@@ -116,8 +116,11 @@ func cmdBuild(ctx context.Context, args []string) error {
 	var (
 		workspace = fs.String("workspace", ".", "workspace folder containing .devcontainer/")
 		specPath  = fs.String("spec", "", "path to devcontainer.json (overrides workspace lookup)")
-		builderID = fs.String("builder", "", "buildx builder name")
-		progress  = fs.String("progress", "auto", "buildx --progress (auto|plain|tty|rawjson)")
+		engine    = fs.String("engine", "buildkit", "build engine: buildkit | buildx")
+		bkAddr    = fs.String("buildkit-addr", "", "buildkitd address (default: $BUILDKIT_HOST or unix socket)")
+		builderID = fs.String("builder", "", "buildx builder name (buildx engine only)")
+		progress  = fs.String("progress", "auto", "progress display (auto|plain|tty)")
+		outputDir = fs.String("output", "", "export filesystem to local dir (buildkit engine only)")
 		workDir   = fs.String("work-dir", "", "directory for staged build context (default: temp dir)")
 		keepWork  = fs.Bool("keep", false, "keep the staged work directory after build")
 		push      = fs.Bool("push", false, "push the resulting image (mutually exclusive with --load)")
@@ -155,15 +158,22 @@ func cmdBuild(ctx context.Context, args []string) error {
 	if len(tags) == 0 && (*push || *load) {
 		return fmt.Errorf("--tag is required with --push/--load")
 	}
+	switch *engine {
+	case string(builder.EngineBuildKit), string(builder.EngineBuildx):
+	default:
+		return fmt.Errorf("invalid --engine %q (want buildkit|buildx)", *engine)
+	}
 
 	logger := stderrLogger("build")
 
 	opts := builder.Options{
+		Engine:           builder.Engine(*engine),
 		SpecPath:         *specPath,
 		Workspace:        *workspace,
 		Tags:             tags,
 		Platforms:        platforms,
 		Builder:          *builderID,
+		BuildKitAddress:  *bkAddr,
 		BuildArgs:        buildArgs,
 		Labels:           labels,
 		CacheFrom:        cacheFrom,
@@ -173,6 +183,7 @@ func cmdBuild(ctx context.Context, args []string) error {
 		NoCache:          *noCache,
 		Pull:             *pull,
 		Progress:         *progress,
+		OutputDir:        *outputDir,
 		SkipFeatures:     *skipFeatures,
 		SkipVSCodeServer: *skipServer,
 		WorkDir:          *workDir,
