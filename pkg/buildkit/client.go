@@ -42,9 +42,9 @@ type SolveOptions struct {
 	// CacheImports / CacheExports map directly to BuildKit's options.
 	CacheImports []CacheRef
 	CacheExports []CacheRef
-	// Platforms is the list of target platforms (currently the LLB
-	// authoring only supports a single platform; multi-arch is left
-	// for future work).
+	// Platforms is the list of target platforms. SolveDevcontainer
+	// honors all entries (producing a manifest-list image for >1);
+	// the bare Solve still uses only the first.
 	Platforms []string
 	// FrontendAttrs are passed through verbatim. Useful for advanced
 	// callers; normally empty.
