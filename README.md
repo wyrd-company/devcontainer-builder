@@ -28,7 +28,7 @@ tooling and vice versa.
 ## Install
 
 ```sh
-go install github.com/wyrd-company/devcontainer-builder/cmd/devcontainer-builder@latest
+go install github.com/wyrd-company/devcontainer-builder/cmd/dcb@latest
 go install github.com/wyrd-company/devcontainer-builder/cmd/devcontainer-docker@latest
 ```
 
@@ -38,7 +38,7 @@ Two binaries: one for building images, one for running them. They share
 the same library packages.
 
 ```
-devcontainer-builder <command> [flags]
+dcb <command> [flags]
 
 Commands:
   build      Build a devcontainer image
@@ -64,7 +64,7 @@ Commands:
 Build the devcontainer in `./` and load it into the local docker store:
 
 ```sh
-devcontainer-builder build \
+dcb build \
   --workspace . \
   --tag my-org/devbox:latest \
   --load
@@ -75,7 +75,7 @@ specific buildkitd endpoint:
 
 ```sh
 BUILDKIT_HOST=tcp://buildkit.internal:1234 \
-devcontainer-builder build \
+dcb build \
   --workspace . \
   --tag registry.internal/devbox:1.2.3 \
   --push \
@@ -85,13 +85,13 @@ devcontainer-builder build \
 Generate the wrapper Dockerfile for inspection without running a build:
 
 ```sh
-devcontainer-builder generate --workspace . --skip-vscode-server
+dcb generate --workspace . --skip-vscode-server
 ```
 
 Force the buildx fallback engine:
 
 ```sh
-devcontainer-builder build --engine buildx --tag dev:latest --load
+dcb build --engine buildx --tag dev:latest --load
 ```
 
 ## Architecture
@@ -138,7 +138,7 @@ devcontainer-builder build --engine buildx --tag dev:latest --load
 | `pkg/buildx`      | Shell wrapper over `docker buildx build`                        |
 | `pkg/platform`    | Platform/arch translation                                       |
 | `pkg/builder`     | Top-level orchestrator                                          |
-| `cmd/devcontainer-builder` | CLI entrypoint                                         |
+| `cmd/dcb`         | CLI entrypoint                                                  |
 
 ### How features are applied
 
@@ -277,7 +277,7 @@ matching native worker, when available) and not against the daemon's
 default arch.
 
 ```sh
-devcontainer-builder build \
+dcb build \
   --workspace . \
   --tag registry.internal/devbox:1.2.3 \
   --platform linux/amd64 \
