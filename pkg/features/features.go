@@ -55,11 +55,11 @@ type Metadata struct {
 	InstallsAfter      []string          `json:"installsAfter,omitempty"`
 	LegacyIDs          []string          `json:"legacyIds,omitempty"`
 	Deprecated         bool              `json:"deprecated,omitempty"`
-	OnCreateCommand    spec.StringOrSlice `json:"onCreateCommand,omitempty"`
-	UpdateContent      spec.StringOrSlice `json:"updateContentCommand,omitempty"`
-	PostCreateCommand  spec.StringOrSlice `json:"postCreateCommand,omitempty"`
-	PostStartCommand   spec.StringOrSlice `json:"postStartCommand,omitempty"`
-	PostAttachCommand  spec.StringOrSlice `json:"postAttachCommand,omitempty"`
+	OnCreateCommand    spec.Command `json:"onCreateCommand,omitempty"`
+	UpdateContent      spec.Command `json:"updateContentCommand,omitempty"`
+	PostCreateCommand  spec.Command `json:"postCreateCommand,omitempty"`
+	PostStartCommand   spec.Command `json:"postStartCommand,omitempty"`
+	PostAttachCommand  spec.Command `json:"postAttachCommand,omitempty"`
 }
 
 // Option models a single configurable feature option.
