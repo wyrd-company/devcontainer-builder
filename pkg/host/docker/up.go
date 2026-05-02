@@ -2,12 +2,12 @@ package docker
 
 import (
 	"context"
-	"fmt"
 	"strings"
 
 	"github.com/docker/docker/api/types/container"
 
 	"github.com/wyrd-company/devcontainer-builder/pkg/features"
+	"github.com/wyrd-company/devcontainer-builder/pkg/host/runner"
 	"github.com/wyrd-company/devcontainer-builder/pkg/lifecycle"
 	"github.com/wyrd-company/devcontainer-builder/pkg/spec"
 	"github.com/wyrd-company/devcontainer-builder/pkg/substitute"
@@ -160,13 +160,14 @@ func (h *Host) Up(ctx context.Context, req UpRequest) (*UpResult, error) {
 		}
 	}
 
-	// 4. Run lifecycle phases.
-	homeDir, err := h.detectHome(ctx, id, dc.RemoteUser)
+	// 4. Run lifecycle phases through the shared runner.
+	execer := h.Execer(id)
+	homeDir, err := runner.DetectHome(ctx, execer, dc.RemoteUser)
 	if err != nil {
 		return res, errorf("detect home: %w", err)
 	}
 	udf := lifecycle.UserDataFolder(homeDir, "")
-	containerEnv, err := h.detectContainerEnv(ctx, id, dc.RemoteUser)
+	containerEnv, err := runner.DetectContainerEnv(ctx, execer)
 	if err != nil {
 		// Non-fatal: lifecycle commands will just see whatever shell sets
 		// up. Log and continue with the spec's remoteEnv only.
@@ -177,21 +178,23 @@ func (h *Host) Up(ctx context.Context, req UpRequest) (*UpResult, error) {
 	dc = substituteContainerEnv(dc, containerEnv)
 	mergedEnv := mergeStringMaps(stringMap(dc.UpdateRemoteEnv), nil)
 
-	rt := phaseRuntime{
-		containerID:    id,
-		user:           dc.RemoteUser,
-		workdir:        containerWorkspace,
-		env:            mergedEnv,
-		createdAt:      inspect.Created,
-		startedAt:      inspect.State.StartedAt,
-		userDataFolder: udf,
-	}
-
 	plan := lifecycle.Plan(dc, req.Features)
+	rt := runner.Runtime{
+		User:           dc.RemoteUser,
+		Workdir:        containerWorkspace,
+		Env:            mergedEnv,
+		CreatedAt:      inspect.Created,
+		StartedAt:      inspect.State.StartedAt,
+		UserDataFolder: udf,
+	}
+	if err := runner.Run(ctx, execer, plan, rt, runner.Options{
+		Logger: h.opts.Logger,
+		Stdout: h.opts.Stdout,
+		Stderr: h.opts.Stderr,
+	}); err != nil {
+		return res, err
+	}
 	for _, p := range plan {
-		if err := h.runPhase(ctx, p, rt); err != nil {
-			return res, fmt.Errorf("%s [%s]: %w", p.Hook, p.Origin.Source, err)
-		}
 		res.PhasesRun = append(res.PhasesRun, p.Hook)
 	}
 	return res, nil
@@ -209,48 +212,6 @@ func (h *Host) create(
 		return "", errorf("create: %w", err)
 	}
 	return resp.ID, nil
-}
-
-// detectHome runs `getent passwd <user>` (or echo $HOME if user is
-// empty/root) inside the container to find the home directory. We need
-// it to compute the marker file paths under ~/.devcontainer.
-func (h *Host) detectHome(ctx context.Context, id, user string) (string, error) {
-	if user == "" || user == "root" {
-		return "/root", nil
-	}
-	exit, out, err := h.execShellQuiet(ctx, id, "root",
-		fmt.Sprintf("getent passwd %s | cut -d: -f6", shellSQ(user)))
-	if err != nil {
-		return "", err
-	}
-	out = strings.TrimSpace(out)
-	if exit != 0 || out == "" {
-		// Fallback: assume /home/<user>.
-		return "/home/" + user, nil
-	}
-	return out, nil
-}
-
-// detectContainerEnv reads /proc/1/environ inside the container so we
-// know what's available for ${containerEnv:VAR} substitution. We run as
-// root since /proc/<pid>/environ is mode 0400.
-func (h *Host) detectContainerEnv(ctx context.Context, id, _ string) (map[string]string, error) {
-	exit, out, err := h.execShellQuiet(ctx, id, "root", "cat /proc/1/environ")
-	if err != nil {
-		return nil, err
-	}
-	if exit != 0 {
-		return nil, fmt.Errorf("/proc/1/environ: exit %d", exit)
-	}
-	env := map[string]string{}
-	for _, kv := range strings.Split(out, "\x00") {
-		eq := strings.IndexByte(kv, '=')
-		if eq < 0 {
-			continue
-		}
-		env[kv[:eq]] = kv[eq+1:]
-	}
-	return env, nil
 }
 
 // substituteContainerEnv resolves ${containerEnv:VAR} inside a few

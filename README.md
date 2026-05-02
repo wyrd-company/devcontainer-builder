@@ -12,6 +12,7 @@ substance.
 | ------- | ------------ |
 | `pkg/builder` | Build the image. Authors a BuildKit LLB graph directly so feature installs and the VS Code server are cacheable vertices; supports multi-platform, manifest-list builds, and chains the builtin `dockerfile.v0` frontend for upstream Dockerfile bases. A `docker buildx` shell-out engine is included as a fallback. |
 | `pkg/host/docker` | Run the image. Talks to the Docker Engine API directly (no `docker` CLI shell-out), creates / starts / execs / removes containers, runs the lifecycle phases (`onCreate` → `postAttach`) gated by upstream-compatible marker files. Embeddable in a service. |
+| `pkg/host/runner` | Transport-agnostic lifecycle executor: takes an `Execer` (docker exec, apiserver pod-exec, anything that runs argv inside a running container) plus a `lifecycle.Plan` and runs the phases with marker-file gating. Owns the marker shell, the Shell/Args/Parallel dispatch, and per-parallel output buffering. Used by `pkg/host/docker`; also callable directly from operators that want to drive lifecycle themselves. |
 | `pkg/lifecycle` | Pure planning: returns the ordered phases for a spec + features. The same plan can be executed imperatively (docker) or projected declaratively (kubernetes, future phase). |
 | `pkg/projection/kubernetes` | Pure config translation: a `*spec.DevContainer` + features become a `*corev1.Pod` (and friends). No client-go, no apiserver round-trips — drop the result into an operator's reconcile, render to YAML, or hand to a future imperative `pkg/host/kubernetes`. |
 | `pkg/substitute` | `${localEnv:VAR}`, `${localWorkspaceFolder}`, `${containerEnv:VAR}`, `${devcontainerId}`, and the rest of the devcontainer spec's variable substitution rules. |
@@ -357,9 +358,17 @@ other volume source.
 Lifecycle commands (`onCreate`, `postCreate`, `postStart`,
 `postAttach`) are *not* projected into init containers or lifecycle
 hooks: those phases need the running container's userspace state and
-can't be modeled as static manifest fields. A future imperative
-`pkg/host/kubernetes` will exec them after the pod reaches Ready, the
-same shape `pkg/host/docker` uses today.
+can't be modeled as static manifest fields.
+
+Until the imperative `pkg/host/kubernetes` lands, an operator can
+drive lifecycle itself by combining `pkg/lifecycle.Plan` (the ordered
+phases) with `pkg/host/runner` (the marker-gated executor) — supplying
+its own `runner.Execer` that wraps `client-go`'s
+`tools/remotecommand.NewSPDYExecutor`. The runner owns the
+upstream-compatible marker shell and the Shell/Args/Parallel dispatch,
+so the operator only writes the apiserver transport. That same
+runner.Execer surface is what the future Kubernetes host will plug
+into.
 
 ## Status
 
