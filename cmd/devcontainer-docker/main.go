@@ -20,6 +20,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"syscall"
 
@@ -95,6 +96,7 @@ func cmdUp(ctx context.Context, args []string) error {
 		image     = fs.String("image", "", "use this image instead of building (skips builder)")
 		tag       = fs.String("tag", "", "tag for the built image (default: devcontainer-<basename>:latest)")
 		skipBuild = fs.Bool("skip-build", false, "do not build the image; --image must be supplied or already present")
+		updateUID = fs.String("update-remote-user-uid", "auto", "remap the remoteUser to the host UID/GID: auto|on|off (auto = on for linux/darwin, off elsewhere; spec's updateRemoteUserUID:false always wins)")
 	)
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -149,12 +151,18 @@ func cmdUp(ctx context.Context, args []string) error {
 		Stderr: os.Stderr,
 	})
 
+	uidUpdate, err := resolveUIDUpdate(*updateUID)
+	if err != nil {
+		return err
+	}
+
 	res, err := host.Up(ctx, hostdocker.UpRequest{
-		Spec:           dc,
-		SpecPath:       resolvedSpecPath,
-		LocalWorkspace: absWorkspace,
-		Image:          resolvedImage,
-		LocalEnv:       envMap(),
+		Spec:                dc,
+		SpecPath:            resolvedSpecPath,
+		LocalWorkspace:      absWorkspace,
+		Image:               resolvedImage,
+		LocalEnv:            envMap(),
+		RemoteUserUIDUpdate: uidUpdate,
 	})
 	if err != nil {
 		return err
@@ -358,6 +366,30 @@ func sanitizeTag(s string) string {
 		return "devcontainer"
 	}
 	return string(out)
+}
+
+// resolveUIDUpdate translates the --update-remote-user-uid flag into a
+// RemoteUserUIDUpdate. Returns nil when remapping is disabled. The
+// "auto" mode follows upstream's default-on-linux/darwin convention.
+func resolveUIDUpdate(mode string) (*hostdocker.RemoteUserUIDUpdate, error) {
+	switch strings.ToLower(mode) {
+	case "off", "never", "false", "no":
+		return nil, nil
+	case "auto", "":
+		if runtime.GOOS != "linux" && runtime.GOOS != "darwin" {
+			return nil, nil
+		}
+	case "on", "always", "true", "yes":
+		// fall through
+	default:
+		return nil, fmt.Errorf("--update-remote-user-uid: unknown mode %q (want auto|on|off)", mode)
+	}
+	uid, gid := os.Getuid(), os.Getgid()
+	if uid < 0 {
+		// Windows: os.Getuid returns -1. Skip rather than send junk.
+		return nil, nil
+	}
+	return &hostdocker.RemoteUserUIDUpdate{HostUID: uid, HostGID: gid}, nil
 }
 
 func stderrLogger(prefix string) func(string, ...any) {

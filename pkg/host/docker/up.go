@@ -48,6 +48,13 @@ type UpRequest struct {
 	// always included; supply additional labels here if you want them
 	// folded into the id hash.
 	IDLabels map[string]string
+	// RemoteUserUIDUpdate, when non-nil, asks the host to remap the
+	// container's remoteUser to HostUID/HostGID after the container
+	// starts so bind-mounted files land with host-side ownership. The
+	// spec's `updateRemoteUserUID: false` overrides and disables the
+	// remap regardless. The package never reads os.Getuid itself —
+	// embedders pass the IDs they want applied.
+	RemoteUserUIDUpdate *RemoteUserUIDUpdate
 }
 
 // UpResult reports what happened. Fields with a "thisCall" flag denote
@@ -142,7 +149,18 @@ func (h *Host) Up(ctx context.Context, req UpRequest) (*UpResult, error) {
 		}
 	}
 
-	// 3. Run lifecycle phases.
+	// 3. Optional: remap the remoteUser's UID/GID to the host's so
+	// bind-mounted files don't land with surprising ownership. Runs
+	// before lifecycle so onCreate/postCreate already see the new
+	// IDs. Idempotent — converges on every Up.
+	if req.RemoteUserUIDUpdate != nil &&
+		(dc.UpdateRemoteUserUID == nil || *dc.UpdateRemoteUserUID) {
+		if err := h.applyUIDUpdate(ctx, id, dc.RemoteUser, *req.RemoteUserUIDUpdate); err != nil {
+			return res, err
+		}
+	}
+
+	// 4. Run lifecycle phases.
 	homeDir, err := h.detectHome(ctx, id, dc.RemoteUser)
 	if err != nil {
 		return res, errorf("detect home: %w", err)

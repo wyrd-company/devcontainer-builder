@@ -15,31 +15,33 @@ import (
 // The full spec is much larger; unknown fields are preserved through Raw so
 // callers can pass data through to downstream tooling untouched.
 type DevContainer struct {
-	Name            string         `json:"name,omitempty"`
-	Image           string         `json:"image,omitempty"`
-	Dockerfile      string         `json:"dockerFile,omitempty"`
-	Build           *Build         `json:"build,omitempty"`
-	Features        OrderedMap     `json:"features,omitempty"`
-	OverrideFeature []string       `json:"overrideFeatureInstallOrder,omitempty"`
-	RemoteUser      string         `json:"remoteUser,omitempty"`
-	ContainerUser   string         `json:"containerUser,omitempty"`
-	UpdateRemoteEnv map[string]any `json:"remoteEnv,omitempty"`
-	ContainerEnv    map[string]any `json:"containerEnv,omitempty"`
-	WorkspaceFolder string         `json:"workspaceFolder,omitempty"`
-	WorkspaceMount  string         `json:"workspaceMount,omitempty"`
-	Mounts          []any          `json:"mounts,omitempty"`
-	ForwardPorts    []any          `json:"forwardPorts,omitempty"`
-	OnCreate        Command        `json:"onCreateCommand,omitempty"`
-	UpdateContent   Command        `json:"updateContentCommand,omitempty"`
-	PostCreate      Command        `json:"postCreateCommand,omitempty"`
-	PostStart       Command        `json:"postStartCommand,omitempty"`
-	PostAttach      Command        `json:"postAttachCommand,omitempty"`
-	Init            *bool          `json:"init,omitempty"`
-	Privileged      *bool          `json:"privileged,omitempty"`
-	CapAdd          []string       `json:"capAdd,omitempty"`
-	SecurityOpt     []string       `json:"securityOpt,omitempty"`
-	RunArgs         []string       `json:"runArgs,omitempty"`
-	Customizations  map[string]any `json:"customizations,omitempty"`
+	Name                string         `json:"name,omitempty"`
+	Image               string         `json:"image,omitempty"`
+	Dockerfile          string         `json:"dockerFile,omitempty"`
+	Build               *Build         `json:"build,omitempty"`
+	Features            OrderedMap     `json:"features,omitempty"`
+	OverrideFeature     []string       `json:"overrideFeatureInstallOrder,omitempty"`
+	RemoteUser          string         `json:"remoteUser,omitempty"`
+	ContainerUser       string         `json:"containerUser,omitempty"`
+	UpdateRemoteEnv     map[string]any `json:"remoteEnv,omitempty"`
+	ContainerEnv        map[string]any `json:"containerEnv,omitempty"`
+	WorkspaceFolder     string         `json:"workspaceFolder,omitempty"`
+	WorkspaceMount      string         `json:"workspaceMount,omitempty"`
+	Mounts              []any          `json:"mounts,omitempty"`
+	ForwardPorts        []any          `json:"forwardPorts,omitempty"`
+	AppPort             any            `json:"appPort,omitempty"`
+	UpdateRemoteUserUID *bool          `json:"updateRemoteUserUID,omitempty"`
+	OnCreate            Command        `json:"onCreateCommand,omitempty"`
+	UpdateContent       Command        `json:"updateContentCommand,omitempty"`
+	PostCreate          Command        `json:"postCreateCommand,omitempty"`
+	PostStart           Command        `json:"postStartCommand,omitempty"`
+	PostAttach          Command        `json:"postAttachCommand,omitempty"`
+	Init                *bool          `json:"init,omitempty"`
+	Privileged          *bool          `json:"privileged,omitempty"`
+	CapAdd              []string       `json:"capAdd,omitempty"`
+	SecurityOpt         []string       `json:"securityOpt,omitempty"`
+	RunArgs             []string       `json:"runArgs,omitempty"`
+	Customizations      map[string]any `json:"customizations,omitempty"`
 
 	// Path is the on-disk location the spec was loaded from. Not part of
 	// the JSON document itself.
