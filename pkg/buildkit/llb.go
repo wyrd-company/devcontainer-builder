@@ -18,8 +18,10 @@ import (
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/client/llb/imagemetaresolver"
 	"github.com/opencontainers/go-digest"
+	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 
 	"github.com/wyrd-company/devcontainer-builder/pkg/features"
+	dcplatform "github.com/wyrd-company/devcontainer-builder/pkg/platform"
 	"github.com/wyrd-company/devcontainer-builder/pkg/spec"
 	"github.com/wyrd-company/devcontainer-builder/pkg/vscode"
 )
@@ -27,8 +29,14 @@ import (
 // GraphInputs collects every piece of information the LLB authoring
 // routine needs.
 type GraphInputs struct {
-	Spec         *spec.DevContainer
-	BaseImage    string
+	Spec *spec.DevContainer
+	// BaseImage names the FROM image. Ignored when BaseState is set.
+	BaseImage string
+	// BaseState, when non-nil, is used as the starting llb.State instead
+	// of llb.Image(BaseImage). This is how we chain on top of a Dockerfile
+	// frontend solve in the gateway path: the upstream solve produces a
+	// Reference whose ToState() becomes the base for our overlays.
+	BaseState    *llb.State
 	Features     []features.Resolved
 	VSCodeServer *vscode.Result
 	// LocalContextName names the llb.Local mount that the resolved
@@ -43,8 +51,40 @@ type GraphInputs struct {
 	RemoteUser string
 	// ResolveImageConfig, when true, performs a registry roundtrip at
 	// LLB marshal time to inherit ENV/USER/WORKDIR from the base image.
-	// Recommended; can be disabled for offline builds.
+	// Recommended; can be disabled for offline builds. Ignored when
+	// BaseState is set (the upstream solve already resolved it).
 	ResolveImageConfig bool
+	// Platform constrains the LLB graph to the given target platform. A
+	// zero-value Platform falls back to the daemon default. Authoring the
+	// graph with an explicit Platform is required for cross-arch and
+	// multi-platform builds — every llb.Image / llb.Run / llb.HTTP vertex
+	// inherits the constraint.
+	Platform dcplatform.Platform
+}
+
+// hasPlatform reports whether GraphInputs carries an explicit target
+// platform (i.e. its OS/Arch are populated).
+func (g GraphInputs) hasPlatform() bool {
+	return g.Platform.OS != "" && g.Platform.Arch != ""
+}
+
+// ociPlatform translates the package's Platform into the OCI struct
+// BuildKit's llb package expects.
+func (g GraphInputs) ociPlatform() ocispecs.Platform {
+	return ocispecs.Platform{
+		OS:           g.Platform.OS,
+		Architecture: g.Platform.Arch,
+		Variant:      g.Platform.Variant,
+	}
+}
+
+// constraintOpts returns the LLB constraints (currently just llb.Platform)
+// that should be applied to every vertex authored by this graph.
+func (g GraphInputs) constraintOpts() []llb.ConstraintsOpt {
+	if !g.hasPlatform() {
+		return nil
+	}
+	return []llb.ConstraintsOpt{llb.Platform(g.ociPlatform())}
 }
 
 // Build returns the LLB state representing the final image filesystem.
@@ -62,17 +102,27 @@ type GraphInputs struct {
 //     llb.Local with include patterns, so unrelated workspace files
 //     don't bust the build cache.
 func Build(in GraphInputs) (llb.State, error) {
-	if in.BaseImage == "" {
-		return llb.State{}, fmt.Errorf("buildkit: base image is required")
+	if in.BaseState == nil && in.BaseImage == "" {
+		return llb.State{}, fmt.Errorf("buildkit: base image or base state is required")
 	}
 
-	imageOpts := []llb.ImageOption{
-		llb.WithCustomNamef("FROM %s", in.BaseImage),
+	cOpts := in.constraintOpts()
+
+	var state llb.State
+	if in.BaseState != nil {
+		state = *in.BaseState
+	} else {
+		imageOpts := []llb.ImageOption{
+			llb.WithCustomNamef("FROM %s", in.BaseImage),
+		}
+		if in.ResolveImageConfig {
+			imageOpts = append(imageOpts, llb.WithMetaResolver(imagemetaresolver.Default()))
+		}
+		if in.hasPlatform() {
+			imageOpts = append(imageOpts, llb.Platform(in.ociPlatform()))
+		}
+		state = llb.Image(in.BaseImage, imageOpts...)
 	}
-	if in.ResolveImageConfig {
-		imageOpts = append(imageOpts, llb.WithMetaResolver(imagemetaresolver.Default()))
-	}
-	state := llb.Image(in.BaseImage, imageOpts...)
 
 	// containerEnv from spec.
 	for _, k := range sortedKeys(toStringMap(in.Spec.ContainerEnv)) {
@@ -85,15 +135,16 @@ func Build(in GraphInputs) (llb.State, error) {
 	// FeaturesContextSubdir.
 	var localCtx llb.State
 	if len(in.Features) > 0 {
-		localCtx = llb.Local(in.LocalContextName,
+		localOpts := []llb.LocalOption{
 			llb.IncludePatterns([]string{in.FeaturesContextSubdir + "/**"}),
 			llb.WithCustomNamef("loading features context"),
-			llb.SharedKeyHint("devcontainer-builder-features-"+in.LocalContextName),
-		)
+			llb.SharedKeyHint("devcontainer-builder-features-" + in.LocalContextName),
+		}
+		localCtx = llb.Local(in.LocalContextName, localOpts...)
 	}
 
 	for _, f := range in.Features {
-		state = applyFeature(state, localCtx, in.FeaturesContextSubdir, f)
+		state = applyFeature(state, localCtx, in.FeaturesContextSubdir, f, cOpts)
 		// containerEnv contributed by the feature itself
 		for _, k := range sortedKeys(f.Metadata.ContainerEnv) {
 			state = state.AddEnv(k, f.Metadata.ContainerEnv[k])
@@ -102,7 +153,7 @@ func Build(in GraphInputs) (llb.State, error) {
 
 	if in.VSCodeServer != nil {
 		var err error
-		state, err = applyVSCodeServer(state, in.VSCodeServer, remoteUser(in))
+		state, err = applyVSCodeServer(state, in.VSCodeServer, remoteUser(in), cOpts)
 		if err != nil {
 			return llb.State{}, err
 		}
@@ -137,7 +188,7 @@ func remoteUser(in GraphInputs) string {
 
 // applyFeature mounts the feature directory from the local context into
 // /tmp/build-features/<SafeID>/ and runs its install.sh as root.
-func applyFeature(base, localCtx llb.State, subdir string, f features.Resolved) llb.State {
+func applyFeature(base, localCtx llb.State, subdir string, f features.Resolved, cOpts []llb.ConstraintsOpt) llb.State {
 	mountTarget := "/tmp/build-features/" + f.SafeID
 	srcSub := path.Join(subdir, f.SafeID)
 
@@ -157,6 +208,9 @@ func applyFeature(base, localCtx llb.State, subdir string, f features.Resolved) 
 			llb.Readonly,
 		),
 	}
+	for _, c := range cOpts {
+		runOpts = append(runOpts, c)
+	}
 	for _, kv := range buildFeatureEnv(f) {
 		runOpts = append(runOpts, llb.AddEnv(kv.k, kv.v))
 	}
@@ -166,7 +220,7 @@ func applyFeature(base, localCtx llb.State, subdir string, f features.Resolved) 
 // applyVSCodeServer fetches the VS Code server tarball via llb.HTTP and
 // extracts it into the canonical install dir, chowning to the remote
 // user if necessary.
-func applyVSCodeServer(base llb.State, sr *vscode.Result, user string) (llb.State, error) {
+func applyVSCodeServer(base llb.State, sr *vscode.Result, user string, cOpts []llb.ConstraintsOpt) (llb.State, error) {
 	if sr.SHA256 == "" {
 		return llb.State{}, fmt.Errorf("vscode result missing sha256")
 	}
@@ -182,22 +236,30 @@ func applyVSCodeServer(base llb.State, sr *vscode.Result, user string) (llb.Stat
 	dir := vscode.CanonicalInstallDir(user, sr.Commit)
 	cmd := fmt.Sprintf("set -e; mkdir -p %s; tar -xzf /tmp/dl/vscode-server.tar.gz -C %s --strip-components=1",
 		shellQuote(dir), shellQuote(dir))
-	out := base.Run(
+	extractOpts := []llb.RunOption{
 		llb.WithCustomNamef("extract vscode-server"),
 		llb.User("root"),
 		llb.Args([]string{"/bin/sh", "-c", cmd}),
 		llb.AddMount("/tmp/dl", tarball, llb.Readonly),
-	).Root()
+	}
+	for _, c := range cOpts {
+		extractOpts = append(extractOpts, c)
+	}
+	out := base.Run(extractOpts...).Root()
 
 	if user != "" && user != "root" {
 		home := homeOf(user)
 		chown := fmt.Sprintf("if id -u %s >/dev/null 2>&1; then chown -R %s:%s %s/.vscode-server || true; fi",
 			shellQuote(user), shellQuote(user), shellQuote(user), shellQuote(home))
-		out = out.Run(
+		chownOpts := []llb.RunOption{
 			llb.WithCustomNamef("chown vscode-server to %s", user),
 			llb.User("root"),
 			llb.Args([]string{"/bin/sh", "-c", chown}),
-		).Root()
+		}
+		for _, c := range cOpts {
+			chownOpts = append(chownOpts, c)
+		}
+		out = out.Run(chownOpts...).Root()
 	}
 	return out, nil
 }

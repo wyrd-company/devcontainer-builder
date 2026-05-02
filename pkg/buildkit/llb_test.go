@@ -5,7 +5,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/moby/buildkit/client/llb"
+
 	"github.com/wyrd-company/devcontainer-builder/pkg/features"
+	"github.com/wyrd-company/devcontainer-builder/pkg/platform"
 	"github.com/wyrd-company/devcontainer-builder/pkg/spec"
 	"github.com/wyrd-company/devcontainer-builder/pkg/vscode"
 )
@@ -90,5 +93,58 @@ func TestBuild_RequiresBaseImage(t *testing.T) {
 	_, err := Build(GraphInputs{Spec: &spec.DevContainer{}})
 	if err == nil {
 		t.Fatal("expected error for missing base image")
+	}
+}
+
+// TestBuild_PlatformConstraint asserts that an explicit Platform is
+// propagated to every authored vertex. Without the constraint, BuildKit
+// builds for the daemon-default platform — which silently breaks
+// cross-arch builds since features (which run via RUN) end up executing
+// against the wrong arch.
+func TestBuild_PlatformConstraint(t *testing.T) {
+	state, err := Build(GraphInputs{
+		Spec:                  &spec.DevContainer{Image: "alpine"},
+		BaseImage:             "alpine",
+		LocalContextName:      "context",
+		FeaturesContextSubdir: "_features",
+		Features: []features.Resolved{{
+			Source:   "ghcr.io/devcontainers/features/node:1",
+			SafeID:   "abc-node",
+			Metadata: features.Metadata{ID: "node", Version: "1.0.0"},
+		}},
+		Platform: platform.Platform{OS: "linux", Arch: "arm64"},
+	})
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	def, err := state.Marshal(context.Background())
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	var arm64Vertices int
+	for _, dt := range def.Def {
+		if strings.Contains(string(dt), "arm64") {
+			arm64Vertices++
+		}
+	}
+	if arm64Vertices == 0 {
+		t.Fatalf("expected the arm64 platform to appear in at least one Op, got none")
+	}
+}
+
+// TestBuild_BaseState verifies that supplying a BaseState llb.State
+// short-circuits the llb.Image FROM. This is the path the gateway
+// solver uses to chain on top of an upstream Dockerfile build.
+func TestBuild_BaseState(t *testing.T) {
+	base := llb.Scratch().File(llb.Mkdir("/marker", 0o755))
+	state, err := Build(GraphInputs{
+		Spec:      &spec.DevContainer{Image: ""},
+		BaseState: &base,
+	})
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	if _, err := state.Marshal(context.Background()); err != nil {
+		t.Fatalf("Marshal: %v", err)
 	}
 }

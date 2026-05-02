@@ -175,16 +175,43 @@ The lower-level packages (`pkg/buildkit`, `pkg/dockerfile`,
 `pkg/features`, `pkg/vscode`) are stable enough to use directly when
 you want to assemble a different pipeline.
 
+### Multi-platform builds
+
+Pass `--platform` more than once to produce a manifest-list image. Each
+platform's LLB graph is authored with the right `llb.Platform`
+constraint so cross-arch feature installs run under emulation (or on a
+matching native worker, when available) and not against the daemon's
+default arch.
+
+```sh
+devcontainer-builder build \
+  --workspace . \
+  --tag registry.internal/devbox:1.2.3 \
+  --platform linux/amd64 \
+  --platform linux/arm64 \
+  --push
+```
+
+`--load` is single-platform only — docker's image store can't hold a
+manifest list. Use `--push` (image exporter) or `--output` (filesystem
+exporter) for multi-platform builds.
+
+### Upstream Dockerfile builds (BuildKit engine)
+
+When the spec uses `dockerFile` (or `build.dockerfile`), the BuildKit
+engine chains the builtin `dockerfile.v0` frontend inside the same
+gateway invocation that authors the rest of the LLB graph. The upstream
+build's reference becomes the base of the devcontainer overlays
+directly — no `docker build` round-trip, no temporary tag.
+
+The buildx engine still pre-builds the upstream Dockerfile through
+`docker buildx build --load` and then references the resulting tag.
+
 ## Status
 
-This is an initial implementation. Known gaps:
+Initial implementation. Known gaps:
 
-- Multi-platform builds: the LLB engine currently uses the first
-  `--platform` entry only. Cross-arch features and a manifest list
-  exporter are next.
-- Upstream Dockerfile builds (`build.dockerfile` in the spec) still
-  go through `docker buildx` even on the BuildKit engine — direct
-  Dockerfile-frontend solves are a follow-up.
 - Lifecycle commands (`postCreateCommand`, etc.) are parsed but not
   executed at build time. They belong to the run-time start phase
-  rather than the image build.
+  rather than the image build, and need a separate `up`/`exec`
+  command path that this tool intentionally does not own.

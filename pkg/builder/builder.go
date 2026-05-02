@@ -56,7 +56,8 @@ type Options struct {
 	// Tags applied to the produced image.
 	Tags []string
 	// Platforms (e.g., "linux/amd64", "linux/arm64"). The BuildKit
-	// engine currently only honors the first platform.
+	// engine builds a manifest-list image when more than one is given.
+	// --load is incompatible with multi-platform.
 	Platforms []string
 	// Builder is the buildx instance name (buildx engine only).
 	Builder string
@@ -159,7 +160,7 @@ func (b *Builder) Build(ctx context.Context, opts Options) (*Result, error) {
 		opts.Engine = EngineBuildKit
 	}
 
-	dc, workDir, ctxDir, baseImage, resolved, sr, dfPath, df, err := b.prepareBuildContext(ctx, opts, logf)
+	dc, workDir, ctxDir, baseImage, upstream, resolved, sr, dfPath, df, err := b.prepareBuildContext(ctx, opts, logf)
 	if err != nil {
 		return nil, err
 	}
@@ -184,7 +185,7 @@ func (b *Builder) Build(ctx context.Context, opts Options) (*Result, error) {
 			return result, err
 		}
 	case EngineBuildKit:
-		if err := b.runBuildKit(ctx, opts, ctxDir, dc, baseImage, resolved, sr, result, logf); err != nil {
+		if err := b.runBuildKit(ctx, opts, ctxDir, dc, baseImage, upstream, resolved, sr, result, logf); err != nil {
 			return result, err
 		}
 	default:
@@ -198,6 +199,7 @@ func (b *Builder) Build(ctx context.Context, opts Options) (*Result, error) {
 
 func (b *Builder) prepareBuildContext(ctx context.Context, opts Options, logf func(string, ...any)) (
 	dc *spec.DevContainer, workDir, ctxDir, baseImage string,
+	upstream *buildkit.DockerfileBuild,
 	resolved []features.Resolved, sr *vscode.Result,
 	dfPath string, df []byte, err error,
 ) {
@@ -232,15 +234,19 @@ func (b *Builder) prepareBuildContext(ctx context.Context, opts Options, logf fu
 		return
 	}
 
-	// Determine base image. With the buildx engine, we may need to
-	// build the upstream Dockerfile first. With BuildKit, the same is
-	// true — we'll do it via shelling out for now since LLB-authoring
-	// of an arbitrary Dockerfile is significantly more involved.
-	baseImage, err = b.prepareBaseImage(ctx, dc, opts, logf)
+	// Determine the base image. The BuildKit engine prefers chaining the
+	// upstream dockerfile.v0 frontend in-process (no docker round-trip);
+	// the buildx engine still needs a concrete tagged image to FROM.
+	baseImage, upstream, err = b.prepareBaseImage(ctx, dc, opts, logf)
 	if err != nil {
 		return
 	}
-	logf("base image: %s", baseImage)
+	switch {
+	case upstream != nil:
+		logf("base image: dockerfile %s (built in-process via dockerfile.v0)", upstream.Filename)
+	default:
+		logf("base image: %s", baseImage)
+	}
 
 	if !opts.SkipFeatures && dc.Features.Len() > 0 {
 		featStaging := filepath.Join(ctxDir, "_features")
@@ -270,9 +276,13 @@ func (b *Builder) prepareBuildContext(ctx context.Context, opts Options, logf fu
 	if sr != nil {
 		serverCtxPath = relPath(ctxDir, sr.TarballPath)
 	}
+	wrapperBase := baseImage
+	if wrapperBase == "" && upstream != nil {
+		wrapperBase = "<upstream-dockerfile>"
+	}
 	df, err = dockerfile.Generate(dockerfile.Inputs{
 		Spec:                    dc,
-		BaseImage:               baseImage,
+		BaseImage:               wrapperBase,
 		Features:                resolved,
 		FeaturesContextDir:      "_features",
 		VSCodeServer:            sr,
@@ -320,24 +330,10 @@ func (b *Builder) runBuildx(ctx context.Context, opts Options, dfPath, ctxDir st
 }
 
 func (b *Builder) runBuildKit(ctx context.Context, opts Options, ctxDir string,
-	dc *spec.DevContainer, baseImage string,
+	dc *spec.DevContainer, baseImage string, upstream *buildkit.DockerfileBuild,
 	resolved []features.Resolved, sr *vscode.Result, result *Result,
 	logf func(string, ...any),
 ) error {
-	state, err := buildkit.Build(buildkit.GraphInputs{
-		Spec:                  dc,
-		BaseImage:             baseImage,
-		Features:              resolved,
-		VSCodeServer:          sr,
-		LocalContextName:      "context",
-		FeaturesContextSubdir: "_features",
-		RemoteUser:            dc.RemoteUser,
-		ResolveImageConfig:    !opts.SkipImageMetaResolve,
-	})
-	if err != nil {
-		return err
-	}
-
 	cacheImports, cacheExports := translateCache(opts.CacheFrom, opts.CacheTo)
 	solveOpts := buildkit.SolveOptions{
 		Address:          opts.BuildKitAddress,
@@ -358,8 +354,21 @@ func (b *Builder) runBuildKit(ctx context.Context, opts Options, ctxDir string,
 	if opts.Push && len(opts.Tags) == 0 {
 		return fmt.Errorf("--push requires at least one --tag")
 	}
-	logf("solving via buildkit (addr=%s)", solveOptsAddr(solveOpts))
-	res, err := buildkit.Solve(ctx, state, solveOpts)
+	logf("solving via buildkit (addr=%s, platforms=%d)", solveOptsAddr(solveOpts), max(1, len(opts.Platforms)))
+	bspec := buildkit.BuildSpec{
+		Graph: buildkit.GraphInputs{
+			Spec:                  dc,
+			BaseImage:             baseImage,
+			Features:              resolved,
+			VSCodeServer:          sr,
+			LocalContextName:      "context",
+			FeaturesContextSubdir: "_features",
+			RemoteUser:            dc.RemoteUser,
+			ResolveImageConfig:    !opts.SkipImageMetaResolve,
+		},
+		Upstream: upstream,
+	}
+	res, err := buildkit.SolveDevcontainer(ctx, bspec, solveOpts)
 	if err != nil {
 		return err
 	}
@@ -427,24 +436,57 @@ func translateCache(from, to []string) ([]buildkit.CacheRef, []buildkit.CacheRef
 	return parse(from), parse(to)
 }
 
-// prepareBaseImage either returns spec.Image, or builds the upstream
-// Dockerfile via buildx first.
+// prepareBaseImage resolves what should appear "above" the devcontainer
+// overlays. There are three cases:
+//
+//   - The spec uses `image` directly: return it as the base.
+//   - The spec uses `dockerFile` AND we're on the BuildKit engine: return
+//     a *buildkit.DockerfileBuild so the gateway path can chain the
+//     dockerfile.v0 frontend with no docker round-trip.
+//   - The spec uses `dockerFile` AND we're on the buildx engine: pre-build
+//     it via `docker buildx`, load it into the local docker store, and
+//     return the temporary tag.
 func (b *Builder) prepareBaseImage(
 	ctx context.Context, dc *spec.DevContainer, opts Options,
 	logf func(format string, args ...any),
-) (string, error) {
+) (string, *buildkit.DockerfileBuild, error) {
 	if dc.Image != "" && dc.DockerfilePath() == "" {
-		return dc.Image, nil
+		return dc.Image, nil, nil
 	}
 	dfPath := dc.DockerfilePath()
 	if dfPath == "" {
-		return "", fmt.Errorf("spec must specify either image or dockerFile")
+		return "", nil, fmt.Errorf("spec must specify either image or dockerFile")
 	}
 
 	upstreamCtx, err := dc.BuildContextDir()
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
+
+	if opts.Engine == EngineBuildKit {
+		dfFilename := dfPath
+		dfDir := upstreamCtx
+		if filepath.IsAbs(dfPath) {
+			dfDir = filepath.Dir(dfPath)
+			dfFilename = filepath.Base(dfPath)
+		} else {
+			dfFilename = filepath.Base(dfPath)
+			if rel := filepath.Dir(dfPath); rel != "." && rel != "" {
+				dfDir = filepath.Join(upstreamCtx, rel)
+			}
+		}
+		upstream := &buildkit.DockerfileBuild{
+			ContextDir:    upstreamCtx,
+			DockerfileDir: dfDir,
+			Filename:      dfFilename,
+			BuildArgs:     mergeArgs(buildArgsFromSpec(dc), opts.BuildArgs),
+		}
+		if dc.Build != nil && dc.Build.Target != "" {
+			upstream.Target = dc.Build.Target
+		}
+		return "", upstream, nil
+	}
+
 	tag := fmt.Sprintf("devcontainer-builder/base:%d", time.Now().UnixNano())
 	logf("building upstream dockerfile %s -> %s", dfPath, tag)
 
@@ -471,9 +513,9 @@ func (b *Builder) prepareBaseImage(
 		build.Target = dc.Build.Target
 	}
 	if err := build.Run(ctx); err != nil {
-		return "", err
+		return "", nil, err
 	}
-	return tag, nil
+	return tag, nil, nil
 }
 
 func buildArgsFromSpec(dc *spec.DevContainer) map[string]string {
