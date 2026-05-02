@@ -182,7 +182,10 @@ func (h *Host) Up(ctx context.Context, req UpRequest) (*UpResult, error) {
 func (h *Host) create(
 	ctx context.Context, dc *spec.DevContainer, req UpRequest, containerWorkspace string,
 ) (string, error) {
-	cfg, host := buildContainerConfig(dc, req.Features, req.Image, containerWorkspace, req.LocalWorkspace, req.SpecPath)
+	cfg, host, err := buildContainerConfig(dc, req.Features, req.Image, containerWorkspace, req.LocalWorkspace, req.SpecPath)
+	if err != nil {
+		return "", errorf("build container config: %w", err)
+	}
 	resp, err := h.client.ContainerCreate(ctx, cfg, host, nil, nil, "")
 	if err != nil {
 		return "", errorf("create: %w", err)

@@ -226,6 +226,20 @@ workspace via the `devcontainer.local_folder` label, starts it if
 stopped, and runs only the lifecycle phases whose marker files indicate
 they need to.
 
+The structured spec fields (`mounts`, `containerEnv`, `init`,
+`privileged`, `capAdd`, `securityOpt`, `containerUser`) and the free-form
+`runArgs` array are both honored. `runArgs` is parsed against the docker
+CLI flag vocabulary — `--network`, `--cap-add`, `--gpus`, `--device`,
+`-v` / `--mount`, `-e KEY=VAL`, `-p`, `--ulimit`, `--shm-size`,
+`--memory`, `--cpus`, namespace flags (`--ipc`, `--pid`, `--uts`,
+`--userns`, `--cgroupns`), restart policy, sysctls, tmpfs, and the
+common booleans (`--init`, `--privileged`, `--read-only`) — and folded
+into the engine API call. List flags such as `--cap-add` append to
+their structured-spec counterparts rather than replacing them. Unknown
+flags are rejected so a typo doesn't silently change container
+behavior. The `--entrypoint` flag is rejected because the host owns the
+keepalive entrypoint that holds the container open.
+
 The lower-level packages (`pkg/buildkit`, `pkg/dockerfile`,
 `pkg/features`, `pkg/vscode`, `pkg/lifecycle`, `pkg/substitute`) are
 stable enough to use directly when you want to assemble a different
@@ -271,11 +285,6 @@ Known gaps:
   produces an ordered phase plan that's ready to be projected into
   Pod / Deployment manifests by a future `pkg/projection/kubernetes`,
   with a separate `cmd/devcontainer-k8s` CLI for the rendering UI.
-- **`runArgs` parsing.** The docker host honors structured spec fields
-  (`mounts`, `containerEnv`, `init`, `privileged`, `capAdd`,
-  `securityOpt`, `containerUser`) but not arbitrary `runArgs` strings,
-  which are docker-CLI flags. Needs a flag parser to translate to the
-  engine API.
 - **`dockerComposeFile`.** Multi-container compose-style devcontainers
   aren't supported.
 - **`updateRemoteUserUID`.** UID rewriting to match the host user (to

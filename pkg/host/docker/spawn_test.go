@@ -50,7 +50,10 @@ func TestBuildContainerConfig_DefaultsAndLabels(t *testing.T) {
 		ContainerEnv: map[string]any{"DEMO": "true"},
 		ContainerUser: "vscode",
 	}
-	cfg, host := buildContainerConfig(dc, nil, "img:latest", "/workspaces/proj", "/host/proj", "/host/proj/.devcontainer/devcontainer.json")
+	cfg, host, err := buildContainerConfig(dc, nil, "img:latest", "/workspaces/proj", "/host/proj", "/host/proj/.devcontainer/devcontainer.json")
+	if err != nil {
+		t.Fatalf("buildContainerConfig: %v", err)
+	}
 
 	if cfg.Image != "img:latest" {
 		t.Errorf("image: got %q", cfg.Image)

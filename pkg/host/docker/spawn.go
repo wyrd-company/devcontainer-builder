@@ -53,7 +53,7 @@ func buildContainerConfig(
 	dc *spec.DevContainer,
 	resolved []features.Resolved,
 	image, containerWorkspaceFolder, localFolder, configFilePath string,
-) (*container.Config, *container.HostConfig) {
+) (*container.Config, *container.HostConfig, error) {
 	envSlice := mapToEnvSlice(stringMap(dc.ContainerEnv))
 	for _, f := range resolved {
 		for k, v := range f.Metadata.ContainerEnv {
@@ -111,7 +111,13 @@ func buildContainerConfig(
 	}
 	host.Mounts = mounts
 
-	return cfg, host
+	if len(dc.RunArgs) > 0 {
+		if err := applyRunArgs(dc.RunArgs, cfg, host); err != nil {
+			return nil, nil, err
+		}
+	}
+
+	return cfg, host, nil
 }
 
 // workspaceMount returns the bind mount for the workspace, honoring
