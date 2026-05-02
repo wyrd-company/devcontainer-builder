@@ -240,6 +240,27 @@ flags are rejected so a typo doesn't silently change container
 behavior. The `--entrypoint` flag is rejected because the host owns the
 keepalive entrypoint that holds the container open.
 
+`forwardPorts` and `appPort` are translated to docker port publishing.
+Bare port numbers (`3000`, `"3000"`, `"3000/udp"`, `"8000-8002"`) bind
+to `127.0.0.1:N:N` so listeners stay on loopback by default; entries
+already in `host:container` or `iface:host:container` form are
+honored verbatim. Both merge with any `-p` / `--publish` entries in
+`runArgs` rather than replacing them.
+
+`updateRemoteUserUID` is honored: when the embedder passes
+`UpRequest.RemoteUserUIDUpdate{HostUID, HostGID}` (and the spec
+doesn't override with `updateRemoteUserUID: false`), the host execs
+into the started container as root and sed-rewrites `/etc/passwd` +
+`/etc/group` so the configured `remoteUser`'s UID/GID match the
+host's, so files created in bind-mounted host paths land with the
+right ownership. The runtime behavior matches upstream's
+`scripts/updateUID.Dockerfile` — same skip cases (`remoteUser` is
+`root` or numeric, IDs already match, a colliding UID/GID exists) —
+but no rebuild and no extra image tag. The package never reads
+`os.Getuid` itself; embedders supply the IDs they want applied. The
+`devcontainer-docker up` CLI calls this on linux/macOS by default;
+pass `--update-remote-user-uid=off` to disable.
+
 The lower-level packages (`pkg/buildkit`, `pkg/dockerfile`,
 `pkg/features`, `pkg/vscode`, `pkg/lifecycle`, `pkg/substitute`) are
 stable enough to use directly when you want to assemble a different
@@ -287,9 +308,3 @@ Known gaps:
   with a separate `cmd/devcontainer-k8s` CLI for the rendering UI.
 - **`dockerComposeFile`.** Multi-container compose-style devcontainers
   aren't supported.
-- **`updateRemoteUserUID`.** UID rewriting to match the host user (to
-  avoid bind-mount permission surprises) is on the roadmap; for now
-  containers run as the spec-declared `remoteUser` without UID
-  remapping.
-- **`forwardPorts` / `appPort`.** Not yet wired through to docker port
-  publishing.

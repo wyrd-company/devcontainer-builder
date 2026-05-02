@@ -111,6 +111,10 @@ func buildContainerConfig(
 	}
 	host.Mounts = mounts
 
+	if err := applyPorts(dc.ForwardPorts, dc.AppPort, cfg, host); err != nil {
+		return nil, nil, err
+	}
+
 	if len(dc.RunArgs) > 0 {
 		if err := applyRunArgs(dc.RunArgs, cfg, host); err != nil {
 			return nil, nil, err
