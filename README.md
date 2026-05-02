@@ -1,23 +1,39 @@
 # devcontainer-builder
 
-Go package and CLI that builds [devcontainer-spec][spec] images by
-authoring a BuildKit LLB graph directly. Devcontainer features are
-pulled from OCI registries and applied as cacheable build steps; the
-VS Code server is fetched via `llb.HTTP` so it gets its own
-content-addressable cache vertex and can be reused across rebuilds.
+A Go toolkit for working with [devcontainer-spec][spec] images and
+containers, with no Node toolchain required.
 
-A buildx shell-out engine is included as a fallback for environments
-that don't have a reachable `buildkitd`.
+The packages are designed to be embedded — drop them into a service, an
+HTTP handler, or a Kubernetes operator — with thin CLIs on top for the
+"I just want a binary" case. Each CLI is a UI; the libraries are the
+substance.
+
+| Package | What it does |
+| ------- | ------------ |
+| `pkg/builder` | Build the image. Authors a BuildKit LLB graph directly so feature installs and the VS Code server are cacheable vertices; supports multi-platform, manifest-list builds, and chains the builtin `dockerfile.v0` frontend for upstream Dockerfile bases. A `docker buildx` shell-out engine is included as a fallback. |
+| `pkg/host/docker` | Run the image. Talks to the Docker Engine API directly (no `docker` CLI shell-out), creates / starts / execs / removes containers, runs the lifecycle phases (`onCreate` → `postAttach`) gated by upstream-compatible marker files. Embeddable in a service. |
+| `pkg/lifecycle` | Pure planning: returns the ordered phases for a spec + features. The same plan can be executed imperatively (docker) or projected declaratively (kubernetes, future phase). |
+| `pkg/substitute` | `${localEnv:VAR}`, `${localWorkspaceFolder}`, `${containerEnv:VAR}`, `${devcontainerId}`, and the rest of the devcontainer spec's variable substitution rules. |
+
+Marker file paths, container labels, and command-form semantics mirror
+the upstream [`devcontainers/cli`][upstream] (added as a submodule under
+`reference/`) so a container created here can be picked up by upstream
+tooling and vice versa.
 
 [spec]: https://containers.dev/
+[upstream]: https://github.com/devcontainers/cli
 
 ## Install
 
 ```sh
 go install github.com/wyrd-company/devcontainer-builder/cmd/devcontainer-builder@latest
+go install github.com/wyrd-company/devcontainer-builder/cmd/devcontainer-docker@latest
 ```
 
-## CLI
+## CLIs
+
+Two binaries: one for building images, one for running them. They share
+the same library packages.
 
 ```
 devcontainer-builder <command> [flags]
@@ -28,6 +44,17 @@ Commands:
   features   Resolve and stage devcontainer features into a directory
   server     Download a VS Code server tarball
   version    Print version information
+```
+
+```
+devcontainer-docker <command> [flags]
+
+Commands:
+  up       Build (if needed), create, start, and run lifecycle commands
+  exec     Run a command in the running devcontainer
+  down     Stop and remove the devcontainer
+  inspect  Print devcontainer state
+  version  Print version
 ```
 
 ### Examples
@@ -151,6 +178,8 @@ so the first remote attach finds the server already in place.
 
 ## Library usage
 
+### Building an image
+
 ```go
 import (
     "context"
@@ -158,22 +187,49 @@ import (
     "github.com/wyrd-company/devcontainer-builder/pkg/builder"
 )
 
-func main() {
-    res, err := builder.New().Build(context.Background(), builder.Options{
-        Workspace: ".",
-        Tags:      []string{"my-org/devbox:latest"},
-        Load:      true,
-    })
-    if err != nil {
-        panic(err)
-    }
-    _ = res
-}
+res, err := builder.New().Build(ctx, builder.Options{
+    Workspace: ".",
+    Tags:      []string{"my-org/devbox:latest"},
+    Load:      true,
+})
 ```
 
+### Running a container against the docker engine
+
+The docker host is built to be embedded — the constructor takes a
+`*client.Client` so a service or operator can manage its connection
+lifetime. The package never reads `$DOCKER_HOST`, never writes to
+stdout/stderr unless explicitly given writers, and never touches global
+state.
+
+```go
+import (
+    "github.com/docker/docker/client"
+    "github.com/wyrd-company/devcontainer-builder/pkg/host/docker"
+    "github.com/wyrd-company/devcontainer-builder/pkg/spec"
+)
+
+cli, _ := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+host := docker.New(cli, docker.Options{Stdout: os.Stdout, Stderr: os.Stderr})
+
+dc, _ := spec.LoadFromWorkspace("/path/to/workspace")
+res, err := host.Up(ctx, docker.UpRequest{
+    Spec:           dc,
+    SpecPath:       dc.Path,
+    LocalWorkspace: "/path/to/workspace",
+    Image:          "my-org/devbox:latest",
+})
+```
+
+`Up` is idempotent: it discovers an existing devcontainer for the
+workspace via the `devcontainer.local_folder` label, starts it if
+stopped, and runs only the lifecycle phases whose marker files indicate
+they need to.
+
 The lower-level packages (`pkg/buildkit`, `pkg/dockerfile`,
-`pkg/features`, `pkg/vscode`) are stable enough to use directly when
-you want to assemble a different pipeline.
+`pkg/features`, `pkg/vscode`, `pkg/lifecycle`, `pkg/substitute`) are
+stable enough to use directly when you want to assemble a different
+pipeline.
 
 ### Multi-platform builds
 
@@ -209,9 +265,22 @@ The buildx engine still pre-builds the upstream Dockerfile through
 
 ## Status
 
-Initial implementation. Known gaps:
+Known gaps:
 
-- Lifecycle commands (`postCreateCommand`, etc.) are parsed but not
-  executed at build time. They belong to the run-time start phase
-  rather than the image build, and need a separate `up`/`exec`
-  command path that this tool intentionally does not own.
+- **Kubernetes host.** Planned. The pure `pkg/lifecycle` package
+  produces an ordered phase plan that's ready to be projected into
+  Pod / Deployment manifests by a future `pkg/projection/kubernetes`,
+  with a separate `cmd/devcontainer-k8s` CLI for the rendering UI.
+- **`runArgs` parsing.** The docker host honors structured spec fields
+  (`mounts`, `containerEnv`, `init`, `privileged`, `capAdd`,
+  `securityOpt`, `containerUser`) but not arbitrary `runArgs` strings,
+  which are docker-CLI flags. Needs a flag parser to translate to the
+  engine API.
+- **`dockerComposeFile`.** Multi-container compose-style devcontainers
+  aren't supported.
+- **`updateRemoteUserUID`.** UID rewriting to match the host user (to
+  avoid bind-mount permission surprises) is on the roadmap; for now
+  containers run as the spec-declared `remoteUser` without UID
+  remapping.
+- **`forwardPorts` / `appPort`.** Not yet wired through to docker port
+  publishing.

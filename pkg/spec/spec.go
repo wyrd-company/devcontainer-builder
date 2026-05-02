@@ -29,11 +29,11 @@ type DevContainer struct {
 	WorkspaceMount  string         `json:"workspaceMount,omitempty"`
 	Mounts          []any          `json:"mounts,omitempty"`
 	ForwardPorts    []any          `json:"forwardPorts,omitempty"`
-	OnCreate        StringOrSlice  `json:"onCreateCommand,omitempty"`
-	UpdateContent   StringOrSlice  `json:"updateContentCommand,omitempty"`
-	PostCreate      StringOrSlice  `json:"postCreateCommand,omitempty"`
-	PostStart       StringOrSlice  `json:"postStartCommand,omitempty"`
-	PostAttach      StringOrSlice  `json:"postAttachCommand,omitempty"`
+	OnCreate        Command        `json:"onCreateCommand,omitempty"`
+	UpdateContent   Command        `json:"updateContentCommand,omitempty"`
+	PostCreate      Command        `json:"postCreateCommand,omitempty"`
+	PostStart       Command        `json:"postStartCommand,omitempty"`
+	PostAttach      Command        `json:"postAttachCommand,omitempty"`
 	Init            *bool          `json:"init,omitempty"`
 	Privileged      *bool          `json:"privileged,omitempty"`
 	CapAdd          []string       `json:"capAdd,omitempty"`
@@ -58,8 +58,59 @@ type Build struct {
 	Options    []string          `json:"options,omitempty"`
 }
 
+// Command models the three forms a devcontainer lifecycle command can
+// take in devcontainer.json:
+//
+//   - String form ("npm install") — runs in a shell.
+//   - Array form (["npm", "install"]) — exec'd directly without a shell.
+//   - Object form ({"server": "npm start", "watch": ["npm", "watch"]})
+//     — multiple named commands run in parallel, each interpreted as
+//     string or array per the same rules.
+//
+// Exactly zero or one of Shell, Args, Parallel will be non-empty for a
+// well-formed value.
+type Command struct {
+	Shell    string             // string form
+	Args     []string           // array form
+	Parallel map[string]Command // object form; each value is itself a Command
+}
+
+// IsZero reports whether c carries no command at all.
+func (c Command) IsZero() bool {
+	return c.Shell == "" && len(c.Args) == 0 && len(c.Parallel) == 0
+}
+
+// UnmarshalJSON accepts string / []string / object-of-(string|[]string).
+func (c *Command) UnmarshalJSON(data []byte) error {
+	if len(data) == 0 || string(data) == "null" {
+		return nil
+	}
+	switch data[0] {
+	case '"':
+		return json.Unmarshal(data, &c.Shell)
+	case '[':
+		return json.Unmarshal(data, &c.Args)
+	case '{':
+		var m map[string]json.RawMessage
+		if err := json.Unmarshal(data, &m); err != nil {
+			return err
+		}
+		c.Parallel = make(map[string]Command, len(m))
+		for k, raw := range m {
+			var sub Command
+			if err := sub.UnmarshalJSON(raw); err != nil {
+				return fmt.Errorf("parallel command %q: %w", k, err)
+			}
+			c.Parallel[k] = sub
+		}
+		return nil
+	}
+	return fmt.Errorf("unsupported Command value: %s", string(data))
+}
+
 // StringOrSlice accepts either a single string or a list of strings, which
-// the devcontainer spec allows for command fields.
+// the devcontainer spec allows for command fields. Retained for fields
+// that don't need the parallel-object form.
 type StringOrSlice []string
 
 func (s *StringOrSlice) UnmarshalJSON(data []byte) error {
