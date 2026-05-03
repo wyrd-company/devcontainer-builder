@@ -27,7 +27,7 @@ func (h *Host) ensureVolumes(ctx context.Context, proj *types.Project) (map[stri
 		if exists {
 			continue
 		}
-		labels := projectLabels(proj.Name, proj.WorkingDir, "")
+		labels := projectLabels(proj.Name, proj.WorkingDir)
 		labels["com.docker.compose.volume"] = key
 		for k, val := range v.Labels {
 			labels[k] = val

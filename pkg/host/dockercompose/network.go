@@ -28,7 +28,7 @@ func (h *Host) ensureNetworks(ctx context.Context, proj *types.Project) (map[str
 		if exists {
 			continue
 		}
-		labels := projectLabels(proj.Name, proj.WorkingDir, "")
+		labels := projectLabels(proj.Name, proj.WorkingDir)
 		labels["com.docker.compose.network"] = key
 		for k, v := range n.Labels {
 			labels[k] = v

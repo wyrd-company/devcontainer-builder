@@ -10,22 +10,25 @@
 // The "primary service" is the one named in devcontainer.json's
 // `service` field: it's where lifecycle commands run and where Exec
 // attaches. Other services come up alongside it, ordered by their
-// compose `depends_on` graph (start-only — health gating is not yet
-// implemented; see scope notes in README).
+// compose `depends_on` graph; `service_healthy` and
+// `service_completed_successfully` conditions are honored by polling
+// the dependency's container state before the dependent is created
+// (timeout tunable via Options.DependencyTimeout).
 //
 // # Compatibility
 //
 // Containers, networks, and volumes are labeled with the standard
 // compose keys (`com.docker.compose.project`, `com.docker.compose.service`,
-// etc.) plus the devcontainer keys used by the single-container host
-// (`devcontainer.local_folder`, `devcontainer.config_file`). A project
-// brought up here can be torn down by `docker compose down -p <name>`
-// and vice versa.
+// etc.). The devcontainer-discovery labels
+// (`devcontainer.local_folder`, `devcontainer.config_file`) are
+// stamped only onto the primary service's container, matching the
+// upstream `devcontainers/cli` so editor extensions (and the
+// InspectPrimary helper) find a unique target. A project brought up
+// here can be torn down by `docker compose down -p <name>` and vice
+// versa.
 //
 // # Scope cuts in this iteration
 //
-//   - depends_on conditions: ordering only; service_healthy /
-//     service_completed_successfully are treated as service_started.
 //   - profiles, watch, configs, secrets, develop: not honored.
 //   - compose-side `build:` for non-primary services: not built; the
 //     service must reference a pullable `image:`.

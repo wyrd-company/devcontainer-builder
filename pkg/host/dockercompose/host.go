@@ -51,6 +51,11 @@ type Options struct {
 	Stderr io.Writer
 	// StopTimeout bounds graceful shutdown. Defaults to 10s.
 	StopTimeout time.Duration
+	// DependencyTimeout bounds how long Up will wait for any single
+	// `depends_on` entry to reach its declared condition
+	// (service_healthy / service_completed_successfully). Defaults to
+	// 5 minutes; the condition is rechecked every 500ms.
+	DependencyTimeout time.Duration
 }
 
 // Host is the per-daemon connection. Safe for concurrent use.
