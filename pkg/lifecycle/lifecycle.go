@@ -136,10 +136,10 @@ func Plan(dc *spec.DevContainer, resolved []features.Resolved) []Phase {
 	}
 	specOrigin := Origin{Source: "devcontainer.json"}
 	hooks := []struct {
-		hook       Hook
-		when       When
-		spec       spec.Command
-		fromFeat   func(features.Metadata) spec.Command
+		hook     Hook
+		when     When
+		spec     spec.Command
+		fromFeat func(features.Metadata) spec.Command
 	}{
 		{HookOnCreate, WhenOnce, dc.OnCreate, func(m features.Metadata) spec.Command { return m.OnCreateCommand }},
 		{HookUpdateContent, WhenOnce, dc.UpdateContent, func(m features.Metadata) spec.Command { return m.UpdateContent }},

@@ -11,9 +11,9 @@ import (
 func TestProject_ForwardPorts(t *testing.T) {
 	dc := &spec.DevContainer{
 		ForwardPorts: []any{
-			float64(3000),    // numeric (devcontainer.json parses ints as float64)
-			"8080",           // string
-			"5353/udp",       // with proto
+			float64(3000), // numeric (devcontainer.json parses ints as float64)
+			"8080",        // string
+			"5353/udp",    // with proto
 		},
 		AppPort: float64(80),
 	}

@@ -45,7 +45,7 @@ func (a runnerExecer) Exec(ctx context.Context, req runner.ExecRequest) (*runner
 }
 
 // shellSQRaw escapes single quotes for safe interpolation inside a
-// single-quoted shell literal, using the standard '\'' construction.
+// single-quoted shell literal, using the standard '\” construction.
 // Kept here as the only remaining shell-quoting need on the docker
 // side (the uid update script). Marker-script quoting lives with the
 // marker shell, in pkg/host/runner.

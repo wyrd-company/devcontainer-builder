@@ -48,7 +48,7 @@ func shouldRunMarker(ctx context.Context, execer Execer, user, markerPath, expec
 }
 
 // shellSQ wraps a string in single quotes, escaping any embedded
-// single-quote with the standard '\'' construction. Use shellSQRaw
+// single-quote with the standard '\” construction. Use shellSQRaw
 // for values that go between literal single quotes in the script
 // template (no extra outer quotes).
 func shellSQ(s string) string {

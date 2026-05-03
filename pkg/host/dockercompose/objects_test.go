@@ -126,7 +126,7 @@ func TestTranslateConfigsAndSecrets_DefaultTargets(t *testing.T) {
 		t.Fatalf("mounts: got %d want 2", len(got))
 	}
 	want := map[string]mount.Mount{
-		"/app-config":         {Type: mount.TypeBind, Source: configHost, Target: "/app-config", ReadOnly: true},
+		"/app-config":          {Type: mount.TypeBind, Source: configHost, Target: "/app-config", ReadOnly: true},
 		"/run/secrets/api-key": {Type: mount.TypeBind, Source: secretHost, Target: "/run/secrets/api-key", ReadOnly: true},
 	}
 	for _, m := range got {

@@ -44,7 +44,7 @@ func TestWrapExecCommand_UserWrapsWithSu(t *testing.T) {
 }
 
 // Single quotes in user-supplied strings must survive the
-// '\''-style escape unchanged.
+// '\”-style escape unchanged.
 func TestWrapExecCommand_QuotesEscape(t *testing.T) {
 	got := wrapExecCommand([]string{"echo", "it's fine"}, "", "/tmp", nil)
 	if !strings.Contains(got[2], `'it'\''s fine'`) {
@@ -67,5 +67,5 @@ func (e errStringT) Error() string { return string(e) }
 
 type codeErr struct{ code int }
 
-func (c codeErr) Error() string    { return "exit code" }
-func (c codeErr) ExitStatus() int  { return c.code }
+func (c codeErr) Error() string   { return "exit code" }
+func (c codeErr) ExitStatus() int { return c.code }

@@ -195,7 +195,7 @@ func joinArgvShell(argv []string) string {
 }
 
 // shellSQ wraps a string in single quotes, escaping any embedded
-// single-quote with the standard '\'' construction.
+// single-quote with the standard '\” construction.
 func shellSQ(s string) string {
 	out := make([]byte, 0, len(s)+2)
 	out = append(out, '\'')

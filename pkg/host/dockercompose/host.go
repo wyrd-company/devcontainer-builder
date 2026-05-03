@@ -13,16 +13,16 @@ import (
 // rediscovered by either this package or the upstream `docker compose`
 // CLI. Keys match docker/compose's own constants.
 const (
-	LabelProject       = "com.docker.compose.project"
-	LabelService       = "com.docker.compose.service"
-	LabelOneoff        = "com.docker.compose.oneoff"
-	LabelConfigHash    = "com.docker.compose.config-hash"
-	LabelContainerN    = "com.docker.compose.container-number"
-	LabelWorkingDir    = "com.docker.compose.project.working_dir"
-	LabelConfigFiles   = "com.docker.compose.project.config_files"
-	LabelDependencies  = "com.docker.compose.depends_on"
-	LabelVersion       = "com.docker.compose.version"
-	LabelComposeVer    = "3.13.0" // minimum compose version we claim
+	LabelProject      = "com.docker.compose.project"
+	LabelService      = "com.docker.compose.service"
+	LabelOneoff       = "com.docker.compose.oneoff"
+	LabelConfigHash   = "com.docker.compose.config-hash"
+	LabelContainerN   = "com.docker.compose.container-number"
+	LabelWorkingDir   = "com.docker.compose.project.working_dir"
+	LabelConfigFiles  = "com.docker.compose.project.config_files"
+	LabelDependencies = "com.docker.compose.depends_on"
+	LabelVersion      = "com.docker.compose.version"
+	LabelComposeVer   = "3.13.0" // minimum compose version we claim
 )
 
 // Devcontainer-side labels mirrored from pkg/host/docker so a project

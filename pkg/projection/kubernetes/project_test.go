@@ -125,8 +125,8 @@ func TestProject_ContainerEnvAndFeatureMerge(t *testing.T) {
 			Source: "ghcr.io/example/node:1",
 			Metadata: features.Metadata{
 				ContainerEnv: map[string]string{
-					"BAR":         "from-feature",
-					"NODE_ENV":    "development",
+					"BAR":      "from-feature",
+					"NODE_ENV": "development",
 				},
 			},
 		},

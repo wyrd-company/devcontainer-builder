@@ -213,7 +213,7 @@ func (d *Downloader) resolveLatestCommit(ctx context.Context, quality Quality, a
 		return "", fmt.Errorf("update api %s: %s: %s", url, resp.Status, string(body))
 	}
 	var payload struct {
-		Version    string `json:"version"`
+		Version        string `json:"version"`
 		ProductVersion string `json:"productVersion"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {

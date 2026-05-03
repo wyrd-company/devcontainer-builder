@@ -10,19 +10,19 @@ import (
 
 func TestEvalCondition_Healthy(t *testing.T) {
 	cases := []struct {
-		name      string
-		state     *container.State
-		wantDone  bool
-		wantErr   string // substring; "" expects no error
+		name     string
+		state    *container.State
+		wantDone bool
+		wantErr  string // substring; "" expects no error
 	}{
 		{
-			name:    "healthy",
-			state:   &container.State{Health: &container.Health{Status: container.Healthy}},
+			name:     "healthy",
+			state:    &container.State{Health: &container.Health{Status: container.Healthy}},
 			wantDone: true,
 		},
 		{
-			name:    "starting",
-			state:   &container.State{Health: &container.Health{Status: container.Starting}},
+			name:     "starting",
+			state:    &container.State{Health: &container.Health{Status: container.Starting}},
 			wantDone: false,
 		},
 		{
