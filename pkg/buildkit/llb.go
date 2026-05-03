@@ -15,6 +15,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/distribution/reference"
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/client/llb/imagemetaresolver"
 	"github.com/opencontainers/go-digest"
@@ -112,8 +113,12 @@ func Build(in GraphInputs) (llb.State, error) {
 	if in.BaseState != nil {
 		state = *in.BaseState
 	} else {
+		imageRef, err := normalizeImageRef(in.BaseImage)
+		if err != nil {
+			return llb.State{}, err
+		}
 		imageOpts := []llb.ImageOption{
-			llb.WithCustomNamef("FROM %s", in.BaseImage),
+			llb.WithCustomNamef("FROM %s", imageRef),
 		}
 		if in.ResolveImageConfig {
 			imageOpts = append(imageOpts, llb.WithMetaResolver(imagemetaresolver.Default()))
@@ -121,7 +126,7 @@ func Build(in GraphInputs) (llb.State, error) {
 		if in.hasPlatform() {
 			imageOpts = append(imageOpts, llb.Platform(in.ociPlatform()))
 		}
-		state = llb.Image(in.BaseImage, imageOpts...)
+		state = llb.Image(imageRef, imageOpts...)
 	}
 
 	// containerEnv from spec.
@@ -160,12 +165,21 @@ func Build(in GraphInputs) (llb.State, error) {
 	}
 
 	if in.Spec.WorkspaceFolder != "" {
+		state = ensureDir(state, in.Spec.WorkspaceFolder, cOpts)
 		state = state.Dir(in.Spec.WorkspaceFolder)
 	}
 	if u := remoteUser(in); u != "" && u != "root" {
 		state = state.User(u)
 	}
 	return state, nil
+}
+
+func normalizeImageRef(raw string) (string, error) {
+	ref, err := reference.ParseNormalizedNamed(raw)
+	if err != nil {
+		return "", fmt.Errorf("parse image reference %q: %w", raw, err)
+	}
+	return reference.TagNameOnly(ref).String(), nil
 }
 
 func remoteUser(in GraphInputs) string {
@@ -178,6 +192,18 @@ func remoteUser(in GraphInputs) string {
 		return in.Spec.ContainerUser
 	}
 	return ""
+}
+
+func ensureDir(base llb.State, dir string, cOpts []llb.ConstraintsOpt) llb.State {
+	runOpts := []llb.RunOption{
+		llb.WithCustomNamef("create workspace folder %s", dir),
+		llb.User("root"),
+		llb.Args([]string{"/bin/sh", "-c", "mkdir -p " + shellQuote(dir)}),
+	}
+	for _, c := range cOpts {
+		runOpts = append(runOpts, c)
+	}
+	return base.Run(runOpts...).Root()
 }
 
 // applyFeature mounts the feature directory from the local context into
@@ -199,7 +225,6 @@ func applyFeature(base, localCtx llb.State, subdir string, f features.Resolved, 
 		llb.Args([]string{"/bin/sh", "-c", cmd}),
 		llb.AddMount(mountTarget, localCtx,
 			llb.SourcePath(srcSub),
-			llb.Readonly,
 		),
 	}
 	for _, c := range cOpts {

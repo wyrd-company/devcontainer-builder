@@ -311,7 +311,13 @@ func (b *Builder) prepareBuildContext(ctx context.Context, opts Options, logf fu
 func (b *Builder) runBuildx(ctx context.Context, opts Options, dfPath, ctxDir string,
 	dc *spec.DevContainer, baseImage string, result *Result, logf func(string, ...any),
 ) error {
-	_ = baseImage
+	if shouldRemoveBuildxBase(dc, baseImage) {
+		defer func() {
+			if err := dockerImageRemove(ctx, baseImage); err != nil {
+				logf("could not remove temporary base image %s: %v", baseImage, err)
+			}
+		}()
+	}
 	build := buildx.Build{
 		ContextDir: ctxDir,
 		Dockerfile: dfPath,
@@ -334,6 +340,10 @@ func (b *Builder) runBuildx(ctx context.Context, opts Options, dfPath, ctxDir st
 	logf("running: docker %s", strings.Join(build.Args(), " "))
 	result.BuildxArgs = build.Args()
 	return build.Run(ctx)
+}
+
+func shouldRemoveBuildxBase(dc *spec.DevContainer, image string) bool {
+	return dc != nil && dc.DockerfilePath() != "" && strings.HasPrefix(image, "devcontainer-builder/base:")
 }
 
 func (b *Builder) runBuildKit(ctx context.Context, opts Options, ctxDir string,
@@ -412,6 +422,13 @@ func dockerLoad(ctx context.Context, path string, stdout, stderr io.Writer) erro
 	c := exec.CommandContext(ctx, "docker", "load", "-i", path)
 	c.Stdout = stdout
 	c.Stderr = stderr
+	return c.Run()
+}
+
+func dockerImageRemove(ctx context.Context, image string) error {
+	c := exec.CommandContext(ctx, "docker", "image", "rm", "-f", image)
+	c.Stdout = io.Discard
+	c.Stderr = io.Discard
 	return c.Run()
 }
 

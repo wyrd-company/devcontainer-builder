@@ -288,12 +288,16 @@ func buildOnePlatform(
 		baseState = st
 		baseConfig = cfg
 	} else if spec.Graph.ResolveImageConfig {
-		_, _, cfg, err := gc.ResolveImageConfig(ctx, spec.Graph.BaseImage, sourceresolver.Opt{
+		imageRef, err := normalizeImageRef(spec.Graph.BaseImage)
+		if err != nil {
+			return nil, nil, err
+		}
+		_, _, cfg, err := gc.ResolveImageConfig(ctx, imageRef, sourceresolver.Opt{
 			Platform: &p,
 			ImageOpt: &sourceresolver.ResolveImageOpt{},
 		})
 		if err != nil {
-			return nil, nil, fmt.Errorf("resolve base image %s: %w", spec.Graph.BaseImage, err)
+			return nil, nil, fmt.Errorf("resolve base image %s: %w", imageRef, err)
 		}
 		baseConfig = cfg
 	}

@@ -41,8 +41,18 @@ func TestBuild_BareImage(t *testing.T) {
 		BaseImage:          "alpine:3.20",
 		ResolveImageConfig: false,
 	})
-	if !strings.Contains(got, "alpine:3.20") {
+	if !strings.Contains(got, "docker.io/library/alpine:3.20") {
 		t.Errorf("expected alpine reference in graph, got:\n%s", got)
+	}
+}
+
+func TestNormalizeImageRef(t *testing.T) {
+	got, err := normalizeImageRef("alpine:3.20")
+	if err != nil {
+		t.Fatalf("normalizeImageRef: %v", err)
+	}
+	if got != "docker.io/library/alpine:3.20" {
+		t.Fatalf("normalizeImageRef = %q, want docker.io/library/alpine:3.20", got)
 	}
 }
 
@@ -69,6 +79,20 @@ func TestBuild_FeatureRunsAsRoot(t *testing.T) {
 		if !strings.Contains(got, want) {
 			t.Errorf("missing %q in graph", want)
 		}
+	}
+}
+
+func TestBuild_WorkspaceFolderIsCreated(t *testing.T) {
+	got := marshalGraph(t, GraphInputs{
+		Spec: &spec.DevContainer{
+			Image:           "alpine",
+			WorkspaceFolder: "/workspaces/demo",
+		},
+		BaseImage:          "alpine",
+		ResolveImageConfig: false,
+	})
+	if !strings.Contains(got, "mkdir -p /workspaces/demo") {
+		t.Errorf("missing workspace mkdir in graph:\n%s", got)
 	}
 }
 

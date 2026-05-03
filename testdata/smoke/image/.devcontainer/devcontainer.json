@@ -1,6 +1,7 @@
 {
   "name": "smoke-image",
   "image": "alpine:3.20",
+  "remoteUser": "nobody",
   "workspaceFolder": "/workspaces/smoke-image",
   "containerEnv": {
     "DCB_SMOKE": "image"
