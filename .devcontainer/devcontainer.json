@@ -4,9 +4,15 @@
   "features": {
     "ghcr.io/devcontainers/features/go:1": {
       "golangciLintVersion": "2.11.4"
-    }
+    },
+    "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {}
   },
   "mounts": [
+    {
+        "source": "/var/run/docker.sock",
+        "target": "/var/run/docker.sock",
+        "type": "bind"
+    },
     {
         "source": "claude",
         "target": "/home/vscode/.claude",

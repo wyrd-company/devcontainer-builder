@@ -1,0 +1,10 @@
+{
+  "name": "smoke-features",
+  "image": "alpine:3.20",
+  "workspaceFolder": "/workspaces/smoke-features",
+  "features": {
+    "./features/marker": {
+      "marker": "/usr/local/share/dcb-smoke-feature"
+    }
+  }
+}

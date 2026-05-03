@@ -1,0 +1,11 @@
+{
+  "id": "marker",
+  "version": "1.0.0",
+  "name": "Smoke Marker",
+  "options": {
+    "marker": {
+      "type": "string",
+      "default": "/usr/local/share/dcb-smoke-feature"
+    }
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "name": "smoke-dockerfile",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": "."
+  },
+  "workspaceFolder": "/workspaces/smoke-dockerfile",
+  "containerEnv": {
+    "DCB_SMOKE": "dockerfile"
+  }
+}
