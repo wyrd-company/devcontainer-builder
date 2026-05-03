@@ -26,8 +26,13 @@ type translation struct {
 // container.Config / HostConfig / NetworkingConfig triple that
 // ContainerCreate expects.
 //
-// Coverage limits (see package doc): tmpfs/image/cluster volume
-// types and configs/secrets/profiles are not honored.
+// Coverage limits (see package doc): image/cluster volume types are
+// rejected. tmpfs is honored via HostConfig.Tmpfs (compose tmpfs
+// volumes return an error from translateVolumes — use the service-
+// level `tmpfs:` field instead). Configs and secrets are honored when
+// a non-nil materializer is supplied; the materializer resolves each
+// to an on-host file the daemon then bind-mounts read-only into the
+// container.
 func translateService(
 	proj *types.Project,
 	svc types.ServiceConfig,
@@ -35,6 +40,7 @@ func translateService(
 	labels map[string]string,
 	networkNames map[string]string,
 	volumeNames map[string]string,
+	materializer *objectMaterializer,
 ) (*translation, error) {
 	cfg := &container.Config{
 		Image:      svc.Image,
@@ -103,7 +109,11 @@ func translateService(
 	if err != nil {
 		return nil, err
 	}
-	host.Mounts = mounts
+	objMounts, err := translateConfigsAndSecrets(proj, svc, materializer)
+	if err != nil {
+		return nil, err
+	}
+	host.Mounts = append(mounts, objMounts...)
 
 	netCfg := &network.NetworkingConfig{
 		EndpointsConfig: map[string]*network.EndpointSettings{},

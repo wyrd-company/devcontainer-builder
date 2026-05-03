@@ -41,8 +41,15 @@ type UpRequest struct {
 	// lifecycle commands are merged into the primary service.
 	Features []features.Resolved
 	// LocalEnv is forwarded to compose's `${VAR}` interpolation and
-	// to ${localEnv:VAR} substitution in the spec.
+	// to ${localEnv:VAR} substitution in the spec. It's also the
+	// lookup table for `environment:` source secrets/configs.
 	LocalEnv map[string]string
+	// Profiles activates compose service profiles. Services whose
+	// `profiles:` are set to a non-empty list are excluded unless one
+	// matches an entry here (or "*" is supplied). The primary service
+	// (spec.Service) is always kept; its declared profiles are folded
+	// into the active set so its own dependencies-by-profile come up.
+	Profiles []string
 }
 
 // UpResult reports what happened.
@@ -142,6 +149,19 @@ func (h *Host) Up(ctx context.Context, req UpRequest) (*UpResult, error) {
 		return nil, err
 	}
 
+	// Filter the project by active profiles. The primary always
+	// stays enabled — without it there's no devcontainer — and any
+	// service named in spec.RunServices does too, matching `docker
+	// compose up <svc>`'s behavior of implicitly activating each
+	// argument's profiles.
+	keepEnabled := append([]string{req.Spec.Service}, req.Spec.RunServices...)
+	proj, err = applyProfiles(proj, req.Profiles, keepEnabled)
+	if err != nil {
+		return nil, errorf("apply profiles: %w", err)
+	}
+
+	materializer := newObjectMaterializer(proj.Name, req.LocalEnv)
+
 	// Build any non-primary services that declare a compose-side
 	// `build:` block. The primary's compose `build:` (if any) is
 	// already baked into req.PrimaryImage by BuildPrimaryImage, so
@@ -190,7 +210,7 @@ func (h *Host) Up(ctx context.Context, req UpRequest) (*UpResult, error) {
 		}
 		hash := serviceConfigHash(*svc)
 		labels := containerLabels(proj.Name, req.LocalWorkspace, req.SpecPath, name, hash, dependsOnList(*svc), isPrimary)
-		id, created, started, recreated, err := h.bringUp(ctx, proj, *svc, labels, hash, netNames, volNames)
+		id, created, started, recreated, err := h.bringUp(ctx, proj, *svc, labels, hash, netNames, volNames, materializer)
 		if err != nil {
 			return fmt.Errorf("service %q: %w", name, err)
 		}
@@ -240,6 +260,7 @@ func (h *Host) bringUp(
 	ctx context.Context, proj *types.Project, svc types.ServiceConfig,
 	labels map[string]string, expectedHash string,
 	netNames, volNames map[string]string,
+	materializer *objectMaterializer,
 ) (string, bool, bool, bool, error) {
 	containerName := composeContainerName(proj.Name, svc.Name)
 	id, err := h.findExisting(ctx, proj.Name, svc.Name)
@@ -263,7 +284,7 @@ func (h *Host) bringUp(
 	}
 	created := false
 	if id == "" {
-		t, err := translateService(proj, svc, containerName, labels, netNames, volNames)
+		t, err := translateService(proj, svc, containerName, labels, netNames, volNames, materializer)
 		if err != nil {
 			return "", false, false, false, err
 		}

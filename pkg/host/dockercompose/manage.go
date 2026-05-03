@@ -195,6 +195,11 @@ func (h *Host) Remove(ctx context.Context, localWorkspace string) error {
 			h.logf("remove volume %s: %v", v.Name, err)
 		}
 	}
+	// Drop any materialized configs/secrets on the host: the project
+	// is gone, so the temp files have nothing left to back.
+	if err := removeMaterialized(projectName); err != nil {
+		h.logf("remove materialized objects for %s: %v", projectName, err)
+	}
 	return nil
 }
 

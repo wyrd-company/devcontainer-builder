@@ -417,6 +417,28 @@ translate as:
 - **image / cluster** → returns an error rather than silently
   dropping.
 
+Compose `configs:`, `secrets:`, and `profiles:` are honored:
+
+- **Profiles.** `ComposeProjectRequest.Profiles` narrows the
+  projected Pod to services whose `profiles:` match (or `"*"`),
+  always keeping the primary.
+- **Configs.** Each top-level config becomes a generated
+  `ConfigMap` carrying the file content under a sanitized data
+  key. Service refs become `volumeMounts` with `subPath:` so only
+  the addressed file lands at the target path. `external: true`
+  references a pre-existing ConfigMap by name and emits no new
+  resource.
+- **Secrets.** Same shape as configs but emitted as `Secret`
+  (type `Opaque`) and mounted at `/run/secrets/<source>` by
+  default. `environment:` sources read `ComposeProjectRequest.LocalEnv`
+  at projection time so the value is baked into the resulting
+  Secret. `external: true` references a pre-existing Secret by
+  name.
+
+`ComposeProjection` carries the generated resources alongside
+the Pod and PVCs (`ConfigMaps`, `Secrets`); the caller applies
+them before the Pod.
+
 Compose-mode Kubernetes scope cuts:
 
 - **`depends_on`.** Containers in a Pod can't be ordered through
@@ -431,8 +453,10 @@ Compose-mode Kubernetes scope cuts:
   `image:`; `BuildPrimaryImage` from `pkg/host/dockercompose` lets
   you bake features into the primary's derived image, but compose
   `build:` for any service is not honored.
-- **Profiles, `watch`, `develop`, `configs`, `secrets`.** Not
-  honored — same as the docker compose host.
+- **`watch` / `develop`.** Not projected — file-watch loops aren't
+  a static manifest concept. The imperative
+  `pkg/host/dockercompose` host has `Watch()` for that. Use it
+  alongside the projected Pod, or run an external sync tool.
 - **`forwardPorts`/`appPort` vs compose `ports:`.** `forwardPorts`
   and `appPort` are merged onto the primary's ContainerPorts. The
   compose `ports:` field is also translated (one ContainerPort per
@@ -557,11 +581,34 @@ res, err := host.Up(ctx, dockercompose.UpRequest{
 // maps every started service to its container ID.
 ```
 
-Compose-mode scope cuts in this iteration — handled in a future pass
-rather than silently dropped:
+Profiles, configs, secrets, and develop/watch are honored:
 
-- **Profiles, `watch`, `develop`, `configs`, `secrets`.** Not
-  honored.
+- **Profiles.** `UpRequest.Profiles` activates compose service
+  profiles; services whose `profiles:` is non-empty are excluded
+  unless one entry matches (or `"*"` is passed). The primary
+  service (and any name in `spec.runServices`) stays enabled
+  regardless, matching `docker compose up <svc>`'s implicit
+  profile activation.
+- **Configs / secrets.** Top-level `configs:` and `secrets:` are
+  translated to read-only bind mounts on the engine API call.
+  Default targets mirror upstream (`/<source>` for configs,
+  `/run/secrets/<source>` for secrets) and explicit `target:`
+  overrides land verbatim. Sources can be `file:`, `environment:`
+  (read from `UpRequest.LocalEnv`), or `content:`; the latter two
+  materialize to a project-scoped path under `$TMPDIR/dcb-compose`
+  that `Remove()` cleans up. `external: true` and `driver:` return
+  an error rather than being silently dropped.
+- **`develop.watch` via `Host.Watch`.** A separate call from `Up`
+  that polls each trigger's `path:` and fires the configured
+  action on change: `sync` tars deltas through `CopyToContainer`;
+  `restart` calls `ContainerRestart`; `sync+restart` does both;
+  `sync+exec` syncs and then runs `exec.command:` via the same
+  exec path lifecycle commands use. `rebuild` is rejected (it
+  would need the build pipeline). Include/ignore globs accept
+  `*`/`?`/`**`. Watch blocks until ctx is cancelled.
+
+Compose-mode scope cuts that remain:
+
 - **Volume types.** Bind and named volumes are translated; tmpfs,
   image, and cluster volume types return an error rather than being
   silently dropped.
@@ -645,4 +692,10 @@ Two more compose-mode gaps are now closed:
   behavior. `UpResult.RecreatedThisCall` lists which services were
   rebuilt.
 
-The remaining compose-mode scope cuts (profiles/watch/develop/configs/secrets, `forwardPorts`/`appPort` overlay, tmpfs/image/cluster volume types) are listed under "Compose-mode scope cuts" above.
+And the remaining compose-feature gaps from the prior iteration —
+`profiles`, `configs`, `secrets`, `develop.watch` — are closed
+across both the dockercompose host and the kubernetes projection.
+See "Compose-mode scope cuts" above for the per-feature contract;
+the only compose-mode scope cuts left are tmpfs/image/cluster
+volume types and the `forwardPorts`/`appPort` vs compose `ports:`
+overlap.
