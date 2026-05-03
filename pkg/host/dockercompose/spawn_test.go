@@ -19,7 +19,7 @@ func TestTranslateService_NetworksGetAliases(t *testing.T) {
 	}
 	netNames := map[string]string{"default": "proj_abc_default"}
 
-	tr, err := translateService(proj, svc, "proj_abc-app-1", nil, netNames, nil)
+	tr, err := translateService(proj, svc, "proj_abc-app-1", nil, netNames, nil, nil)
 	if err != nil {
 		t.Fatalf("translateService: %v", err)
 	}
@@ -45,7 +45,7 @@ func TestTranslateService_NamedVolumeRenamed(t *testing.T) {
 	}
 	volNames := map[string]string{"data": "proj_abc_data"}
 
-	tr, err := translateService(proj, svc, "proj_abc-app-1", nil, nil, volNames)
+	tr, err := translateService(proj, svc, "proj_abc-app-1", nil, nil, volNames, nil)
 	if err != nil {
 		t.Fatalf("translateService: %v", err)
 	}
@@ -73,7 +73,7 @@ func TestTranslateService_RejectsUnsupportedVolumeType(t *testing.T) {
 			{Type: "tmpfs", Target: "/tmp/x"},
 		},
 	}
-	_, err := translateService(proj, svc, "proj_abc-app-1", nil, nil, nil)
+	_, err := translateService(proj, svc, "proj_abc-app-1", nil, nil, nil, nil)
 	if err == nil {
 		t.Fatal("translateService: expected error for tmpfs volume type")
 	}
@@ -89,7 +89,7 @@ func TestTranslateService_PortsExposeAndPublish(t *testing.T) {
 			{Target: 9000, Protocol: "tcp"}, // expose-only
 		},
 	}
-	tr, err := translateService(proj, svc, "proj_abc-app-1", nil, nil, nil)
+	tr, err := translateService(proj, svc, "proj_abc-app-1", nil, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("translateService: %v", err)
 	}

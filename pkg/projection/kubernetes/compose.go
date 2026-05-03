@@ -90,14 +90,29 @@ type ComposeProjectRequest struct {
 	// VolumeStorageRequest is the per-PVC storage request. Defaults
 	// to DefaultComposeVolumeStorage when zero.
 	VolumeStorageRequest resource.Quantity
+
+	// Profiles activates compose service profiles. Services whose
+	// `profiles:` list is non-empty are excluded from the projected
+	// Pod unless one of their entries matches Profiles (or Profiles
+	// contains "*"). The primary service stays enabled regardless.
+	Profiles []string
+
+	// LocalEnv is the lookup table for compose `secrets:` /
+	// `configs:` declared with `environment:` source. Materializing
+	// happens at projection time, so the env variable's value is
+	// baked into the resulting Secret/ConfigMap.
+	LocalEnv map[string]string
 }
 
-// ComposeProjection bundles the rendered Pod with any PVCs that need
-// to exist for the Pod's volume references to resolve. The caller
-// applies them in order (PVCs first, then the Pod).
+// ComposeProjection bundles the rendered Pod with any PVCs, Secrets,
+// and ConfigMaps that need to exist for the Pod's volume references
+// to resolve. The caller applies them in order (PVCs/ConfigMaps/
+// Secrets first, then the Pod).
 type ComposeProjection struct {
 	Pod                    *corev1.Pod
 	PersistentVolumeClaims []*corev1.PersistentVolumeClaim
+	ConfigMaps             []*corev1.ConfigMap
+	Secrets                []*corev1.Secret
 }
 
 // ProjectCompose translates a compose-mode devcontainer into a
@@ -109,7 +124,9 @@ type ComposeProjection struct {
 //
 //   - depends_on: containers in a Pod can't be ordered through the
 //     compose model; compose `depends_on` is ignored.
-//   - profiles, watch, develop, configs, secrets: not honored.
+//   - watch / develop: file-watch loops aren't a static manifest
+//     concept and aren't honored by the projection. The imperative
+//     pkg/host/dockercompose host has Watch() for that.
 //   - Compose-side `build:` for any service (including the primary):
 //     not built. Each service must reference a pullable `image:`.
 //   - tmpfs/image/cluster volume types: tmpfs translates to
@@ -119,6 +136,16 @@ type ComposeProjection struct {
 //     communication is via 127.0.0.1:port. This deviates from
 //     compose; document it in the spec or restructure into a
 //     multi-Deployment shape instead.
+//
+// Profiles, configs, and secrets are honored:
+//
+//   - Profiles narrow the projected Pod to services whose `profiles:`
+//     match `req.Profiles` (with "*" as a wildcard). The primary
+//     stays enabled regardless.
+//   - Configs become ConfigMaps (or external references) and are
+//     mounted at `/<source>` by default.
+//   - Secrets become Secrets (or external references) and are
+//     mounted at `/run/secrets/<source>` by default.
 func ProjectCompose(req ComposeProjectRequest) (*ComposeProjection, error) {
 	if req.Spec == nil {
 		return nil, errors.New("kubernetes projection: ComposeProjectRequest.Spec is required")
@@ -129,7 +156,11 @@ func ProjectCompose(req ComposeProjectRequest) (*ComposeProjection, error) {
 	if req.Project == nil {
 		return nil, errors.New("kubernetes projection: ComposeProjectRequest.Project is required")
 	}
-	primary, err := req.Project.GetService(req.Spec.Service)
+	proj, err := applyComposeProfiles(req.Project, req.Profiles, req.Spec.Service)
+	if err != nil {
+		return nil, fmt.Errorf("kubernetes projection: %w", err)
+	}
+	primary, err := proj.GetService(req.Spec.Service)
 	if err != nil {
 		return nil, fmt.Errorf("kubernetes projection: primary service %q not found in compose project", req.Spec.Service)
 	}
@@ -156,7 +187,19 @@ func ProjectCompose(req ComposeProjectRequest) (*ComposeProjection, error) {
 	// with the literal compose name and don't generate a PVC of our
 	// own. The result map is keyed by the compose volume key (e.g.
 	// "data") and carries the Pod-side volume name + an optional PVC.
-	volMap, pvcs, err := projectComposeNamedVolumes(req.Project, req.Name, req.Namespace, req.VolumeStorageClass, storage, req.Labels)
+	volMap, pvcs, err := projectComposeNamedVolumes(proj, req.Name, req.Namespace, req.VolumeStorageClass, storage, req.Labels)
+	if err != nil {
+		return nil, err
+	}
+
+	// Project compose configs/secrets into ConfigMaps/Secrets. Each
+	// returns a resource (or nil for `external: true`) and a binding
+	// the per-service translator uses to wire up Pod volumes.
+	configMaps, configBindings, err := projectComposeConfigs(proj, req)
+	if err != nil {
+		return nil, err
+	}
+	secrets, secretBindings, err := projectComposeSecrets(proj, req)
 	if err != nil {
 		return nil, err
 	}
@@ -203,7 +246,7 @@ func ProjectCompose(req ComposeProjectRequest) (*ComposeProjection, error) {
 		return nil, fmt.Errorf("kubernetes projection: primary service %q has no image (compose-side build for primary is out of scope)", dc.Service)
 	}
 
-	primaryC, primaryVols, err := buildPrimaryContainer(dc, &primary, primaryImage, containerWorkspace, req, volMap)
+	primaryC, primaryVols, err := buildPrimaryContainer(dc, &primary, primaryImage, containerWorkspace, req, volMap, configBindings, secretBindings)
 	if err != nil {
 		return nil, err
 	}
@@ -214,17 +257,17 @@ func ProjectCompose(req ComposeProjectRequest) (*ComposeProjection, error) {
 
 	// Sidecars: every other service in the project, in name order
 	// for stable output.
-	sideNames := make([]string, 0, len(req.Project.Services))
-	for _, s := range req.Project.AllServices() {
-		if s.Name == dc.Service {
+	sideNames := make([]string, 0, len(proj.Services))
+	for _, name := range proj.ServiceNames() {
+		if name == dc.Service {
 			continue
 		}
-		sideNames = append(sideNames, s.Name)
+		sideNames = append(sideNames, name)
 	}
 	sort.Strings(sideNames)
 	for _, name := range sideNames {
-		svc, _ := req.Project.GetService(name)
-		c, vols, err := buildSidecarContainer(svc, volMap)
+		svc, _ := proj.GetService(name)
+		c, vols, err := buildSidecarContainer(svc, volMap, configBindings, secretBindings)
 		if err != nil {
 			return nil, fmt.Errorf("service %q: %w", name, err)
 		}
@@ -234,7 +277,37 @@ func ProjectCompose(req ComposeProjectRequest) (*ComposeProjection, error) {
 		pod.Spec.Containers = append(pod.Spec.Containers, c)
 	}
 
-	return &ComposeProjection{Pod: pod, PersistentVolumeClaims: pvcs}, nil
+	return &ComposeProjection{
+		Pod:                    pod,
+		PersistentVolumeClaims: pvcs,
+		ConfigMaps:             configMaps,
+		Secrets:                secrets,
+	}, nil
+}
+
+// applyComposeProfiles narrows the project to services enabled by
+// req.Profiles, always keeping the primary. Returns the original
+// project unchanged when no profiles are supplied.
+func applyComposeProfiles(proj *composetypes.Project, profiles []string, primary string) (*composetypes.Project, error) {
+	if proj == nil {
+		return nil, errors.New("project is nil")
+	}
+	out := proj
+	if len(profiles) > 0 {
+		f, err := proj.WithProfiles(profiles)
+		if err != nil {
+			return nil, fmt.Errorf("apply profiles %v: %w", profiles, err)
+		}
+		out = f
+	}
+	if primary != "" {
+		f, err := out.WithServicesEnabled(primary)
+		if err != nil {
+			return nil, fmt.Errorf("ensure primary service %q: %w", primary, err)
+		}
+		out = f
+	}
+	return out, nil
 }
 
 // composeVolumeBinding resolves how a named compose volume is exposed
@@ -317,6 +390,7 @@ func composePVCName(podName, key string) string {
 func buildPrimaryContainer(
 	dc *spec.DevContainer, svc *composetypes.ServiceConfig, image, containerWorkspace string,
 	req ComposeProjectRequest, volMap map[string]composeVolumeBinding,
+	configBindings, secretBindings map[string]composeObjectBinding,
 ) (corev1.Container, []corev1.Volume, error) {
 	c := corev1.Container{
 		Name:       dc.Service,
@@ -366,6 +440,13 @@ func buildPrimaryContainer(
 	}
 	vols = append(vols, svcVols...)
 	c.VolumeMounts = append(c.VolumeMounts, mounts...)
+
+	objVols, objMounts, err := translateComposeServiceObjects(*svc, configBindings, secretBindings)
+	if err != nil {
+		return c, nil, err
+	}
+	vols = append(vols, objVols...)
+	c.VolumeMounts = append(c.VolumeMounts, objMounts...)
 
 	// devcontainer.json mounts and feature mounts (same translator the
 	// single-container projection uses).
@@ -425,7 +506,10 @@ func buildPrimaryContainer(
 // buildSidecarContainer assembles a container for a non-primary
 // compose service. Features and devcontainer.json fields don't apply
 // to sidecars; they take only what compose declared.
-func buildSidecarContainer(svc composetypes.ServiceConfig, volMap map[string]composeVolumeBinding) (corev1.Container, []corev1.Volume, error) {
+func buildSidecarContainer(
+	svc composetypes.ServiceConfig, volMap map[string]composeVolumeBinding,
+	configBindings, secretBindings map[string]composeObjectBinding,
+) (corev1.Container, []corev1.Volume, error) {
 	c := corev1.Container{
 		Name:       svc.Name,
 		Image:      svc.Image,
@@ -469,6 +553,13 @@ func buildSidecarContainer(svc composetypes.ServiceConfig, volMap map[string]com
 		return c, nil, fmt.Errorf("service %q: %w", svc.Name, err)
 	}
 	c.VolumeMounts = mounts
+
+	objVols, objMounts, err := translateComposeServiceObjects(svc, configBindings, secretBindings)
+	if err != nil {
+		return c, nil, fmt.Errorf("service %q: %w", svc.Name, err)
+	}
+	vols = append(vols, objVols...)
+	c.VolumeMounts = append(c.VolumeMounts, objMounts...)
 
 	ports, err := composePortsToContainerPorts(svc.Ports, svc.Name)
 	if err != nil {

@@ -52,9 +52,61 @@
 // behavior; UpResult.RecreatedThisCall lists which services were
 // destroyed and rebuilt this call.
 //
-// # Scope cuts in this iteration
+// # Profiles
 //
-//   - profiles, watch, configs, secrets, develop: not honored.
+// Up takes a Profiles slice on its request. Compose services whose
+// `profiles:` list is non-empty are excluded unless one of the
+// activated profiles matches (or "*" is passed). The primary service
+// stays enabled regardless — without it there's no devcontainer —
+// and any service named in spec.RunServices stays enabled too,
+// matching `docker compose up <svc>`'s "implicitly activate this
+// service's profiles" behavior.
+//
+// # Configs and secrets
+//
+// Top-level compose `configs:` and `secrets:` are honored in
+// standalone (non-swarm) mode. Each ServiceConfig.Configs /
+// .Secrets reference is translated into a read-only bind mount of
+// the source file into the container; default targets match
+// upstream (`/<source>` for configs, `/run/secrets/<source>` for
+// secrets) and explicit `target:` overrides land verbatim. Source
+// resolution follows the spec:
+//
+//   - `file:` is bound directly.
+//   - `environment:` reads the named host env var (from
+//     UpRequest.LocalEnv) and writes it to a project-scoped temp
+//     file under $TMPDIR/dcb-compose/<sha256(project)[:8]>/...
+//     before binding it. Remove() cleans these up.
+//   - `content:` writes the literal value to the same temp area.
+//   - `external: true` is rejected — the package doesn't speak swarm.
+//   - `driver:` is rejected — only file/env/content sources work.
+//
+// UID/GID/Mode on the FileReferenceConfig are not enforced: the bind
+// mount inherits the on-host file's ownership (matching `docker
+// compose` standalone mode).
+//
+// # Watch / develop
+//
+// Host.Watch loops over every service in the project that declares
+// `develop.watch` and polls each trigger's Path for filesystem
+// changes. Action coverage:
+//
+//   - `sync`: changed files are tarred and pushed via the
+//     CopyToContainer engine API; deletions trigger an `rm -rf`
+//     exec inside the target container.
+//   - `restart`: ContainerRestart on the target.
+//   - `sync+restart`: both.
+//   - `sync+exec`: sync, then run trigger.exec.command via the
+//     same Exec path lifecycle commands use.
+//   - `rebuild`: not honored — would need the build pipeline. Any
+//     active rebuild trigger errors out.
+//
+// Include/ignore use `*`, `?`, and `**` (leading `**/` / trailing
+// `/**`) globs. Watch blocks until ctx is cancelled; the caller
+// owns the goroutine.
+//
+// # Scope cuts
+//
 //   - tmpfs, image, and cluster volume types return an error rather
 //     than being silently dropped.
 //   - port publishing from compose `ports:` is forwarded to the engine,
