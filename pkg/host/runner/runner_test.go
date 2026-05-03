@@ -161,6 +161,39 @@ func TestRun_WhenOnce_MarkerUpToDate_Skips(t *testing.T) {
 	}
 }
 
+func TestRunWithResult_ReportsOnlyExecutedPhases(t *testing.T) {
+	plan := []lifecycle.Phase{
+		{
+			Hook:    lifecycle.HookPostCreate,
+			When:    lifecycle.WhenOnce,
+			Origin:  lifecycle.Origin{Source: "devcontainer.json"},
+			Command: spec.Command{Shell: "echo skipped"},
+		},
+		{
+			Hook:    lifecycle.HookPostAttach,
+			When:    lifecycle.WhenAttach,
+			Origin:  lifecycle.Origin{Source: "devcontainer.json"},
+			Command: spec.Command{Shell: "echo ran"},
+		},
+	}
+	f := &fakeExecer{
+		handler: func(req ExecRequest) (*ExecResult, error) {
+			if strings.Contains(req.Cmd[2], "ENOENT") {
+				return &ExecResult{ExitCode: 1}, nil
+			}
+			return &ExecResult{ExitCode: 0}, nil
+		},
+	}
+	got, err := RunWithResult(context.Background(), f, plan, Runtime{UserDataFolder: "/root/.devcontainer", CreatedAt: "x"}, Options{})
+	if err != nil {
+		t.Fatalf("RunWithResult: %v", err)
+	}
+	ran := got.RanPhases()
+	if len(ran) != 1 || ran[0].Hook != lifecycle.HookPostAttach {
+		t.Fatalf("RanPhases = %+v, want only postAttach", ran)
+	}
+}
+
 func TestRun_ShellVsArgsDispatch(t *testing.T) {
 	plan := []lifecycle.Phase{
 		{

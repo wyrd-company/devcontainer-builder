@@ -52,6 +52,10 @@ type Options struct {
 	// is used as the default build context root and to discover the
 	// spec when SpecPath is empty.
 	Workspace string
+	// FeatureBaseDir overrides the directory used to resolve relative
+	// local feature references. Empty means the devcontainer.json
+	// directory.
+	FeatureBaseDir string
 
 	// Tags applied to the produced image.
 	Tags []string
@@ -216,6 +220,9 @@ func (b *Builder) prepareBuildContext(ctx context.Context, opts Options, logf fu
 	if err != nil {
 		return
 	}
+	if err = validateBuildSupport(dc, opts.Engine); err != nil {
+		return
+	}
 	logf("loaded spec from %s", specPath)
 
 	workDir = opts.WorkDir
@@ -251,7 +258,7 @@ func (b *Builder) prepareBuildContext(ctx context.Context, opts Options, logf fu
 	if !opts.SkipFeatures && dc.Features.Len() > 0 {
 		featStaging := filepath.Join(ctxDir, "_features")
 		b.Resolver.Logger = logf
-		resolved, err = b.Resolver.Resolve(dc.Features, dc.OverrideFeature, featStaging)
+		resolved, err = b.Resolver.Resolve(dc.Features, dc.OverrideFeature, featStaging, featureBaseDir(dc, opts))
 		if err != nil {
 			err = fmt.Errorf("features: %w", err)
 			return
@@ -304,7 +311,6 @@ func (b *Builder) prepareBuildContext(ctx context.Context, opts Options, logf fu
 func (b *Builder) runBuildx(ctx context.Context, opts Options, dfPath, ctxDir string,
 	dc *spec.DevContainer, baseImage string, result *Result, logf func(string, ...any),
 ) error {
-	_ = dc
 	_ = baseImage
 	build := buildx.Build{
 		ContextDir: ctxDir,
@@ -313,8 +319,9 @@ func (b *Builder) runBuildx(ctx context.Context, opts Options, dfPath, ctxDir st
 		BuildArgs:  opts.BuildArgs,
 		Labels:     opts.Labels,
 		Platforms:  opts.Platforms,
-		CacheFrom:  opts.CacheFrom,
+		CacheFrom:  mergeSlices(buildCacheFrom(dc), opts.CacheFrom),
 		CacheTo:    opts.CacheTo,
+		ExtraArgs:  buildOptions(dc),
 		Builder:    opts.Builder,
 		Push:       opts.Push,
 		Load:       opts.Load,
@@ -334,7 +341,7 @@ func (b *Builder) runBuildKit(ctx context.Context, opts Options, ctxDir string,
 	resolved []features.Resolved, sr *vscode.Result, result *Result,
 	logf func(string, ...any),
 ) error {
-	cacheImports, cacheExports := translateCache(opts.CacheFrom, opts.CacheTo)
+	cacheImports, cacheExports := translateCache(mergeSlices(buildCacheFrom(dc), opts.CacheFrom), opts.CacheTo)
 	solveOpts := buildkit.SolveOptions{
 		Address:          opts.BuildKitAddress,
 		LocalContextName: "context",
@@ -500,6 +507,8 @@ func (b *Builder) prepareBaseImage(
 		Dockerfile: upstreamDf,
 		Tags:       []string{tag},
 		BuildArgs:  mergeArgs(buildArgsFromSpec(dc), opts.BuildArgs),
+		CacheFrom:  mergeSlices(buildCacheFrom(dc), opts.CacheFrom),
+		ExtraArgs:  buildOptions(dc),
 		Builder:    opts.Builder,
 		Load:       true,
 		Pull:       opts.Pull,
@@ -518,11 +527,55 @@ func (b *Builder) prepareBaseImage(
 	return tag, nil, nil
 }
 
+func validateBuildSupport(dc *spec.DevContainer, engine Engine) error {
+	if dc == nil || dc.Build == nil || len(dc.Build.Options) == 0 {
+		return nil
+	}
+	if engine == EngineBuildKit {
+		return fmt.Errorf("build.options is not supported by the buildkit engine; use engine=buildx or remove build.options")
+	}
+	return nil
+}
+
 func buildArgsFromSpec(dc *spec.DevContainer) map[string]string {
 	if dc.Build == nil {
 		return nil
 	}
 	return dc.Build.Args
+}
+
+func buildOptions(dc *spec.DevContainer) []string {
+	if dc == nil || dc.Build == nil || len(dc.Build.Options) == 0 {
+		return nil
+	}
+	return append([]string(nil), dc.Build.Options...)
+}
+
+func buildCacheFrom(dc *spec.DevContainer) []string {
+	if dc == nil || dc.Build == nil || len(dc.Build.CacheFrom) == 0 {
+		return nil
+	}
+	return append([]string(nil), dc.Build.CacheFrom...)
+}
+
+func mergeSlices(a, b []string) []string {
+	if len(a) == 0 && len(b) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(a)+len(b))
+	out = append(out, a...)
+	out = append(out, b...)
+	return out
+}
+
+func featureBaseDir(dc *spec.DevContainer, opts Options) string {
+	if opts.FeatureBaseDir != "" {
+		return opts.FeatureBaseDir
+	}
+	if dc == nil || dc.Path == "" {
+		return ""
+	}
+	return filepath.Dir(dc.Path)
 }
 
 func mergeArgs(a, b map[string]string) map[string]string {

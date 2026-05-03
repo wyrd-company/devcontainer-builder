@@ -16,6 +16,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 
@@ -302,7 +303,7 @@ func cmdFeatures(ctx context.Context, args []string) error {
 	}
 	r := features.New()
 	r.Logger = logger
-	resolved, err := r.Resolve(dc.Features, dc.OverrideFeature, *out)
+	resolved, err := r.Resolve(dc.Features, dc.OverrideFeature, *out, filepath.Dir(dc.Path))
 	if err != nil {
 		return err
 	}

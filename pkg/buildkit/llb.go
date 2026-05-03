@@ -159,12 +159,6 @@ func Build(in GraphInputs) (llb.State, error) {
 		}
 	}
 
-	// remoteEnv (runtime hint, but we set it as ENV to match buildx
-	// behavior).
-	for _, k := range sortedKeys(toStringMap(in.Spec.UpdateRemoteEnv)) {
-		state = state.AddEnv(k, toStringMap(in.Spec.UpdateRemoteEnv)[k])
-	}
-
 	if in.Spec.WorkspaceFolder != "" {
 		state = state.Dir(in.Spec.WorkspaceFolder)
 	}

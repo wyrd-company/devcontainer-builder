@@ -105,20 +105,52 @@ type Options struct {
 	Stderr io.Writer
 }
 
+// PhaseResult reports whether a planned phase executed or was skipped by
+// marker checks.
+type PhaseResult struct {
+	Phase lifecycle.Phase
+	Ran   bool
+}
+
+// RunResult is the structured result of a lifecycle run.
+type RunResult struct {
+	Phases []PhaseResult
+}
+
+// RanPhases returns only phases whose lifecycle command actually executed.
+func (r RunResult) RanPhases() []lifecycle.Phase {
+	out := make([]lifecycle.Phase, 0, len(r.Phases))
+	for _, p := range r.Phases {
+		if p.Ran {
+			out = append(out, p.Phase)
+		}
+	}
+	return out
+}
+
 // Run executes plan against execer in order, observing markers to skip
 // phases that have already run. The first phase that returns a
 // non-nil error short-circuits with a wrapped error identifying the
 // hook and origin.
 func Run(ctx context.Context, execer Execer, plan []lifecycle.Phase, rt Runtime, opts Options) error {
+	_, err := RunWithResult(ctx, execer, plan, rt, opts)
+	return err
+}
+
+// RunWithResult is Run plus executed/skipped phase reporting.
+func RunWithResult(ctx context.Context, execer Execer, plan []lifecycle.Phase, rt Runtime, opts Options) (*RunResult, error) {
 	if execer == nil {
-		return fmt.Errorf("runner: Execer is required")
+		return nil, fmt.Errorf("runner: Execer is required")
 	}
+	result := &RunResult{Phases: make([]PhaseResult, 0, len(plan))}
 	for _, p := range plan {
-		if err := runPhase(ctx, execer, p, rt, opts); err != nil {
-			return fmt.Errorf("%s [%s]: %w", p.Hook, p.Origin.Source, err)
+		ran, err := runPhase(ctx, execer, p, rt, opts)
+		if err != nil {
+			return result, fmt.Errorf("%s [%s]: %w", p.Hook, p.Origin.Source, err)
 		}
+		result.Phases = append(result.Phases, PhaseResult{Phase: p, Ran: ran})
 	}
-	return nil
+	return result, nil
 }
 
 func logf(opts Options, format string, args ...any) {

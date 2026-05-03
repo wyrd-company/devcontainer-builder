@@ -64,7 +64,7 @@ func (b *Builder) Generate(ctx context.Context, opts Options) (*Result, error) {
 	var resolved []features.Resolved
 	if !opts.SkipFeatures && dc.Features.Len() > 0 {
 		b.Resolver.Logger = logf
-		resolved, err = b.Resolver.Resolve(dc.Features, dc.OverrideFeature, filepath.Join(ctxDir, "_features"))
+		resolved, err = b.Resolver.Resolve(dc.Features, dc.OverrideFeature, filepath.Join(ctxDir, "_features"), featureBaseDir(dc, opts))
 		if err != nil {
 			return nil, fmt.Errorf("features: %w", err)
 		}

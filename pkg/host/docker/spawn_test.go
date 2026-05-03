@@ -45,9 +45,22 @@ func TestParseMountString_NoTargetReturnsNil(t *testing.T) {
 	}
 }
 
+func TestParseMountObject_ReadonlyBool(t *testing.T) {
+	got := parseMountObject(map[string]any{
+		"type":     "bind",
+		"source":   "/host/secrets",
+		"target":   "/run/secrets",
+		"readonly": true,
+	})
+	want := &mount.Mount{Type: mount.TypeBind, Source: "/host/secrets", Target: "/run/secrets", ReadOnly: true}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("parseMountObject readonly:\n got  %+v\n want %+v", got, want)
+	}
+}
+
 func TestBuildContainerConfig_DefaultsAndLabels(t *testing.T) {
 	dc := &spec.DevContainer{
-		ContainerEnv: map[string]any{"DEMO": "true"},
+		ContainerEnv:  map[string]any{"DEMO": "true"},
 		ContainerUser: "vscode",
 	}
 	cfg, host, err := buildContainerConfig(dc, nil, "img:latest", "/workspaces/proj", "/host/proj", "/host/proj/.devcontainer/devcontainer.json")
@@ -90,6 +103,18 @@ func TestBuildContainerConfig_DefaultsAndLabels(t *testing.T) {
 	// Keepalive entrypoint expected.
 	if len(cfg.Entrypoint) != 1 || cfg.Entrypoint[0] != "/bin/sh" {
 		t.Errorf("entrypoint: got %v", cfg.Entrypoint)
+	}
+}
+
+func TestBuildContainerConfig_OverrideCommandFalsePreservesImageCommand(t *testing.T) {
+	override := false
+	dc := &spec.DevContainer{OverrideCommand: &override}
+	cfg, _, err := buildContainerConfig(dc, nil, "img:latest", "/workspaces/proj", "/host/proj", "")
+	if err != nil {
+		t.Fatalf("buildContainerConfig: %v", err)
+	}
+	if len(cfg.Entrypoint) != 0 || len(cfg.Cmd) != 0 || cfg.StopSignal != "" {
+		t.Fatalf("overrideCommand=false should leave image entrypoint/cmd alone, got entrypoint=%v cmd=%v stop=%q", cfg.Entrypoint, cfg.Cmd, cfg.StopSignal)
 	}
 }
 

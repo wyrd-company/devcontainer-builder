@@ -106,12 +106,27 @@ type Manifest struct {
 	Annotations   ManifestAnnot `json:"annotations,omitempty"`
 }
 
+// Index is a thin model of an OCI index / Docker manifest list.
+type Index struct {
+	SchemaVersion int          `json:"schemaVersion"`
+	MediaType     string       `json:"mediaType"`
+	Manifests     []Descriptor `json:"manifests"`
+}
+
 // Descriptor is the OCI content descriptor used by manifests.
 type Descriptor struct {
 	MediaType   string            `json:"mediaType"`
 	Digest      string            `json:"digest"`
 	Size        int64             `json:"size"`
 	Annotations map[string]string `json:"annotations,omitempty"`
+	Platform    *Platform         `json:"platform,omitempty"`
+}
+
+// Platform is the OCI platform object found on index descriptors.
+type Platform struct {
+	OS           string `json:"os,omitempty"`
+	Architecture string `json:"architecture,omitempty"`
+	Variant      string `json:"variant,omitempty"`
 }
 
 // ManifestAnnot is the typed map for manifest-level annotations.
@@ -121,6 +136,13 @@ type ManifestAnnot map[string]string
 // needed by selecting the first child manifest. (For features, indexes are
 // rare; when present we just take whatever is first.)
 func (c *Client) FetchManifest(ref Reference) (*Manifest, []byte, error) {
+	return c.fetchManifest(ref, 0)
+}
+
+func (c *Client) fetchManifest(ref Reference, depth int) (*Manifest, []byte, error) {
+	if depth > 4 {
+		return nil, nil, fmt.Errorf("manifest index nesting too deep")
+	}
 	endpoint := manifestURL(ref)
 	req, err := http.NewRequest(http.MethodGet, endpoint, nil)
 	if err != nil {
@@ -144,6 +166,41 @@ func (c *Client) FetchManifest(ref Reference) (*Manifest, []byte, error) {
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, nil, err
+	}
+	mediaType := strings.TrimSpace(strings.Split(resp.Header.Get("Content-Type"), ";")[0])
+	var envelope struct {
+		MediaType string `json:"mediaType"`
+	}
+	if err := json.Unmarshal(body, &envelope); err != nil {
+		return nil, nil, fmt.Errorf("decode manifest: %w", err)
+	}
+	if envelope.MediaType != "" {
+		mediaType = envelope.MediaType
+	}
+	switch mediaType {
+	case mediaTypeOCIIndex, mediaTypeDockerManifestL:
+		var idx Index
+		if err := json.Unmarshal(body, &idx); err != nil {
+			return nil, nil, fmt.Errorf("decode index: %w", err)
+		}
+		if len(idx.Manifests) == 0 {
+			return nil, nil, fmt.Errorf("manifest index has no manifests")
+		}
+		child := idx.Manifests[0]
+		if child.Digest == "" {
+			return nil, nil, fmt.Errorf("manifest index child has no digest")
+		}
+		childRef := ref
+		childRef.Tag = ""
+		childRef.Digest = child.Digest
+		m, childBody, err := c.fetchManifest(childRef, depth+1)
+		if err != nil {
+			return nil, nil, err
+		}
+		if err := verifyDigest(child.Digest, childBody); err != nil {
+			return nil, nil, fmt.Errorf("child manifest: %w", err)
+		}
+		return m, childBody, nil
 	}
 	var m Manifest
 	if err := json.Unmarshal(body, &m); err != nil {
@@ -176,6 +233,18 @@ func (c *Client) FetchBlob(ref Reference, digest string, w io.Writer) error {
 	got := "sha256:" + hex.EncodeToString(hasher.Sum(nil))
 	if !strings.EqualFold(got, digest) {
 		return fmt.Errorf("digest mismatch: got %s want %s", got, digest)
+	}
+	return nil
+}
+
+func verifyDigest(want string, body []byte) error {
+	if want == "" {
+		return nil
+	}
+	sum := sha256.Sum256(body)
+	got := "sha256:" + hex.EncodeToString(sum[:])
+	if !strings.EqualFold(got, want) {
+		return fmt.Errorf("digest mismatch: got %s want %s", got, want)
 	}
 	return nil
 }

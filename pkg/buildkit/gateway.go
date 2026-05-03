@@ -373,8 +373,9 @@ func solveUpstreamDockerfile(
 // mergeImageConfig produces the serialized image config for the final
 // image. It clones whatever the base resolver/upstream returned (so
 // ENV / USER / WORKDIR / ENTRYPOINT carry through) and then layers in
-// the devcontainer's own contributions: containerEnv, remoteEnv,
-// workspaceFolder, remoteUser, plus the ENV from each feature.
+// the devcontainer's own image-time contributions: containerEnv,
+// workspaceFolder, remoteUser, plus the ENV from each feature. remoteEnv
+// is intentionally left for runtime exec/attach paths.
 func mergeImageConfig(base []byte, g GraphInputs, p ocispecs.Platform) ([]byte, error) {
 	var img dockerspec.DockerOCIImage
 	if len(base) > 0 {
@@ -396,9 +397,6 @@ func mergeImageConfig(base []byte, g GraphInputs, p ocispecs.Platform) ([]byte, 
 		for _, k := range sortedKeys(f.Metadata.ContainerEnv) {
 			envIndex[k] = f.Metadata.ContainerEnv[k]
 		}
-	}
-	for _, k := range sortedKeys(toStringMap(g.Spec.UpdateRemoteEnv)) {
-		envIndex[k] = toStringMap(g.Spec.UpdateRemoteEnv)[k]
 	}
 	img.Config.Env = envSlice(envIndex)
 
@@ -508,4 +506,3 @@ func buildExportsForGateway(opt SolveOptions, multi bool) ([]client.ExportEntry,
 	}
 	return exports, loadPath, nil
 }
-

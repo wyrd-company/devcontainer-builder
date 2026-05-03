@@ -58,11 +58,13 @@ func TestMergeImageConfig_AppendsEnvAndOverridesUserAndWorkdir(t *testing.T) {
 		{"EXISTING", "keep"},
 		{"DEMO", "true"},
 		{"FROM_FEATURE", "1"},
-		{"REMOTE", "yes"},
 	} {
 		if envIdx[want.k] != want.v {
 			t.Errorf("env %s: want %q got %q", want.k, want.v, envIdx[want.k])
 		}
+	}
+	if _, ok := envIdx["REMOTE"]; ok {
+		t.Errorf("remoteEnv must not be baked into image config: %+v", got.Config.Env)
 	}
 }
 

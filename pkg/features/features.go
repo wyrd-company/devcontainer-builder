@@ -28,6 +28,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -39,27 +40,27 @@ import (
 // Metadata is the parsed devcontainer-feature.json bundled inside each
 // feature artifact.
 type Metadata struct {
-	ID                 string            `json:"id"`
-	Version            string            `json:"version"`
-	Name               string            `json:"name,omitempty"`
-	Description        string            `json:"description,omitempty"`
-	DocumentationURL   string            `json:"documentationURL,omitempty"`
-	Options            map[string]Option `json:"options,omitempty"`
-	ContainerEnv       map[string]string `json:"containerEnv,omitempty"`
-	Mounts             []any             `json:"mounts,omitempty"`
-	Init               *bool             `json:"init,omitempty"`
-	Privileged         *bool             `json:"privileged,omitempty"`
-	CapAdd             []string          `json:"capAdd,omitempty"`
-	SecurityOpt        []string          `json:"securityOpt,omitempty"`
-	Entrypoint         string            `json:"entrypoint,omitempty"`
-	InstallsAfter      []string          `json:"installsAfter,omitempty"`
-	LegacyIDs          []string          `json:"legacyIds,omitempty"`
-	Deprecated         bool              `json:"deprecated,omitempty"`
-	OnCreateCommand    spec.Command `json:"onCreateCommand,omitempty"`
-	UpdateContent      spec.Command `json:"updateContentCommand,omitempty"`
-	PostCreateCommand  spec.Command `json:"postCreateCommand,omitempty"`
-	PostStartCommand   spec.Command `json:"postStartCommand,omitempty"`
-	PostAttachCommand  spec.Command `json:"postAttachCommand,omitempty"`
+	ID                string            `json:"id"`
+	Version           string            `json:"version"`
+	Name              string            `json:"name,omitempty"`
+	Description       string            `json:"description,omitempty"`
+	DocumentationURL  string            `json:"documentationURL,omitempty"`
+	Options           map[string]Option `json:"options,omitempty"`
+	ContainerEnv      map[string]string `json:"containerEnv,omitempty"`
+	Mounts            []any             `json:"mounts,omitempty"`
+	Init              *bool             `json:"init,omitempty"`
+	Privileged        *bool             `json:"privileged,omitempty"`
+	CapAdd            []string          `json:"capAdd,omitempty"`
+	SecurityOpt       []string          `json:"securityOpt,omitempty"`
+	Entrypoint        string            `json:"entrypoint,omitempty"`
+	InstallsAfter     []string          `json:"installsAfter,omitempty"`
+	LegacyIDs         []string          `json:"legacyIds,omitempty"`
+	Deprecated        bool              `json:"deprecated,omitempty"`
+	OnCreateCommand   spec.Command      `json:"onCreateCommand,omitempty"`
+	UpdateContent     spec.Command      `json:"updateContentCommand,omitempty"`
+	PostCreateCommand spec.Command      `json:"postCreateCommand,omitempty"`
+	PostStartCommand  spec.Command      `json:"postStartCommand,omitempty"`
+	PostAttachCommand spec.Command      `json:"postAttachCommand,omitempty"`
 }
 
 // Option models a single configurable feature option.
@@ -113,9 +114,10 @@ func (r *Resolver) logf(format string, args ...any) {
 	}
 }
 
-// Resolve fetches all features from the given spec into stagingDir. The
-// returned slice is in install order.
-func (r *Resolver) Resolve(specFeatures spec.OrderedMap, override []string, stagingDir string) ([]Resolved, error) {
+// Resolve fetches all features from the given spec into stagingDir. Local
+// feature references are resolved relative to localBaseDir when they are not
+// absolute. The returned slice is in install order.
+func (r *Resolver) Resolve(specFeatures spec.OrderedMap, override []string, stagingDir, localBaseDir string) ([]Resolved, error) {
 	if specFeatures.Len() == 0 {
 		return nil, nil
 	}
@@ -137,7 +139,7 @@ func (r *Resolver) Resolve(specFeatures spec.OrderedMap, override []string, stag
 				opts = map[string]any{"version": scalar}
 			}
 		}
-		resolved, err := r.resolveOne(source, opts, stagingDir)
+		resolved, err := r.resolveOne(source, opts, stagingDir, localBaseDir)
 		if err != nil {
 			return nil, fmt.Errorf("feature %s: %w", source, err)
 		}
@@ -147,12 +149,12 @@ func (r *Resolver) Resolve(specFeatures spec.OrderedMap, override []string, stag
 	return order(out, override), nil
 }
 
-func (r *Resolver) resolveOne(source string, opts map[string]any, stagingDir string) (*Resolved, error) {
+func (r *Resolver) resolveOne(source string, opts map[string]any, stagingDir, localBaseDir string) (*Resolved, error) {
 	safeID := safeIdent(source)
 	dir := filepath.Join(stagingDir, safeID)
 
 	if isLocalSource(source) {
-		abs, err := filepath.Abs(source)
+		abs, err := localSourcePath(source, localBaseDir)
 		if err != nil {
 			return nil, err
 		}
@@ -230,6 +232,9 @@ func extractTarMaybeGz(data []byte, dir string) error {
 			return fmt.Errorf("tar: unsafe path %q", hdr.Name)
 		}
 		target := filepath.Join(dir, clean)
+		if err := ensureSafeTarget(dir, target); err != nil {
+			return fmt.Errorf("tar: unsafe path %q: %w", hdr.Name, err)
+		}
 		switch hdr.Typeflag {
 		case tar.TypeDir:
 			if err := os.MkdirAll(target, fs.FileMode(hdr.Mode)|0o111); err != nil {
@@ -249,13 +254,7 @@ func extractTarMaybeGz(data []byte, dir string) error {
 			}
 			f.Close()
 		case tar.TypeSymlink:
-			if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
-				return err
-			}
-			_ = os.Remove(target)
-			if err := os.Symlink(hdr.Linkname, target); err != nil {
-				return err
-			}
+			return fmt.Errorf("tar: symlinks are not supported in feature layers: %q -> %q", hdr.Name, hdr.Linkname)
 		}
 	}
 }
@@ -286,6 +285,80 @@ func isLocalSource(s string) bool {
 		return true
 	}
 	return false
+}
+
+func localSourcePath(source, baseDir string) (string, error) {
+	var p string
+	if strings.HasPrefix(source, "file://") {
+		u, err := url.Parse(source)
+		if err != nil {
+			return "", fmt.Errorf("parse file URL: %w", err)
+		}
+		if u.Scheme != "file" {
+			return "", fmt.Errorf("unsupported local feature URL scheme %q", u.Scheme)
+		}
+		if u.Host != "" && u.Host != "localhost" {
+			return "", fmt.Errorf("file URL host %q is not supported", u.Host)
+		}
+		if u.Path == "" {
+			return "", fmt.Errorf("file URL has no path")
+		}
+		p = u.Path
+	} else {
+		p = source
+	}
+	if !filepath.IsAbs(p) {
+		if baseDir == "" {
+			var err error
+			baseDir, err = os.Getwd()
+			if err != nil {
+				return "", err
+			}
+		}
+		p = filepath.Join(baseDir, p)
+	}
+	return filepath.Abs(p)
+}
+
+func ensureSafeTarget(root, target string) error {
+	rootAbs, err := filepath.Abs(root)
+	if err != nil {
+		return err
+	}
+	rootReal, err := filepath.EvalSymlinks(rootAbs)
+	if err != nil {
+		return err
+	}
+	existingParent := filepath.Dir(target)
+	for {
+		if _, err := os.Lstat(existingParent); err == nil {
+			break
+		} else if !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+		next := filepath.Dir(existingParent)
+		if next == existingParent {
+			return fmt.Errorf("no existing parent under staging root")
+		}
+		existingParent = next
+	}
+	parentReal, err := filepath.EvalSymlinks(existingParent)
+	if err != nil {
+		return err
+	}
+	rel, err := filepath.Rel(rootReal, parentReal)
+	if err != nil {
+		return err
+	}
+	if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || filepath.IsAbs(rel) {
+		return fmt.Errorf("resolved parent escapes staging root")
+	}
+	if info, err := os.Lstat(target); err == nil && info.Mode()&fs.ModeSymlink != 0 {
+		return fmt.Errorf("target is a symlink")
+	} else if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	return nil
 }
 
 // safeIdent transforms an arbitrary source string into a path-safe

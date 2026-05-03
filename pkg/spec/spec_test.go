@@ -178,9 +178,8 @@ func TestValidate(t *testing.T) {
 			wantErr: "unknown shutdownAction",
 		},
 		{
-			name:    "overrideCommand in single",
-			dc:      DevContainer{Image: "alpine", OverrideCommand: ptrBool(true)},
-			wantErr: "overrideCommand is only meaningful in compose mode",
+			name: "overrideCommand in single",
+			dc:   DevContainer{Image: "alpine", OverrideCommand: ptrBool(true)},
 		},
 		{
 			name: "overrideCommand in compose",

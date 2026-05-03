@@ -73,11 +73,17 @@ func buildContainerConfig(
 		Env:        envSlice,
 		Labels:     labels,
 		WorkingDir: containerWorkspaceFolder,
+	}
+	overrideCommand := true
+	if dc.OverrideCommand != nil {
+		overrideCommand = *dc.OverrideCommand
+	}
+	if overrideCommand {
 		// Match upstream: shell entrypoint that keeps the container
 		// alive until SIGTERM.
-		Entrypoint: strslice.StrSlice{"/bin/sh"},
-		Cmd:        strslice.StrSlice{"-c", keepaliveCmd, "-"},
-		StopSignal: "SIGTERM",
+		cfg.Entrypoint = strslice.StrSlice{"/bin/sh"}
+		cfg.Cmd = strslice.StrSlice{"-c", keepaliveCmd, "-"}
+		cfg.StopSignal = "SIGTERM"
 	}
 	if dc.ContainerUser != "" {
 		cfg.User = dc.ContainerUser
@@ -190,6 +196,16 @@ func parseMountString(s string) *mount.Mount {
 func parseMountObject(o map[string]any) *mount.Mount {
 	m := &mount.Mount{}
 	for k, raw := range o {
+		switch k {
+		case "readonly", "readOnly":
+			switch v := raw.(type) {
+			case bool:
+				m.ReadOnly = v
+			case string:
+				m.ReadOnly = v == "" || v == "true" || v == "1"
+			}
+			continue
+		}
 		s, ok := raw.(string)
 		if !ok {
 			continue
@@ -203,11 +219,6 @@ func parseMountObject(o map[string]any) *mount.Mount {
 			m.Target = s
 		case "consistency":
 			m.Consistency = mount.Consistency(s)
-		}
-		if k == "readonly" {
-			if b, ok := raw.(bool); ok {
-				m.ReadOnly = b
-			}
 		}
 	}
 	if m.Type == "" {

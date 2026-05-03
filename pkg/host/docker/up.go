@@ -61,7 +61,7 @@ type UpRequest struct {
 // state changes attributable to *this* Up invocation, so a caller can
 // log "created+started" vs "reused+lifecycle-only" cleanly.
 type UpResult struct {
-	ContainerID    string
+	ContainerID     string
 	CreatedThisCall bool
 	StartedThisCall bool
 	// Phases lists the lifecycle phases that actually ran (markers may
@@ -187,14 +187,15 @@ func (h *Host) Up(ctx context.Context, req UpRequest) (*UpResult, error) {
 		StartedAt:      inspect.State.StartedAt,
 		UserDataFolder: udf,
 	}
-	if err := runner.Run(ctx, execer, plan, rt, runner.Options{
+	runResult, err := runner.RunWithResult(ctx, execer, plan, rt, runner.Options{
 		Logger: h.opts.Logger,
 		Stdout: h.opts.Stdout,
 		Stderr: h.opts.Stderr,
-	}); err != nil {
+	})
+	if err != nil {
 		return res, err
 	}
-	for _, p := range plan {
+	for _, p := range runResult.RanPhases() {
 		res.PhasesRun = append(res.PhasesRun, p.Hook)
 	}
 	return res, nil

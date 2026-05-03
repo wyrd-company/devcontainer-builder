@@ -13,7 +13,7 @@ import (
 // runPhase executes one Phase, observing markers. The marker payload
 // is the createdAt timestamp for WhenOnce, the startedAt timestamp
 // for WhenStart, and unused for WhenAttach (no marker, always re-run).
-func runPhase(ctx context.Context, execer Execer, p lifecycle.Phase, rt Runtime, opts Options) error {
+func runPhase(ctx context.Context, execer Execer, p lifecycle.Phase, rt Runtime, opts Options) (bool, error) {
 	expected := ""
 	switch p.When {
 	case lifecycle.WhenOnce:
@@ -24,14 +24,14 @@ func runPhase(ctx context.Context, execer Execer, p lifecycle.Phase, rt Runtime,
 	markerPath := p.MarkerPath(rt.UserDataFolder)
 	doRun, err := shouldRunMarker(ctx, execer, rt.User, markerPath, expected)
 	if err != nil {
-		return fmt.Errorf("marker check (%s): %w", p.Hook, err)
+		return false, fmt.Errorf("marker check (%s): %w", p.Hook, err)
 	}
 	if !doRun {
 		logf(opts, "skipping %s (marker up to date) [%s]", p.Hook, p.Origin.Source)
-		return nil
+		return false, nil
 	}
 	logf(opts, "running %s [%s]", p.Hook, p.Origin.Source)
-	return execCommand(ctx, execer, p.Command, rt, opts)
+	return true, execCommand(ctx, execer, p.Command, rt, opts)
 }
 
 // execCommand dispatches on the Command form: shell string, args

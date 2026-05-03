@@ -33,6 +33,27 @@ func TestGenerate_BareImage(t *testing.T) {
 	}
 }
 
+func TestGenerate_DoesNotBakeRemoteEnv(t *testing.T) {
+	out, err := Generate(Inputs{
+		Spec: &spec.DevContainer{
+			Image:           "alpine",
+			ContainerEnv:    map[string]any{"CONTAINER_ONLY": "yes"},
+			UpdateRemoteEnv: map[string]any{"REMOTE_ONLY": "secret"},
+		},
+		BaseImage: "alpine",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	if !strings.Contains(got, "ENV CONTAINER_ONLY=yes") {
+		t.Fatalf("containerEnv missing from Dockerfile:\n%s", got)
+	}
+	if strings.Contains(got, "REMOTE_ONLY") {
+		t.Fatalf("remoteEnv should not be emitted into Dockerfile:\n%s", got)
+	}
+}
+
 func TestGenerate_VSCodeServer_AsRoot(t *testing.T) {
 	out, err := Generate(Inputs{
 		Spec:                    &spec.DevContainer{Image: "alpine"},

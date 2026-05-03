@@ -300,10 +300,6 @@ func (d *DevContainer) Validate() error {
 		return fmt.Errorf("unknown shutdownAction %q (want none, stopContainer, or stopCompose)", d.ShutdownAction)
 	}
 
-	if d.OverrideCommand != nil && !hasCompose {
-		return fmt.Errorf("overrideCommand is only meaningful in compose mode")
-	}
-
 	return nil
 }
 

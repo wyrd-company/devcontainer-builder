@@ -92,12 +92,6 @@ func Generate(in Inputs) ([]byte, error) {
 		emitVSCodeServer(&b, *in.VSCodeServer, in.VSCodeServerContextPath, user)
 	}
 
-	if env := mapToEnv(toStringMap(in.Spec.UpdateRemoteEnv)); env != "" {
-		fmt.Fprintln(&b, "# --- remoteEnv ---")
-		fmt.Fprintln(&b, env)
-		fmt.Fprintln(&b)
-	}
-
 	if in.Spec.WorkspaceFolder != "" {
 		fmt.Fprintf(&b, "WORKDIR %s\n", shellQuote(in.Spec.WorkspaceFolder))
 	}
