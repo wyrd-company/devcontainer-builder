@@ -14,6 +14,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
@@ -28,7 +29,9 @@ import (
 
 	"github.com/wyrd-company/devcontainer-builder/pkg/builder"
 	hostdocker "github.com/wyrd-company/devcontainer-builder/pkg/host/docker"
+	"github.com/wyrd-company/devcontainer-builder/pkg/host/runner"
 	"github.com/wyrd-company/devcontainer-builder/pkg/spec"
+	"github.com/wyrd-company/devcontainer-builder/pkg/substitute"
 )
 
 // Version is overridden at link time via -ldflags "-X main.Version=...".
@@ -216,8 +219,9 @@ func cmdExec(ctx context.Context, args []string) error {
 
 	user := *userFlag
 	wd := *workdir
+	var dc *spec.DevContainer
 	if user == "" || wd == "" {
-		dc, _ := spec.LoadFromWorkspace(absWorkspace)
+		dc, _ = spec.LoadFromWorkspace(absWorkspace)
 		if dc != nil {
 			if user == "" {
 				user = dc.RemoteUser
@@ -230,12 +234,34 @@ func cmdExec(ctx context.Context, args []string) error {
 	if wd == "" {
 		wd = info.WorkingDir
 	}
+	if dc == nil {
+		dc, _ = spec.LoadFromWorkspace(absWorkspace)
+	}
+
+	execEnv := map[string]string{}
+	if dc != nil {
+		var containerEnv map[string]string
+		if referencesContainerEnv(dc.UpdateRemoteEnv) {
+			var detectErr error
+			containerEnv, detectErr = runner.DetectContainerEnv(ctx, host.Execer(info.ID))
+			if detectErr != nil {
+				return fmt.Errorf("detect container env: %w", detectErr)
+			}
+		}
+		execEnv = resolveRemoteEnv(dc.UpdateRemoteEnv, substitute.Context{
+			LocalWorkspaceFolder:     absWorkspace,
+			ContainerWorkspaceFolder: wd,
+			LocalEnv:                 envMap(),
+			IDLabels:                 info.Labels,
+		}, containerEnv)
+	}
 
 	res, err := host.Exec(ctx, hostdocker.ExecRequest{
 		ContainerID: info.ID,
 		Cmd:         cmdArgs,
 		User:        user,
 		WorkDir:     wd,
+		Env:         execEnv,
 		TTY:         *ttyFlag,
 		Stdin:       os.Stdin,
 		Stdout:      os.Stdout,
@@ -337,6 +363,39 @@ func envMap() map[string]string {
 		}
 	}
 	return out
+}
+
+func resolveRemoteEnv(in map[string]any, ctx substitute.Context, containerEnv map[string]string) map[string]string {
+	out := make(map[string]string, len(in))
+	cctx := substitute.ContainerContext{ContainerEnv: containerEnv}
+	for k, v := range in {
+		s := stringifyValue(v)
+		s = substitute.Substitute(ctx, s)
+		s = substitute.ContainerSubstitute(cctx, s)
+		out[k] = s
+	}
+	return out
+}
+
+func referencesContainerEnv(in map[string]any) bool {
+	for _, v := range in {
+		if strings.Contains(stringifyValue(v), "${containerEnv:") {
+			return true
+		}
+	}
+	return false
+}
+
+func stringifyValue(v any) string {
+	switch t := v.(type) {
+	case string:
+		return t
+	case nil:
+		return ""
+	default:
+		b, _ := json.Marshal(t)
+		return string(b)
+	}
 }
 
 func indexByte(s string, c byte) int {

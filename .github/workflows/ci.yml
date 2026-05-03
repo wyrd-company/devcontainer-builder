@@ -73,3 +73,30 @@ jobs:
       - name: Stop BuildKit
         if: always()
         run: docker rm -f dcb-buildkitd || true
+
+  docker-host-integration:
+    name: Docker host integration
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Run Docker host integration
+        run: |
+          mkdir -p artifacts
+          ./scripts/docker-host-integration.sh 2>&1 | tee artifacts/docker-host-integration.log
+
+      - name: Upload Docker host log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-host-integration-log
+          path: artifacts/docker-host-integration.log
+          if-no-files-found: ignore
