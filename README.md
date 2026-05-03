@@ -560,9 +560,6 @@ res, err := host.Up(ctx, dockercompose.UpRequest{
 Compose-mode scope cuts in this iteration — handled in a future pass
 rather than silently dropped:
 
-- **`depends_on` conditions.** Ordering only; `service_healthy` and
-  `service_completed_successfully` are treated as `service_started`,
-  no health-gating yet.
 - **Profiles, `watch`, `develop`, `configs`, `secrets`.** Not
   honored.
 - **Compose-side `build:` for the primary service.** The primary
@@ -583,11 +580,28 @@ rather than silently dropped:
 
 ## Status
 
-Known gaps:
+The two README-tracked gaps from the previous iteration are closed:
 
-- **Compose-mode `depends_on` health-gating.** See compose-mode
-  scope notes above.
-- **VS Code remote-attach against compose-mode primaries.** Server
-  staging is layered into the derived image just like single-container
-  builds, but the editor-side connection helpers haven't been wired
-  up against compose projects.
+- **Compose-mode `depends_on` health-gating** is wired through the
+  compose host. Before bringing each service up, `Up` waits for every
+  required dependency to satisfy its declared condition —
+  `service_healthy` polls the dependency's healthcheck status,
+  `service_completed_successfully` polls until the container has
+  exited with code 0, `service_started` is implicit (the dep was
+  already started by an earlier topological visit). The wait timeout
+  per dependency is tunable via `Options.DependencyTimeout` (default
+  5m, 500ms poll interval). The `com.docker.compose.depends_on`
+  label encodes the actual condition rather than always reporting
+  `service_started`.
+- **VS Code remote-attach against compose-mode primaries** works the
+  same way it does for single-container devcontainers. The
+  `devcontainer.local_folder` and `devcontainer.config_file` labels
+  are stamped only on the primary service's container — matching the
+  upstream `devcontainers/cli` — so editor extensions and the
+  upstream CLI find a unique container per workspace. Embedders that
+  want the same one-call lookup the docker host exposes can use the
+  new `(*Host).InspectPrimary(ctx, localWorkspace)` to retrieve just
+  the primary's container info regardless of how many sidecars the
+  project declares.
+
+The remaining compose-mode scope cuts (profiles/watch/develop/configs/secrets, compose-side `build:` for non-primary services, recreate-on-config-change, `forwardPorts`/`appPort` overlay) are listed under "Compose-mode scope cuts" above.

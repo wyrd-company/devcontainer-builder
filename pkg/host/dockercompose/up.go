@@ -159,7 +159,14 @@ func (h *Host) Up(ctx context.Context, req UpRequest) (*UpResult, error) {
 
 	if err := proj.ForEachService(startNames, func(name string, svc *types.ServiceConfig) error {
 		isPrimary := name == req.Spec.Service
-		labels := containerLabels(proj.Name, proj.WorkingDir, req.SpecPath, name, dependsOnNames(*svc), isPrimary)
+		// Wait for any service_healthy / service_completed_successfully
+		// deps before creating the dependent. ForEachService visits in
+		// topological order, so the dep's container ID is already in
+		// res.ContainerIDs by the time we get here.
+		if err := h.waitDependencies(ctx, *svc, res.ContainerIDs); err != nil {
+			return fmt.Errorf("service %q: %w", name, err)
+		}
+		labels := containerLabels(proj.Name, req.LocalWorkspace, req.SpecPath, name, dependsOnList(*svc), isPrimary)
 		id, created, started, err := h.bringUp(ctx, proj, *svc, labels, netNames, volNames)
 		if err != nil {
 			return fmt.Errorf("service %q: %w", name, err)

@@ -54,6 +54,52 @@ func (h *Host) Inspect(ctx context.Context, localWorkspace string) (*ProjectInfo
 	return info, nil
 }
 
+// InspectPrimary returns just the primary service's container for the
+// workspace — the one editor extensions and the upstream
+// `devcontainers/cli` discover by the `devcontainer.local_folder`
+// label. The lookup mirrors the single-container docker host's
+// Inspect, so the same workspace-path → container handoff works
+// regardless of which mode the spec is in. Returns
+// ErrProjectNotFound when no project exists for the workspace, or
+// ErrPrimaryNotFound when a project exists but no container carries
+// the primary marker label (e.g. a stale partial up).
+func (h *Host) InspectPrimary(ctx context.Context, localWorkspace string) (*ContainerInfo, error) {
+	id, err := h.findPrimary(ctx, localWorkspace)
+	if err != nil {
+		return nil, err
+	}
+	return h.inspectOne(ctx, id)
+}
+
+// findPrimary returns the container ID of the project's primary
+// service for the workspace. Uses the devcontainer.local_folder label
+// (which Up only stamps onto the primary) so the lookup is
+// unambiguous even in compose projects with many services.
+func (h *Host) findPrimary(ctx context.Context, localWorkspace string) (string, error) {
+	args := filters.NewArgs(
+		filters.Arg("label", LabelLocalFolder+"="+localWorkspace),
+		filters.Arg("label", LabelPrimary+"=true"),
+	)
+	list, err := h.client.ContainerList(ctx, container.ListOptions{All: true, Filters: args})
+	if err != nil {
+		return "", errorf("list containers: %w", err)
+	}
+	if len(list) == 0 {
+		// Distinguish "no project at all" from "project exists but the
+		// primary marker is missing", so embedders can decide whether to
+		// re-run Up vs. surface a confusing partial state.
+		existing, err := h.listProjectContainers(ctx, ProjectName(localWorkspace))
+		if err != nil {
+			return "", err
+		}
+		if len(existing) == 0 {
+			return "", ErrProjectNotFound
+		}
+		return "", ErrPrimaryNotFound
+	}
+	return list[0].ID, nil
+}
+
 func (h *Host) inspectOne(ctx context.Context, id string) (*ContainerInfo, error) {
 	resp, err := h.client.ContainerInspect(ctx, id)
 	if err != nil {
