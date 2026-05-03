@@ -1,3 +1,9 @@
 [submodule "reference/devcontainers-cli"]
 	path = reference/devcontainers-cli
 	url = https://github.com/devcontainers/cli
+[submodule "reference/spec"]
+	path = reference/spec
+	url = git@github.com:devcontainers/spec.git
+[submodule "reference/cli"]
+	path = reference/cli
+	url = git@github.com:devcontainers/cli.git
