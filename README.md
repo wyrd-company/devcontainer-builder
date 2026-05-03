@@ -12,10 +12,11 @@ substance.
 | ------- | ------------ |
 | `pkg/builder` | Build the image. Authors a BuildKit LLB graph directly so feature installs and the VS Code server are cacheable vertices; supports multi-platform, manifest-list builds, and chains the builtin `dockerfile.v0` frontend for upstream Dockerfile bases. A `docker buildx` shell-out engine is included as a fallback. |
 | `pkg/host/docker` | Run the image. Talks to the Docker Engine API directly (no `docker` CLI shell-out), creates / starts / execs / removes containers, runs the lifecycle phases (`onCreate` → `postAttach`) gated by upstream-compatible marker files. Embeddable in a service. |
+| `pkg/host/dockercompose` | Run a compose-mode devcontainer (`dockerComposeFile` + `service`). Parses and merges compose files via `compose-spec/compose-go`, generates an in-memory override that injects the workspace mount + remoteEnv + the feature-derived primary image, and creates networks / volumes / containers natively through the engine API — no `docker compose` CLI shell-out. Lifecycle phases run inside the primary service container. |
 | `pkg/host/kubernetes` | Run the image on a cluster. Discover-or-create the Pod via the apiserver, wait for the target container to reach Ready, exec lifecycle phases through the pod-exec subresource (SPDY), port-forward, delete on teardown. Builds on `pkg/projection/kubernetes` for the spec → Pod translation and `pkg/host/runner` for marker gating. No CLI: this is a library for operators and services that already own a `kubernetes.Interface`. |
 | `pkg/host/runner` | Transport-agnostic lifecycle executor: takes an `Execer` (docker exec, apiserver pod-exec, anything that runs argv inside a running container) plus a `lifecycle.Plan` and runs the phases with marker-file gating. Owns the marker shell, the Shell/Args/Parallel dispatch, and per-parallel output buffering. Used by both `pkg/host/docker` and `pkg/host/kubernetes`. |
 | `pkg/lifecycle` | Pure planning: returns the ordered phases for a spec + features. The same plan can be executed imperatively (docker, kubernetes) or projected declaratively. |
-| `pkg/projection/kubernetes` | Pure config translation: a `*spec.DevContainer` + features become a `*corev1.Pod` (and friends). No client-go, no apiserver round-trips — drop the result into an operator's reconcile, render to YAML, or hand to `pkg/host/kubernetes`. |
+| `pkg/projection/kubernetes` | Pure config translation: a `*spec.DevContainer` + features become a `*corev1.Pod` (and friends). For compose-mode specs, `ProjectCompose` emits a single multi-container Pod (sidecar model) plus PVCs for compose named volumes. No client-go, no apiserver round-trips — drop the result into an operator's reconcile, render to YAML, or hand to `pkg/host/kubernetes`. |
 | `pkg/substitute` | `${localEnv:VAR}`, `${localWorkspaceFolder}`, `${containerEnv:VAR}`, `${devcontainerId}`, and the rest of the devcontainer spec's variable substitution rules. |
 
 Marker file paths, container labels, and command-form semantics mirror
@@ -361,7 +362,83 @@ Lifecycle commands (`onCreate`, `postCreate`, `postStart`,
 hooks: those phases need the running container's userspace state and
 can't be modeled as static manifest fields.
 
-### Running a container against a Kubernetes apiserver
+### Projecting a compose-mode devcontainer into a Kubernetes Pod
+
+`pkg/projection/kubernetes`'s `ProjectCompose` is the compose
+counterpart to `Project`: it takes a `*types.Project` (use
+`pkg/host/dockercompose.LoadProject` to produce one) plus the
+devcontainer.json + primary service name, and returns a single
+multi-container Pod (sidecar model) along with any PVCs the Pod's
+volume references need.
+
+```go
+import (
+    composedck "github.com/wyrd-company/devcontainer-builder/pkg/host/dockercompose"
+    "github.com/wyrd-company/devcontainer-builder/pkg/projection/kubernetes"
+    "github.com/wyrd-company/devcontainer-builder/pkg/spec"
+)
+
+dc, _ := spec.LoadFromWorkspace(workspace)
+proj, _ := composedck.LoadProject(ctx, composedck.LoadInputs{
+    Spec:      dc,
+    Workspace: workspace,
+})
+
+out, err := kubernetes.ProjectCompose(kubernetes.ComposeProjectRequest{
+    Spec:           dc,
+    SpecPath:       dc.Path,
+    LocalWorkspace: workspace,
+    Project:        proj,
+    PrimaryImage:   "registry.example.com/devbox-derived:1.2.3",
+    Name:           "alice-devbox",
+    Namespace:      "dev",
+})
+// out.PersistentVolumeClaims need to exist before out.Pod is applied —
+// the Pod references them by ClaimName.
+```
+
+The shape is one Pod with one Container per compose service (the
+primary first, sidecars next in stable name order). Compose volumes
+translate as:
+
+- **Bind mount** → `HostPath` volume. Same caveat as the
+  single-container projection: only useful on single-node clusters
+  where the kubelet can see the host path.
+- **Named volume (default)** → a generated `PersistentVolumeClaim`
+  referenced by the Pod. Default access mode is `ReadWriteOnce` and
+  the storage request defaults to `1Gi`; both are tunable via
+  `VolumeStorageClass` and `VolumeStorageRequest` on the request.
+  When two services bind the same compose volume, they share the
+  same Pod-level Volume entry — same PVC, two `volumeMounts`.
+- **External named volume (`external: true`)** → a Pod Volume
+  referencing a pre-existing PVC named after the compose volume's
+  `name:` (or its key). No PVC is generated.
+- **Tmpfs** → `EmptyDir{Medium: Memory}`.
+- **image / cluster** → returns an error rather than silently
+  dropping.
+
+Compose-mode Kubernetes scope cuts:
+
+- **`depends_on`.** Containers in a Pod can't be ordered through
+  the compose model; `depends_on` is ignored. Use init containers
+  or readiness probes if you need start ordering.
+- **Service-name DNS.** Containers in a Pod share `localhost`, so
+  cross-service traffic is `127.0.0.1:<port>` rather than the
+  compose `<svcname>:<port>` model. Anything that reaches into
+  another service by hostname needs the spec restructured (e.g.
+  multi-Deployment + Services) — outside this iteration's scope.
+- **Compose-side `build:`.** Each service must reference a pullable
+  `image:`; `BuildPrimaryImage` from `pkg/host/dockercompose` lets
+  you bake features into the primary's derived image, but compose
+  `build:` for any service is not honored.
+- **Profiles, `watch`, `develop`, `configs`, `secrets`.** Not
+  honored — same as the docker compose host.
+- **`forwardPorts`/`appPort` vs compose `ports:`.** `forwardPorts`
+  and `appPort` are merged onto the primary's ContainerPorts. The
+  compose `ports:` field is also translated (one ContainerPort per
+  service entry); the docker publish-to-localhost / hostPort
+  semantics don't carry over — use a Service for external
+  reachability.
 
 `pkg/host/kubernetes` is the imperative companion to
 `pkg/projection/kubernetes`. The projection package turns a spec into a
@@ -410,9 +487,107 @@ inside an operator's reconcile loop or a service that owns its own
 `kubernetes.Interface`. The package never reads `$KUBECONFIG` and
 never writes to stdout/stderr unless explicitly given writers.
 
+### Running a compose-mode (multi-container) devcontainer
+
+When a `devcontainer.json` declares `dockerComposeFile` + `service`,
+`pkg/host/dockercompose` brings the whole compose project up natively
+through the docker engine API. It mirrors what `docker compose up`
+would do — same project labels (`com.docker.compose.project`,
+`com.docker.compose.service`, …) so a project started here is
+discoverable by `docker compose`/`docker ps`/the upstream
+devcontainer CLI and vice versa — but never shells out to the
+`docker compose` binary.
+
+The package owns the full pipeline:
+
+1. **Parse + merge.** `compose-spec/compose-go/v2` loads every file
+   listed in `dockerComposeFile` (in order), interpolates `${VAR}`
+   against the supplied `LocalEnv`, and resolves a normalized
+   `*types.Project`.
+2. **Override.** A small in-memory YAML layer is appended to the
+   merge chain, touching only the primary service: it injects the
+   workspace bind mount + `working_dir`, the spec's `remoteEnv`, the
+   feature-derived image (when `BuildPrimaryImage` produced one), and
+   a long-running keepalive entrypoint matching the docker host's so
+   exec/lifecycle have a live container regardless of the image's
+   `CMD` (suppress with `overrideCommand: false` in the spec).
+3. **Project name.** Stable across re-runs: a sanitized basename of
+   the workspace path plus an 8-char sha256 prefix of its absolute
+   form, so the same workspace always reuses the same project and
+   unrelated workspaces never collide.
+4. **Networks + volumes.** Anything declared by the project that
+   doesn't already exist is created with the standard compose labels.
+   `external: true` resources are left alone.
+5. **Containers.** Visited in `depends_on` order via
+   `Project.ForEachService` and reused if a container with the same
+   project + service labels already exists; otherwise created and
+   started.
+6. **Lifecycle.** Runs against the primary service container only,
+   through the shared `pkg/host/runner` marker engine (so
+   `onCreate` → `postAttach` semantics, marker file paths, and
+   container-env probing all match the docker / kubernetes hosts).
+
+```go
+import (
+    "github.com/docker/docker/client"
+    "github.com/wyrd-company/devcontainer-builder/pkg/host/dockercompose"
+    "github.com/wyrd-company/devcontainer-builder/pkg/spec"
+)
+
+cli, _ := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+host := dockercompose.New(cli, dockercompose.Options{Stdout: os.Stdout, Stderr: os.Stderr})
+
+dc, _ := spec.LoadFromWorkspace(workspace)
+
+// Optional: bake features into a derived image FROM the primary
+// service's compose `image:`. When the spec has no features the
+// helper just returns that base image unchanged.
+build, _ := dockercompose.BuildPrimaryImage(ctx, dockercompose.BuildPrimaryInputs{
+    Spec:      dc,
+    Workspace: workspace,
+})
+
+res, err := host.Up(ctx, dockercompose.UpRequest{
+    Spec:           dc,
+    SpecPath:       dc.Path,
+    LocalWorkspace: workspace,
+    PrimaryImage:   build.Image,
+})
+// res.PrimaryContainerID is where lifecycle commands ran; res.ContainerIDs
+// maps every started service to its container ID.
+```
+
+Compose-mode scope cuts in this iteration — handled in a future pass
+rather than silently dropped:
+
+- **`depends_on` conditions.** Ordering only; `service_healthy` and
+  `service_completed_successfully` are treated as `service_started`,
+  no health-gating yet.
+- **Profiles, `watch`, `develop`, `configs`, `secrets`.** Not
+  honored.
+- **Compose-side `build:` for the primary service.** The primary
+  service must declare an `image:` in compose; building from a
+  compose-side `build:` for the primary is not implemented (the
+  builder always derives FROM the primary's `image`, layering
+  features on). Non-primary services with `build:` aren't built
+  either — they must reference a pullable image.
+- **Recreate-on-config-change.** Containers are reused if present
+  with the matching project + service labels; there's no diff/recreate
+  step yet.
+- **Volume types.** Bind and named volumes are translated; tmpfs,
+  image, and cluster volume types return an error rather than being
+  silently dropped.
+- **`forwardPorts` / `appPort` on the primary.** Not layered onto
+  the compose service — the user already has compose `ports:` for
+  port publishing in this mode.
+
 ## Status
 
 Known gaps:
 
-- **`dockerComposeFile`.** Multi-container compose-style devcontainers
-  aren't supported.
+- **Compose-mode `depends_on` health-gating.** See compose-mode
+  scope notes above.
+- **VS Code remote-attach against compose-mode primaries.** Server
+  staging is layered into the derived image just like single-container
+  builds, but the editor-side connection helpers haven't been wired
+  up against compose projects.
