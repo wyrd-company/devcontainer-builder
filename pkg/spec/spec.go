@@ -19,6 +19,11 @@ type DevContainer struct {
 	Image               string         `json:"image,omitempty"`
 	Dockerfile          string         `json:"dockerFile,omitempty"`
 	Build               *Build         `json:"build,omitempty"`
+	DockerComposeFile   StringOrSlice  `json:"dockerComposeFile,omitempty"`
+	Service             string         `json:"service,omitempty"`
+	RunServices         []string       `json:"runServices,omitempty"`
+	ShutdownAction      string         `json:"shutdownAction,omitempty"`
+	OverrideCommand     *bool          `json:"overrideCommand,omitempty"`
 	Features            OrderedMap     `json:"features,omitempty"`
 	OverrideFeature     []string       `json:"overrideFeatureInstallOrder,omitempty"`
 	RemoteUser          string         `json:"remoteUser,omitempty"`
@@ -213,7 +218,112 @@ func Load(path string) (*DevContainer, error) {
 	}
 	dc.Path = path
 	dc.Raw = stripped
+	if err := dc.Validate(); err != nil {
+		return nil, fmt.Errorf("validate %s: %w", path, err)
+	}
 	return &dc, nil
+}
+
+// Mode reports which container model the spec describes.
+type Mode int
+
+const (
+	// ModeSingle is the single-container model: image / build / dockerFile.
+	ModeSingle Mode = iota
+	// ModeCompose is the docker-compose model: dockerComposeFile + service.
+	ModeCompose
+)
+
+func (m Mode) String() string {
+	switch m {
+	case ModeSingle:
+		return "single"
+	case ModeCompose:
+		return "compose"
+	}
+	return "unknown"
+}
+
+// Allowed shutdownAction values per the devcontainer spec. "none" is valid
+// in both modes; "stopContainer" only in single-container mode;
+// "stopCompose" only in compose mode.
+const (
+	ShutdownNone          = "none"
+	ShutdownStopContainer = "stopContainer"
+	ShutdownStopCompose   = "stopCompose"
+)
+
+// Mode returns the container model the spec describes. Only valid after
+// Validate has succeeded; otherwise the result is whichever mode the
+// compose discriminator fields suggest.
+func (d *DevContainer) Mode() Mode {
+	if len(d.DockerComposeFile) > 0 || d.Service != "" {
+		return ModeCompose
+	}
+	return ModeSingle
+}
+
+// Validate enforces the discriminator: a spec is either single-container
+// (image / build / dockerFile) or compose (dockerComposeFile + service),
+// and the two sets of fields cannot mix. Validate is invoked from Load
+// so callers using Load never see a malformed spec; tests and other
+// in-memory construction paths can call it directly.
+func (d *DevContainer) Validate() error {
+	hasCompose := len(d.DockerComposeFile) > 0 || d.Service != ""
+	hasSingle := d.Image != "" || d.Dockerfile != "" || d.Build != nil
+
+	if hasCompose && hasSingle {
+		return fmt.Errorf("spec mixes compose fields (dockerComposeFile/service) with single-container fields (image/build/dockerFile); choose one")
+	}
+	if hasCompose {
+		if len(d.DockerComposeFile) == 0 {
+			return fmt.Errorf("service is set but dockerComposeFile is missing")
+		}
+		if d.Service == "" {
+			return fmt.Errorf("dockerComposeFile is set but service is missing")
+		}
+	} else if !hasSingle {
+		return fmt.Errorf("spec has no image, build, dockerFile, or dockerComposeFile field")
+	}
+
+	switch d.ShutdownAction {
+	case "", ShutdownNone:
+	case ShutdownStopContainer:
+		if hasCompose {
+			return fmt.Errorf("shutdownAction %q is not valid in compose mode", d.ShutdownAction)
+		}
+	case ShutdownStopCompose:
+		if !hasCompose {
+			return fmt.Errorf("shutdownAction %q is only valid in compose mode", d.ShutdownAction)
+		}
+	default:
+		return fmt.Errorf("unknown shutdownAction %q (want none, stopContainer, or stopCompose)", d.ShutdownAction)
+	}
+
+	if d.OverrideCommand != nil && !hasCompose {
+		return fmt.Errorf("overrideCommand is only meaningful in compose mode")
+	}
+
+	return nil
+}
+
+// ComposeFiles returns the docker-compose file paths declared by the spec,
+// resolved relative to the devcontainer.json directory. Returns nil when
+// the spec is not in compose mode.
+func (d *DevContainer) ComposeFiles() []string {
+	if len(d.DockerComposeFile) == 0 {
+		return nil
+	}
+	specDir := filepath.Dir(d.Path)
+	out := make([]string, 0, len(d.DockerComposeFile))
+	for _, p := range d.DockerComposeFile {
+		if filepath.IsAbs(p) {
+			out = append(out, filepath.Clean(p))
+			continue
+		}
+		out = append(out, filepath.Clean(filepath.Join(specDir, p)))
+	}
+	return out
 }
 
 // LoadFromWorkspace finds and loads the conventional devcontainer.json from
