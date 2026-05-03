@@ -61,6 +61,10 @@ type UpResult struct {
 	// StartedThisCall enumerates services whose container had to be
 	// started this call (vs already running).
 	StartedThisCall []string
+	// RecreatedThisCall enumerates services whose container was
+	// destroyed and recreated this call because its config-hash label
+	// disagreed with the current spec.
+	RecreatedThisCall []string
 	// PhasesRun lists lifecycle phases that actually ran on the
 	// primary (markers may have skipped some).
 	PhasesRun []lifecycle.Hook
@@ -138,6 +142,24 @@ func (h *Host) Up(ctx context.Context, req UpRequest) (*UpResult, error) {
 		return nil, err
 	}
 
+	// Build any non-primary services that declare a compose-side
+	// `build:` block. The primary's compose `build:` (if any) is
+	// already baked into req.PrimaryImage by BuildPrimaryImage, so
+	// it's skipped here.
+	if !h.opts.SkipServiceBuild {
+		built, err := BuildServiceImages(ctx, BuildServiceImagesInputs{
+			Project: proj,
+			Skip:    []string{req.Spec.Service},
+			Stdout:  h.opts.Stdout,
+			Stderr:  h.opts.Stderr,
+			Logger:  h.opts.Logger,
+		})
+		if err != nil {
+			return nil, errorf("build services: %w", err)
+		}
+		applyBuiltImages(proj, built.Images)
+	}
+
 	netNames, err := h.ensureNetworks(ctx, proj)
 	if err != nil {
 		return nil, err
@@ -166,8 +188,9 @@ func (h *Host) Up(ctx context.Context, req UpRequest) (*UpResult, error) {
 		if err := h.waitDependencies(ctx, *svc, res.ContainerIDs); err != nil {
 			return fmt.Errorf("service %q: %w", name, err)
 		}
-		labels := containerLabels(proj.Name, req.LocalWorkspace, req.SpecPath, name, dependsOnList(*svc), isPrimary)
-		id, created, started, err := h.bringUp(ctx, proj, *svc, labels, netNames, volNames)
+		hash := serviceConfigHash(*svc)
+		labels := containerLabels(proj.Name, req.LocalWorkspace, req.SpecPath, name, hash, dependsOnList(*svc), isPrimary)
+		id, created, started, recreated, err := h.bringUp(ctx, proj, *svc, labels, hash, netNames, volNames)
 		if err != nil {
 			return fmt.Errorf("service %q: %w", name, err)
 		}
@@ -177,6 +200,9 @@ func (h *Host) Up(ctx context.Context, req UpRequest) (*UpResult, error) {
 		}
 		if started {
 			res.StartedThisCall = append(res.StartedThisCall, name)
+		}
+		if recreated {
+			res.RecreatedThisCall = append(res.RecreatedThisCall, name)
 		}
 		if isPrimary {
 			res.PrimaryContainerID = id
@@ -192,6 +218,7 @@ func (h *Host) Up(ctx context.Context, req UpRequest) (*UpResult, error) {
 
 	sort.Strings(res.CreatedThisCall)
 	sort.Strings(res.StartedThisCall)
+	sort.Strings(res.RecreatedThisCall)
 
 	if err := h.runLifecycle(ctx, dc, req.Features, res.PrimaryContainerID, containerWorkspace, res); err != nil {
 		return res, err
@@ -200,25 +227,49 @@ func (h *Host) Up(ctx context.Context, req UpRequest) (*UpResult, error) {
 }
 
 // bringUp finds or creates a container for one service and starts it
-// if not running. Returns (id, createdThisCall, startedThisCall).
+// if not running. Returns (id, createdThisCall, startedThisCall,
+// recreatedThisCall).
+//
+// Recreate-on-config-change mirrors `docker compose up`: if an
+// existing container's `com.docker.compose.config-hash` label
+// disagrees with the just-computed expectedHash (or is missing on a
+// container we created in an earlier release), the container is
+// stopped, removed, and rebuilt from the current service spec.
+// Disable with Options.NoRecreate.
 func (h *Host) bringUp(
 	ctx context.Context, proj *types.Project, svc types.ServiceConfig,
-	labels map[string]string, netNames, volNames map[string]string,
-) (string, bool, bool, error) {
+	labels map[string]string, expectedHash string,
+	netNames, volNames map[string]string,
+) (string, bool, bool, bool, error) {
 	containerName := composeContainerName(proj.Name, svc.Name)
 	id, err := h.findExisting(ctx, proj.Name, svc.Name)
 	if err != nil {
-		return "", false, false, err
+		return "", false, false, false, err
+	}
+	recreated := false
+	if id != "" && !h.opts.NoRecreate {
+		drifted, err := h.containerNeedsRecreate(ctx, id, expectedHash)
+		if err != nil {
+			return "", false, false, false, err
+		}
+		if drifted {
+			h.logf("recreating container %s: config-hash changed", containerName)
+			if err := h.removeContainer(ctx, id); err != nil {
+				return "", false, false, false, errorf("recreate %q: %w", containerName, err)
+			}
+			id = ""
+			recreated = true
+		}
 	}
 	created := false
 	if id == "" {
 		t, err := translateService(proj, svc, containerName, labels, netNames, volNames)
 		if err != nil {
-			return "", false, false, err
+			return "", false, false, false, err
 		}
 		resp, err := h.client.ContainerCreate(ctx, t.Config, t.HostConfig, t.NetConfig, nil, t.Name)
 		if err != nil {
-			return "", false, false, errorf("create %q: %w", containerName, err)
+			return "", false, false, false, errorf("create %q: %w", containerName, err)
 		}
 		id = resp.ID
 		created = true
@@ -229,17 +280,48 @@ func (h *Host) bringUp(
 
 	inspect, err := h.client.ContainerInspect(ctx, id)
 	if err != nil {
-		return id, created, false, errorf("inspect %s: %w", short(id), err)
+		return id, created, false, recreated, errorf("inspect %s: %w", short(id), err)
 	}
 	started := false
 	if !inspect.State.Running {
 		if err := h.client.ContainerStart(ctx, id, container.StartOptions{}); err != nil {
-			return id, created, false, errorf("start %s: %w", short(id), err)
+			return id, created, false, recreated, errorf("start %s: %w", short(id), err)
 		}
 		started = true
 		h.logf("started container %s", short(id))
 	}
-	return id, created, started, nil
+	return id, created, started, recreated, nil
+}
+
+// containerNeedsRecreate reports whether an existing container's
+// config-hash label disagrees with the current expectedHash. Missing
+// labels are treated as drift — older containers (or those produced
+// by upstream `docker compose` with a different hash algo) need to
+// be reconciled before they're trusted as up-to-date.
+func (h *Host) containerNeedsRecreate(ctx context.Context, id, expectedHash string) (bool, error) {
+	if expectedHash == "" {
+		return false, nil
+	}
+	insp, err := h.client.ContainerInspect(ctx, id)
+	if err != nil {
+		return false, errorf("inspect %s: %w", short(id), err)
+	}
+	if insp.Config == nil {
+		return true, nil
+	}
+	got := insp.Config.Labels[LabelConfigHash]
+	return got != expectedHash, nil
+}
+
+// removeContainer stops (best-effort) and removes a container.
+func (h *Host) removeContainer(ctx context.Context, id string) error {
+	timeout := int(h.opts.StopTimeout.Seconds())
+	if err := h.client.ContainerStop(ctx, id, container.StopOptions{Timeout: &timeout}); err != nil {
+		if !isAlreadyStoppedErr(err) {
+			h.logf("stop %s before recreate: %v", short(id), err)
+		}
+	}
+	return h.client.ContainerRemove(ctx, id, container.RemoveOptions{Force: true})
 }
 
 // findExisting returns the container ID for a (project, service) pair,
@@ -258,6 +340,25 @@ func (h *Host) findExisting(ctx context.Context, projectName, serviceName string
 		return "", nil
 	}
 	return list[0].ID, nil
+}
+
+// applyBuiltImages updates the service entries in proj.Services with
+// freshly-built tags so the downstream spawn step sees the just-built
+// image rather than the (possibly empty) compose-declared one.
+// proj.Services is a map[string]ServiceConfig, so the entry has to be
+// reassigned rather than mutated through the map index.
+func applyBuiltImages(proj *types.Project, images map[string]string) {
+	if len(images) == 0 {
+		return
+	}
+	for name, tag := range images {
+		svc, ok := proj.Services[name]
+		if !ok {
+			continue
+		}
+		svc.Image = tag
+		proj.Services[name] = svc
+	}
 }
 
 // composeContainerName matches docker compose v2's default

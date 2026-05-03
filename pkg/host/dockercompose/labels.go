@@ -27,13 +27,16 @@ func projectLabels(projectName, workingDir string) map[string]string {
 // docker compose writes on each container, plus — only on the primary
 // — the devcontainer-discovery labels editor tooling looks up.
 func containerLabels(
-	projectName, localWorkspace, configFile, serviceName string,
+	projectName, localWorkspace, configFile, serviceName, configHash string,
 	deps []dependency, isPrimary bool,
 ) map[string]string {
 	out := projectLabels(projectName, localWorkspace)
 	out[LabelService] = serviceName
 	out[LabelOneoff] = "False"
 	out[LabelContainerN] = "1"
+	if configHash != "" {
+		out[LabelConfigHash] = configHash
+	}
 	if configFile != "" {
 		out[LabelConfigFiles] = configFile
 	}

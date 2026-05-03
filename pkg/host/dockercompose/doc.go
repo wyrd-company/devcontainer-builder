@@ -27,13 +27,36 @@
 // here can be torn down by `docker compose down -p <name>` and vice
 // versa.
 //
+// # Compose-side build
+//
+// Both the primary and sidecars may declare a compose `build:` block.
+// BuildPrimaryImage runs the primary's build through pkg/buildx and
+// uses the result as the base for feature derivation; Up walks the
+// project for non-primary services with a build block and compiles
+// each via pkg/buildx before creating its container, then mutates the
+// in-memory project so the spawn step uses the freshly-built tag.
+// Options.SkipServiceBuild opts out for embedders that manage their
+// own image pipeline. dockerfile_inline is rejected.
+//
+// # Recreate-on-config-change
+//
+// Every container created by Up carries a
+// `com.docker.compose.config-hash` label computed from a normalized
+// JSON snapshot of its compose ServiceConfig (image, entrypoint,
+// command, env, volumes, ports, networks, depends_on, security
+// flags, …) with host-managed labels stripped. On subsequent Up
+// calls, an existing container whose hash disagrees with the current
+// spec (or is missing) is stopped, removed, and rebuilt from the
+// current spec; matching hashes preserve the container. Set
+// Options.NoRecreate to fall back to the prior "always reuse"
+// behavior; UpResult.RecreatedThisCall lists which services were
+// destroyed and rebuilt this call.
+//
 // # Scope cuts in this iteration
 //
 //   - profiles, watch, configs, secrets, develop: not honored.
-//   - compose-side `build:` for non-primary services: not built; the
-//     service must reference a pullable `image:`.
-//   - recreate-on-config-change: containers are reused if present,
-//     created otherwise — no diff/recreate logic.
+//   - tmpfs, image, and cluster volume types return an error rather
+//     than being silently dropped.
 //   - port publishing from compose `ports:` is forwarded to the engine,
 //     but devcontainer.json `forwardPorts`/`appPort` are intentionally
 //     not layered onto compose services (the user already has compose

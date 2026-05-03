@@ -13,7 +13,10 @@ func TestContainerLabels_PrimaryHasDevcontainerLabels(t *testing.T) {
 		{Name: "cache", Condition: types.ServiceConditionStarted, Required: true},
 		{Name: "seeder", Condition: types.ServiceConditionCompletedSuccessfully, Required: false},
 	}
-	got := containerLabels("proj_abc", "/work", "/work/.devcontainer/devcontainer.json", "app", deps, true)
+	got := containerLabels("proj_abc", "/work", "/work/.devcontainer/devcontainer.json", "app", "deadbeef", deps, true)
+	if got[LabelConfigHash] != "deadbeef" {
+		t.Errorf("config-hash label: got %q want deadbeef", got[LabelConfigHash])
+	}
 	if got[LabelProject] != "proj_abc" {
 		t.Errorf("project label: got %q", got[LabelProject])
 	}
@@ -36,7 +39,7 @@ func TestContainerLabels_PrimaryHasDevcontainerLabels(t *testing.T) {
 }
 
 func TestContainerLabels_NonPrimaryOmitsDevcontainerLabels(t *testing.T) {
-	got := containerLabels("proj_abc", "/work", "/work/.devcontainer/devcontainer.json", "db", nil, false)
+	got := containerLabels("proj_abc", "/work", "/work/.devcontainer/devcontainer.json", "db", "", nil, false)
 	if _, ok := got[LabelLocalFolder]; ok {
 		t.Errorf("non-primary services must not carry %s; got %q", LabelLocalFolder, got[LabelLocalFolder])
 	}
