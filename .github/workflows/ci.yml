@@ -100,3 +100,30 @@ jobs:
           name: docker-host-integration-log
           path: artifacts/docker-host-integration.log
           if-no-files-found: ignore
+
+  docker-compose-integration:
+    name: Docker compose integration
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Run Docker compose integration
+        run: |
+          mkdir -p artifacts
+          ./scripts/docker-compose-integration.sh 2>&1 | tee artifacts/docker-compose-integration.log
+
+      - name: Upload Docker compose log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-compose-integration-log
+          path: artifacts/docker-compose-integration.log
+          if-no-files-found: ignore

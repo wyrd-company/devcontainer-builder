@@ -3,6 +3,7 @@ package dockercompose
 import (
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/compose-spec/compose-go/v2/types"
 	"github.com/docker/docker/api/types/mount"
@@ -98,6 +99,41 @@ func TestTranslateService_PortsExposeAndPublish(t *testing.T) {
 	}
 	if len(tr.HostConfig.PortBindings) != 1 {
 		t.Errorf("port bindings: got %d want 1 (only the published one)", len(tr.HostConfig.PortBindings))
+	}
+}
+
+func TestTranslateService_ConfiguresHealthcheck(t *testing.T) {
+	interval := types.Duration(200 * time.Millisecond)
+	timeout := types.Duration(time.Second)
+	retries := uint64(7)
+	svc := types.ServiceConfig{
+		Name:  "db",
+		Image: "busybox",
+		HealthCheck: &types.HealthCheckConfig{
+			Test:     types.HealthCheckTest{"CMD-SHELL", "test -f /tmp/ready"},
+			Interval: &interval,
+			Timeout:  &timeout,
+			Retries:  &retries,
+		},
+	}
+	got, err := translateService(&types.Project{Name: "proj"}, svc, "proj-db-1", nil, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("translateService: %v", err)
+	}
+	if got.Config.Healthcheck == nil {
+		t.Fatal("healthcheck was not translated")
+	}
+	if got.Config.Healthcheck.Test[0] != "CMD-SHELL" || got.Config.Healthcheck.Test[1] != "test -f /tmp/ready" {
+		t.Fatalf("healthcheck test = %v", got.Config.Healthcheck.Test)
+	}
+	if got.Config.Healthcheck.Interval != 200*time.Millisecond {
+		t.Fatalf("interval = %s, want 200ms", got.Config.Healthcheck.Interval)
+	}
+	if got.Config.Healthcheck.Timeout != time.Second {
+		t.Fatalf("timeout = %s, want 1s", got.Config.Healthcheck.Timeout)
+	}
+	if got.Config.Healthcheck.Retries != 7 {
+		t.Fatalf("retries = %d, want 7", got.Config.Healthcheck.Retries)
 	}
 }
 

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sort"
 	"strconv"
+	"time"
 
 	"github.com/compose-spec/compose-go/v2/types"
 	"github.com/docker/docker/api/types/container"
@@ -52,6 +53,9 @@ func translateService(
 		Tty:        svc.Tty,
 		OpenStdin:  svc.StdinOpen,
 		StopSignal: svc.StopSignal,
+	}
+	if svc.HealthCheck != nil {
+		cfg.Healthcheck = translateHealthcheck(svc.HealthCheck)
 	}
 	if len(svc.Entrypoint) > 0 {
 		cfg.Entrypoint = strslice.StrSlice(svc.Entrypoint)
@@ -152,6 +156,33 @@ func translateService(
 		HostConfig: host,
 		NetConfig:  netCfg,
 	}, nil
+}
+
+func translateHealthcheck(in *types.HealthCheckConfig) *container.HealthConfig {
+	if in == nil {
+		return nil
+	}
+	out := &container.HealthConfig{
+		Test:          append([]string(nil), in.Test...),
+		Timeout:       composeDuration(in.Timeout),
+		Interval:      composeDuration(in.Interval),
+		StartPeriod:   composeDuration(in.StartPeriod),
+		StartInterval: composeDuration(in.StartInterval),
+	}
+	if in.Disable {
+		out.Test = []string{"NONE"}
+	}
+	if in.Retries != nil {
+		out.Retries = int(*in.Retries)
+	}
+	return out
+}
+
+func composeDuration(d *types.Duration) time.Duration {
+	if d == nil {
+		return 0
+	}
+	return time.Duration(*d)
 }
 
 // translateVolumes converts compose volume entries into docker mounts.
