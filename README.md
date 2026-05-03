@@ -16,7 +16,7 @@ substance.
 | `pkg/host/kubernetes` | Run the image on a cluster. Discover-or-create the Pod via the apiserver, wait for the target container to reach Ready, exec lifecycle phases through the pod-exec subresource (SPDY), port-forward, delete on teardown. Builds on `pkg/projection/kubernetes` for the spec → Pod translation and `pkg/host/runner` for marker gating. No CLI: this is a library for operators and services that already own a `kubernetes.Interface`. |
 | `pkg/host/runner` | Transport-agnostic lifecycle executor: takes an `Execer` (docker exec, apiserver pod-exec, anything that runs argv inside a running container) plus a `lifecycle.Plan` and runs the phases with marker-file gating. Owns the marker shell, the Shell/Args/Parallel dispatch, and per-parallel output buffering. Used by both `pkg/host/docker` and `pkg/host/kubernetes`. |
 | `pkg/lifecycle` | Pure planning: returns the ordered phases for a spec + features. The same plan can be executed imperatively (docker, kubernetes) or projected declaratively. |
-| `pkg/projection/kubernetes` | Pure config translation: a `*spec.DevContainer` + features become a `*corev1.Pod` (and friends). No client-go, no apiserver round-trips — drop the result into an operator's reconcile, render to YAML, or hand to `pkg/host/kubernetes`. |
+| `pkg/projection/kubernetes` | Pure config translation: a `*spec.DevContainer` + features become a `*corev1.Pod` (and friends). For compose-mode specs, `ProjectCompose` emits a single multi-container Pod (sidecar model) plus PVCs for compose named volumes. No client-go, no apiserver round-trips — drop the result into an operator's reconcile, render to YAML, or hand to `pkg/host/kubernetes`. |
 | `pkg/substitute` | `${localEnv:VAR}`, `${localWorkspaceFolder}`, `${containerEnv:VAR}`, `${devcontainerId}`, and the rest of the devcontainer spec's variable substitution rules. |
 
 Marker file paths, container labels, and command-form semantics mirror
@@ -362,7 +362,83 @@ Lifecycle commands (`onCreate`, `postCreate`, `postStart`,
 hooks: those phases need the running container's userspace state and
 can't be modeled as static manifest fields.
 
-### Running a container against a Kubernetes apiserver
+### Projecting a compose-mode devcontainer into a Kubernetes Pod
+
+`pkg/projection/kubernetes`'s `ProjectCompose` is the compose
+counterpart to `Project`: it takes a `*types.Project` (use
+`pkg/host/dockercompose.LoadProject` to produce one) plus the
+devcontainer.json + primary service name, and returns a single
+multi-container Pod (sidecar model) along with any PVCs the Pod's
+volume references need.
+
+```go
+import (
+    composedck "github.com/wyrd-company/devcontainer-builder/pkg/host/dockercompose"
+    "github.com/wyrd-company/devcontainer-builder/pkg/projection/kubernetes"
+    "github.com/wyrd-company/devcontainer-builder/pkg/spec"
+)
+
+dc, _ := spec.LoadFromWorkspace(workspace)
+proj, _ := composedck.LoadProject(ctx, composedck.LoadInputs{
+    Spec:      dc,
+    Workspace: workspace,
+})
+
+out, err := kubernetes.ProjectCompose(kubernetes.ComposeProjectRequest{
+    Spec:           dc,
+    SpecPath:       dc.Path,
+    LocalWorkspace: workspace,
+    Project:        proj,
+    PrimaryImage:   "registry.example.com/devbox-derived:1.2.3",
+    Name:           "alice-devbox",
+    Namespace:      "dev",
+})
+// out.PersistentVolumeClaims need to exist before out.Pod is applied —
+// the Pod references them by ClaimName.
+```
+
+The shape is one Pod with one Container per compose service (the
+primary first, sidecars next in stable name order). Compose volumes
+translate as:
+
+- **Bind mount** → `HostPath` volume. Same caveat as the
+  single-container projection: only useful on single-node clusters
+  where the kubelet can see the host path.
+- **Named volume (default)** → a generated `PersistentVolumeClaim`
+  referenced by the Pod. Default access mode is `ReadWriteOnce` and
+  the storage request defaults to `1Gi`; both are tunable via
+  `VolumeStorageClass` and `VolumeStorageRequest` on the request.
+  When two services bind the same compose volume, they share the
+  same Pod-level Volume entry — same PVC, two `volumeMounts`.
+- **External named volume (`external: true`)** → a Pod Volume
+  referencing a pre-existing PVC named after the compose volume's
+  `name:` (or its key). No PVC is generated.
+- **Tmpfs** → `EmptyDir{Medium: Memory}`.
+- **image / cluster** → returns an error rather than silently
+  dropping.
+
+Compose-mode Kubernetes scope cuts:
+
+- **`depends_on`.** Containers in a Pod can't be ordered through
+  the compose model; `depends_on` is ignored. Use init containers
+  or readiness probes if you need start ordering.
+- **Service-name DNS.** Containers in a Pod share `localhost`, so
+  cross-service traffic is `127.0.0.1:<port>` rather than the
+  compose `<svcname>:<port>` model. Anything that reaches into
+  another service by hostname needs the spec restructured (e.g.
+  multi-Deployment + Services) — outside this iteration's scope.
+- **Compose-side `build:`.** Each service must reference a pullable
+  `image:`; `BuildPrimaryImage` from `pkg/host/dockercompose` lets
+  you bake features into the primary's derived image, but compose
+  `build:` for any service is not honored.
+- **Profiles, `watch`, `develop`, `configs`, `secrets`.** Not
+  honored — same as the docker compose host.
+- **`forwardPorts`/`appPort` vs compose `ports:`.** `forwardPorts`
+  and `appPort` are merged onto the primary's ContainerPorts. The
+  compose `ports:` field is also translated (one ContainerPort per
+  service entry); the docker publish-to-localhost / hostPort
+  semantics don't carry over — use a Service for external
+  reachability.
 
 `pkg/host/kubernetes` is the imperative companion to
 `pkg/projection/kubernetes`. The projection package turns a spec into a
