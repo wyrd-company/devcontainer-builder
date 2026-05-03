@@ -42,15 +42,18 @@ type BuildPrimaryResult struct {
 }
 
 // BuildPrimaryImage produces the image the primary compose service
-// should run with. When the spec has no features, returns the
-// primary service's compose `image:` unchanged. When features are
-// present, builds a derived image FROM that base with the features
-// (and the VS Code server, by default) layered on, and returns the
-// derived tag.
+// should run with.
 //
-// The primary service must declare an `image:` in compose; building
-// from a compose-side `build:` for the primary is out of scope for
-// this iteration (see package doc).
+//   - When the primary declares only `image:` and the spec has no
+//     features, the compose `image:` is returned unchanged.
+//   - When the primary declares `build:`, that compose-side build is
+//     run through pkg/buildx first to produce a base image. When the
+//     spec has features, a derived image is layered on top; otherwise
+//     the build's output tag is returned directly.
+//   - When features are present, a derived image is built FROM the
+//     base (compose `image:` or compose `build:` output) with the
+//     features (and the VS Code server, by default) layered on, and
+//     the derived tag is returned.
 func BuildPrimaryImage(ctx context.Context, in BuildPrimaryInputs) (*BuildPrimaryResult, error) {
 	if in.Spec == nil {
 		return nil, fmt.Errorf("BuildPrimaryInputs.Spec is required")
@@ -71,12 +74,33 @@ func BuildPrimaryImage(ctx context.Context, in BuildPrimaryInputs) (*BuildPrimar
 	if err != nil {
 		return nil, fmt.Errorf("%w: %q", ErrPrimaryNotFound, in.Spec.Service)
 	}
-	if primary.Image == "" {
-		return nil, fmt.Errorf("primary service %q has no image: building from compose-side `build:` for the primary service is out of scope", in.Spec.Service)
+
+	baseImage := primary.Image
+	composeBuilt := false
+	if primary.Build != nil {
+		bsi, err := BuildServiceImages(ctx, BuildServiceImagesInputs{
+			Project:  proj,
+			Services: []string{in.Spec.Service},
+			Builder:  in.BuilderOptions.Builder,
+			NoCache:  in.BuilderOptions.NoCache,
+			Pull:     in.BuilderOptions.Pull,
+			Progress: in.BuilderOptions.Progress,
+			Stdout:   in.BuilderOptions.Stdout,
+			Stderr:   in.BuilderOptions.Stderr,
+			Logger:   in.BuilderOptions.Logger,
+		})
+		if err != nil {
+			return nil, err
+		}
+		baseImage = bsi.Images[in.Spec.Service]
+		composeBuilt = true
+	}
+	if baseImage == "" {
+		return nil, fmt.Errorf("primary service %q has neither image nor build", in.Spec.Service)
 	}
 
 	if in.Spec.Features.Len() == 0 {
-		return &BuildPrimaryResult{Image: primary.Image}, nil
+		return &BuildPrimaryResult{Image: baseImage, Built: composeBuilt}, nil
 	}
 
 	tag := in.Tag
@@ -91,11 +115,11 @@ func BuildPrimaryImage(ctx context.Context, in BuildPrimaryInputs) (*BuildPrimar
 	defer os.RemoveAll(syntheticDir)
 
 	syntheticSpec := map[string]any{
-		"image":          primary.Image,
-		"remoteUser":     in.Spec.RemoteUser,
-		"containerUser":  in.Spec.ContainerUser,
-		"containerEnv":   in.Spec.ContainerEnv,
-		"remoteEnv":      in.Spec.UpdateRemoteEnv,
+		"image":         baseImage,
+		"remoteUser":    in.Spec.RemoteUser,
+		"containerUser": in.Spec.ContainerUser,
+		"containerEnv":  in.Spec.ContainerEnv,
+		"remoteEnv":     in.Spec.UpdateRemoteEnv,
 	}
 	if in.Spec.Features.Len() > 0 {
 		featuresOut := map[string]json.RawMessage{}

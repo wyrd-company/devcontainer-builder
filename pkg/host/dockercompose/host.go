@@ -56,6 +56,18 @@ type Options struct {
 	// (service_healthy / service_completed_successfully). Defaults to
 	// 5 minutes; the condition is rechecked every 500ms.
 	DependencyTimeout time.Duration
+	// SkipServiceBuild disables the auto-build pass that walks the
+	// project for non-primary services with a `build:` block and
+	// compiles them via pkg/buildx before bring-up. Embedders that
+	// pre-build their own images can set this to keep Up purely
+	// engine-API.
+	SkipServiceBuild bool
+	// NoRecreate, when true, preserves an existing container even if
+	// its config-hash label disagrees with the current spec. Default
+	// behavior (false) mirrors `docker compose up`: a config-hash
+	// mismatch (or missing label) triggers a stop+remove+create cycle
+	// so the container picks up the new spec.
+	NoRecreate bool
 }
 
 // Host is the per-daemon connection. Safe for concurrent use.

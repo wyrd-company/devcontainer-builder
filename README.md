@@ -562,21 +562,47 @@ rather than silently dropped:
 
 - **Profiles, `watch`, `develop`, `configs`, `secrets`.** Not
   honored.
-- **Compose-side `build:` for the primary service.** The primary
-  service must declare an `image:` in compose; building from a
-  compose-side `build:` for the primary is not implemented (the
-  builder always derives FROM the primary's `image`, layering
-  features on). Non-primary services with `build:` aren't built
-  either — they must reference a pullable image.
-- **Recreate-on-config-change.** Containers are reused if present
-  with the matching project + service labels; there's no diff/recreate
-  step yet.
 - **Volume types.** Bind and named volumes are translated; tmpfs,
   image, and cluster volume types return an error rather than being
   silently dropped.
 - **`forwardPorts` / `appPort` on the primary.** Not layered onto
   the compose service — the user already has compose `ports:` for
   port publishing in this mode.
+
+### Compose-side `build:`
+
+Both the primary service and any sidecar may declare a compose-side
+`build:` block. `BuildPrimaryImage` runs the primary's `build:`
+through `pkg/buildx` first to produce a base image, then layers
+features (and the VS Code server) on top with the regular builder
+pipeline. `Up` walks the project for non-primary services with a
+`build:` block and builds them through the same path before
+bringing them up — the resulting tag is folded into the project
+in-memory so the spawn step uses it instead of compose's empty
+`image:`. `Options.SkipServiceBuild` opts out for embedders that
+manage their own builds. `dockerfile_inline:` is rejected (we don't
+shadow a real path with synthetic content); everything else
+(`context`, `dockerfile`, `args`, `target`, `cache_from` /
+`cache_to`, `platforms`, `tags`, `no_cache`, `pull`, `labels`)
+maps directly onto the buildx invocation. When a service declares
+both `build:` and `image:`, the `image:` becomes the primary tag
+applied to the build (matching `docker compose build`).
+
+### Recreate-on-config-change
+
+Every container created by `Up` carries a
+`com.docker.compose.config-hash` label computed from a normalized
+JSON snapshot of its compose `ServiceConfig` (image, entrypoint,
+command, env, volumes, ports, networks, depends_on, security
+flags, …). Host-managed labels — anything under
+`com.docker.compose.*` or `devcontainer.*` — are stripped before
+hashing so the hash isn't perturbed by our own bookkeeping.
+On subsequent `Up` calls, an existing container with a mismatched
+or missing hash is stopped, removed, and recreated from the
+current spec; matching hashes preserve the container as before.
+`Options.NoRecreate = true` falls back to the prior "always
+reuse" behavior. `UpResult.RecreatedThisCall` lists which services
+were destroyed and rebuilt this call.
 
 ## Status
 
@@ -604,4 +630,19 @@ The two README-tracked gaps from the previous iteration are closed:
   the primary's container info regardless of how many sidecars the
   project declares.
 
-The remaining compose-mode scope cuts (profiles/watch/develop/configs/secrets, compose-side `build:` for non-primary services, recreate-on-config-change, `forwardPorts`/`appPort` overlay) are listed under "Compose-mode scope cuts" above.
+Two more compose-mode gaps are now closed:
+
+- **Compose-side `build:`** is honored for both the primary service
+  and sidecars. `BuildPrimaryImage` runs the primary's `build:` and
+  uses the resulting tag as the base for feature derivation; `Up`
+  builds any sidecar with a `build:` block through `pkg/buildx`
+  before creating its container. `Options.SkipServiceBuild` lets
+  embedders that manage their own image pipeline opt out.
+- **Recreate-on-config-change** stamps a
+  `com.docker.compose.config-hash` label on every container and
+  rebuilds it on the next `Up` if the hash drifts (or is missing).
+  `Options.NoRecreate` falls back to the prior "always reuse"
+  behavior. `UpResult.RecreatedThisCall` lists which services were
+  rebuilt.
+
+The remaining compose-mode scope cuts (profiles/watch/develop/configs/secrets, `forwardPorts`/`appPort` overlay, tmpfs/image/cluster volume types) are listed under "Compose-mode scope cuts" above.
