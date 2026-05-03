@@ -1,5 +1,4 @@
-// Command devcontainer-builder builds devcontainer-spec images via
-// docker buildx.
+// Command dcb builds devcontainer-spec images via docker buildx.
 //
 // Subcommands:
 //
@@ -69,10 +68,10 @@ func main() {
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, `devcontainer-builder - build devcontainer-spec images with docker buildx
+	fmt.Fprintln(os.Stderr, `dcb - build devcontainer-spec images with docker buildx
 
 Usage:
-  devcontainer-builder <command> [flags]
+  dcb <command> [flags]
 
 Commands:
   build      Build a devcontainer image
@@ -82,7 +81,7 @@ Commands:
   version    Print version information
   help       Show this help
 
-Run "devcontainer-builder <command> -h" for command-specific flags.`)
+Run "dcb <command> -h" for command-specific flags.`)
 }
 
 // stringSlice is a flag.Value that collects repeated occurrences.
@@ -357,7 +356,7 @@ func cmdServer(ctx context.Context, args []string) error {
 }
 
 func cmdVersion(ctx context.Context) error {
-	fmt.Printf("devcontainer-builder %s\n", Version)
+	fmt.Printf("dcb %s\n", Version)
 	if v, err := buildx.Version(ctx); err == nil {
 		fmt.Printf("  buildx: %s\n", v)
 	}

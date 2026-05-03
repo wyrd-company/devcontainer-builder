@@ -12,9 +12,10 @@ substance.
 | ------- | ------------ |
 | `pkg/builder` | Build the image. Authors a BuildKit LLB graph directly so feature installs and the VS Code server are cacheable vertices; supports multi-platform, manifest-list builds, and chains the builtin `dockerfile.v0` frontend for upstream Dockerfile bases. A `docker buildx` shell-out engine is included as a fallback. |
 | `pkg/host/docker` | Run the image. Talks to the Docker Engine API directly (no `docker` CLI shell-out), creates / starts / execs / removes containers, runs the lifecycle phases (`onCreate` → `postAttach`) gated by upstream-compatible marker files. Embeddable in a service. |
-| `pkg/host/runner` | Transport-agnostic lifecycle executor: takes an `Execer` (docker exec, apiserver pod-exec, anything that runs argv inside a running container) plus a `lifecycle.Plan` and runs the phases with marker-file gating. Owns the marker shell, the Shell/Args/Parallel dispatch, and per-parallel output buffering. Used by `pkg/host/docker`; also callable directly from operators that want to drive lifecycle themselves. |
-| `pkg/lifecycle` | Pure planning: returns the ordered phases for a spec + features. The same plan can be executed imperatively (docker) or projected declaratively (kubernetes, future phase). |
-| `pkg/projection/kubernetes` | Pure config translation: a `*spec.DevContainer` + features become a `*corev1.Pod` (and friends). No client-go, no apiserver round-trips — drop the result into an operator's reconcile, render to YAML, or hand to a future imperative `pkg/host/kubernetes`. |
+| `pkg/host/kubernetes` | Run the image on a cluster. Discover-or-create the Pod via the apiserver, wait for the target container to reach Ready, exec lifecycle phases through the pod-exec subresource (SPDY), port-forward, delete on teardown. Builds on `pkg/projection/kubernetes` for the spec → Pod translation and `pkg/host/runner` for marker gating. No CLI: this is a library for operators and services that already own a `kubernetes.Interface`. |
+| `pkg/host/runner` | Transport-agnostic lifecycle executor: takes an `Execer` (docker exec, apiserver pod-exec, anything that runs argv inside a running container) plus a `lifecycle.Plan` and runs the phases with marker-file gating. Owns the marker shell, the Shell/Args/Parallel dispatch, and per-parallel output buffering. Used by both `pkg/host/docker` and `pkg/host/kubernetes`. |
+| `pkg/lifecycle` | Pure planning: returns the ordered phases for a spec + features. The same plan can be executed imperatively (docker, kubernetes) or projected declaratively. |
+| `pkg/projection/kubernetes` | Pure config translation: a `*spec.DevContainer` + features become a `*corev1.Pod` (and friends). No client-go, no apiserver round-trips — drop the result into an operator's reconcile, render to YAML, or hand to `pkg/host/kubernetes`. |
 | `pkg/substitute` | `${localEnv:VAR}`, `${localWorkspaceFolder}`, `${containerEnv:VAR}`, `${devcontainerId}`, and the rest of the devcontainer spec's variable substitution rules. |
 
 Marker file paths, container labels, and command-form semantics mirror
@@ -28,7 +29,7 @@ tooling and vice versa.
 ## Install
 
 ```sh
-go install github.com/wyrd-company/devcontainer-builder/cmd/devcontainer-builder@latest
+go install github.com/wyrd-company/devcontainer-builder/cmd/dcb@latest
 go install github.com/wyrd-company/devcontainer-builder/cmd/devcontainer-docker@latest
 ```
 
@@ -38,7 +39,7 @@ Two binaries: one for building images, one for running them. They share
 the same library packages.
 
 ```
-devcontainer-builder <command> [flags]
+dcb <command> [flags]
 
 Commands:
   build      Build a devcontainer image
@@ -64,7 +65,7 @@ Commands:
 Build the devcontainer in `./` and load it into the local docker store:
 
 ```sh
-devcontainer-builder build \
+dcb build \
   --workspace . \
   --tag my-org/devbox:latest \
   --load
@@ -75,7 +76,7 @@ specific buildkitd endpoint:
 
 ```sh
 BUILDKIT_HOST=tcp://buildkit.internal:1234 \
-devcontainer-builder build \
+dcb build \
   --workspace . \
   --tag registry.internal/devbox:1.2.3 \
   --push \
@@ -85,13 +86,13 @@ devcontainer-builder build \
 Generate the wrapper Dockerfile for inspection without running a build:
 
 ```sh
-devcontainer-builder generate --workspace . --skip-vscode-server
+dcb generate --workspace . --skip-vscode-server
 ```
 
 Force the buildx fallback engine:
 
 ```sh
-devcontainer-builder build --engine buildx --tag dev:latest --load
+dcb build --engine buildx --tag dev:latest --load
 ```
 
 ## Architecture
@@ -138,7 +139,7 @@ devcontainer-builder build --engine buildx --tag dev:latest --load
 | `pkg/buildx`      | Shell wrapper over `docker buildx build`                        |
 | `pkg/platform`    | Platform/arch translation                                       |
 | `pkg/builder`     | Top-level orchestrator                                          |
-| `cmd/devcontainer-builder` | CLI entrypoint                                         |
+| `cmd/dcb`         | CLI entrypoint                                                  |
 
 ### How features are applied
 
@@ -277,7 +278,7 @@ matching native worker, when available) and not against the daemon's
 default arch.
 
 ```sh
-devcontainer-builder build \
+dcb build \
   --workspace . \
   --tag registry.internal/devbox:1.2.3 \
   --platform linux/amd64 \
@@ -360,24 +361,58 @@ Lifecycle commands (`onCreate`, `postCreate`, `postStart`,
 hooks: those phases need the running container's userspace state and
 can't be modeled as static manifest fields.
 
-Until the imperative `pkg/host/kubernetes` lands, an operator can
-drive lifecycle itself by combining `pkg/lifecycle.Plan` (the ordered
-phases) with `pkg/host/runner` (the marker-gated executor) — supplying
-its own `runner.Execer` that wraps `client-go`'s
-`tools/remotecommand.NewSPDYExecutor`. The runner owns the
-upstream-compatible marker shell and the Shell/Args/Parallel dispatch,
-so the operator only writes the apiserver transport. That same
-runner.Execer surface is what the future Kubernetes host will plug
-into.
+### Running a container against a Kubernetes apiserver
+
+`pkg/host/kubernetes` is the imperative companion to
+`pkg/projection/kubernetes`. The projection package turns a spec into a
+`*corev1.Pod`; the host package takes that translation and drives the
+apiserver: discover-or-create the Pod, wait for the target container to
+reach Ready, exec lifecycle phases through the pod-exec subresource
+(SPDY), port-forward, delete on teardown.
+
+```go
+import (
+    k8shost "github.com/wyrd-company/devcontainer-builder/pkg/host/kubernetes"
+    "github.com/wyrd-company/devcontainer-builder/pkg/spec"
+    "k8s.io/client-go/kubernetes"
+    "k8s.io/client-go/tools/clientcmd"
+)
+
+cfg, _ := clientcmd.BuildConfigFromFlags("", kubeconfigPath)
+cs, _ := kubernetes.NewForConfig(cfg)
+host := k8shost.New(cs, cfg, k8shost.Options{Stdout: os.Stdout, Stderr: os.Stderr})
+
+dc, _ := spec.LoadFromWorkspace("/path/to/workspace")
+res, err := host.Up(ctx, k8shost.UpRequest{
+    Spec:           dc,
+    SpecPath:       dc.Path,
+    LocalWorkspace: "/path/to/workspace",
+    Image:          "registry.example.com/devbox:1.2.3",
+    Namespace:      "dev",
+})
+```
+
+`Up` is idempotent. The discovery key is a sha256 of `LocalWorkspace`
+written onto the Pod as the `devcontainer.io/local-folder-hash` label
+(annotations carry the verbatim path values, mirroring the docker
+host's labels — Kubernetes label values can't hold filesystem paths).
+A second call rediscovers the Pod by that label, waits for Ready,
+and runs only the lifecycle phases whose marker files indicate they
+need to. Lifecycle exec uses the same `pkg/host/runner` engine the
+docker host uses, so marker contents and phase ordering stay
+upstream-compatible across hosts.
+
+There is deliberately no Kubernetes CLI in this repo. Rendering — the
+half that benefits from a CLI — is `kubectl apply -f <file>` against
+the YAML you serialize from `pkg/projection/kubernetes`. The
+imperative half lives where the Kubernetes client already does:
+inside an operator's reconcile loop or a service that owns its own
+`kubernetes.Interface`. The package never reads `$KUBECONFIG` and
+never writes to stdout/stderr unless explicitly given writers.
 
 ## Status
 
 Known gaps:
 
-- **Imperative Kubernetes host.** `pkg/projection/kubernetes` covers
-  the static config translation (`spec → corev1.Pod`); the imperative
-  side — discover-or-create the Pod, exec lifecycle phases through
-  the apiserver, port-forward — is still planned, alongside a
-  `cmd/devcontainer-k8s` CLI for the rendering UI.
 - **`dockerComposeFile`.** Multi-container compose-style devcontainers
   aren't supported.

@@ -32,6 +32,6 @@
 // initContainers or lifecycle hooks: those phases need the running
 // container's userspace state (features installed by previous phases,
 // the workspace bind contents) and can't be modeled as static manifest
-// fields. A future imperative pkg/host/kubernetes will exec them after
-// the pod reaches Ready, the same shape pkg/host/docker uses today.
+// fields. The imperative pkg/host/kubernetes execs them after the pod
+// reaches Ready, the same shape pkg/host/docker uses today.
 package kubernetes

@@ -14,11 +14,11 @@ import (
 )
 
 // Annotations written onto the projected Pod so upstream tooling (and
-// our own future imperative kubernetes host) can reverse-look-up which
-// devcontainer/workspace produced the pod. Keys mirror the docker host
-// labels exactly — see pkg/host/docker.LabelLocalFolder /
-// LabelConfigFile — but live on annotations rather than labels because
-// path values aren't valid Kubernetes label values.
+// pkg/host/kubernetes) can reverse-look-up which devcontainer /
+// workspace produced the pod. Keys mirror the docker host labels
+// exactly — see pkg/host/docker.LabelLocalFolder / LabelConfigFile —
+// but live on annotations rather than labels because path values
+// aren't valid Kubernetes label values.
 const (
 	AnnotationLocalFolder = "devcontainer.local_folder"
 	AnnotationConfigFile  = "devcontainer.config_file"

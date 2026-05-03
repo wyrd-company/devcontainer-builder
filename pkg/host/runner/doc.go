@@ -12,9 +12,10 @@
 // container created by either host stays compatible with the upstream
 // devcontainer CLI.
 //
-// pkg/host/docker uses this package internally; a future
-// pkg/host/kubernetes will use it the same way against the apiserver
-// exec subresource.
+// Both pkg/host/docker and pkg/host/kubernetes use this package
+// internally — the docker host adapts the Execer onto docker exec,
+// the kubernetes host adapts it onto the apiserver pod-exec
+// subresource.
 //
 // # Embedding
 //
