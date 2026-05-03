@@ -315,6 +315,81 @@ func TestProjectCompose_PrimaryImageOverride(t *testing.T) {
 	}
 }
 
+func TestProjectCompose_HostAliasesForServiceNameDNS(t *testing.T) {
+	composeBody := `services:
+  app:
+    image: alpine
+    networks:
+      default:
+        aliases: ["api"]
+  db:
+    image: postgres:16
+  cache:
+    image: redis:7
+    profiles: ["full"]
+`
+	specBody := `{"dockerComposeFile": "docker-compose.yml", "service": "app"}`
+	dc, proj, workspace := loadProjectForTest(t, composeBody, specBody)
+
+	out, err := ProjectCompose(ComposeProjectRequest{
+		Spec:           dc,
+		LocalWorkspace: workspace,
+		Project:        proj,
+		Name:           "alice-dev",
+	})
+	if err != nil {
+		t.Fatalf("ProjectCompose: %v", err)
+	}
+	if len(out.Pod.Spec.HostAliases) != 1 {
+		t.Fatalf("HostAliases: got %d entries, want 1", len(out.Pod.Spec.HostAliases))
+	}
+	got := out.Pod.Spec.HostAliases[0]
+	if got.IP != "127.0.0.1" {
+		t.Errorf("IP: got %q want 127.0.0.1", got.IP)
+	}
+	hosts := map[string]bool{}
+	for _, h := range got.Hostnames {
+		hosts[h] = true
+	}
+	if !hosts["app"] || !hosts["db"] || !hosts["api"] {
+		t.Errorf("hostnames should include app + db + api alias; got %v", got.Hostnames)
+	}
+	// "cache" is profile-gated and not active, so it must not appear.
+	if hosts["cache"] {
+		t.Errorf("profile-gated service should not appear in hostAliases; got %v", got.Hostnames)
+	}
+}
+
+func TestProjectCompose_HostAliasesIncludeProfileEnabledServices(t *testing.T) {
+	composeBody := `services:
+  app:
+    image: alpine
+  cache:
+    image: redis:7
+    profiles: ["full"]
+`
+	specBody := `{"dockerComposeFile": "docker-compose.yml", "service": "app"}`
+	dc, proj, workspace := loadProjectForTest(t, composeBody, specBody)
+
+	out, err := ProjectCompose(ComposeProjectRequest{
+		Spec:           dc,
+		LocalWorkspace: workspace,
+		Project:        proj,
+		Name:           "alice-dev",
+		Profiles:       []string{"full"},
+	})
+	if err != nil {
+		t.Fatalf("ProjectCompose: %v", err)
+	}
+	hosts := map[string]bool{}
+	for _, h := range out.Pod.Spec.HostAliases[0].Hostnames {
+		hosts[h] = true
+	}
+	if !hosts["cache"] {
+		t.Errorf("activated profile-gated service should appear in hostAliases; got %v", out.Pod.Spec.HostAliases[0].Hostnames)
+	}
+}
+
 func findVolume(pod *corev1.Pod, name string) *corev1.Volume {
 	for i := range pod.Spec.Volumes {
 		if pod.Spec.Volumes[i].Name == name {

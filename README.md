@@ -417,7 +417,8 @@ translate as:
 - **image / cluster** → returns an error rather than silently
   dropping.
 
-Compose `configs:`, `secrets:`, and `profiles:` are honored:
+Compose `configs:`, `secrets:`, `profiles:`, and service-name DNS
+are honored:
 
 - **Profiles.** `ComposeProjectRequest.Profiles` narrows the
   projected Pod to services whose `profiles:` match (or `"*"`),
@@ -434,6 +435,12 @@ Compose `configs:`, `secrets:`, and `profiles:` are honored:
   at projection time so the value is baked into the resulting
   Secret. `external: true` references a pre-existing Secret by
   name.
+- **Service-name DNS.** Every active compose service name (and any
+  compose network alias) lands in `pod.spec.hostAliases` mapped to
+  `127.0.0.1`, so a primary that connects to `db:5432` resolves to
+  the Pod's shared loopback where `db`'s container is actually
+  listening. This works for compose-mode in-Pod traffic, not for
+  reaching the Pod from outside (use a Service for that).
 
 `ComposeProjection` carries the generated resources alongside
 the Pod and PVCs (`ConfigMaps`, `Secrets`); the caller applies
@@ -444,11 +451,6 @@ Compose-mode Kubernetes scope cuts:
 - **`depends_on`.** Containers in a Pod can't be ordered through
   the compose model; `depends_on` is ignored. Use init containers
   or readiness probes if you need start ordering.
-- **Service-name DNS.** Containers in a Pod share `localhost`, so
-  cross-service traffic is `127.0.0.1:<port>` rather than the
-  compose `<svcname>:<port>` model. Anything that reaches into
-  another service by hostname needs the spec restructured (e.g.
-  multi-Deployment + Services) — outside this iteration's scope.
 - **Compose-side `build:`.** Each service must reference a pullable
   `image:`; `BuildPrimaryImage` from `pkg/host/dockercompose` lets
   you bake features into the primary's derived image, but compose

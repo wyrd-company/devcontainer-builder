@@ -131,13 +131,8 @@ type ComposeProjection struct {
 //     not built. Each service must reference a pullable `image:`.
 //   - tmpfs/image/cluster volume types: tmpfs translates to
 //     EmptyDir(memory); image and cluster types return an error.
-//   - service-name network DNS: containers in a Pod share localhost,
-//     so service-name resolution doesn't work. Cross-service
-//     communication is via 127.0.0.1:port. This deviates from
-//     compose; document it in the spec or restructure into a
-//     multi-Deployment shape instead.
 //
-// Profiles, configs, and secrets are honored:
+// Profiles, configs, secrets, and service-name DNS are honored:
 //
 //   - Profiles narrow the projected Pod to services whose `profiles:`
 //     match `req.Profiles` (with "*" as a wildcard). The primary
@@ -146,6 +141,12 @@ type ComposeProjection struct {
 //     mounted at `/<source>` by default.
 //   - Secrets become Secrets (or external references) and are
 //     mounted at `/run/secrets/<source>` by default.
+//   - Service-name DNS works inside the Pod via pod.spec.hostAliases:
+//     each compose service name (and any compose network alias) is
+//     mapped to 127.0.0.1, where its container is actually listening
+//     since all containers in a Pod share the network namespace. So
+//     `db:5432` resolves the same way it would on a compose
+//     user-defined network.
 func ProjectCompose(req ComposeProjectRequest) (*ComposeProjection, error) {
 	if req.Spec == nil {
 		return nil, errors.New("kubernetes projection: ComposeProjectRequest.Spec is required")
@@ -277,12 +278,64 @@ func ProjectCompose(req ComposeProjectRequest) (*ComposeProjection, error) {
 		pod.Spec.Containers = append(pod.Spec.Containers, c)
 	}
 
+	// Compose service-name DNS in a single Pod is faked through
+	// /etc/hosts: every service name (and its compose network
+	// aliases) resolves to 127.0.0.1, where the corresponding
+	// container is actually listening because all containers in a
+	// Pod share the network namespace. Without this, a primary that
+	// connects to "db:5432" would fail — Pod containers don't get
+	// the compose embedded-DNS that user-defined docker networks
+	// provide.
+	if aliases := composeHostnames(proj); len(aliases) > 0 {
+		pod.Spec.HostAliases = append(pod.Spec.HostAliases, corev1.HostAlias{
+			IP:        "127.0.0.1",
+			Hostnames: aliases,
+		})
+	}
+
 	return &ComposeProjection{
 		Pod:                    pod,
 		PersistentVolumeClaims: pvcs,
 		ConfigMaps:             configMaps,
 		Secrets:                secrets,
 	}, nil
+}
+
+// composeHostnames returns the deduplicated list of names that the
+// containers in the projected Pod should reach via 127.0.0.1: every
+// active service's name plus any compose network aliases declared on
+// it. Sorted for stable manifest output.
+func composeHostnames(proj *composetypes.Project) []string {
+	if proj == nil || len(proj.Services) == 0 {
+		return nil
+	}
+	seen := map[string]struct{}{}
+	for _, name := range proj.ServiceNames() {
+		if _, dup := seen[name]; !dup {
+			seen[name] = struct{}{}
+		}
+		svc, err := proj.GetService(name)
+		if err != nil {
+			continue
+		}
+		for _, ep := range svc.Networks {
+			if ep == nil {
+				continue
+			}
+			for _, a := range ep.Aliases {
+				if a == "" {
+					continue
+				}
+				seen[a] = struct{}{}
+			}
+		}
+	}
+	out := make([]string, 0, len(seen))
+	for n := range seen {
+		out = append(out, n)
+	}
+	sort.Strings(out)
+	return out
 }
 
 // applyComposeProfiles narrows the project to services enabled by
