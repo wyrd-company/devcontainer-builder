@@ -1,0 +1,130 @@
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  creationTimestamp: null
+  labels:
+    app.kubernetes.io/name: devcontainer
+  name: compose-workspace-data
+  namespace: dev
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+status: {}
+---
+apiVersion: v1
+binaryData:
+  app-config: bW9kZT1kZXYK
+kind: ConfigMap
+metadata:
+  creationTimestamp: null
+  labels:
+    app.kubernetes.io/name: devcontainer
+  name: test-proj-app-config
+  namespace: dev
+---
+apiVersion: v1
+data:
+  api-token: c2VjcmV0LXZhbHVl
+kind: Secret
+metadata:
+  creationTimestamp: null
+  labels:
+    app.kubernetes.io/name: devcontainer
+  name: test-proj-api-token
+  namespace: dev
+type: Opaque
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  annotations:
+    devcontainer.compose.project: test_proj
+    devcontainer.compose.service: app
+    devcontainer.config_file: /repo/.devcontainer/devcontainer.json
+    devcontainer.local_folder: /repo
+  creationTimestamp: null
+  labels:
+    app.kubernetes.io/name: devcontainer
+  name: compose-workspace
+  namespace: dev
+spec:
+  containers:
+  - args:
+    - -c
+    - |-
+      echo Container started
+      trap "exit 0" 15
+      exec "$@"
+      while sleep 1 & wait $!; do :; done
+    - '-'
+    command:
+    - /bin/sh
+    env:
+    - name: APP_ENV
+      value: dev
+    image: ghcr.io/acme/app:dev
+    name: app
+    ports:
+    - containerPort: 3000
+      name: app-0
+      protocol: TCP
+    resources: {}
+    stdin: true
+    tty: true
+    volumeMounts:
+    - mountPath: /workspace/project
+      name: workspace
+    - mountPath: /workspace/.cache
+      name: vol-data
+    - mountPath: /var/run/docker.sock
+      name: var-run-docker-sock
+      readOnly: true
+    - mountPath: /app-config
+      name: config-app-config
+      readOnly: true
+      subPath: app-config
+    - mountPath: /run/secrets/api-token
+      name: secret-api-token
+      readOnly: true
+      subPath: api-token
+    workingDir: /workspace/project
+  - args:
+    - postgres
+    - -c
+    - fsync=off
+    env:
+    - name: POSTGRES_PASSWORD
+      value: example
+    image: postgres:16
+    name: db
+    resources: {}
+    volumeMounts:
+    - mountPath: /var/lib/postgresql/data
+      name: vol-data
+  hostAliases:
+  - hostnames:
+    - app
+    - db
+    ip: 127.0.0.1
+  restartPolicy: Never
+  volumes:
+  - hostPath:
+      path: /repo
+    name: workspace
+  - name: vol-data
+    persistentVolumeClaim:
+      claimName: compose-workspace-data
+  - hostPath:
+      path: /var/run/docker.sock
+    name: var-run-docker-sock
+  - configMap:
+      name: test-proj-app-config
+    name: config-app-config
+  - name: secret-api-token
+    secret:
+      secretName: test-proj-api-token
+status: {}

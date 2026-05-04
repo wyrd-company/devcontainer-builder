@@ -1,0 +1,98 @@
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  annotations:
+    devcontainer.config_file: /repo/.devcontainer/devcontainer.json
+    devcontainer.local_folder: /repo
+    example.com/owner: devtools
+  creationTimestamp: null
+  labels:
+    app.kubernetes.io/component: workspace
+  name: runargs-workspace
+  namespace: dev
+spec:
+  containers:
+  - args:
+    - -c
+    - |-
+      echo Container started
+      trap "exit 0" 15
+      exec "$@"
+      while sleep 1 & wait $!; do :; done
+    - '-'
+    command:
+    - /bin/sh
+    env:
+    - name: EXTRA
+      value: "1"
+    image: ubuntu:24.04
+    name: devcontainer
+    ports:
+    - containerPort: 3000
+      protocol: TCP
+    - containerPort: 80
+      hostPort: 8080
+      protocol: TCP
+    resources:
+      limits:
+        cpu: 1500m
+        memory: 512Mi
+        nvidia.com/gpu: "1"
+      requests:
+        memory: 256Mi
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        add:
+        - SYS_PTRACE
+        drop:
+        - MKNOD
+      runAsGroup: 1002
+      runAsUser: 1001
+    volumeMounts:
+    - mountPath: /workspace/project
+      name: workspace
+    - mountPath: /tmp
+      name: tmpfs-tmp
+    - mountPath: /cache
+      name: var-cache-dev
+      readOnly: true
+    workingDir: /workspace/project
+  dnsConfig:
+    nameservers:
+    - 1.1.1.1
+    options:
+    - name: ndots
+      value: "2"
+    searches:
+    - svc.local
+  dnsPolicy: None
+  hostAliases:
+  - hostnames:
+    - host.docker.internal
+    ip: 127.0.0.1
+  hostNetwork: true
+  hostname: devbox
+  restartPolicy: OnFailure
+  runtimeClassName: gvisor
+  securityContext:
+    supplementalGroups:
+    - 1003
+    sysctls:
+    - name: net.ipv4.ip_unprivileged_port_start
+      value: "0"
+  shareProcessNamespace: true
+  subdomain: cluster.local
+  terminationGracePeriodSeconds: 20
+  volumes:
+  - hostPath:
+      path: /repo
+    name: workspace
+  - emptyDir:
+      medium: Memory
+    name: tmpfs-tmp
+  - hostPath:
+      path: /var/cache/dev
+    name: var-cache-dev
+status: {}

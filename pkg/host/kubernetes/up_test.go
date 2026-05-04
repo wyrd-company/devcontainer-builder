@@ -148,3 +148,58 @@ func TestUp_AlreadyExistsRecoversByGet(t *testing.T) {
 		t.Error("Up should Get the existing pod after AlreadyExists, but Get was not called")
 	}
 }
+
+func TestUp_AlreadyExistsGetFailure(t *testing.T) {
+	hash := LocalFolderHash("/host/proj")
+	name := "devcontainer-" + hash
+	cs := fake.NewSimpleClientset()
+
+	cs.PrependReactor("list", "pods", func(a k8stesting.Action) (bool, runtime.Object, error) {
+		return true, &corev1.PodList{}, nil
+	})
+	cs.PrependReactor("create", "pods", func(a k8stesting.Action) (bool, runtime.Object, error) {
+		gvr := schema.GroupResource{Group: "", Resource: "pods"}
+		return true, nil, apierrors.NewAlreadyExists(gvr, name)
+	})
+	cs.PrependReactor("get", "pods", func(a k8stesting.Action) (bool, runtime.Object, error) {
+		gvr := schema.GroupResource{Group: "", Resource: "pods"}
+		return true, nil, apierrors.NewNotFound(gvr, name)
+	})
+
+	h := New(cs, nil, Options{ReadyTimeout: 1})
+	_, err := h.Up(context.Background(), UpRequest{
+		Spec:           &spec.DevContainer{Image: "alpine:3"},
+		LocalWorkspace: "/host/proj",
+		Image:          "alpine:3",
+	})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !strings.Contains(err.Error(), "get after AlreadyExists") || !apierrors.IsNotFound(err) {
+		t.Fatalf("expected get-after-create NotFound, got %v", err)
+	}
+}
+
+func TestUp_CreateForbidden(t *testing.T) {
+	cs := fake.NewSimpleClientset()
+	cs.PrependReactor("list", "pods", func(a k8stesting.Action) (bool, runtime.Object, error) {
+		return true, &corev1.PodList{}, nil
+	})
+	cs.PrependReactor("create", "pods", func(a k8stesting.Action) (bool, runtime.Object, error) {
+		gvr := schema.GroupResource{Group: "", Resource: "pods"}
+		return true, nil, apierrors.NewForbidden(gvr, "devcontainer", nil)
+	})
+
+	h := New(cs, nil, Options{ReadyTimeout: 1})
+	_, err := h.Up(context.Background(), UpRequest{
+		Spec:           &spec.DevContainer{Image: "alpine:3"},
+		LocalWorkspace: "/host/proj",
+		Image:          "alpine:3",
+	})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !strings.Contains(err.Error(), "create pod") || !apierrors.IsForbidden(err) {
+		t.Fatalf("expected forbidden create error, got %v", err)
+	}
+}

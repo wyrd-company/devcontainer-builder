@@ -7,8 +7,12 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/kubernetes/fake"
+	k8stesting "k8s.io/client-go/testing"
 )
 
 func newPod(ns, name, hash string, created time.Time) *corev1.Pod {
@@ -123,5 +127,39 @@ func TestDeleteByName_AlreadyGone(t *testing.T) {
 	h := New(cs, nil, Options{})
 	if err := h.DeleteByName(context.Background(), "default", "missing"); err != nil {
 		t.Errorf("expected nil for already-gone pod, got %v", err)
+	}
+}
+
+func TestInspect_ListError(t *testing.T) {
+	cs := fake.NewSimpleClientset()
+	cs.PrependReactor("list", "pods", func(a k8stesting.Action) (bool, runtime.Object, error) {
+		gvr := schema.GroupResource{Group: "", Resource: "pods"}
+		return true, nil, apierrors.NewForbidden(gvr, "", nil)
+	})
+	h := New(cs, nil, Options{})
+
+	_, err := h.Inspect(context.Background(), "default", "/host/alice")
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !apierrors.IsForbidden(err) {
+		t.Fatalf("expected forbidden list error, got %v", err)
+	}
+}
+
+func TestDeleteByName_DeleteError(t *testing.T) {
+	cs := fake.NewSimpleClientset(newPod("default", "alice", "h", time.Now()))
+	cs.PrependReactor("delete", "pods", func(a k8stesting.Action) (bool, runtime.Object, error) {
+		gvr := schema.GroupResource{Group: "", Resource: "pods"}
+		return true, nil, apierrors.NewForbidden(gvr, "alice", nil)
+	})
+	h := New(cs, nil, Options{})
+
+	err := h.DeleteByName(context.Background(), "default", "alice")
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !apierrors.IsForbidden(err) {
+		t.Fatalf("expected forbidden delete error, got %v", err)
 	}
 }

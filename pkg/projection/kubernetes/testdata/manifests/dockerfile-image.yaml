@@ -1,0 +1,38 @@
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  annotations:
+    devcontainer.config_file: /repo/.devcontainer/devcontainer.json
+    devcontainer.local_folder: /repo
+  creationTimestamp: null
+  name: dockerfile-workspace
+  namespace: dev
+spec:
+  containers:
+  - args:
+    - -c
+    - |-
+      echo Container started
+      trap "exit 0" 15
+      exec "$@"
+      while sleep 1 & wait $!; do :; done
+    - '-'
+    command:
+    - /bin/sh
+    image: registry.example.com/devcontainers/app:build-output
+    name: devcontainer
+    resources: {}
+    securityContext:
+      runAsGroup: 1000
+      runAsUser: 1000
+    volumeMounts:
+    - mountPath: /workspace/source
+      name: workspace
+    workingDir: /workspace/source
+  restartPolicy: Never
+  volumes:
+  - hostPath:
+      path: /repo
+    name: workspace
+status: {}

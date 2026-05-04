@@ -127,3 +127,25 @@ jobs:
           name: docker-compose-integration-log
           path: artifacts/docker-compose-integration.log
           if-no-files-found: ignore
+
+  kubernetes-manifest:
+    name: Kubernetes manifest validation
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Install kubeconform
+        run: go install github.com/yannh/kubeconform/cmd/kubeconform@v0.6.7
+
+      - name: Validate Kubernetes manifests
+        run: |
+          go test ./pkg/projection/kubernetes ./pkg/host/kubernetes
+          go test -tags=k8svalidate ./test/integration/kubernetes -v
