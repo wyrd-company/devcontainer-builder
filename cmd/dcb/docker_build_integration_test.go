@@ -133,6 +133,7 @@ func skipOrFail(t *testing.T, format string, args ...any) {
 func inspectImage(t *testing.T, tag string) imageConfig {
 	t.Helper()
 	out := runCommand(t, "docker", "image", "inspect", tag)
+	writeArtifact(t, safeArtifactName(tag)+"-image-inspect.json", out)
 	var images []struct {
 		Config imageConfig `json:"Config"`
 	}
@@ -186,4 +187,32 @@ func removeImage(t *testing.T, tag string) {
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Logf("cleanup docker image %s failed: %v\n%s", tag, err, out)
 	}
+}
+
+func writeArtifact(t *testing.T, name string, data []byte) {
+	t.Helper()
+	dir := os.Getenv("DCB_ARTIFACT_DIR")
+	if dir == "" {
+		return
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Logf("create artifact dir %s: %v", dir, err)
+		return
+	}
+	path := filepath.Join(dir, name)
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Logf("write artifact %s: %v", path, err)
+	}
+}
+
+func safeArtifactName(s string) string {
+	return strings.Map(func(r rune) rune {
+		switch {
+		case r >= 'a' && r <= 'z',
+			r >= 'A' && r <= 'Z',
+			r >= '0' && r <= '9':
+			return r
+		}
+		return '-'
+	}, s)
 }

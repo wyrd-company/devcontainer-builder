@@ -4,6 +4,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -56,6 +57,7 @@ func TestDockerHostIntegration(t *testing.T) {
 	)
 
 	info := inspectContainer(t, ctx, cli, workspace)
+	writeJSONArtifact(t, "docker-host-container-inspect.json", info)
 	if !info.State.Running {
 		t.Fatal("container is not running after up")
 	}
@@ -82,6 +84,7 @@ func TestDockerHostIntegration(t *testing.T) {
 	}
 
 	inspectOut := runCommand(t, cmdEnv, bin, "inspect", "--workspace", workspace)
+	writeArtifact(t, "docker-host-cli-inspect.txt", inspectOut)
 	for _, want := range []string{
 		"running:    true",
 		"devcontainer.local_folder=" + workspace,
@@ -101,6 +104,7 @@ func TestDockerHostIntegration(t *testing.T) {
 		"--update-remote-user-uid", "off",
 	)
 	info = inspectContainer(t, ctx, cli, workspace)
+	writeJSONArtifact(t, "docker-host-container-inspect-second-up.json", info)
 	if info.ID != firstID {
 		t.Fatalf("second up created %s, want reuse of %s", info.ID[:12], firstID[:12])
 	}
@@ -342,4 +346,30 @@ func runCommandAllowError(name string, args ...string) error {
 		return fmt.Errorf("%s %s: %w\n%s", name, strings.Join(args, " "), err, out)
 	}
 	return nil
+}
+
+func writeJSONArtifact(t *testing.T, name string, v any) {
+	t.Helper()
+	data, err := json.MarshalIndent(v, "", "  ")
+	if err != nil {
+		t.Logf("marshal artifact %s: %v", name, err)
+		return
+	}
+	writeArtifact(t, name, append(data, '\n'))
+}
+
+func writeArtifact(t *testing.T, name string, data []byte) {
+	t.Helper()
+	dir := os.Getenv("DCB_ARTIFACT_DIR")
+	if dir == "" {
+		return
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Logf("create artifact dir %s: %v", dir, err)
+		return
+	}
+	path := filepath.Join(dir, name)
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Logf("write artifact %s: %v", path, err)
+	}
 }

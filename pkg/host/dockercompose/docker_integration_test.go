@@ -4,6 +4,7 @@ package dockercompose
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -183,6 +184,7 @@ func assertComposeRuntime(
 	if info.Name != res.ProjectName {
 		t.Fatalf("project name = %q, want %q", info.Name, res.ProjectName)
 	}
+	writeJSONArtifact(t, "docker-compose-project-inspect.json", info)
 	services := map[string]ContainerInfo{}
 	for _, c := range info.Containers {
 		services[c.Service] = c
@@ -222,6 +224,7 @@ func assertComposeRuntime(
 	if err != nil {
 		t.Fatalf("inspect app container: %v", err)
 	}
+	writeJSONArtifact(t, "docker-compose-primary-container-inspect.json", appInspect)
 	assertMount(t, appInspect.Mounts, mount.TypeBind, workspace, "/workspace")
 	assertMount(t, appInspect.Mounts, mount.TypeBind, filepath.Join(workspace, "host-bind"), "/host-bind")
 	assertMount(t, appInspect.Mounts, mount.TypeVolume, res.ProjectName+"_app-cache", "/cache")
@@ -699,4 +702,30 @@ func (w testLogWriter) Write(p []byte) (int, error) {
 		w.t.Log(text)
 	}
 	return len(p), nil
+}
+
+func writeJSONArtifact(t *testing.T, name string, v any) {
+	t.Helper()
+	data, err := json.MarshalIndent(v, "", "  ")
+	if err != nil {
+		t.Logf("marshal artifact %s: %v", name, err)
+		return
+	}
+	writeArtifact(t, name, append(data, '\n'))
+}
+
+func writeArtifact(t *testing.T, name string, data []byte) {
+	t.Helper()
+	dir := os.Getenv("DCB_ARTIFACT_DIR")
+	if dir == "" {
+		return
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Logf("create artifact dir %s: %v", dir, err)
+		return
+	}
+	path := filepath.Join(dir, name)
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Logf("write artifact %s: %v", path, err)
+	}
 }

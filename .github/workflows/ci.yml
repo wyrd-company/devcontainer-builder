@@ -3,6 +3,9 @@ name: CI
 on:
   push:
   pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 7 * * *"
 
 jobs:
   static-unit:
@@ -60,14 +63,17 @@ jobs:
       - name: Run Docker build integration
         run: |
           mkdir -p artifacts
+          export DCB_ARTIFACT_DIR="$PWD/artifacts/docker-build-integration"
           ./scripts/docker-build-integration.sh 2>&1 | tee artifacts/docker-build-integration.log
 
       - name: Upload Docker build log
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: docker-build-integration-log
-          path: artifacts/docker-build-integration.log
+          name: docker-build-integration-artifacts
+          path: |
+            artifacts/docker-build-integration.log
+            artifacts/docker-build-integration/**
           if-no-files-found: ignore
 
       - name: Stop BuildKit
@@ -91,14 +97,17 @@ jobs:
       - name: Run Docker host integration
         run: |
           mkdir -p artifacts
+          export DCB_ARTIFACT_DIR="$PWD/artifacts/docker-host-integration"
           ./scripts/docker-host-integration.sh 2>&1 | tee artifacts/docker-host-integration.log
 
       - name: Upload Docker host log
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: docker-host-integration-log
-          path: artifacts/docker-host-integration.log
+          name: docker-host-integration-artifacts
+          path: |
+            artifacts/docker-host-integration.log
+            artifacts/docker-host-integration/**
           if-no-files-found: ignore
 
   docker-compose-integration:
@@ -118,14 +127,17 @@ jobs:
       - name: Run Docker compose integration
         run: |
           mkdir -p artifacts
+          export DCB_ARTIFACT_DIR="$PWD/artifacts/docker-compose-integration"
           ./scripts/docker-compose-integration.sh 2>&1 | tee artifacts/docker-compose-integration.log
 
       - name: Upload Docker compose log
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: docker-compose-integration-log
-          path: artifacts/docker-compose-integration.log
+          name: docker-compose-integration-artifacts
+          path: |
+            artifacts/docker-compose-integration.log
+            artifacts/docker-compose-integration/**
           if-no-files-found: ignore
 
   kubernetes-manifest:
@@ -147,5 +159,74 @@ jobs:
 
       - name: Validate Kubernetes manifests
         run: |
+          mkdir -p artifacts/kubernetes
+          go run ./cmd/internal/render-k8s-testdata > artifacts/kubernetes/devcontainer-kubernetes.yaml
+          kubeconform -strict -kubernetes-version 1.30.0 artifacts/kubernetes/devcontainer-kubernetes.yaml
           go test ./pkg/projection/kubernetes ./pkg/host/kubernetes
           go test -tags=k8svalidate ./test/integration/kubernetes -v
+
+      - name: Upload Kubernetes manifests
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kubernetes-manifest-artifacts
+          path: artifacts/kubernetes/**
+          if-no-files-found: ignore
+
+  nightly-heavy:
+    name: Nightly/manual heavy checks
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+
+    env:
+      BUILDKIT_HOST: tcp://127.0.0.1:1234
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Start BuildKit
+        run: |
+          docker run --rm --privileged -d \
+            --name dcb-buildkitd-heavy \
+            -p 1234:1234 \
+            moby/buildkit:buildx-stable-1 \
+            --addr tcp://0.0.0.0:1234
+
+          for i in {1..30}; do
+            if docker logs dcb-buildkitd-heavy 2>&1 | grep -q "running server"; then
+              exit 0
+            fi
+            sleep 1
+          done
+
+          docker logs dcb-buildkitd-heavy
+          exit 1
+
+      - name: Run heavier validation
+        run: |
+          mkdir -p artifacts/nightly-heavy
+          go test ./test/compat -v
+          go test ./pkg/buildkit ./pkg/builder -run 'TestBuild_PlatformConstraint|TestParseTargetPlatforms|TestValidateBuildSupport' -v
+          export DCB_ARTIFACT_DIR="$PWD/artifacts/nightly-heavy/docker-build"
+          ./scripts/docker-build-integration.sh 2>&1 | tee artifacts/nightly-heavy/docker-build-integration.log
+          export DCB_ARTIFACT_DIR="$PWD/artifacts/nightly-heavy/docker-compose"
+          ./scripts/docker-compose-integration.sh 2>&1 | tee artifacts/nightly-heavy/docker-compose-integration.log
+
+      - name: Upload nightly artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-heavy-artifacts
+          path: artifacts/nightly-heavy/**
+          if-no-files-found: ignore
+
+      - name: Stop BuildKit
+        if: always()
+        run: docker rm -f dcb-buildkitd-heavy || true
