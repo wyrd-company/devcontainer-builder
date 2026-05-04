@@ -319,7 +319,8 @@ func repoRoot(t *testing.T) string {
 		t.Fatalf("Getwd: %v", err)
 	}
 	for {
-		if _, err := os.Stat(filepath.Join(dir, "TEST-PLAN.md")); err == nil {
+		if body, err := os.ReadFile(filepath.Join(dir, "go.mod")); err == nil &&
+			strings.Contains(string(body), "module github.com/wyrd-company/devcontainer-builder") {
 			if _, err := os.Stat(filepath.Join(dir, "reference")); err == nil {
 				return dir
 			}
