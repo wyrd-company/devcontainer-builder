@@ -78,6 +78,7 @@ func execParallel(ctx context.Context, execer Execer, cmds map[string]spec.Comma
 	var (
 		wg       sync.WaitGroup
 		mu       sync.Mutex
+		outputMu sync.Mutex
 		firstErr error
 	)
 	for name, c := range cmds {
@@ -85,7 +86,7 @@ func execParallel(ctx context.Context, execer Execer, cmds map[string]spec.Comma
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			err := execNamed(ctx, execer, name, c, rt, opts)
+			err := execNamed(ctx, execer, name, c, rt, opts, &outputMu)
 			if err != nil {
 				mu.Lock()
 				if firstErr == nil {
@@ -99,7 +100,7 @@ func execParallel(ctx context.Context, execer Execer, cmds map[string]spec.Comma
 	return firstErr
 }
 
-func execNamed(ctx context.Context, execer Execer, name string, cmd spec.Command, rt Runtime, opts Options) error {
+func execNamed(ctx context.Context, execer Execer, name string, cmd spec.Command, rt Runtime, opts Options, outputMu *sync.Mutex) error {
 	var argv []string
 	switch {
 	case cmd.Shell != "":
@@ -120,6 +121,8 @@ func execNamed(ctx context.Context, execer Execer, name string, cmd spec.Command
 	if err != nil {
 		return fmt.Errorf("%s: %w", name, err)
 	}
+	outputMu.Lock()
+	defer outputMu.Unlock()
 	if opts.Stdout != nil {
 		fmt.Fprintf(opts.Stdout, "\n--- %s ---\n%s", name, res.Stdout)
 	}
