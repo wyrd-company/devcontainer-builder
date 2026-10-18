@@ -27,6 +27,7 @@ func TestMetadataPrebuiltCLIIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Setenv("DOCKER_CONFIG", configDir)
+	t.Setenv("SAMPLE_REMOTE_USER", "sample-user")
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
 	cli := hostRequireDocker(t, ctx)
@@ -48,7 +49,7 @@ func TestMetadataPrebuiltCLIIntegration(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	initial := `{"image":"alpine:3.20","features":{"./sample-feature":{}},"remoteUser":"sample-user","containerUser":"root","workspaceFolder":"/workspace","workspaceMount":"type=volume,target=/workspace","remoteEnv":{"SAMPLE_ID":"${devcontainerId}"},"postCreateCommand":"echo config >> /tmp/sample-hooks"}`
+	initial := `{"image":"alpine:3.20","features":{"./sample-feature":{}},"remoteUser":"${localEnv:SAMPLE_REMOTE_USER}","containerUser":"root","containerEnv":{"FEATURE_VALUE":"image-env"},"workspaceFolder":"/workspace","workspaceMount":"type=volume,target=/workspace","remoteEnv":{"SAMPLE_ID":"${devcontainerId}","SAMPLE_ENV":"${containerEnv:FEATURE_VALUE}"},"postCreateCommand":"echo config >> /tmp/sample-hooks"}`
 	if err := os.WriteFile(path, []byte(initial), 0644); err != nil {
 		t.Fatal(err)
 	}
@@ -108,9 +109,9 @@ func TestMetadataPrebuiltCLIIntegration(t *testing.T) {
 	if response["remoteUser"] != "sample-user" {
 		t.Fatalf("prebuilt up response=%v", response)
 	}
-	got := string(hostRunCommand(t, os.Environ(), bin, "exec", "--workspace-folder", workspace, "--", "sh", "-c", "id -un; cat /tmp/sample-hooks; test ! -e /tmp/sample-attach; printf '%s\\n' \"$SAMPLE_ID\"; cat /tmp/sample-id"))
+	got := string(hostRunCommand(t, os.Environ(), bin, "exec", "--workspace-folder", workspace, "--", "sh", "-c", "id -un; cat /tmp/sample-hooks; test ! -e /tmp/sample-attach; printf '%s\\n' \"$SAMPLE_ENV\"; printf '%s\\n' \"$SAMPLE_ID\"; cat /tmp/sample-id"))
 	lines := strings.Split(strings.TrimSpace(got), "\n")
-	if len(lines) != 5 || lines[0] != "sample-user" || lines[1] != "feature" || lines[2] != "config" || lines[3] == "" || lines[3] != lines[4] {
+	if len(lines) != 6 || lines[0] != "sample-user" || lines[1] != "feature" || lines[2] != "config" || lines[3] != "image-env" || lines[4] == "" || lines[4] != lines[5] {
 		t.Fatalf("prebuilt exec/user/hooks/identity=%q", got)
 	}
 	for _, selection := range [][]string{nil, {"--container-id", id}} {
