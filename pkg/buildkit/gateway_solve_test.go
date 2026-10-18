@@ -5,9 +5,12 @@ import (
 	"encoding/json"
 	"reflect"
 	"slices"
+	"strings"
 	"testing"
 
+	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/client/llb/sourceresolver"
+	"github.com/moby/buildkit/exporter/containerimage/exptypes"
 	gateway "github.com/moby/buildkit/frontend/gateway/client"
 	"github.com/moby/buildkit/solver/pb"
 	dockerspec "github.com/moby/docker-image-spec/specs-go/v1"
@@ -24,6 +27,7 @@ type fakeGateway struct {
 	baseConfig  []byte
 	resolveOpts []sourceresolver.Opt
 	solved      []*pb.Definition
+	frontends   []gateway.SolveRequest
 }
 
 func (f *fakeGateway) ResolveImageConfig(_ context.Context, _ string, opt sourceresolver.Opt) (string, digest.Digest, []byte, error) {
@@ -32,13 +36,20 @@ func (f *fakeGateway) ResolveImageConfig(_ context.Context, _ string, opt source
 }
 
 func (f *fakeGateway) Solve(_ context.Context, req gateway.SolveRequest) (*gateway.Result, error) {
-	f.solved = append(f.solved, req.Definition)
 	res := gateway.NewResult()
 	res.SetRef(fakeRef{})
+	if req.Frontend != "" {
+		f.frontends = append(f.frontends, req)
+		res.AddMeta(exptypes.ExporterImageConfigKey, f.baseConfig)
+		return res, nil
+	}
+	f.solved = append(f.solved, req.Definition)
 	return res, nil
 }
 
 type fakeRef struct{ gateway.Reference }
+
+func (fakeRef) ToState() (llb.State, error) { return llb.Scratch(), nil }
 
 func decodeOps(t *testing.T, def *pb.Definition) []*pb.Op {
 	t.Helper()
@@ -127,6 +138,47 @@ func TestBuildOnePlatform_BaseImageEnvReachesBuildSteps(t *testing.T) {
 	}
 	if execs == 0 {
 		t.Fatal("expected the workspace-folder exec step")
+	}
+}
+
+func TestBuildOnePlatform_UpstreamDockerfileBase(t *testing.T) {
+	gc := &fakeGateway{baseConfig: baseConfigJSON(t)}
+	bs := buildSpecWithUpstream()
+	if _, _, err := buildOnePlatform(context.Background(), gc, bs, amd64, buildSettings{resolveMode: pb.AttrImageResolveModePreferLocal}); err != nil {
+		t.Fatalf("buildOnePlatform: %v", err)
+	}
+	if len(gc.frontends) != 1 || gc.frontends[0].Frontend != "dockerfile.v0" {
+		t.Fatalf("frontend solves = %+v, want one dockerfile.v0", gc.frontends)
+	}
+	opts := gc.frontends[0].FrontendOpt
+	if opts["image-resolve-mode"] != pb.AttrImageResolveModePreferLocal || opts["platform"] != "linux/amd64" ||
+		opts["contextkey"] != upstreamContextLocal || opts["dockerfilekey"] != upstreamDockerfileLocal {
+		t.Fatalf("frontend opts = %v", opts)
+	}
+	if len(gc.resolveOpts) != 0 {
+		t.Fatalf("upstream base resolved an image config: %+v", gc.resolveOpts)
+	}
+	var execs int
+	for _, op := range decodeOps(t, gc.solved[0]) {
+		if e := op.GetExec(); e != nil {
+			execs++
+			if !slices.Contains(e.Meta.Env, "BASE_ONLY=1") {
+				t.Errorf("exec %v env = %v, want the upstream image env", e.Meta.Args, e.Meta.Env)
+			}
+		}
+		if src := op.GetSource(); src != nil && src.Identifier != "" && !strings.HasPrefix(src.Identifier, "local://") {
+			t.Errorf("unexpected source %s on an upstream base", src.Identifier)
+		}
+	}
+	if execs == 0 {
+		t.Fatal("expected the workspace-folder exec step")
+	}
+}
+
+func buildSpecWithUpstream() BuildSpec {
+	return BuildSpec{
+		Graph:    GraphInputs{Spec: &spec.DevContainer{WorkspaceFolder: "/workspaces/demo"}},
+		Upstream: &DockerfileBuild{ContextDir: "/ctx"},
 	}
 }
 
