@@ -33,6 +33,9 @@ type BuildSpec struct {
 	// and used as the base for Graph (Graph.BaseImage / BaseState are
 	// ignored in that case).
 	Upstream *DockerfileBuild
+	// Labels are set on the image config, over any the base image
+	// carries.
+	Labels map[string]string
 }
 
 // upstreamContextLocal / upstreamDockerfileLocal are local mount names
@@ -248,7 +251,7 @@ func buildOnePlatform(
 		return nil, nil, err
 	}
 
-	cfg, err := mergeImageConfig(baseConfig, graph, p)
+	cfg, err := mergeImageConfig(baseConfig, graph, spec.Labels, p)
 	if err != nil {
 		return nil, nil, fmt.Errorf("image config: %w", err)
 	}
@@ -259,9 +262,9 @@ func buildOnePlatform(
 // image. It clones whatever the base resolver/upstream returned (so
 // ENV / USER / WORKDIR / ENTRYPOINT carry through) and then layers in
 // the devcontainer's own image-time contributions: containerEnv,
-// workspaceFolder, remoteUser, plus the ENV from each feature. remoteEnv
-// is intentionally left for runtime exec/attach paths.
-func mergeImageConfig(base []byte, g GraphInputs, p ocispecs.Platform) ([]byte, error) {
+// workspaceFolder, remoteUser, the ENV from each feature, and labels.
+// remoteEnv is intentionally left for runtime exec/attach paths.
+func mergeImageConfig(base []byte, g GraphInputs, labels map[string]string, p ocispecs.Platform) ([]byte, error) {
 	var img dockerspec.DockerOCIImage
 	if len(base) > 0 {
 		if err := json.Unmarshal(base, &img); err != nil {
@@ -290,6 +293,12 @@ func mergeImageConfig(base []byte, g GraphInputs, p ocispecs.Platform) ([]byte, 
 	}
 	if u := remoteUser(g); u != "" && u != "root" {
 		img.Config.User = u
+	}
+	if len(labels) > 0 && img.Config.Labels == nil {
+		img.Config.Labels = map[string]string{}
+	}
+	for k, v := range labels {
+		img.Config.Labels[k] = v
 	}
 	return json.Marshal(img)
 }

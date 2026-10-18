@@ -2,6 +2,7 @@ package buildkit
 
 import (
 	"encoding/json"
+	"reflect"
 	"testing"
 
 	dockerspec "github.com/moby/docker-image-spec/specs-go/v1"
@@ -17,6 +18,7 @@ func TestMergeImageConfig_AppendsEnvAndOverridesUserAndWorkdir(t *testing.T) {
 	base.Config.Env = []string{"PATH=/usr/bin", "EXISTING=keep"}
 	base.Config.User = "1000:1000"
 	base.Config.WorkingDir = "/old"
+	base.Config.Labels = map[string]string{"org.example.base": "base", "org.example.kept": "kept"}
 	baseJSON, err := json.Marshal(base)
 	if err != nil {
 		t.Fatalf("marshal base: %v", err)
@@ -33,7 +35,7 @@ func TestMergeImageConfig_AppendsEnvAndOverridesUserAndWorkdir(t *testing.T) {
 			Metadata: features.Metadata{ContainerEnv: map[string]string{"FROM_FEATURE": "1"}},
 		}},
 	}
-	out, err := mergeImageConfig(baseJSON, g, ocispecs.Platform{OS: "linux", Architecture: "arm64"})
+	out, err := mergeImageConfig(baseJSON, g, map[string]string{"org.example.added": "yes", "org.example.base": "override"}, ocispecs.Platform{OS: "linux", Architecture: "arm64"})
 	if err != nil {
 		t.Fatalf("mergeImageConfig: %v", err)
 	}
@@ -65,6 +67,10 @@ func TestMergeImageConfig_AppendsEnvAndOverridesUserAndWorkdir(t *testing.T) {
 	}
 	if _, ok := envIdx["REMOTE"]; ok {
 		t.Errorf("remoteEnv must not be baked into image config: %+v", got.Config.Env)
+	}
+	wantLabels := map[string]string{"org.example.added": "yes", "org.example.base": "override", "org.example.kept": "kept"}
+	if !reflect.DeepEqual(got.Config.Labels, wantLabels) {
+		t.Errorf("labels = %v, want %v", got.Config.Labels, wantLabels)
 	}
 }
 

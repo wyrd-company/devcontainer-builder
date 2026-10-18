@@ -61,6 +61,7 @@ func TestEngineBuildIntegration(t *testing.T) {
 					Workspace:       filepath.Join(root, "testdata", "smoke", fx.fixture),
 					Tags:            []string{tag},
 					Load:            true,
+					Labels:          map[string]string{"org.example.dcb-it": fx.name},
 					BuildKitAddress: ep.address,
 					Docker:          cli,
 					Progress:        "plain",
@@ -82,6 +83,13 @@ func TestEngineBuildIntegration(t *testing.T) {
 				}
 				if len(images) != 1 {
 					t.Fatalf("Engine API lists %d images for %s, want 1", len(images), tag)
+				}
+				inspect, err := cli.ImageInspect(ctx, tag)
+				if err != nil {
+					t.Fatalf("inspect %s: %v", tag, err)
+				}
+				if got := inspect.Config.Labels["org.example.dcb-it"]; got != fx.name {
+					t.Fatalf("label org.example.dcb-it = %q, want %q", got, fx.name)
 				}
 				if got := readImageFile(t, ctx, cli, tag, fx.path); strings.TrimSpace(got) != fx.want {
 					t.Fatalf("%s = %q, want %q", fx.path, got, fx.want)

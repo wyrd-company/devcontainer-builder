@@ -308,6 +308,7 @@ func (b *Builder) runBuildKit(ctx context.Context, opts Options, ctxDir string,
 			ResolveImageConfig:    !opts.SkipImageMetaResolve,
 		},
 		Upstream: upstream,
+		Labels:   opts.Labels,
 	}
 	_, err := buildkit.SolveDevcontainer(ctx, bspec, solveOpts)
 	return err
