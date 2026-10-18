@@ -13,6 +13,43 @@ from test_release import ROOT, VERSION, yaml_file
 
 
 class CompatibilityTests(unittest.TestCase):
+    def assert_publisher_pins(self, gate_pin, action_pin):
+        self.assertRegex(action_pin, r"^[a-f0-9]{40}$")
+        # The gate deliberately blocks release until the product entry is approved.
+        # Activation must select the same immutable publisher as the submit action.
+        if gate_pin != "PUBLISHER_COMMIT_UNSET":
+            self.assertRegex(gate_pin, r"^[a-f0-9]{40}$")
+            self.assertEqual(gate_pin, action_pin)
+
+    def test_publisher_action_pin_matches_activated_gate(self):
+        release = yaml_file(ROOT / ".github/workflows/release.yml")
+        submit = yaml_file(ROOT / ".github/workflows/submit-package.yml")
+        gate_pin = release["jobs"]["compatibility"]["env"][
+            "REPO_WYRD_FOO_PUBLISHER_COMMIT"
+        ]
+        action = next(
+            step["uses"]
+            for step in submit["jobs"]["submit"]["steps"]
+            if step.get("uses", "").startswith("wyrd-company/repo.wyrd.foo/")
+        )
+        self.assert_publisher_pins(gate_pin, action.split("@", 1)[1])
+
+    def test_publisher_pin_agreement_accepts_blocked_and_matching_fixtures(self):
+        for gate_pin in ["PUBLISHER_COMMIT_UNSET", "a" * 40]:
+            with self.subTest(gate_pin=gate_pin):
+                self.assert_publisher_pins(gate_pin, "a" * 40)
+
+    def test_publisher_pin_agreement_rejects_mismatching_and_non_sha_fixtures(self):
+        for gate_pin, action_pin in [
+            ("a" * 40, "b" * 40),
+            ("a" * 40, "PUBLISHER_COMMIT_UNSET"),
+            ("PUBLISHER_COMMIT_UNSET", "PUBLISHER_COMMIT_UNSET"),
+            ("invalid", "a" * 40),
+        ]:
+            with self.subTest(gate_pin=gate_pin, action_pin=action_pin):
+                with self.assertRaises(AssertionError):
+                    self.assert_publisher_pins(gate_pin, action_pin)
+
     def test_unset_pin_blocks_before_publisher_checkout_and_both_workflows_agree(self):
         release = yaml_file(ROOT / ".github/workflows/release.yml")
         submit = yaml_file(ROOT / ".github/workflows/submit-package.yml")["jobs"][
@@ -25,7 +62,6 @@ class CompatibilityTests(unittest.TestCase):
             for s in submit["steps"]
             if s.get("uses", "").startswith("wyrd-company/repo.wyrd.foo/")
         )
-        self.assertEqual(action["uses"].split("@")[1], pin)
         self.assertEqual(submit["env"]["REPO_WYRD_FOO_PUBLISHER_COMMIT"], pin)
         self.assertEqual(release["jobs"]["release"]["needs"], "compatibility")
         submit_gate = next(

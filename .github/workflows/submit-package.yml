@@ -59,7 +59,7 @@ jobs:
       - run: task release:publisher-pin
         env:
           RELEASE_VERSION: ${{ steps.handoff.outputs.version }}
-      - uses: wyrd-company/repo.wyrd.foo/.github/actions/submit-release@PUBLISHER_COMMIT_UNSET
+      - uses: wyrd-company/repo.wyrd.foo/.github/actions/submit-release@b83f283412e576dcdb448a4b288ae781165b8c7c
         with:
           manifest: handoff/release-manifest.json
           app-client-id: ${{ secrets.REPO_WYRD_FOO_PUBLISHER_APP_ID }}
