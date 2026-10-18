@@ -68,6 +68,8 @@ func TestHelpContract(t *testing.T) {
 }
 
 func TestErrorResults(t *testing.T) {
+	t.Chdir(t.TempDir())
+	t.Setenv("DOCKER_HOST", "unix://"+filepath.Join(t.TempDir(), "missing.sock"))
 	missing := filepath.Join(t.TempDir(), "missing")
 	cases := []struct {
 		name string

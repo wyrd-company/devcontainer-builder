@@ -51,6 +51,7 @@ func TestSkipLifecycle(t *testing.T) {
 }
 
 func TestBuildOptions(t *testing.T) {
+	t.Setenv("DOCKER_HOST", "unix://"+filepath.Join(t.TempDir(), "missing.sock"))
 	cfg := filepath.Join(t.TempDir(), "devcontainer.json")
 	if err := os.WriteFile(cfg, []byte(`{"image":"alpine:3.20"}`), 0o644); err != nil {
 		t.Fatal(err)
