@@ -113,7 +113,8 @@ func (h *Host) Up(ctx context.Context, req UpRequest) (*UpResult, error) {
 	}
 	dc := substituteSpec(req.Spec, subCtx)
 
-	override, err := OverrideYAML(primaryOverride(req, dc, containerWorkspace))
+	primary := primaryOverride(req, dc, containerWorkspace)
+	override, err := OverrideYAML(primary)
 	if err != nil {
 		return nil, errorf("override yaml: %w", err)
 	}
@@ -137,6 +138,9 @@ func (h *Host) Up(ctx context.Context, req UpRequest) (*UpResult, error) {
 	proj, err = applyProfiles(proj, req.Profiles, keepEnabled)
 	if err != nil {
 		return nil, errorf("apply profiles: %w", err)
+	}
+	if err := h.wrapPrimaryCommand(ctx, proj, primary); err != nil {
+		return nil, err
 	}
 
 	materializer := newObjectMaterializer(proj.Name, req.LocalEnv)
