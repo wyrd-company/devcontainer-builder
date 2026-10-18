@@ -154,13 +154,18 @@ func TestMetadataPrebuiltCLIIntegration(t *testing.T) {
 			t.Logf("cleanup Compose: %v %s", err, out)
 		}
 	})
-	hostRunCommand(t, os.Environ(), bin, "up", "--workspace-folder", workspace, "--update-remote-user-uid-default", "never")
-	hostRunCommand(t, os.Environ(), bin, "exec", "--workspace-folder", workspace, "--", "rm", "/tmp/compose-current-attach")
-	hostRunCommand(t, os.Environ(), bin, "run-user-commands", "--workspace-folder", workspace)
-	if got := string(hostRunCommand(t, os.Environ(), bin, "exec", "--workspace-folder", workspace, "--", "cat", "/tmp/compose-current-attach")); got != "current\n" {
+	composeUp := hostRunCommand(t, os.Environ(), bin, "up", "--workspace-folder", workspace, "--update-remote-user-uid-default", "never")
+	var composeResponse map[string]any
+	if err := json.Unmarshal(composeUp, &composeResponse); err != nil {
+		t.Fatal(err)
+	}
+	composeID := composeResponse["containerId"].(string)
+	hostRunCommand(t, os.Environ(), bin, "exec", "--workspace-folder", workspace, "--container-id", composeID, "--", "rm", "/tmp/compose-current-attach")
+	hostRunCommand(t, os.Environ(), bin, "run-user-commands", "--workspace-folder", workspace, "--container-id", composeID)
+	if got := string(hostRunCommand(t, os.Environ(), bin, "exec", "--workspace-folder", workspace, "--container-id", composeID, "--", "cat", "/tmp/compose-current-attach")); got != "current\n" {
 		t.Fatalf("current Compose hook=%q", got)
 	}
-	output := hostRunCommand(t, os.Environ(), bin, "read-configuration", "--workspace-folder", workspace, "--include-merged-configuration")
+	output := hostRunCommand(t, os.Environ(), bin, "read-configuration", "--workspace-folder", workspace, "--include-merged-configuration", "--container-id", composeID)
 	var read map[string]any
 	if err := json.Unmarshal(output, &read); err != nil {
 		t.Fatal(err)
