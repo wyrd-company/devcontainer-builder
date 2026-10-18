@@ -10,6 +10,7 @@ import (
 	dockerclient "github.com/docker/docker/client"
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/client/llb"
+	"github.com/moby/buildkit/session"
 	"github.com/moby/buildkit/solver/pb"
 	"github.com/moby/buildkit/util/progress/progressui"
 	fsutil "github.com/tonistiigi/fsutil"
@@ -66,6 +67,11 @@ type SolveOptions struct {
 	// FrontendAttrs are passed through verbatim. Useful for advanced
 	// callers; normally empty.
 	FrontendAttrs map[string]string
+	// RegistryAuth supplies registry credentials. BuildKit asks for them
+	// through the client session to pull and push, and a push from the
+	// daemon's image store sends them to the Engine API. When nil, the
+	// docker CLI's configuration is read (registryauth.FromEnvironment).
+	RegistryAuth RegistryAuth
 	// Progress controls the display: "auto", "tty", "plain".
 	Progress string
 	// Stdout / Stderr default to os.Stdout / os.Stderr.
@@ -147,6 +153,8 @@ func runSolve(ctx context.Context, opt SolveOptions, multi bool, localMounts map
 		return nil, err
 	}
 	defer conn.Close()
+	// The session and the Engine API push share one credential source.
+	opt.RegistryAuth = registryAuth(opt)
 
 	stderr := opt.Stderr
 	if stderr == nil {
@@ -170,6 +178,7 @@ func runSolve(ctx context.Context, opt SolveOptions, multi bool, localMounts map
 		CacheImports:  cacheEntries(opt.CacheImports),
 		CacheExports:  cacheEntries(opt.CacheExports),
 		FrontendAttrs: opt.FrontendAttrs,
+		Session:       []session.Attachable{newSessionAuth(opt.RegistryAuth)},
 	}
 
 	g, gctx := errgroup.WithContext(ctx)

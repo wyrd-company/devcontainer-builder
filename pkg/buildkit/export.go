@@ -49,10 +49,11 @@ func exportsFor(ctx context.Context, opt SolveOptions, conn *Connection, multi b
 		}
 		if conn.Daemon {
 			tags := append([]string(nil), opt.Tags...)
+			auth := registryAuth(opt)
 			return &exportPlan{
 				entries: []client.ExportEntry{{Type: exporterMoby, Attrs: map[string]string{"name": name}}},
 				finish: func(ctx context.Context) error {
-					return pushTags(ctx, conn.Docker, tags, progressOut(opt))
+					return pushTags(ctx, conn.Docker, tags, auth, progressOut(opt))
 				},
 			}, nil
 		}
@@ -207,10 +208,14 @@ func progressOut(opt SolveOptions) io.Writer {
 }
 
 // pushTags pushes each tag from the daemon's image store through the
-// Engine API. Registry pushes are anonymous.
-func pushTags(ctx context.Context, docker *dockerclient.Client, tags []string, progress io.Writer) error {
+// Engine API, with the registry credentials auth supplies.
+func pushTags(ctx context.Context, docker *dockerclient.Client, tags []string, auth RegistryAuth, progress io.Writer) error {
 	for _, tag := range tags {
-		rc, err := docker.ImagePush(ctx, tag, image.PushOptions{})
+		encoded, err := auth.EngineAuth(tag)
+		if err != nil {
+			return fmt.Errorf("push %s: %w", tag, err)
+		}
+		rc, err := docker.ImagePush(ctx, tag, image.PushOptions{RegistryAuth: encoded})
 		if err != nil {
 			return fmt.Errorf("push %s: %w", tag, err)
 		}

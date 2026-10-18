@@ -3,14 +3,50 @@ package buildkit
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
+	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
 
+	"github.com/docker/docker/api/types/registry"
 	dockerclient "github.com/docker/docker/client"
+
+	"github.com/wyrd-company/devcontainer-builder/pkg/registryauth"
 )
+
+// dockerConfig writes a Docker client config.json into a new directory.
+func dockerConfig(t *testing.T, cfg string) string {
+	t.Helper()
+	t.Setenv("DOCKER_AUTH_CONFIG", "")
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "config.json"), []byte(cfg), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}
+
+// anonymous is a credential source with no credentials, independent of
+// the operator's Docker configuration.
+func anonymous(t *testing.T) RegistryAuth {
+	return registryauth.New(dockerConfig(t, `{}`))
+}
+
+// failingAuth fails every credential lookup.
+type failingAuth struct{}
+
+func (failingAuth) Credentials(string) (registryauth.Credentials, error) {
+	return registryauth.Credentials{}, errors.New("credential helper failed")
+}
+
+func (failingAuth) EngineAuth(string) (string, error) {
+	return "", errors.New("credential helper failed")
+}
 
 // fakeEngine serves the Engine API image push and save endpoints and
 // records the requests it receives.
@@ -20,6 +56,7 @@ type fakeEngine struct {
 
 	mu     sync.Mutex
 	pushes []string
+	auths  []string
 	saves  [][]string
 }
 
@@ -30,6 +67,7 @@ func (f *fakeEngine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		name := strings.TrimSuffix(r.URL.Path[i+len("/images/"):], "/push")
 		f.mu.Lock()
 		f.pushes = append(f.pushes, name+":"+r.URL.Query().Get("tag"))
+		f.auths = append(f.auths, r.Header.Get("X-Registry-Auth"))
 		f.mu.Unlock()
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(f.pushBody))
@@ -68,7 +106,7 @@ func TestDaemonPushFinish(t *testing.T) {
 		f := &fakeEngine{pushBody: okPush}
 		var progress bytes.Buffer
 		conn := &Connection{Daemon: true, Docker: newFakeEngineClient(t, f)}
-		p, err := exportsFor(context.Background(), SolveOptions{Push: true, Tags: tags, Stderr: &progress}, conn, false)
+		p, err := exportsFor(context.Background(), SolveOptions{Push: true, Tags: tags, Stderr: &progress, RegistryAuth: anonymous(t)}, conn, false)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -84,10 +122,55 @@ func TestDaemonPushFinish(t *testing.T) {
 		}
 	})
 
+	t.Run("each push sends its registry credentials", func(t *testing.T) {
+		f := &fakeEngine{pushBody: okPush}
+		conn := &Connection{Daemon: true, Docker: newFakeEngineClient(t, f)}
+		auth := registryauth.New(dockerConfig(t, `{"auths":{"example.test":{"auth":"`+
+			base64.StdEncoding.EncodeToString([]byte("testuser:testpassword"))+`"}}}`))
+		p, err := exportsFor(context.Background(), SolveOptions{Push: true, Tags: tags, Stderr: &bytes.Buffer{}, RegistryAuth: auth}, conn, false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := p.finish(context.Background()); err != nil {
+			t.Fatalf("finish: %v", err)
+		}
+		if len(f.auths) != len(tags) {
+			t.Fatalf("pushes sent %d X-Registry-Auth values, want %d", len(f.auths), len(tags))
+		}
+		for i, v := range f.auths {
+			b, err := base64.URLEncoding.DecodeString(v)
+			if err != nil {
+				t.Fatalf("push %d X-Registry-Auth %q: %v", i, v, err)
+			}
+			var ac registry.AuthConfig
+			if err := json.Unmarshal(b, &ac); err != nil {
+				t.Fatal(err)
+			}
+			if ac.Username != "testuser" || ac.Password != "testpassword" || ac.ServerAddress != "example.test" {
+				t.Fatalf("push %d credentials = %+v, want the example.test entry", i, ac)
+			}
+		}
+	})
+
+	t.Run("a credential error fails before pushing", func(t *testing.T) {
+		f := &fakeEngine{pushBody: okPush}
+		conn := &Connection{Daemon: true, Docker: newFakeEngineClient(t, f)}
+		p, err := exportsFor(context.Background(), SolveOptions{Push: true, Tags: tags, Stderr: &bytes.Buffer{}, RegistryAuth: failingAuth{}}, conn, false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := p.finish(context.Background()); err == nil || !strings.Contains(err.Error(), "credential helper failed") {
+			t.Fatalf("finish err = %v, want the credential error", err)
+		}
+		if len(f.pushes) != 0 {
+			t.Fatalf("pushes = %v, want none", f.pushes)
+		}
+	})
+
 	t.Run("a push error fails the solve", func(t *testing.T) {
 		f := &fakeEngine{pushBody: `{"errorDetail":{"message":"denied: requested access to the resource is denied"},"error":"denied: requested access to the resource is denied"}` + "\n"}
 		conn := &Connection{Daemon: true, Docker: newFakeEngineClient(t, f)}
-		p, err := exportsFor(context.Background(), SolveOptions{Push: true, Tags: tags, Stderr: &bytes.Buffer{}}, conn, false)
+		p, err := exportsFor(context.Background(), SolveOptions{Push: true, Tags: tags, Stderr: &bytes.Buffer{}, RegistryAuth: anonymous(t)}, conn, false)
 		if err != nil {
 			t.Fatal(err)
 		}
