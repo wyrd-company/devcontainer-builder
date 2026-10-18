@@ -92,12 +92,6 @@ func (a *application) buildCommand(generate bool) *cobra.Command {
 			return err
 		}
 		if generate {
-			cli, err := newDockerClient()
-			if err != nil {
-				return err
-			}
-			defer cli.Close()
-			bo.Docker = cli
 			res, err := builder.New().Generate(cmd.Context(), bo)
 			if err != nil {
 				return err
