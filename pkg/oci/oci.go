@@ -1,8 +1,9 @@
 // relationships:
 //   references: [metadata]
 
-// Package oci is a small read-only OCI Distribution v2 client. It supports
-// anonymous and bearer-token-authenticated pulls of manifests and blobs,
+// Package oci is a small read-only OCI Distribution v2 client. It pulls
+// manifests and blobs anonymously or with the registry credentials of the
+// Docker client configuration, through Basic or Bearer-token challenges,
 // which is sufficient for fetching devcontainer features published as OCI
 // artifacts (the "ghcr.io/devcontainers/features/*" namespace, for
 // instance).
@@ -19,9 +20,10 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"strings"
 	"time"
+
+	"github.com/wyrd-company/devcontainer-builder/pkg/registryauth"
 )
 
 const (
@@ -85,17 +87,22 @@ func ParseReference(ref string) (Reference, error) {
 
 // Client performs read operations against an OCI distribution registry.
 type Client struct {
-	HTTP   *http.Client
-	bearer map[string]string // registry-host -> "Bearer ..."
+	HTTP *http.Client
+	// Auth supplies registry credentials. When nil, every registry is
+	// accessed anonymously.
+	Auth          CredentialSource
+	authorization map[string]string // registry-host -> Authorization header
 }
 
-// NewClient constructs a Client using sensible defaults.
+// NewClient constructs a Client using sensible defaults. It reads
+// registry credentials from the Docker client configuration.
 func NewClient() *Client {
 	return &Client{
 		HTTP: &http.Client{
 			Timeout: 5 * time.Minute,
 		},
-		bearer: map[string]string{},
+		Auth:          registryauth.FromEnvironment(),
+		authorization: map[string]string{},
 	}
 }
 
@@ -307,114 +314,6 @@ func verifyDigest(want string, body []byte) error {
 		return fmt.Errorf("digest mismatch: got %s want %s", got, want)
 	}
 	return nil
-}
-
-func (c *Client) do(req *http.Request, ref Reference) (*http.Response, error) {
-	if tok, ok := c.bearer[ref.Registry]; ok {
-		req.Header.Set("Authorization", tok)
-	}
-	resp, err := c.HTTP.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	if resp.StatusCode == http.StatusUnauthorized {
-		challenge := resp.Header.Get("WWW-Authenticate")
-		_ = resp.Body.Close()
-		tok, terr := c.acquireToken(ref, challenge)
-		if terr != nil {
-			return nil, terr
-		}
-		c.bearer[ref.Registry] = "Bearer " + tok
-		newReq := req.Clone(req.Context())
-		newReq.Header.Set("Authorization", c.bearer[ref.Registry])
-		return c.HTTP.Do(newReq)
-	}
-	return resp, nil
-}
-
-func (c *Client) acquireToken(ref Reference, challenge string) (string, error) {
-	// Parse `Bearer realm="...",service="...",scope="..."`.
-	if !strings.HasPrefix(strings.ToLower(challenge), "bearer ") {
-		return "", fmt.Errorf("unsupported auth challenge: %q", challenge)
-	}
-	params := parseChallenge(challenge[len("Bearer "):])
-	realm := params["realm"]
-	if realm == "" {
-		return "", fmt.Errorf("auth challenge missing realm")
-	}
-	u, err := url.Parse(realm)
-	if err != nil {
-		return "", err
-	}
-	q := u.Query()
-	if svc := params["service"]; svc != "" {
-		q.Set("service", svc)
-	}
-	scope := params["scope"]
-	if scope == "" {
-		scope = fmt.Sprintf("repository:%s:pull", ref.Repository)
-	}
-	q.Set("scope", scope)
-	u.RawQuery = q.Encode()
-
-	req, err := http.NewRequest(http.MethodGet, u.String(), nil)
-	if err != nil {
-		return "", err
-	}
-	resp, err := c.HTTP.Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-		return "", fmt.Errorf("token: %s: %s", resp.Status, string(body))
-	}
-	var payload struct {
-		Token       string `json:"token"`
-		AccessToken string `json:"access_token"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
-		return "", err
-	}
-	if payload.Token != "" {
-		return payload.Token, nil
-	}
-	return payload.AccessToken, nil
-}
-
-func parseChallenge(s string) map[string]string {
-	out := map[string]string{}
-	for len(s) > 0 {
-		eq := strings.Index(s, "=")
-		if eq < 0 {
-			break
-		}
-		k := strings.TrimSpace(s[:eq])
-		s = s[eq+1:]
-		var v string
-		if strings.HasPrefix(s, `"`) {
-			s = s[1:]
-			end := strings.Index(s, `"`)
-			if end < 0 {
-				break
-			}
-			v = s[:end]
-			s = s[end+1:]
-		} else {
-			end := strings.IndexAny(s, ", ")
-			if end < 0 {
-				v = s
-				s = ""
-			} else {
-				v = s[:end]
-				s = s[end:]
-			}
-		}
-		out[strings.ToLower(k)] = v
-		s = strings.TrimLeft(s, ", \t")
-	}
-	return out
 }
 
 func manifestURL(ref Reference) string {
