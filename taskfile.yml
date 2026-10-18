@@ -59,9 +59,7 @@ tasks:
       - task: lint
       - task: test
       - task: build
-      - task: integration:build
-      - task: integration:host
-      - task: integration:compose
+      - task: integration:docker
       - task: integration:kubernetes
   # The parity harness owns this task's implementation; keep additions here additive.
   parity:
@@ -79,8 +77,16 @@ tasks:
       - go install github.com/yannh/kubeconform/cmd/kubeconform@v0.6.7
       - go install github.com/evilmartians/lefthook/v2@v2.1.4
       - npm install --global --allow-scripts=@wyrd-company/intentional --@wyrd-company:registry=https://registry.npmjs.org @wyrd-company/intentional@0.1.6
+  integration:docker:
+    desc: Run every Docker integration suite on stock Docker
+    cmds:
+      - bash scripts/ci-integration.sh all
+  integration:remote:
+    desc: Check the optional remote BuildKit path
+    cmds:
+      - bash scripts/ci-integration.sh remote
   integration:build:
-    desc: Run Docker builds against a temporary BuildKit daemon
+    desc: Run Docker builds on stock Docker
     cmds:
       - bash scripts/ci-integration.sh build
   integration:host:

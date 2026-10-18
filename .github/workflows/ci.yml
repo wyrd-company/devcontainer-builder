@@ -60,7 +60,7 @@ jobs:
           go-version-file: go.mod
       - uses: go-task/setup-task@01a4adf9db2d14c1de7a560f09170b6e0df736aa # v2
       - run: task build
-  docker-build-integration:
+  docker-integration:
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -74,53 +74,11 @@ jobs:
         with:
           go-version-file: go.mod
       - uses: go-task/setup-task@01a4adf9db2d14c1de7a560f09170b6e0df736aa # v2
-      - run: task integration:build
+      - run: task integration:docker
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: failure()
         with:
-          name: docker-build-integration-artifacts
-          path: artifacts/
-          if-no-files-found: ignore
-  docker-host-integration:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-        with:
-          persist-credentials: false
-          fetch-depth: 0
-          submodules: true
-      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
-        with:
-          go-version-file: go.mod
-      - uses: go-task/setup-task@01a4adf9db2d14c1de7a560f09170b6e0df736aa # v2
-      - run: task integration:host
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        if: failure()
-        with:
-          name: docker-host-integration-artifacts
-          path: artifacts/
-          if-no-files-found: ignore
-  docker-compose-integration:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-        with:
-          persist-credentials: false
-          fetch-depth: 0
-          submodules: true
-      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
-        with:
-          go-version-file: go.mod
-      - uses: go-task/setup-task@01a4adf9db2d14c1de7a560f09170b6e0df736aa # v2
-      - run: task integration:compose
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        if: failure()
-        with:
-          name: docker-compose-integration-artifacts
+          name: docker-integration-artifacts
           path: artifacts/
           if-no-files-found: ignore
   kubernetes-manifest:
@@ -165,6 +123,28 @@ jobs:
         if: failure()
         with:
           name: nightly-heavy-artifacts
+          path: artifacts/
+          if-no-files-found: ignore
+  remote-buildkit:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+          submodules: true
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: go.mod
+      - uses: go-task/setup-task@01a4adf9db2d14c1de7a560f09170b6e0df736aa # v2
+      - run: task integration:remote
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: failure()
+        with:
+          name: remote-buildkit-artifacts
           path: artifacts/
           if-no-files-found: ignore
   pr-title:
