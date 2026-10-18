@@ -153,3 +153,29 @@ func TestExtractTarMaybeGz_AcceptsDotDotPrefixedName(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// Mirrors upstream updateFromOldProperties for feature metadata.
+func TestReadMetadataMigratesLegacyVSCodeProperties(t *testing.T) {
+	for _, tc := range []struct {
+		name, input, want string
+	}{
+		{"legacy only", `{"id":"sample","extensions":["one"],"settings":{"a":1}}`, `{"vscode":{"extensions":["one"],"settings":{"a":1}}}`},
+		{"merged", `{"id":"sample","extensions":["two"],"settings":{"a":1,"b":1},"customizations":{"vscode":{"extensions":["one"],"settings":{"b":2}},"other":true}}`, `{"other":true,"vscode":{"extensions":["one","two"],"settings":{"a":1,"b":2}}}`},
+		{"current only", `{"id":"sample","customizations":{"vscode":{"extensions":["one"]}}}`, `{"vscode":{"extensions":["one"]}}`},
+		{"none", `{"id":"sample"}`, `null`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			if err := os.WriteFile(filepath.Join(dir, "devcontainer-feature.json"), []byte(tc.input), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			meta, err := readMetadata(dir)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got, _ := json.Marshal(meta.Customizations); string(got) != tc.want {
+				t.Fatalf("customizations=%s, want %s", got, tc.want)
+			}
+		})
+	}
+}
