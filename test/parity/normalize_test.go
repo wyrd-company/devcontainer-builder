@@ -250,6 +250,33 @@ func TestPreparePreservesFixtureAndAddsOwnership(t *testing.T) {
 	}
 }
 
+func TestPrepareWorkspaceNamesAreRunUnique(t *testing.T) {
+	root := t.TempDir()
+	f := Fixture{Name: "sample", Path: "src/test/configs/sample", Config: ".devcontainer.json"}
+	source := filepath.Join(root, "reference/cli", f.Path)
+	if err := os.MkdirAll(source, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(source, f.Config), []byte(`{"image":"alpine"}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	names := map[string]bool{}
+	for _, runID := range []string{"parity-1", "parity-2"} {
+		r := &Runner{root: root, temp: t.TempDir(), runID: runID}
+		for _, side := range []string{"upstream", "go"} {
+			workspace, err := r.prepare(f, side)
+			if err != nil {
+				t.Fatal(err)
+			}
+			name := filepath.Base(workspace)
+			if !strings.HasPrefix(name, runID+"-") || names[name] {
+				t.Fatalf("workspace name %q is not unique to run %s and side %s", name, runID, side)
+			}
+			names[name] = true
+		}
+	}
+}
+
 func TestPrerequisiteSkips(t *testing.T) {
 	for _, missing := range []string{"node", "npx", "docker", "submodule"} {
 		t.Run(missing, func(t *testing.T) {

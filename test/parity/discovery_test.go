@@ -43,7 +43,7 @@ func (a *discoveryAdapter) Up(ctx context.Context, r *Runner, workspace, _ strin
 			}
 			args = append(args, "--label", "devcontainer.local_folder="+folder)
 		}
-		args = append(args, "--env", "VALUE="+a.value, "alpine:3.20", "true")
+		args = append(args, "--env", "VALUE="+a.value, "--env", "WORKSPACE_FOLDER=/workspaces/"+filepath.Base(workspace), "alpine:3.20", "true")
 		body, err = r.command(ctx, "docker", args...)
 		if err != nil {
 			return nil, err
@@ -115,8 +115,12 @@ func requireContainerObservations(t *testing.T, observations map[string]Observat
 			t.Fatalf("%s unavailable: %+v", dimension, observations[dimension])
 		}
 	}
-	if got := observations["env"].Value.(map[string]any)["VALUE"]; got != value {
+	env := observations["env"].Value.(map[string]any)
+	if got := env["VALUE"]; got != value {
 		t.Fatalf("observed another fixture/side: VALUE=%v, want %s", got, value)
+	}
+	if got := env["WORKSPACE_FOLDER"]; got != "/workspaces/<workspace-name>" {
+		t.Fatalf("workspace name not normalized: %v", got)
 	}
 	labels := observations["labels"].Value.(map[string]any)
 	for _, label := range []string{ownershipLabel, discoveryLabel} {

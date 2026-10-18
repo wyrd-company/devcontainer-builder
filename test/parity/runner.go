@@ -41,6 +41,12 @@ func (r *Runner) label() string { return ownershipLabel + "=" + r.runID }
 
 func fixtureSide(f Fixture, side string) string { return f.Name + "/" + side }
 
+// workspaceName is unique to the run, fixture and side, so that names derived
+// from the folder (Compose projects, upstream image names) never collide.
+func (r *Runner) workspaceName(f Fixture, side string) string {
+	return r.runID + "-" + f.Name + "-" + side
+}
+
 func discovery(f Fixture, side string) string {
 	return discoveryLabel + "=" + fixtureSide(f, side)
 }
@@ -90,7 +96,7 @@ func (r *Runner) command(ctx context.Context, name string, args ...string) ([]by
 }
 
 func (r *Runner) prepare(f Fixture, side string) (string, error) {
-	workspace := filepath.Join(r.temp, f.Name, side, "workspace")
+	workspace := filepath.Join(r.temp, f.Name, side, r.workspaceName(f, side))
 	source := filepath.Join(r.root, "reference/cli", f.Path)
 	err := filepath.WalkDir(source, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -214,7 +220,7 @@ func (r *Runner) observe(ctx context.Context, a Adapter, f Fixture, side string)
 	if c.ID != id || c.Config.Labels[ownershipLabel] != r.runID || c.Config.Labels[discoveryLabel] != fixtureSide(f, side) {
 		return out
 	}
-	n := Normalizer{map[string]string{workspace: "<workspace>", r.temp: "<temp>", id: "<container>", id[:12]: "<container>", c.Image: "<image>", c.Config.Hostname: "<hostname>", tag: "<image-tag>"}}
+	n := Normalizer{map[string]string{workspace: "<workspace>", filepath.Base(workspace): "<workspace-name>", r.temp: "<temp>", id: "<container>", id[:12]: "<container>", c.Image: "<image>", c.Config.Hostname: "<hostname>", tag: "<image-tag>"}}
 	if out["result"].Error == "" {
 		out["result"] = Observation{Value: n.Result(out["result"].Value)}
 	}
