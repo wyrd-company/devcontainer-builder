@@ -1,3 +1,6 @@
+// relationships:
+//   references: [substitute]
+
 package dockercompose
 
 import (
@@ -131,14 +134,6 @@ func stringMap(in map[string]any) map[string]string {
 		}
 	}
 	return out
-}
-
-func basename(p string) string {
-	p = strings.TrimRight(p, "/")
-	if i := strings.LastIndexByte(p, '/'); i >= 0 {
-		return p[i+1:]
-	}
-	return p
 }
 
 func short(s string) string {
