@@ -61,8 +61,12 @@ res, err := host.Up(ctx, docker.UpRequest{
     SpecPath:       dc.Path,
     LocalWorkspace: "/path/to/workspace",
     Image:          "example:dev",
+    ImageBuilt:     true,
 })
 ```
+
+`ImageBuilt` tells `Up` that the image was built from this configuration, so
+its metadata label already holds the feature and configuration entries.
 
 `Up` is idempotent. It finds the workspace container by its labels, starts it
 if it is stopped, and runs only the lifecycle commands that the marker files
