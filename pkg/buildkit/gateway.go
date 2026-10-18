@@ -18,6 +18,7 @@ import (
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	"golang.org/x/sync/errgroup"
 
+	"github.com/wyrd-company/devcontainer-builder/pkg/metadata"
 	dcplatform "github.com/wyrd-company/devcontainer-builder/pkg/platform"
 )
 
@@ -298,9 +299,15 @@ func mergeImageConfig(base []byte, g GraphInputs, labels map[string]string, p oc
 	if u := remoteUser(g); u != "" && u != "root" {
 		img.Config.User = u
 	}
-	if len(labels) > 0 && img.Config.Labels == nil {
+	entries := metadata.Collect(metadata.Read(img.Config.Labels, nil), g.Features, g.Spec)
+	value, err := metadata.Encode(entries)
+	if err != nil {
+		return nil, err
+	}
+	if img.Config.Labels == nil {
 		img.Config.Labels = map[string]string{}
 	}
+	img.Config.Labels[metadata.Label] = value
 	for k, v := range labels {
 		img.Config.Labels[k] = v
 	}

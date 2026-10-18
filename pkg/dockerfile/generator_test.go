@@ -1,6 +1,10 @@
 package dockerfile
 
 import (
+	"github.com/moby/buildkit/frontend/dockerfile/instructions"
+	"github.com/moby/buildkit/frontend/dockerfile/parser"
+	"github.com/moby/buildkit/frontend/dockerfile/shell"
+	"github.com/wyrd-company/devcontainer-builder/pkg/metadata"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -52,8 +56,8 @@ func TestGenerate_DoesNotBakeRemoteEnv(t *testing.T) {
 	if !strings.Contains(got, "ENV CONTAINER_ONLY=yes") {
 		t.Fatalf("containerEnv missing from Dockerfile:\n%s", got)
 	}
-	if strings.Contains(got, "REMOTE_ONLY") {
-		t.Fatalf("remoteEnv should not be emitted into Dockerfile:\n%s", got)
+	if strings.Contains(got, "ENV REMOTE_ONLY=") {
+		t.Fatalf("remoteEnv should not be emitted as image ENV:\n%s", got)
 	}
 }
 
@@ -213,5 +217,46 @@ func TestGenerate_HeredocDelimiterAvoidsContent(t *testing.T) {
 	got := b.String()
 	if !strings.HasPrefix(got, `COPY <<"DEVCONTAINER_EOF_2" /dest`) || !strings.HasSuffix(got, "\nDEVCONTAINER_EOF_2\n") {
 		t.Fatalf("heredoc = %q", got)
+	}
+}
+
+func TestGenerate_MetadataIncludesBaseFeaturesAndConfig(t *testing.T) {
+	out, err := Generate(Inputs{Spec: &spec.DevContainer{RemoteUser: "sample", PostCreate: spec.Command{Shell: `printf '%s' "$VALUE"`}}, BaseImage: "alpine", BaseMetadata: []metadata.Entry{{ID: "base"}}, Features: []features.Resolved{{Source: "./feature", Metadata: features.Metadata{ID: "feature", CapAdd: []string{"SYS_PTRACE"}}}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Parse the emitted Dockerfile with BuildKit's own parser, then use its LABEL
+	// expansion rules to recover the exact image label, including $ and quotes.
+	parsed, err := parser.Parse(strings.NewReader(string(out)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var label string
+	for _, node := range parsed.AST.Children {
+		if strings.EqualFold(node.Value, "label") {
+			instruction, err := instructions.ParseInstruction(node)
+			if err != nil {
+				t.Fatal(err)
+			}
+			command := instruction.(*instructions.LabelCommand)
+			if err := command.Expand(func(value string) (string, error) {
+				word, _, err := shell.NewLex('\\').ProcessWord(value, shell.EnvsFromSlice(nil))
+				return word, err
+			}); err != nil {
+				t.Fatal(err)
+			}
+			for _, kv := range command.Labels {
+				if kv.Key == metadata.Label {
+					label = kv.Value
+				}
+			}
+		}
+	}
+	entries, err := metadata.Parse(label)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 3 || entries[0].ID != "base" || entries[1].ID != "./feature" || entries[2].PostCreate.Shell != `printf '%s' "$VALUE"` {
+		t.Fatalf("label=%s entries=%+v", label, entries)
 	}
 }

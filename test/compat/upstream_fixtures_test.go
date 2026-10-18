@@ -212,8 +212,8 @@ func TestCuratedCLIFixtureGeneratesWrapperDockerfile(t *testing.T) {
 			t.Errorf("generated Dockerfile missing %q:\n%s", want, got)
 		}
 	}
-	if strings.Contains(got, "TEST_ESCAPING") {
-		t.Fatalf("remoteEnv leaked into generated Dockerfile:\n%s", got)
+	if strings.Contains(got, "ENV TEST_ESCAPING=") {
+		t.Fatalf("remoteEnv leaked into image ENV:\n%s", got)
 	}
 }
 

@@ -28,12 +28,15 @@ import (
 	"strings"
 
 	"github.com/wyrd-company/devcontainer-builder/pkg/features"
+	"github.com/wyrd-company/devcontainer-builder/pkg/metadata"
 	"github.com/wyrd-company/devcontainer-builder/pkg/spec"
 	"github.com/wyrd-company/devcontainer-builder/pkg/vscode"
 )
 
 // Inputs collects everything the generator needs.
 type Inputs struct {
+	// BaseMetadata is the metadata of the FROM image, before features and config.
+	BaseMetadata []metadata.Entry
 	// Spec is the loaded devcontainer.json.
 	Spec *spec.DevContainer
 	// BaseImage is the FROM image. May be either the spec's `image`
@@ -109,6 +112,11 @@ func Generate(in Inputs) ([]byte, error) {
 		fmt.Fprintf(&b, "USER %s\n", user)
 	}
 
+	label, err := metadata.DockerfileLabel(metadata.Collect(in.BaseMetadata, in.Features, in.Spec))
+	if err != nil {
+		return nil, fmt.Errorf("metadata label: %w", err)
+	}
+	fmt.Fprintln(&b, label)
 	return []byte(b.String()), nil
 }
 

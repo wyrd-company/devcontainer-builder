@@ -9,6 +9,7 @@ import (
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 
 	"github.com/wyrd-company/devcontainer-builder/pkg/features"
+	"github.com/wyrd-company/devcontainer-builder/pkg/metadata"
 	"github.com/wyrd-company/devcontainer-builder/pkg/platform"
 	"github.com/wyrd-company/devcontainer-builder/pkg/spec"
 )
@@ -68,6 +69,11 @@ func TestMergeImageConfig_AppendsEnvAndOverridesUserAndWorkdir(t *testing.T) {
 	if _, ok := envIdx["REMOTE"]; ok {
 		t.Errorf("remoteEnv must not be baked into image config: %+v", got.Config.Env)
 	}
+	entries, err := metadata.Parse(got.Config.Labels[metadata.Label])
+	if err != nil || len(entries) != 2 || entries[1].RemoteUser != "vscode" {
+		t.Fatalf("metadata=%v err=%v", entries, err)
+	}
+	delete(got.Config.Labels, metadata.Label)
 	wantLabels := map[string]string{"org.example.added": "yes", "org.example.base": "override", "org.example.kept": "kept"}
 	if !reflect.DeepEqual(got.Config.Labels, wantLabels) {
 		t.Errorf("labels = %v, want %v", got.Config.Labels, wantLabels)
@@ -84,5 +90,33 @@ func TestParseTargetPlatforms(t *testing.T) {
 	}
 	if out[0].Architecture != "amd64" || out[1].Architecture != "arm64" {
 		t.Errorf("unexpected platforms: %+v", out)
+	}
+}
+
+func TestMergeImageConfig_MetadataPreservesBaseAndInstallOrder(t *testing.T) {
+	base := dockerspec.DockerOCIImage{}
+	base.Config.Labels = map[string]string{metadata.Label: `{"remoteUser":"sample","postCreateCommand":"echo base"}`}
+	raw, err := json.Marshal(base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	g := GraphInputs{Spec: &spec.DevContainer{PostCreate: spec.Command{Args: []string{"echo", "config"}}}, Features: []features.Resolved{
+		{Source: "./second", Metadata: features.Metadata{CapAdd: []string{"SYS_PTRACE"}, PostCreateCommand: spec.Command{Shell: "echo second"}}},
+		{Source: "./first", Metadata: features.Metadata{PostCreateCommand: spec.Command{Parallel: map[string]spec.Command{"one": {Shell: "echo first"}}}}},
+	}}
+	raw, err = mergeImageConfig(raw, g, nil, ocispecs.Platform{OS: "linux", Architecture: "amd64"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var img dockerspec.DockerOCIImage
+	if err := json.Unmarshal(raw, &img); err != nil {
+		t.Fatal(err)
+	}
+	entries, err := metadata.Parse(img.Config.Labels[metadata.Label])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 4 || entries[0].RemoteUser != "sample" || entries[1].ID != "./second" || entries[2].ID != "./first" || len(entries[3].PostCreate.Args) != 2 {
+		t.Fatalf("entries=%+v", entries)
 	}
 }

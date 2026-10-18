@@ -12,6 +12,7 @@ import (
 	"github.com/docker/docker/api/types/strslice"
 
 	"github.com/wyrd-company/devcontainer-builder/pkg/features"
+	"github.com/wyrd-company/devcontainer-builder/pkg/metadata"
 	"github.com/wyrd-company/devcontainer-builder/pkg/spec"
 	"github.com/wyrd-company/devcontainer-builder/pkg/substitute"
 )
@@ -82,6 +83,11 @@ func buildContainerConfig(
 	resolved []features.Resolved,
 	image, containerWorkspaceFolder, localFolder, configFilePath string,
 ) (*container.Config, *container.HostConfig, error) {
+	merged := metadata.Merge(dc, metadata.Collect(nil, resolved, dc))
+	return buildContainerConfigWithEntrypoints(merged.DevContainer, resolved, merged.Entrypoints, image, containerWorkspaceFolder, localFolder, configFilePath)
+}
+
+func buildContainerConfigWithEntrypoints(dc *spec.DevContainer, resolved []features.Resolved, entrypoints []string, image, containerWorkspaceFolder, localFolder, configFilePath string) (*container.Config, *container.HostConfig, error) {
 	// Features first, then the spec, so the spec wins (upstream order).
 	var envSlice []string
 	for _, f := range resolved {
@@ -106,7 +112,6 @@ func buildContainerConfig(
 		Labels:     labels,
 		WorkingDir: containerWorkspaceFolder,
 	}
-	entrypoints := featureEntrypoints(resolved)
 	if overrideCommand(dc) || len(entrypoints) > 0 {
 		// Match upstream: shell entrypoint that runs the feature
 		// entrypoints and keeps the container alive until SIGTERM. With

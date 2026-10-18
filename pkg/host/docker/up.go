@@ -9,6 +9,7 @@ import (
 	"github.com/wyrd-company/devcontainer-builder/pkg/features"
 	"github.com/wyrd-company/devcontainer-builder/pkg/host/runner"
 	"github.com/wyrd-company/devcontainer-builder/pkg/lifecycle"
+	"github.com/wyrd-company/devcontainer-builder/pkg/metadata"
 	"github.com/wyrd-company/devcontainer-builder/pkg/spec"
 	"github.com/wyrd-company/devcontainer-builder/pkg/substitute"
 )
@@ -37,6 +38,12 @@ type UpRequest struct {
 	// Image is the image reference to run (use pkg/builder to produce
 	// one). Up pulls it when the daemon does not have it.
 	Image string
+	// ImageBuilt means Image was built from this request's spec and features.
+	// Its label already contains those contributions; append only runtime updates.
+	ImageBuilt bool
+	// metadataEntries carries the complete raw list to container creation.
+	metadataEntries []metadata.Entry
+	entrypoints     []string
 	// Features as resolved by pkg/features. Their containerEnv and
 	// lifecycle commands are merged into the container.
 	Features []features.Resolved
@@ -111,6 +118,7 @@ func (h *Host) Up(ctx context.Context, req UpRequest) (*UpResult, error) {
 		IDLabels:                 idLabels,
 	}
 	dc := substituteSpec(req.Spec, subCtx)
+	var entries []metadata.Entry
 
 	// 1. Discover or create.
 	id, err := h.findExisting(ctx, req.LocalWorkspace)
@@ -122,6 +130,31 @@ func (h *Host) Up(ctx context.Context, req UpRequest) (*UpResult, error) {
 		if err := h.ensureImage(ctx, req.Image); err != nil {
 			return nil, err
 		}
+		img, inspectErr := h.client.ImageInspect(ctx, req.Image)
+		if inspectErr != nil {
+			return nil, errorf("inspect image metadata: %w", inspectErr)
+		}
+		var labels map[string]string
+		if img.Config != nil {
+			labels = img.Config.Labels
+		}
+		entries = metadata.Read(labels, h.logf)
+		if req.ImageBuilt && len(entries) > 0 {
+			entries = metadata.Update(entries, req.Spec)
+		} else {
+			entries = metadata.Collect(entries, req.Features, req.Spec)
+		}
+		dc, req.entrypoints, err = runtimeMetadata(req.Spec, entries, subCtx)
+		if err != nil {
+			return nil, err
+		}
+		req.metadataEntries = entries
+		// Image ENV already carries feature contributions. Keep this existing
+		// runtime-only path for callers that resolve features without building.
+		if !req.ImageBuilt {
+			dc.ContainerEnv = featureContainerEnv(dc.ContainerEnv, req.Features, subCtx)
+		}
+		req.Features = nil
 		id, err = h.create(ctx, dc, req, containerWorkspace)
 		if err != nil {
 			return nil, err
@@ -138,6 +171,28 @@ func (h *Host) Up(ctx context.Context, req UpRequest) (*UpResult, error) {
 	inspect, err := h.client.ContainerInspect(ctx, id)
 	if err != nil {
 		return res, errorf("inspect: %w", err)
+	}
+	if !res.CreatedThisCall {
+		var labels map[string]string
+		if inspect.Config != nil {
+			labels = inspect.Config.Labels
+		}
+		entries = metadata.Read(labels, h.logf)
+		if len(entries) > 0 {
+			entries = metadata.Update(entries, req.Spec)
+		} else {
+			entries = metadata.Collect(nil, req.Features, req.Spec)
+		}
+		dc, _, err = runtimeMetadata(req.Spec, entries, subCtx)
+		if err != nil {
+			return res, err
+		}
+	}
+	if dc.RemoteUser == "" {
+		dc.RemoteUser = dc.ContainerUser
+		if dc.RemoteUser == "" && inspect.Config != nil {
+			dc.RemoteUser = inspect.Config.User
+		}
 	}
 	if !inspect.State.Running {
 		if err := h.client.ContainerStart(ctx, id, container.StartOptions{}); err != nil {
@@ -180,7 +235,10 @@ func (h *Host) Up(ctx context.Context, req UpRequest) (*UpResult, error) {
 	dc = substituteContainerEnv(dc, containerEnv)
 	mergedEnv := mergeStringMaps(stringMap(dc.UpdateRemoteEnv), nil)
 
-	plan := lifecycle.Plan(dc, req.Features)
+	plan := metadata.Plan(entries)
+	for i := range plan {
+		plan[i].Command = containerSubstituteCommand(substitute.ContainerContext{ContainerEnv: containerEnv}, substituteCommand(subCtx, plan[i].Command))
+	}
 	rt := runner.Runtime{
 		User:           dc.RemoteUser,
 		Workdir:        containerWorkspace,
@@ -206,11 +264,25 @@ func (h *Host) Up(ctx context.Context, req UpRequest) (*UpResult, error) {
 func (h *Host) create(
 	ctx context.Context, dc *spec.DevContainer, req UpRequest, containerWorkspace string,
 ) (string, error) {
-	cfg, host, err := buildContainerConfig(dc, req.Features, req.Image, containerWorkspace, req.LocalWorkspace, req.SpecPath)
+	var cfg *container.Config
+	var host *container.HostConfig
+	var err error
+	if req.metadataEntries != nil {
+		cfg, host, err = buildContainerConfigWithEntrypoints(dc, nil, req.entrypoints, req.Image, containerWorkspace, req.LocalWorkspace, req.SpecPath)
+	} else {
+		cfg, host, err = buildContainerConfig(dc, req.Features, req.Image, containerWorkspace, req.LocalWorkspace, req.SpecPath)
+	}
+	if err == nil && req.metadataEntries != nil {
+		value, encodeErr := metadata.Encode(req.metadataEntries)
+		if encodeErr != nil {
+			return "", errorf("encode container metadata: %w", encodeErr)
+		}
+		cfg.Labels[metadata.Label] = value
+	}
 	if err != nil {
 		return "", errorf("build container config: %w", err)
 	}
-	if !overrideCommand(dc) && len(featureEntrypoints(req.Features)) > 0 {
+	if !overrideCommand(dc) && (len(req.entrypoints) > 0 || len(featureEntrypoints(req.Features)) > 0) {
 		img, err := h.client.ImageInspect(ctx, req.Image)
 		if err != nil {
 			return "", errorf("inspect image %s: %w", req.Image, err)
