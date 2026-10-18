@@ -26,7 +26,8 @@ func ociNode(t *testing.T, source string, after ...string) *node {
 			Digest:    "sha256:" + id + "-" + ref.Tag,
 			Metadata:  Metadata{ID: id, InstallsAfter: after},
 		},
-		options: "{}",
+		options:      "{}",
+		optionsValue: map[string]any{},
 	}
 }
 
@@ -37,7 +38,8 @@ func localNode(path, id string, after ...string) *node {
 			localPath: path,
 			Metadata:  Metadata{ID: id, InstallsAfter: after},
 		},
-		options: "{}",
+		options:      "{}",
+		optionsValue: map[string]any{},
 	}
 }
 

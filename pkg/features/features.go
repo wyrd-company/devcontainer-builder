@@ -54,6 +54,7 @@ type Metadata struct {
 	SecurityOpt       []string          `json:"securityOpt,omitempty"`
 	Entrypoint        string            `json:"entrypoint,omitempty"`
 	InstallsAfter     []string          `json:"installsAfter,omitempty"`
+	DependsOn         spec.OrderedMap   `json:"dependsOn,omitempty"`
 	LegacyIDs         []string          `json:"legacyIds,omitempty"`
 	Deprecated        bool              `json:"deprecated,omitempty"`
 	OnCreateCommand   spec.Command      `json:"onCreateCommand,omitempty"`
@@ -131,25 +132,55 @@ func (r *Resolver) Resolve(specFeatures spec.OrderedMap, override []string, stag
 		return nil, err
 	}
 
-	nodes := make([]*node, 0, specFeatures.Len())
+	type pending struct {
+		source string
+		raw    json.RawMessage
+		parent *node
+	}
+	worklist := make([]pending, 0, specFeatures.Len())
 	for _, source := range specFeatures.Keys {
-		raw := specFeatures.Values[source]
-		var opts map[string]any
-		if len(raw) > 0 && string(raw) != "null" {
-			// Options may be a bool/string scalar shorthand for "version".
-			if err := json.Unmarshal(raw, &opts); err != nil {
-				var scalar any
-				if err2 := json.Unmarshal(raw, &scalar); err2 != nil {
-					return nil, fmt.Errorf("feature %s: parse options: %w", source, err)
-				}
-				opts = map[string]any{"version": scalar}
-			}
+		worklist = append(worklist, pending{source: source, raw: specFeatures.Values[source]})
+	}
+
+	// Resolve user features, then their dependsOn features recursively.
+	// A feature equal to one already resolved (same feature and options)
+	// is installed once and satisfies every dependency on it.
+	var nodes []*node
+	link := func(parent, n *node) {
+		if parent != nil {
+			parent.dependsOn = append(parent.dependsOn, n)
 		}
-		resolved, err := r.resolveOne(source, opts, stagingDir, localBaseDir)
+	}
+	for len(worklist) > 0 {
+		item := worklist[0]
+		worklist = worklist[1:]
+		options, optionsValue := decodeOptions(item.raw)
+
+		if existing := findNode(nodes, func(n *node) bool {
+			return n.res.Source == item.source && n.options == options
+		}); existing != nil {
+			link(item.parent, existing)
+			continue
+		}
+		opts, err := parseOptions(item.raw)
 		if err != nil {
-			return nil, fmt.Errorf("feature %s: %w", source, err)
+			return nil, fmt.Errorf("feature %s: %w", item.source, err)
 		}
-		nodes = append(nodes, &node{res: *resolved, options: canonicalOptions(raw)})
+		resolved, err := r.resolveOne(item.source, opts, options, stagingDir, localBaseDir)
+		if err != nil {
+			return nil, fmt.Errorf("feature %s: %w", item.source, err)
+		}
+		n := &node{res: *resolved, options: options, optionsValue: optionsValue}
+		if existing := findNode(nodes, n.equals); existing != nil {
+			link(item.parent, existing)
+			continue
+		}
+		nodes = append(nodes, n)
+		link(item.parent, n)
+		deps := n.res.Metadata.DependsOn
+		for _, source := range deps.Keys {
+			worklist = append(worklist, pending{source: source, raw: deps.Values[source], parent: n})
+		}
 	}
 
 	out, err := installOrder(nodes, override, localBaseDir)
@@ -159,8 +190,36 @@ func (r *Resolver) Resolve(specFeatures spec.OrderedMap, override []string, stag
 	return out, nil
 }
 
-func (r *Resolver) resolveOne(source string, opts map[string]any, stagingDir, localBaseDir string) (*Resolved, error) {
-	safeID := safeIdent(source)
+func findNode(nodes []*node, match func(*node) bool) *node {
+	for _, n := range nodes {
+		if match(n) {
+			return n
+		}
+	}
+	return nil
+}
+
+// parseOptions decodes a feature's options value. A scalar is shorthand
+// for the "version" option.
+func parseOptions(raw json.RawMessage) (map[string]any, error) {
+	if len(raw) == 0 || string(raw) == "null" {
+		return nil, nil
+	}
+	var opts map[string]any
+	if err := json.Unmarshal(raw, &opts); err != nil {
+		var scalar any
+		if err2 := json.Unmarshal(raw, &scalar); err2 != nil {
+			return nil, fmt.Errorf("parse options: %w", err)
+		}
+		opts = map[string]any{"version": scalar}
+	}
+	return opts, nil
+}
+
+func (r *Resolver) resolveOne(source string, opts map[string]any, options, stagingDir, localBaseDir string) (*Resolved, error) {
+	// The same feature may be installed more than once with different
+	// options (via dependsOn), so the staging directory is keyed by both.
+	safeID := safeIdent(source, options)
 	dir := filepath.Join(stagingDir, safeID)
 
 	if isLocalSource(source) {
@@ -378,11 +437,11 @@ func ensureSafeTarget(root, target string) error {
 	return nil
 }
 
-// safeIdent transforms an arbitrary source string into a path-safe
-// identifier. It uses a sha256 prefix plus the trailing path component to
-// stay deterministic across invocations.
-func safeIdent(s string) string {
-	sum := sha256.Sum256([]byte(s))
+// safeIdent transforms a feature source and its canonical options into a
+// path-safe identifier. It uses a sha256 prefix plus the trailing path
+// component of the source to stay deterministic across invocations.
+func safeIdent(s, options string) string {
+	sum := sha256.Sum256([]byte(s + "\x00" + options))
 	prefix := hex.EncodeToString(sum[:6])
 	tail := s
 	if i := strings.LastIndexAny(tail, "/:@"); i >= 0 {

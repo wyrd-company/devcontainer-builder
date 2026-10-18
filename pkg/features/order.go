@@ -13,9 +13,10 @@ import (
 // The install order mirrors upstream's round-based algorithm
 // (reference/cli/src/spec-configuration/containerFeaturesOrder.ts):
 //
-//   - Each round installs every feature whose `installsAfter` soft
-//     dependencies are already installed. Soft dependencies that name a
-//     feature outside the install set are dropped.
+//   - Each round installs every feature whose `dependsOn` hard
+//     dependencies and `installsAfter` soft dependencies are already
+//     installed. Soft dependencies that name a feature outside the
+//     install set are dropped.
 //   - `overrideFeatureInstallOrder` assigns a round priority (first entry
 //     highest); within a round only the highest-priority candidates are
 //     installed, so the override never breaks a dependency.
@@ -31,8 +32,13 @@ import (
 type node struct {
 	res Resolved
 	// options is the canonical JSON of the options value as written in
-	// devcontainer.json; equal features must have equal options.
+	// devcontainer.json (or in a dependsOn entry).
 	options string
+	// optionsValue is the decoded options value, compared like upstream.
+	optionsValue any
+	// dependsOn holds the hard dependencies, each the node that installs
+	// it.
+	dependsOn []*node
 	// installsAfter holds the soft dependencies that name a feature in
 	// the install set.
 	installsAfter []sourceRef
@@ -124,10 +130,10 @@ func compareNodes(a, b *node) int {
 		if c := strings.Compare(ar.resource, br.resource); c != 0 {
 			return c
 		}
-		return strings.Compare(a.options, b.options)
+		return compareOptions(a.optionsValue, b.optionsValue)
 	}
 	ad, bd := a.res.Digest, b.res.Digest
-	if ad != "" && ad == bd && a.options == b.options {
+	if ad != "" && ad == bd && compareOptions(a.optionsValue, b.optionsValue) == 0 {
 		return 0
 	}
 	if c := compareOCIResource(a, b); c != 0 {
@@ -137,7 +143,7 @@ func compareNodes(a, b *node) int {
 	if at != "" && bt != "" && at != bt {
 		return strings.Compare(at, bt)
 	}
-	if c := strings.Compare(a.options, b.options); c != 0 {
+	if c := compareOptions(a.optionsValue, b.optionsValue); c != 0 {
 		return c
 	}
 	return strings.Compare(ad, bd)
@@ -165,20 +171,103 @@ func compareOCIResource(a, b *node) int {
 	return strings.Compare(path.Base(ar), path.Base(br))
 }
 
-// canonicalOptions returns a stable JSON encoding of an options value.
-func canonicalOptions(raw json.RawMessage) string {
-	if len(raw) == 0 {
-		return "null"
+// compareOptions mirrors upstream's optionsCompareTo: strings and
+// booleans compare by value, objects by key count, then keys, then
+// string or boolean values; other value types do not take part.
+// Mismatched types compare by their JavaScript type name.
+func compareOptions(a, b any) int {
+	switch av := a.(type) {
+	case string:
+		if bv, ok := b.(string); ok {
+			return strings.Compare(av, bv)
+		}
+	case bool:
+		if bv, ok := b.(bool); ok {
+			return compareBool(av, bv)
+		}
+	case map[string]any:
+		if bv, ok := b.(map[string]any); ok {
+			return compareOptionObjects(av, bv)
+		}
+	}
+	return strings.Compare(jsTypeOf(a), jsTypeOf(b))
+}
+
+func compareOptionObjects(a, b map[string]any) int {
+	if len(a) != len(b) {
+		return len(a) - len(b)
+	}
+	aKeys, bKeys := sortedKeys(a), sortedKeys(b)
+	for i := range aKeys {
+		if aKeys[i] != bKeys[i] {
+			return strings.Compare(aKeys[i], bKeys[i])
+		}
+		switch av := a[aKeys[i]].(type) {
+		case string:
+			if bv, ok := b[bKeys[i]].(string); ok {
+				if c := strings.Compare(av, bv); c != 0 {
+					return c
+				}
+			}
+		case bool:
+			if bv, ok := b[bKeys[i]].(bool); ok {
+				if c := compareBool(av, bv); c != 0 {
+					return c
+				}
+			}
+		}
+	}
+	return 0
+}
+
+func compareBool(a, b bool) int {
+	switch {
+	case a == b:
+		return 0
+	case a:
+		return 1
+	}
+	return -1
+}
+
+func jsTypeOf(v any) string {
+	switch v.(type) {
+	case nil:
+		return "undefined"
+	case string:
+		return "string"
+	case bool:
+		return "boolean"
+	case float64:
+		return "number"
+	}
+	return "object"
+}
+
+func sortedKeys(m map[string]any) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+// decodeOptions returns the canonical JSON and the decoded value of an
+// options value.
+func decodeOptions(raw json.RawMessage) (string, any) {
+	if len(raw) == 0 || string(raw) == "null" {
+		return "null", nil
 	}
 	var v any
 	if err := json.Unmarshal(raw, &v); err != nil {
-		return string(raw)
+		return string(raw), nil
 	}
 	out, err := json.Marshal(v) // map keys are sorted
 	if err != nil {
-		return string(raw)
+		return string(raw), v
 	}
-	return string(out)
+	return string(out), v
 }
 
 // linkSoftDependencies records each node's installsAfter entries that
@@ -229,6 +318,18 @@ func installOrder(nodes []*node, override []string, localBaseDir string) ([]Reso
 	remaining := append([]*node(nil), nodes...)
 	installed := make([]*node, 0, len(nodes))
 	ready := func(n *node) bool {
+		for _, dep := range n.dependsOn {
+			found := false
+			for _, done := range installed {
+				if done == dep {
+					found = true
+					break
+				}
+			}
+			if !found {
+				return false
+			}
+		}
 		for _, dep := range n.installsAfter {
 			found := false
 			for _, done := range installed {
