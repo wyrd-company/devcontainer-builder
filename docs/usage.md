@@ -68,8 +68,8 @@ Commands that read a configuration take these flags:
 
 `dcb` identifies the container of a workspace by its labels, so `exec`,
 `down`, `inspect`, and `run-user-commands` find the container that `up`
-created. `exec`, `run-user-commands`, and `set-up` also take
-`--container-id` to select a container directly.
+created. `exec`, `run-user-commands`, `set-up`, and `read-configuration` also
+take `--container-id` to select a container directly.
 
 ## Results
 
@@ -95,7 +95,7 @@ Other result fields by command:
 | `run-user-commands`, `set-up` | `phasesRun`, and the `up` fields |
 | `build` | `imageName`; `cacheOnly` or `outputDir` when the image is not loaded or pushed |
 | `generate` | `dockerfile`, `contextDir` |
-| `read-configuration` | `configuration`, `workspace` |
+| `read-configuration` | `configuration`, `workspace`; `mergedConfiguration` with `--include-merged-configuration` |
 | `features` | `features` |
 | `server` | `commit`, `quality`, `path`, `url`, `bytes` |
 | `skills` | `skills`; `installed` for `skills install` |

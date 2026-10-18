@@ -41,7 +41,7 @@ sees it.
 | `forwardPorts` | Not published, as upstream. |
 | `overrideCommand` | |
 | `onCreateCommand`, `updateContentCommand`, `postCreateCommand`, `postStartCommand`, `postAttachCommand` | String, array, and object forms. Object entries run in parallel. |
-| `customizations` | Returned by `dcb read-configuration`. |
+| `customizations` | Kept in the image metadata and collected in the merged configuration. |
 | `shutdownAction` | Validated. `dcb down` always stops and removes the container. |
 
 `initializeCommand` does not run: `dcb` runs no commands on the host.
@@ -62,6 +62,38 @@ the Engine API. Flags that add to a property, such as `--cap-add`, add to it
 and do not replace it. An unknown flag is an error, so that a typing error does
 not change the container. `--entrypoint` is an error, because `dcb` sets the
 entrypoint that keeps the container running.
+
+## Image metadata
+
+`dcb build` and `dcb up` write the `devcontainer.metadata` label on the image
+they build, as upstream does. The label is a list of entries in order: the
+entries of the base image's own label, one entry for each feature in install
+order, and one for the configuration. An entry records lifecycle commands,
+mounts, capabilities, security options, `init`, `privileged`, entrypoints,
+environment, users, and customizations.
+
+`dcb up` merges these entries with the current configuration by the upstream
+rules:
+
+- Lifecycle commands from every entry run, in entry order.
+- `capAdd` and `securityOpt` combine. A later mount replaces an earlier mount
+  with the same target.
+- `init` and `privileged` are on when any entry turns them on.
+- For other single values, such as `remoteUser`, the last entry that sets the
+  value wins.
+
+The container that `dcb up` creates carries the merged label as well. An image
+built once can then be started from a configuration that only names the
+image, and its features' lifecycle commands, mounts, and users still apply.
+
+`dcb read-configuration --include-merged-configuration` adds the merged result
+as `mergedConfiguration`. It reads the label of the workspace container, or
+of the container given with `--container-id`. When there is no container, it
+reads the base image configuration from Docker or the registry, without
+building or pulling layers, and adds the features and the configuration. As
+upstream, `mergedConfiguration` lists the lifecycle commands of all entries in
+`onCreateCommands`, `updateContentCommands`, `postCreateCommands`,
+`postStartCommands`, and `postAttachCommands`.
 
 ## Docker and BuildKit
 
