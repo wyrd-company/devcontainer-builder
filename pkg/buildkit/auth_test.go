@@ -2,11 +2,13 @@ package buildkit
 
 import (
 	"context"
+	"crypto/ed25519"
 	"encoding/base64"
 	"strings"
 	"testing"
 
 	"github.com/moby/buildkit/session/auth"
+	"golang.org/x/crypto/nacl/sign"
 
 	"github.com/wyrd-company/devcontainer-builder/pkg/registryauth"
 )
@@ -76,5 +78,43 @@ func TestRegistryAuth_DefaultsToTheDockerConfiguration(t *testing.T) {
 	explicit := anonymous(t)
 	if registryAuth(SolveOptions{RegistryAuth: explicit}) != explicit {
 		t.Fatal("registryAuth replaced an explicit RegistryAuth")
+	}
+}
+
+// registryTokenAuth answers every host with a static registry token.
+type registryTokenAuth struct{}
+
+func (registryTokenAuth) Credentials(string) (registryauth.Credentials, error) {
+	return registryauth.Credentials{RegistryToken: "synthetic-registry-token"}, nil
+}
+
+func (registryTokenAuth) EngineAuth(string) (string, error) { return "", nil }
+
+// A static registry token reaches BuildKit: the session is the token
+// authority for that host and FetchToken returns the token.
+func TestSessionAuth_RegistryTokenIsFetched(t *testing.T) {
+	server := newSessionAuth(registryTokenAuth{}).(auth.AuthServer)
+	ctx := context.Background()
+	authority, err := server.GetTokenAuthority(ctx, &auth.GetTokenAuthorityRequest{Host: "registry.example.test", Salt: []byte("salt")})
+	if err != nil || len(authority.PublicKey) != ed25519.PublicKeySize {
+		t.Fatalf("GetTokenAuthority = %v, %v; want an ed25519 public key", authority, err)
+	}
+	payload := []byte("synthetic-payload-0123456789abcdef")
+	verified, err := server.VerifyTokenAuthority(ctx, &auth.VerifyTokenAuthorityRequest{Host: "registry.example.test", Salt: []byte("salt"), Payload: payload})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var pub [32]byte
+	copy(pub[:], authority.PublicKey)
+	if got, ok := sign.Open(nil, verified.Signed, &pub); !ok || string(got) != string(payload) {
+		t.Fatal("VerifyTokenAuthority did not sign the payload with the authority key")
+	}
+	tok, err := server.FetchToken(ctx, &auth.FetchTokenRequest{Host: "registry.example.test", Scopes: []string{"repository:team/app:pull"}})
+	if err != nil || tok.Token != "synthetic-registry-token" {
+		t.Fatalf("FetchToken = %v, %v; want the registry token", tok, err)
+	}
+	creds, err := server.Credentials(ctx, &auth.CredentialsRequest{Host: "registry.example.test"})
+	if err != nil || creds.Secret != "" {
+		t.Fatalf("Credentials = %v, %v; want no secret for a token-only host", creds, err)
 	}
 }
