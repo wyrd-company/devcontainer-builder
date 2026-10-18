@@ -285,16 +285,13 @@ dcb build \
 manifest list. Use `--push` (image exporter) or `--output` (filesystem
 exporter) for multi-platform builds.
 
-### Upstream Dockerfile builds (BuildKit engine)
+### Upstream Dockerfile builds
 
-When the spec uses `dockerFile` (or `build.dockerfile`), the BuildKit
-engine chains the builtin `dockerfile.v0` frontend inside the same
+When the spec uses `dockerFile` (or `build.dockerfile`), the builder
+chains the builtin `dockerfile.v0` frontend inside the same
 gateway invocation that authors the rest of the LLB graph. The upstream
 build's reference becomes the base of the devcontainer overlays
 directly — no `docker build` round-trip, no temporary tag.
-
-The buildx engine still pre-builds the upstream Dockerfile through
-`docker buildx build --load` and then references the resulting tag.
 
 ### Projecting a spec into a Kubernetes Pod
 
@@ -627,7 +624,7 @@ manage their own builds. `dockerfile_inline:` is rejected (we don't
 shadow a real path with synthetic content); everything else
 (`context`, `dockerfile`, `args`, `target`, `cache_from` /
 `cache_to`, `platforms`, `tags`, `no_cache`, `pull`, `labels`)
-maps directly onto the buildx invocation. When a service declares
+maps directly onto the BuildKit `dockerfile.v0` frontend. When a service declares
 both `build:` and `image:`, the `image:` becomes the primary tag
 applied to the build (matching `docker compose build`).
 
@@ -678,7 +675,7 @@ Two more compose-mode gaps are now closed:
 - **Compose-side `build:`** is honored for both the primary service
   and sidecars. `BuildPrimaryImage` runs the primary's `build:` and
   uses the resulting tag as the base for feature derivation; `Up`
-  builds any sidecar with a `build:` block through `pkg/buildx`
+  builds any sidecar with a `build:` block through BuildKit
   before creating its container. `Options.SkipServiceBuild` lets
   embedders that manage their own image pipeline opt out.
 - **Recreate-on-config-change** stamps a
