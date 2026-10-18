@@ -113,29 +113,7 @@ func (h *Host) Up(ctx context.Context, req UpRequest) (*UpResult, error) {
 	}
 	dc := substituteSpec(req.Spec, subCtx)
 
-	overrideEnv := stringMap(dc.UpdateRemoteEnv)
-	for _, f := range req.Features {
-		for k, v := range f.Metadata.ContainerEnv {
-			if overrideEnv == nil {
-				overrideEnv = map[string]string{}
-			}
-			overrideEnv[k] = v
-		}
-	}
-	overrideCommand := true
-	if req.Spec.OverrideCommand != nil {
-		overrideCommand = *req.Spec.OverrideCommand
-	}
-
-	override, err := OverrideYAML(OverrideInputs{
-		Spec:               dc,
-		LocalWorkspace:     req.LocalWorkspace,
-		ContainerWorkspace: containerWorkspace,
-		PrimaryImage:       req.PrimaryImage,
-		RemoteEnv:          overrideEnv,
-		OverrideCommand:    overrideCommand,
-		Entrypoints:        featureEntrypoints(req.Features),
-	})
+	override, err := OverrideYAML(primaryOverride(req, dc, containerWorkspace))
 	if err != nil {
 		return nil, errorf("override yaml: %w", err)
 	}
@@ -410,6 +388,33 @@ func selectServices(proj *types.Project, runServices []string) ([]string, error)
 // runLifecycle drives the lifecycle plan against the primary
 // container. Same shape as the docker host: detect home, detect
 // container env (for ${containerEnv:VAR}), then runner.Run.
+// primaryOverride returns the override for the primary service of the
+// substituted spec dc.
+func primaryOverride(req UpRequest, dc *spec.DevContainer, containerWorkspace string) OverrideInputs {
+	overrideEnv := stringMap(dc.UpdateRemoteEnv)
+	for _, f := range req.Features {
+		for k, v := range f.Metadata.ContainerEnv {
+			if overrideEnv == nil {
+				overrideEnv = map[string]string{}
+			}
+			overrideEnv[k] = v
+		}
+	}
+	overrideCommand := true
+	if req.Spec.OverrideCommand != nil {
+		overrideCommand = *req.Spec.OverrideCommand
+	}
+	return OverrideInputs{
+		Spec:               dc,
+		LocalWorkspace:     req.LocalWorkspace,
+		ContainerWorkspace: containerWorkspace,
+		PrimaryImage:       req.PrimaryImage,
+		RemoteEnv:          overrideEnv,
+		OverrideCommand:    overrideCommand,
+		Entrypoints:        featureEntrypoints(req.Features),
+	}
+}
+
 // featureEntrypoints returns the features' entrypoint contributions in
 // install order.
 func featureEntrypoints(resolved []features.Resolved) []string {
