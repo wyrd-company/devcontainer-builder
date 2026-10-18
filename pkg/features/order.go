@@ -1,9 +1,9 @@
 package features
 
 import (
-	"encoding/json"
 	"fmt"
 	"path"
+	"slices"
 	"sort"
 	"strings"
 
@@ -171,105 +171,6 @@ func compareOCIResource(a, b *node) int {
 	return strings.Compare(path.Base(ar), path.Base(br))
 }
 
-// compareOptions mirrors upstream's optionsCompareTo: strings and
-// booleans compare by value, objects by key count, then keys, then
-// string or boolean values; other value types do not take part.
-// Mismatched types compare by their JavaScript type name.
-func compareOptions(a, b any) int {
-	switch av := a.(type) {
-	case string:
-		if bv, ok := b.(string); ok {
-			return strings.Compare(av, bv)
-		}
-	case bool:
-		if bv, ok := b.(bool); ok {
-			return compareBool(av, bv)
-		}
-	case map[string]any:
-		if bv, ok := b.(map[string]any); ok {
-			return compareOptionObjects(av, bv)
-		}
-	}
-	return strings.Compare(jsTypeOf(a), jsTypeOf(b))
-}
-
-func compareOptionObjects(a, b map[string]any) int {
-	if len(a) != len(b) {
-		return len(a) - len(b)
-	}
-	aKeys, bKeys := sortedKeys(a), sortedKeys(b)
-	for i := range aKeys {
-		if aKeys[i] != bKeys[i] {
-			return strings.Compare(aKeys[i], bKeys[i])
-		}
-		switch av := a[aKeys[i]].(type) {
-		case string:
-			if bv, ok := b[bKeys[i]].(string); ok {
-				if c := strings.Compare(av, bv); c != 0 {
-					return c
-				}
-			}
-		case bool:
-			if bv, ok := b[bKeys[i]].(bool); ok {
-				if c := compareBool(av, bv); c != 0 {
-					return c
-				}
-			}
-		}
-	}
-	return 0
-}
-
-func compareBool(a, b bool) int {
-	switch {
-	case a == b:
-		return 0
-	case a:
-		return 1
-	}
-	return -1
-}
-
-func jsTypeOf(v any) string {
-	switch v.(type) {
-	case nil:
-		return "undefined"
-	case string:
-		return "string"
-	case bool:
-		return "boolean"
-	case float64:
-		return "number"
-	}
-	return "object"
-}
-
-func sortedKeys(m map[string]any) []string {
-	keys := make([]string, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	return keys
-}
-
-// decodeOptions returns the canonical JSON and the decoded value of an
-// options value.
-func decodeOptions(raw json.RawMessage) (string, any) {
-	if len(raw) == 0 || string(raw) == "null" {
-		return "null", nil
-	}
-	var v any
-	if err := json.Unmarshal(raw, &v); err != nil {
-		return string(raw), nil
-	}
-	out, err := json.Marshal(v) // map keys are sorted
-	if err != nil {
-		return string(raw), v
-	}
-	return string(out), v
-}
-
 // linkSoftDependencies records each node's installsAfter entries that
 // name a feature in the install set.
 func linkSoftDependencies(nodes []*node, localBaseDir string) {
@@ -316,46 +217,9 @@ func installOrder(nodes []*node, override []string, localBaseDir string) ([]Reso
 	}
 
 	remaining := append([]*node(nil), nodes...)
-	installed := make([]*node, 0, len(nodes))
-	ready := func(n *node) bool {
-		for _, dep := range n.dependsOn {
-			found := false
-			for _, done := range installed {
-				if done == dep {
-					found = true
-					break
-				}
-			}
-			if !found {
-				return false
-			}
-		}
-		for _, dep := range n.installsAfter {
-			found := false
-			for _, done := range installed {
-				if done.satisfies(dep) {
-					found = true
-					break
-				}
-			}
-			if !found {
-				return false
-			}
-		}
-		return true
-	}
-
+	var installed []*node
 	for len(remaining) > 0 {
-		var round []*node
-		maxPriority := 0
-		for _, n := range remaining {
-			if ready(n) {
-				round = append(round, n)
-				if n.priority > maxPriority {
-					maxPriority = n.priority
-				}
-			}
-		}
+		round := nextRound(remaining, installed)
 		if len(round) == 0 {
 			ids := make([]string, 0, len(remaining))
 			for _, n := range remaining {
@@ -363,25 +227,13 @@ func installOrder(nodes []*node, override []string, localBaseDir string) ([]Reso
 			}
 			return nil, fmt.Errorf("circular feature dependency among: %s", strings.Join(ids, ", "))
 		}
-		filtered := round[:0]
+		inRound := map[*node]bool{}
 		for _, n := range round {
-			if n.priority == maxPriority {
-				filtered = append(filtered, n)
-			}
+			inRound[n] = true
 		}
-		round = filtered
-		sort.SliceStable(round, func(i, j int) bool { return compareNodes(round[i], round[j]) < 0 })
-
 		next := remaining[:0]
 		for _, n := range remaining {
-			inRound := false
-			for _, r := range round {
-				if r == n {
-					inRound = true
-					break
-				}
-			}
-			if !inRound {
+			if !inRound[n] {
 				next = append(next, n)
 			}
 		}
@@ -394,4 +246,42 @@ func installOrder(nodes []*node, override []string, localBaseDir string) ([]Reso
 		out[i] = n.res
 	}
 	return out, nil
+}
+
+// nextRound returns the features to install next: those whose
+// dependencies are installed, limited to the highest round priority and
+// sorted.
+func nextRound(remaining, installed []*node) []*node {
+	var round []*node
+	maxPriority := 0
+	for _, n := range remaining {
+		if n.ready(installed) {
+			round = append(round, n)
+			maxPriority = max(maxPriority, n.priority)
+		}
+	}
+	filtered := round[:0]
+	for _, n := range round {
+		if n.priority == maxPriority {
+			filtered = append(filtered, n)
+		}
+	}
+	sort.SliceStable(filtered, func(i, j int) bool { return compareNodes(filtered[i], filtered[j]) < 0 })
+	return filtered
+}
+
+// ready reports whether every hard and soft dependency of n is
+// installed.
+func (n *node) ready(installed []*node) bool {
+	for _, dep := range n.dependsOn {
+		if !slices.Contains(installed, dep) {
+			return false
+		}
+	}
+	for _, dep := range n.installsAfter {
+		if !slices.ContainsFunc(installed, func(done *node) bool { return done.satisfies(dep) }) {
+			return false
+		}
+	}
+	return true
 }
