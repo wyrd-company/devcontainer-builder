@@ -253,6 +253,50 @@ func TestPreparePreservesFixtureAndAddsOwnership(t *testing.T) {
 	}
 }
 
+func TestPrepareLabelsComposeService(t *testing.T) {
+	for _, files := range []string{`"docker-compose.yml"`, `["docker-compose.yml"]`} {
+		root := t.TempDir()
+		f := Fixture{Name: "sample", Path: "src/test/configs/sample", Config: ".devcontainer/devcontainer.json"}
+		source := filepath.Join(root, "reference/cli", f.Path, ".devcontainer")
+		if err := os.MkdirAll(source, 0755); err != nil {
+			t.Fatal(err)
+		}
+		config := `{"dockerComposeFile":` + files + `,"service":"app","runArgs":["-e","VALUE=one"]}`
+		if err := os.WriteFile(filepath.Join(source, "devcontainer.json"), []byte(config), 0644); err != nil {
+			t.Fatal(err)
+		}
+		r := &Runner{root: root, temp: t.TempDir(), runID: "sample"}
+		workspace, err := r.prepare(f, "go")
+		if err != nil {
+			t.Fatal(err)
+		}
+		var got struct {
+			DockerComposeFile []string
+			RunArgs           []string
+		}
+		body, _ := os.ReadFile(filepath.Join(workspace, f.Config))
+		if err := json.Unmarshal(body, &got); err != nil {
+			t.Fatal(err)
+		}
+		if !reflect.DeepEqual(got.DockerComposeFile, []string{"docker-compose.yml", composeLabelsFile}) {
+			t.Fatalf("compose files: %v", got.DockerComposeFile)
+		}
+		if !reflect.DeepEqual(got.RunArgs, []string{"-e", "VALUE=one"}) {
+			t.Fatalf("Compose ignores runArgs; harness labels added there: %v", got.RunArgs)
+		}
+		var labels struct {
+			Services map[string]struct{ Labels []string }
+		}
+		body, _ = os.ReadFile(filepath.Join(workspace, ".devcontainer", composeLabelsFile))
+		if err := json.Unmarshal(body, &labels); err != nil {
+			t.Fatal(err)
+		}
+		if want := []string{r.label(), discovery(f, "go")}; !reflect.DeepEqual(labels.Services["app"].Labels, want) {
+			t.Fatalf("service labels: %+v, want %v", labels, want)
+		}
+	}
+}
+
 func TestPrepareWorkspaceNamesAreRunUnique(t *testing.T) {
 	root := t.TempDir()
 	f := Fixture{Name: "sample", Path: "src/test/configs/sample", Config: ".devcontainer.json"}

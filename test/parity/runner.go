@@ -29,7 +29,13 @@ var fixtures = []Fixture{
 	{"image", "src/test/configs/image", ".devcontainer.json", []string{"/postCreateCommand.txt"}, nil},
 	{"dockerfile", "src/test/configs/dockerfile-without-features", ".devcontainer.json", []string{"/postCreateCommand.txt"}, nil},
 	{"features", "src/test/container-features/configs/dockerfile-with-v2-local-features-config-inside-dev-container-folder", ".devcontainer/devcontainer.json", nil, []string{"/usr/local/bin/hello", "/usr/local/bin/color"}},
+	{"compose", "src/test/configs/compose-image-without-features-minimal", ".devcontainer/devcontainer.json", []string{"/postCreateCommand.txt"}, nil},
+	{"remote-user", "src/test/configs/image-with-git-feature", ".devcontainer.json", nil, nil},
 }
+
+// composeLabelsFile is appended to a Compose configuration's files, so that
+// the primary service carries the harness labels; Compose ignores runArgs.
+const composeLabelsFile = "parity-labels.yml"
 
 type Runner struct {
 	root, temp, runID string
@@ -135,8 +141,14 @@ func (r *Runner) prepare(f Fixture, side string) (string, error) {
 	if err := json.Unmarshal(spec.StripJSONC(body), &config); err != nil {
 		return "", err
 	}
-	args, _ := config["runArgs"].([]any)
-	config["runArgs"] = append(args, "--label", r.label(), "--label", discovery(f, side))
+	if files, ok := config["dockerComposeFile"]; ok {
+		if err := r.labelCompose(config, files, filepath.Dir(path), f, side); err != nil {
+			return "", err
+		}
+	} else {
+		args, _ := config["runArgs"].([]any)
+		config["runArgs"] = append(args, "--label", r.label(), "--label", discovery(f, side))
+	}
 	if build, ok := config["build"].(map[string]any); ok && side == "upstream" {
 		options, _ := build["options"].([]any)
 		build["options"] = append(options, "--label", r.label())
@@ -146,6 +158,23 @@ func (r *Runner) prepare(f Fixture, side string) (string, error) {
 		return "", err
 	}
 	return workspace, os.WriteFile(path, body, 0644)
+}
+
+func (r *Runner) labelCompose(config map[string]any, files any, dir string, f Fixture, side string) error {
+	list, ok := files.([]any)
+	if !ok {
+		list = []any{files}
+	}
+	config["dockerComposeFile"] = append(list, composeLabelsFile)
+	service, _ := config["service"].(string)
+	body, err := json.Marshal(map[string]any{"services": map[string]any{service: map[string]any{
+		"labels": []string{r.label(), discovery(f, side)},
+	}}})
+	if err != nil {
+		return err
+	}
+	// JSON is YAML, so Compose reads the file without a YAML encoder.
+	return os.WriteFile(filepath.Join(dir, composeLabelsFile), body, 0644)
 }
 
 func failedObservations(err error) map[string]Observation {

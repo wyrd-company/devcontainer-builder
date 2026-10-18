@@ -21,10 +21,16 @@ fail. Parity differences do not make the command fail; harness setup, report and
 cleanup errors do. A skipped run has zero dimensions and a `skipped` reason;
 it is not a baseline score.
 
-The three curated upstream fixtures cover an image, a Dockerfile and two local
-v2 features. Each run copies them into separate workspaces under `.tmp/` and
-adds the run ownership label `devcontainer.parity.run` and fixture/side label
-`devcontainer.parity.fixture-side` to runtime arguments. Discovery requires both
+The five curated upstream fixtures cover an image, a Dockerfile, two local v2
+features, a Compose service from an image
+(`compose-image-without-features-minimal`), and an image with a published
+feature and `remoteUser` (`image-with-git-feature`). Each run copies them into
+separate workspaces under `.tmp/` and adds the run ownership label
+`devcontainer.parity.run` and fixture/side label
+`devcontainer.parity.fixture-side` to runtime arguments. Compose ignores
+`runArgs`, so for a Compose configuration the harness instead appends
+`parity-labels.yml` to `dockerComposeFile`; it sets both labels on the primary
+service. Discovery requires both
 labels and exactly one full container ID, then verifies that ID and both labels
 in inspection. It does not filter on compared labels such as
 `devcontainer.local_folder`; missing or different values remain observable.
