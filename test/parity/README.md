@@ -23,7 +23,9 @@ it is not a baseline score.
 
 The three curated upstream fixtures cover an image, a Dockerfile and two local
 v2 features. Each run copies them into separate workspaces under `.tmp/` and
-adds a unique teardown label to runtime arguments and Dockerfile build options.
+adds a unique teardown label to runtime arguments. Upstream Dockerfile build
+options carry the same label; the Go adapter labels its output image through the
+build command, without adding Docker CLI options to its configuration.
 The fixture bodies and feature scripts otherwise stay intact. No credentials or
 host Docker configuration are copied. Every subprocess receives a private
 `DOCKER_CONFIG` containing only `{}` and no inherited `DOCKER_AUTH_CONFIG`.

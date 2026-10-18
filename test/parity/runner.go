@@ -124,7 +124,7 @@ func (r *Runner) prepare(f Fixture, side string) (string, error) {
 	}
 	args, _ := config["runArgs"].([]any)
 	config["runArgs"] = append(args, "--label", r.label())
-	if build, ok := config["build"].(map[string]any); ok {
+	if build, ok := config["build"].(map[string]any); ok && side == "upstream" {
 		options, _ := build["options"].([]any)
 		build["options"] = append(options, "--label", r.label())
 	}

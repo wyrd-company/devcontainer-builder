@@ -296,3 +296,31 @@ func TestUnorderedMounts(t *testing.T) {
 		t.Fatal("mount permissions differ")
 	}
 }
+
+func TestPrepareGoPreservesNativeBuildOptions(t *testing.T) {
+	root := t.TempDir()
+	f := Fixture{Name: "sample", Path: "src/test/configs/sample", Config: ".devcontainer.json"}
+	source := filepath.Join(root, "reference/cli", f.Path)
+	if err := os.MkdirAll(source, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(source, f.Config), []byte(`{"build":{"dockerfile":"Dockerfile"}}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	r := &Runner{root: root, temp: t.TempDir(), runID: "sample"}
+	workspace, err := r.prepare(f, "go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, err := os.ReadFile(filepath.Join(workspace, f.Config))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var config map[string]any
+	if err := json.Unmarshal(body, &config); err != nil {
+		t.Fatal(err)
+	}
+	if _, exists := config["build"].(map[string]any)["options"]; exists {
+		t.Fatal("harness injected unsupported Docker CLI build options into native build")
+	}
+}
