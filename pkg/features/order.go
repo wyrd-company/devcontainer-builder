@@ -26,7 +26,10 @@ import (
 //
 // Soft dependencies and override entries match a feature by its
 // registry/repository (or its resolved local path), ignoring tag and
-// digest, and honoring the feature's `legacyIds`.
+// digest. A soft dependency also matches through its own aliases: the
+// current id and `legacyIds` that the referenced feature's metadata
+// declares, under the reference's registry/namespace. Override entries
+// carry no aliases, as upstream.
 
 // node is one feature in the install graph.
 type node struct {
@@ -52,7 +55,14 @@ type sourceRef struct {
 	// resource is registry/repository for OCI features and the absolute
 	// path for local features.
 	resource string
+	// aliases are the ids the referenced feature declares for itself
+	// (current id, then legacy ids). Only soft dependencies carry them.
+	aliases []string
 }
+
+// aliasLookup returns the aliases declared by the metadata of the OCI
+// feature that a soft dependency id references.
+type aliasLookup func(id string) ([]string, error)
 
 // parseSourceRef converts a user-supplied feature id (as found in
 // installsAfter or overrideFeatureInstallOrder) to a sourceRef. Ids that
@@ -85,14 +95,12 @@ func (n *node) ref() sourceRef {
 
 // aliases returns the feature's current id followed by its legacy ids.
 func (n *node) aliases() []string {
-	out := []string{}
-	if n.res.Metadata.ID != "" {
-		out = append(out, n.res.Metadata.ID)
-	}
-	return append(out, n.res.Metadata.LegacyIDs...)
+	return n.res.Metadata.aliases()
 }
 
-// satisfies reports whether n is the feature a soft dependency names.
+// satisfies reports whether n is the feature a soft dependency names:
+// the same resource, or a resource the dependency's aliases name under
+// its registry/namespace (upstream satisfiesSoftDependency).
 func (n *node) satisfies(want sourceRef) bool {
 	have := n.ref()
 	if have.local != want.local {
@@ -101,12 +109,12 @@ func (n *node) satisfies(want sourceRef) bool {
 	if have.resource == want.resource {
 		return true
 	}
-	if have.local {
+	if want.local {
 		return false
 	}
-	prefix := path.Dir(have.resource)
-	for _, alias := range n.aliases() {
-		if prefix+"/"+alias == want.resource {
+	prefix := path.Dir(want.resource)
+	for _, alias := range want.aliases {
+		if prefix+"/"+alias == have.resource {
 			return true
 		}
 	}
@@ -172,8 +180,10 @@ func compareOCIResource(a, b *node) int {
 }
 
 // linkSoftDependencies records each node's installsAfter entries that
-// name a feature in the install set.
-func linkSoftDependencies(nodes []*node, localBaseDir string) {
+// name a feature in the install set. A referenced feature's aliases are
+// looked up only when they could decide the match: no feature matches
+// the resource and some feature shares its registry/namespace.
+func linkSoftDependencies(nodes []*node, localBaseDir string, lookup aliasLookup) error {
 	for _, n := range nodes {
 		n.installsAfter = nil
 		for _, id := range n.res.Metadata.InstallsAfter {
@@ -181,14 +191,32 @@ func linkSoftDependencies(nodes []*node, localBaseDir string) {
 			if !ok {
 				continue
 			}
-			for _, other := range nodes {
-				if other != n && other.satisfies(ref) {
-					n.installsAfter = append(n.installsAfter, ref)
-					break
+			if !ref.local && !otherSatisfies(nodes, n, ref) && sharesNamespace(nodes, n, ref) {
+				aliases, err := lookup(id)
+				if err != nil {
+					return fmt.Errorf("installsAfter dependency %q of feature %s could not be processed: %w", id, n.res.Source, err)
 				}
+				ref.aliases = aliases
+			}
+			if otherSatisfies(nodes, n, ref) {
+				n.installsAfter = append(n.installsAfter, ref)
 			}
 		}
 	}
+	return nil
+}
+
+func otherSatisfies(nodes []*node, self *node, ref sourceRef) bool {
+	return slices.ContainsFunc(nodes, func(o *node) bool { return o != self && o.satisfies(ref) })
+}
+
+// sharesNamespace reports whether another OCI feature lives under the
+// registry/namespace of ref, the only place an alias can point.
+func sharesNamespace(nodes []*node, self *node, ref sourceRef) bool {
+	return slices.ContainsFunc(nodes, func(o *node) bool {
+		have := o.ref()
+		return o != self && !have.local && path.Dir(have.resource) == path.Dir(ref.resource)
+	})
 }
 
 // applyOverride sets the round priority from overrideFeatureInstallOrder:
@@ -210,8 +238,10 @@ func applyOverride(nodes []*node, override []string, localBaseDir string) error 
 }
 
 // installOrder returns the features in install order.
-func installOrder(nodes []*node, override []string, localBaseDir string) ([]Resolved, error) {
-	linkSoftDependencies(nodes, localBaseDir)
+func installOrder(nodes []*node, override []string, localBaseDir string, lookup aliasLookup) ([]Resolved, error) {
+	if err := linkSoftDependencies(nodes, localBaseDir, lookup); err != nil {
+		return nil, err
+	}
 	if err := applyOverride(nodes, override, localBaseDir); err != nil {
 		return nil, err
 	}

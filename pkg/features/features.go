@@ -49,6 +49,7 @@ type Metadata struct {
 	SecurityOpt       []string          `json:"securityOpt,omitempty"`
 	Entrypoint        string            `json:"entrypoint,omitempty"`
 	InstallsAfter     []string          `json:"installsAfter,omitempty"`
+	CurrentID         string            `json:"currentId,omitempty"`
 	DependsOn         spec.OrderedMap   `json:"dependsOn,omitempty"`
 	LegacyIDs         []string          `json:"legacyIds,omitempty"`
 	Deprecated        bool              `json:"deprecated,omitempty"`
@@ -183,7 +184,19 @@ func (r *Resolver) Resolve(specFeatures spec.OrderedMap, override []string, stag
 		}
 	}
 
-	out, err := installOrder(nodes, override, localBaseDir)
+	aliases := map[string][]string{}
+	lookup := func(id string) ([]string, error) {
+		if a, ok := aliases[id]; ok {
+			return a, nil
+		}
+		a, err := r.featureAliases(id)
+		if err != nil {
+			return nil, err
+		}
+		aliases[id] = a
+		return a, nil
+	}
+	out, err := installOrder(nodes, override, localBaseDir, lookup)
 	if err != nil {
 		return nil, fmt.Errorf("feature install order: %w", err)
 	}
@@ -259,6 +272,56 @@ func (r *Resolver) fetchAndExtractLayer(ref oci.Reference, layer oci.Descriptor,
 		return err
 	}
 	return extractTarMaybeGz(buf.Bytes(), dir)
+}
+
+// aliases returns the feature's current id (currentId, else id)
+// followed by its legacy ids.
+func (m Metadata) aliases() []string {
+	var out []string
+	switch {
+	case m.CurrentID != "":
+		out = append(out, m.CurrentID)
+	case m.ID != "":
+		out = append(out, m.ID)
+	}
+	return append(out, m.LegacyIDs...)
+}
+
+// featureAliases reads the aliases of the OCI feature id references, from
+// the manifest's dev.containers.metadata annotation when present, else
+// from the feature's devcontainer-feature.json.
+func (r *Resolver) featureAliases(id string) ([]string, error) {
+	ref, err := oci.ParseReference(id)
+	if err != nil {
+		return nil, err
+	}
+	r.logf("reading feature metadata %s", ref)
+	manifest, _, err := r.OCI.FetchManifest(ref)
+	if err != nil {
+		return nil, err
+	}
+	if annotation := manifest.Annotations["dev.containers.metadata"]; annotation != "" {
+		var meta Metadata
+		if err := json.Unmarshal(spec.StripJSONC([]byte(annotation)), &meta); err != nil {
+			return nil, fmt.Errorf("parse dev.containers.metadata: %w", err)
+		}
+		return meta.aliases(), nil
+	}
+	dir, err := os.MkdirTemp("", "devcontainer-feature-metadata-")
+	if err != nil {
+		return nil, err
+	}
+	defer os.RemoveAll(dir)
+	for _, layer := range manifest.Layers {
+		if err := r.fetchAndExtractLayer(ref, layer, dir); err != nil {
+			return nil, err
+		}
+	}
+	meta, err := readMetadata(dir)
+	if err != nil {
+		return nil, err
+	}
+	return meta.aliases(), nil
 }
 
 func readMetadata(dir string) (Metadata, error) {
