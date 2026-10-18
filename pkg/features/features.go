@@ -88,6 +88,12 @@ type Resolved struct {
 	// SafeID is a path-safe identifier used to namespace the feature
 	// inside the staging directory.
 	SafeID string
+	// Digest is the manifest digest of an OCI feature. Empty for local
+	// features.
+	Digest string
+
+	// localPath is the absolute source path of a local feature.
+	localPath string
 }
 
 // Resolver pulls and stages features.
@@ -125,7 +131,7 @@ func (r *Resolver) Resolve(specFeatures spec.OrderedMap, override []string, stag
 		return nil, err
 	}
 
-	out := make([]Resolved, 0, specFeatures.Len())
+	nodes := make([]*node, 0, specFeatures.Len())
 	for _, source := range specFeatures.Keys {
 		raw := specFeatures.Values[source]
 		var opts map[string]any
@@ -143,10 +149,14 @@ func (r *Resolver) Resolve(specFeatures spec.OrderedMap, override []string, stag
 		if err != nil {
 			return nil, fmt.Errorf("feature %s: %w", source, err)
 		}
-		out = append(out, *resolved)
+		nodes = append(nodes, &node{res: *resolved, options: canonicalOptions(raw)})
 	}
 
-	return order(out, override), nil
+	out, err := installOrder(nodes, override, localBaseDir)
+	if err != nil {
+		return nil, fmt.Errorf("feature install order: %w", err)
+	}
+	return out, nil
 }
 
 func (r *Resolver) resolveOne(source string, opts map[string]any, stagingDir, localBaseDir string) (*Resolved, error) {
@@ -166,7 +176,7 @@ func (r *Resolver) resolveOne(source string, opts map[string]any, stagingDir, lo
 			return nil, err
 		}
 		return &Resolved{
-			Source: source, Options: opts, Metadata: meta, Dir: dir, SafeID: safeID,
+			Source: source, Options: opts, Metadata: meta, Dir: dir, SafeID: safeID, localPath: abs,
 		}, nil
 	}
 
@@ -175,7 +185,7 @@ func (r *Resolver) resolveOne(source string, opts map[string]any, stagingDir, lo
 		return nil, fmt.Errorf("not a local path and not a valid OCI ref: %w", err)
 	}
 	r.logf("pulling feature %s", ref)
-	manifest, _, err := r.OCI.FetchManifest(ref)
+	manifest, rawManifest, err := r.OCI.FetchManifest(ref)
 	if err != nil {
 		return nil, err
 	}
@@ -194,8 +204,10 @@ func (r *Resolver) resolveOne(source string, opts map[string]any, stagingDir, lo
 	if err != nil {
 		return nil, err
 	}
+	sum := sha256.Sum256(rawManifest)
 	return &Resolved{
 		Source: source, Reference: &ref, Options: opts, Metadata: meta, Dir: dir, SafeID: safeID,
+		Digest: "sha256:" + hex.EncodeToString(sum[:]),
 	}, nil
 }
 

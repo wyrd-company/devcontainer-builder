@@ -1,111 +1,296 @@
 package features
 
 import (
+	"encoding/json"
+	"fmt"
+	"path"
+	"sort"
 	"strings"
+
+	"github.com/wyrd-company/devcontainer-builder/pkg/oci"
 )
 
-// order returns the features in the order they should be installed,
-// honoring `installsAfter` (a soft dependency hint from the feature's own
-// metadata) and `overrideFeatureInstallOrder` (an explicit user-supplied
-// override from devcontainer.json).
+// The install order mirrors upstream's round-based algorithm
+// (reference/cli/src/spec-configuration/containerFeaturesOrder.ts):
 //
-// The override list takes precedence: any feature whose source matches an
-// override entry (by full source or by feature ID) is installed in the
-// override order, before the remaining features. The remaining features
-// are sorted via a deterministic stable topological sort that respects
-// installsAfter.
-func order(in []Resolved, override []string) []Resolved {
-	if len(in) <= 1 {
-		return in
-	}
+//   - Each round installs every feature whose `installsAfter` soft
+//     dependencies are already installed. Soft dependencies that name a
+//     feature outside the install set are dropped.
+//   - `overrideFeatureInstallOrder` assigns a round priority (first entry
+//     highest); within a round only the highest-priority candidates are
+//     installed, so the override never breaks a dependency.
+//   - Candidates within a round are sorted by registry/namespace, id, tag,
+//     options and digest (OCI) or by path and options (local).
+//   - A round with no candidates is a cycle and fails resolution.
+//
+// Soft dependencies and override entries match a feature by its
+// registry/repository (or its resolved local path), ignoring tag and
+// digest, and honoring the feature's `legacyIds`.
 
-	if len(override) > 0 {
-		ordered, leftover := applyOverride(in, override)
-		topo := topoSort(leftover)
-		return append(ordered, topo...)
-	}
-	return topoSort(in)
+// node is one feature in the install graph.
+type node struct {
+	res Resolved
+	// options is the canonical JSON of the options value as written in
+	// devcontainer.json; equal features must have equal options.
+	options string
+	// installsAfter holds the soft dependencies that name a feature in
+	// the install set.
+	installsAfter []sourceRef
+	// priority is the round priority from overrideFeatureInstallOrder.
+	priority int
 }
 
-func applyOverride(in []Resolved, override []string) (ordered []Resolved, rest []Resolved) {
-	matched := make(map[int]bool)
-	for _, want := range override {
-		for i, f := range in {
-			if matched[i] {
-				continue
-			}
-			if matches(f, want) {
-				ordered = append(ordered, f)
-				matched[i] = true
-				break
-			}
-		}
-	}
-	for i, f := range in {
-		if !matched[i] {
-			rest = append(rest, f)
-		}
-	}
-	return ordered, rest
+// sourceRef identifies a feature location independent of its version.
+type sourceRef struct {
+	local bool
+	// resource is registry/repository for OCI features and the absolute
+	// path for local features.
+	resource string
 }
 
-func matches(r Resolved, want string) bool {
-	if r.Source == want {
+// parseSourceRef converts a user-supplied feature id (as found in
+// installsAfter or overrideFeatureInstallOrder) to a sourceRef. Ids that
+// are neither local paths nor registry references (legacy bare ids) match
+// nothing, so ok is false.
+func parseSourceRef(id, localBaseDir string) (sourceRef, bool) {
+	if isLocalSource(id) {
+		p, err := localSourcePath(id, localBaseDir)
+		if err != nil {
+			return sourceRef{}, false
+		}
+		return sourceRef{local: true, resource: p}, true
+	}
+	if !strings.Contains(id, "/") {
+		return sourceRef{}, false
+	}
+	ref, err := oci.ParseReference(id)
+	if err != nil {
+		return sourceRef{}, false
+	}
+	return sourceRef{resource: ref.Registry + "/" + ref.Repository}, true
+}
+
+func (n *node) ref() sourceRef {
+	if n.res.Reference != nil {
+		return sourceRef{resource: n.res.Reference.Registry + "/" + n.res.Reference.Repository}
+	}
+	return sourceRef{local: true, resource: n.res.localPath}
+}
+
+// aliases returns the feature's current id followed by its legacy ids.
+func (n *node) aliases() []string {
+	out := []string{}
+	if n.res.Metadata.ID != "" {
+		out = append(out, n.res.Metadata.ID)
+	}
+	return append(out, n.res.Metadata.LegacyIDs...)
+}
+
+// satisfies reports whether n is the feature a soft dependency names.
+func (n *node) satisfies(want sourceRef) bool {
+	have := n.ref()
+	if have.local != want.local {
+		return false
+	}
+	if have.resource == want.resource {
 		return true
 	}
-	if r.Metadata.ID == want {
-		return true
+	if have.local {
+		return false
 	}
-	// Allow matching by source without tag (e.g., "ghcr.io/.../node").
-	if i := strings.LastIndex(r.Source, ":"); i > 0 {
-		if r.Source[:i] == want {
+	prefix := path.Dir(have.resource)
+	for _, alias := range n.aliases() {
+		if prefix+"/"+alias == want.resource {
 			return true
 		}
 	}
 	return false
 }
 
-// topoSort returns features in installation order respecting installsAfter
-// while preserving the input order for unrelated features.
-func topoSort(in []Resolved) []Resolved {
-	n := len(in)
-	indexBy := make(map[string]int, n*2)
-	for i, f := range in {
-		indexBy[f.Source] = i
-		indexBy[f.Metadata.ID] = i
-	}
+// equals reports whether a and b are the same feature with the same
+// options, so that one install satisfies both.
+func (a *node) equals(b *node) bool {
+	return compareNodes(a, b) == 0
+}
 
-	deps := make([][]int, n)
-	for i, f := range in {
-		for _, after := range f.Metadata.InstallsAfter {
-			if j, ok := indexBy[after]; ok {
-				deps[i] = append(deps[i], j)
+// compareNodes orders two features within a round. It returns 0 when the
+// features are equal.
+func compareNodes(a, b *node) int {
+	ar, br := a.ref(), b.ref()
+	if ar.local != br.local {
+		return strings.Compare(a.res.Source, b.res.Source)
+	}
+	if ar.local {
+		if c := strings.Compare(ar.resource, br.resource); c != 0 {
+			return c
+		}
+		return strings.Compare(a.options, b.options)
+	}
+	ad, bd := a.res.Digest, b.res.Digest
+	if ad != "" && ad == bd && a.options == b.options {
+		return 0
+	}
+	if c := compareOCIResource(a, b); c != 0 {
+		return c
+	}
+	at, bt := a.res.Reference.Tag, b.res.Reference.Tag
+	if at != "" && bt != "" && at != bt {
+		return strings.Compare(at, bt)
+	}
+	if c := strings.Compare(a.options, b.options); c != 0 {
+		return c
+	}
+	return strings.Compare(ad, bd)
+}
+
+func compareOCIResource(a, b *node) int {
+	ar, br := a.ref().resource, b.ref().resource
+	if c := strings.Compare(path.Dir(ar), path.Dir(br)); c != 0 {
+		return c
+	}
+	aIDs, bIDs := a.aliases(), b.aliases()
+	if len(aIDs) == 0 {
+		aIDs = []string{path.Base(ar)}
+	}
+	if len(bIDs) == 0 {
+		bIDs = []string{path.Base(br)}
+	}
+	for _, x := range aIDs {
+		for _, y := range bIDs {
+			if x == y {
+				return 0
 			}
 		}
 	}
+	return strings.Compare(path.Base(ar), path.Base(br))
+}
 
-	visited := make([]int, n) // 0 unvisited, 1 visiting, 2 done
-	out := make([]Resolved, 0, n)
-	var visit func(int)
-	visit = func(i int) {
-		if visited[i] == 2 {
-			return
+// canonicalOptions returns a stable JSON encoding of an options value.
+func canonicalOptions(raw json.RawMessage) string {
+	if len(raw) == 0 {
+		return "null"
+	}
+	var v any
+	if err := json.Unmarshal(raw, &v); err != nil {
+		return string(raw)
+	}
+	out, err := json.Marshal(v) // map keys are sorted
+	if err != nil {
+		return string(raw)
+	}
+	return string(out)
+}
+
+// linkSoftDependencies records each node's installsAfter entries that
+// name a feature in the install set.
+func linkSoftDependencies(nodes []*node, localBaseDir string) {
+	for _, n := range nodes {
+		n.installsAfter = nil
+		for _, id := range n.res.Metadata.InstallsAfter {
+			ref, ok := parseSourceRef(id, localBaseDir)
+			if !ok {
+				continue
+			}
+			for _, other := range nodes {
+				if other != n && other.satisfies(ref) {
+					n.installsAfter = append(n.installsAfter, ref)
+					break
+				}
+			}
 		}
-		if visited[i] == 1 {
-			// Cycle: bail out without re-recursing; we'll still emit
-			// later, but order is not guaranteed for cyclic groups.
-			return
+	}
+}
+
+// applyOverride sets the round priority from overrideFeatureInstallOrder:
+// the first entry gets the highest priority.
+func applyOverride(nodes []*node, override []string, localBaseDir string) error {
+	for i, id := range override {
+		ref, ok := parseSourceRef(id, localBaseDir)
+		if !ok {
+			return fmt.Errorf("feature %q in overrideFeatureInstallOrder could not be processed", id)
 		}
-		visited[i] = 1
-		for _, d := range deps[i] {
-			visit(d)
+		priority := len(override) - i
+		for _, n := range nodes {
+			if n.satisfies(ref) && priority > n.priority {
+				n.priority = priority
+			}
 		}
-		visited[i] = 2
-		out = append(out, in[i])
+	}
+	return nil
+}
+
+// installOrder returns the features in install order.
+func installOrder(nodes []*node, override []string, localBaseDir string) ([]Resolved, error) {
+	linkSoftDependencies(nodes, localBaseDir)
+	if err := applyOverride(nodes, override, localBaseDir); err != nil {
+		return nil, err
 	}
 
-	for i := range in {
-		visit(i)
+	remaining := append([]*node(nil), nodes...)
+	installed := make([]*node, 0, len(nodes))
+	ready := func(n *node) bool {
+		for _, dep := range n.installsAfter {
+			found := false
+			for _, done := range installed {
+				if done.satisfies(dep) {
+					found = true
+					break
+				}
+			}
+			if !found {
+				return false
+			}
+		}
+		return true
 	}
-	return out
+
+	for len(remaining) > 0 {
+		var round []*node
+		maxPriority := 0
+		for _, n := range remaining {
+			if ready(n) {
+				round = append(round, n)
+				if n.priority > maxPriority {
+					maxPriority = n.priority
+				}
+			}
+		}
+		if len(round) == 0 {
+			ids := make([]string, 0, len(remaining))
+			for _, n := range remaining {
+				ids = append(ids, n.res.Source)
+			}
+			return nil, fmt.Errorf("circular feature dependency among: %s", strings.Join(ids, ", "))
+		}
+		filtered := round[:0]
+		for _, n := range round {
+			if n.priority == maxPriority {
+				filtered = append(filtered, n)
+			}
+		}
+		round = filtered
+		sort.SliceStable(round, func(i, j int) bool { return compareNodes(round[i], round[j]) < 0 })
+
+		next := remaining[:0]
+		for _, n := range remaining {
+			inRound := false
+			for _, r := range round {
+				if r == n {
+					inRound = true
+					break
+				}
+			}
+			if !inRound {
+				next = append(next, n)
+			}
+		}
+		remaining = next
+		installed = append(installed, round...)
+	}
+
+	out := make([]Resolved, len(installed))
+	for i, n := range installed {
+		out[i] = n.res
+	}
+	return out, nil
 }
