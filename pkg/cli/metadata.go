@@ -99,9 +99,6 @@ func metadataBaseSpec(ctx context.Context, dc *spec.DevContainer, workspace stri
 		}
 		out.Image = ""
 		out.Build = &spec.Build{Context: service.Build.Context, Dockerfile: service.Build.Dockerfile, Target: service.Build.Target, Args: args}
-		if out.Build.Dockerfile == "" {
-			out.Build.Dockerfile = "Dockerfile"
-		}
 	}
 	return &out, nil
 }

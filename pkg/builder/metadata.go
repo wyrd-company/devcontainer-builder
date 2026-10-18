@@ -69,9 +69,6 @@ func (b *Builder) BaseMetadata(ctx context.Context, dc *spec.DevContainer, opts 
 		if stateErr != nil {
 			return nil, stateErr
 		}
-		if st.root == nil {
-			return nil, nil
-		}
 		cfg, err = st.root.config()
 	} else if dc.Image != "" {
 		cfg, err = imageConfig(dc.Image)
