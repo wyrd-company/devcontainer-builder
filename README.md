@@ -570,6 +570,7 @@ res, err := host.Up(ctx, dockercompose.UpRequest{
     SpecPath:       dc.Path,
     LocalWorkspace: workspace,
     PrimaryImage:   build.Image,
+    ImageBuilt:     build.BuildResult != nil,
 })
 // res.PrimaryContainerID is where lifecycle commands ran; res.ContainerIDs
 // maps every started service to its container ID.
