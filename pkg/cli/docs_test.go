@@ -213,3 +213,13 @@ func hasFlag(cmd *cobra.Command, name string) bool {
 	}
 	return false
 }
+
+// TestExecInvalidInvocationContract holds the documented exec contract for an
+// invalid invocation: one JSON error result, empty stderr, and exit 2.
+func TestExecInvalidInvocationContract(t *testing.T) {
+	for _, args := range [][]string{{"exec"}, {"exec", "--not-a-flag", "--", "ls"}} {
+		if _, stderr := invoke(t, 2, args...); stderr != "" {
+			t.Errorf("%v: stderr = %q, want empty at the default log level", args, stderr)
+		}
+	}
+}
