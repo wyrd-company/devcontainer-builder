@@ -103,6 +103,7 @@ func TestDockerComposeIntegration(t *testing.T) {
 		LocalWorkspace:     workspace,
 		ContainerWorkspace: "/workspace",
 		PrimaryImage:       primary.Image,
+		ImageBuilt:         primary.BuildResult != nil,
 		LocalEnv: map[string]string{
 			"DCB_COMPOSE_VALUE": "from-local-env",
 		},

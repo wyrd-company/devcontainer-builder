@@ -1,3 +1,6 @@
+// relationships:
+//
+//	references: [metadata, up, spec]
 package dockercompose
 
 import (
@@ -195,8 +198,9 @@ func translateVolumes(vols []types.ServiceVolumeConfig, volumeNames map[string]s
 	out := make([]mount.Mount, 0, len(vols))
 	for _, v := range vols {
 		m := mount.Mount{
-			Target:   v.Target,
-			ReadOnly: v.ReadOnly,
+			Target:      v.Target,
+			ReadOnly:    v.ReadOnly,
+			Consistency: mount.Consistency(v.Consistency),
 		}
 		switch v.Type {
 		case types.VolumeTypeBind, "":

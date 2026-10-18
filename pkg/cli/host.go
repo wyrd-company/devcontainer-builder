@@ -92,8 +92,7 @@ func (a *application) upCommand() *cobra.Command {
 		}
 		var id string
 		if dc.Mode() == spec.ModeCompose {
-			dc, resolved = skip.apply(dc, resolved)
-			res, err := a.composeHost(cli).Up(cmd.Context(), dockercompose.UpRequest{Spec: dc, SpecPath: dc.Path, LocalWorkspace: workspace, PrimaryImage: image, Features: resolved, LocalEnv: envMap()})
+			res, err := a.composeHost(cli).Up(cmd.Context(), composeUpRequest(dc, workspace, image, built, skip))
 			if err != nil {
 				return err
 			}
@@ -109,6 +108,16 @@ func (a *application) upCommand() *cobra.Command {
 		return a.containerResult(cmd.Context(), cli, dc, workspace, id)
 	}
 	return cmd
+}
+
+// composeUpRequest distinguishes a complete derived image from an unchanged or
+// Compose-built base so the host collects current contributions exactly once.
+func composeUpRequest(dc *spec.DevContainer, workspace, image string, built *builder.Result, skip skipOptions) dockercompose.UpRequest {
+	req := dockercompose.UpRequest{Spec: dc, SpecPath: dc.Path, LocalWorkspace: workspace, PrimaryImage: image, ImageBuilt: built != nil, SkipLifecycle: skip.postCreate, SkipPostAttach: skip.postAttach, LocalEnv: envMap()}
+	if built != nil {
+		req.Features = built.Features
+	}
+	return req
 }
 
 func needsBuild(dc *spec.DevContainer, bo builder.Options) bool {

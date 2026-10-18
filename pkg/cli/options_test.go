@@ -23,34 +23,6 @@ import (
 	"github.com/wyrd-company/devcontainer-builder/pkg/substitute"
 )
 
-func TestSkipLifecycle(t *testing.T) {
-	dc := &spec.DevContainer{OnCreate: spec.Command{Shell: "create"}, UpdateContent: spec.Command{Shell: "update"}, PostCreate: spec.Command{Shell: "post-create"}, PostStart: spec.Command{Shell: "start"}, PostAttach: spec.Command{Shell: "attach"}}
-	resolved := []features.Resolved{{Metadata: features.Metadata{OnCreateCommand: spec.Command{Shell: "feature-create"}, UpdateContent: spec.Command{Shell: "feature-update"}, PostCreateCommand: spec.Command{Shell: "feature-post-create"}, PostStartCommand: spec.Command{Shell: "feature-start"}, PostAttachCommand: spec.Command{Shell: "feature-attach"}}}}
-	for _, tc := range []struct {
-		name    string
-		options skipOptions
-		want    int
-	}{
-		{"none", skipOptions{}, 10}, {"all", skipOptions{postCreate: true}, 0}, {"attach", skipOptions{postAttach: true}, 8},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			filtered, feats := tc.options.apply(dc, resolved)
-			plan := lifecycle.Plan(filtered, feats)
-			if len(plan) != tc.want {
-				t.Fatalf("plan has %d phases, want %d: %v", len(plan), tc.want, plan)
-			}
-			for _, phase := range plan {
-				if tc.options.postAttach && phase.Hook == lifecycle.HookPostAttach {
-					t.Fatal("postAttach was not skipped")
-				}
-			}
-			if len(lifecycle.Plan(dc, resolved)) != 10 {
-				t.Fatal("filter mutated caller configuration or metadata")
-			}
-		})
-	}
-}
-
 func TestBuildOptions(t *testing.T) {
 	t.Setenv("DOCKER_HOST", "unix://"+filepath.Join(t.TempDir(), "missing.sock"))
 	cfg := filepath.Join(t.TempDir(), "devcontainer.json")
@@ -237,5 +209,31 @@ func TestLifecycleResultShape(t *testing.T) {
 	encoded, err = json.Marshal(phaseResults(nil))
 	if err != nil || string(encoded) != "[]" {
 		t.Fatalf("empty phases=%s (%v)", encoded, err)
+	}
+}
+
+func TestComposeUpRequestMetadataMapping(t *testing.T) {
+	t.Setenv("SAMPLE_VALUE", "local")
+	dc := &spec.DevContainer{Path: "/workspace/devcontainer.json", Service: "app", PostCreate: spec.Command{Shell: "create"}, PostAttach: spec.Command{Shell: "attach"}}
+	built := &builder.Result{Features: []features.Resolved{{Source: "./sample", Metadata: features.Metadata{PostCreateCommand: spec.Command{Shell: "feature"}}}}}
+	for _, tc := range []struct {
+		name  string
+		built *builder.Result
+		skip  skipOptions
+	}{
+		{"prebuilt", nil, skipOptions{}}, {"derived", built, skipOptions{}}, {"skip-all", built, skipOptions{postCreate: true}}, {"skip-attach", built, skipOptions{postAttach: true}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			req := composeUpRequest(dc, "/workspace", "sample:dev", tc.built, tc.skip)
+			if req.Spec != dc || req.SpecPath != dc.Path || req.LocalWorkspace != "/workspace" || req.PrimaryImage != "sample:dev" || req.ImageBuilt != (tc.built != nil) || req.SkipLifecycle != tc.skip.postCreate || req.SkipPostAttach != tc.skip.postAttach || req.LocalEnv["SAMPLE_VALUE"] != "local" {
+				t.Fatalf("request=%+v", req)
+			}
+			if tc.built != nil && (len(req.Features) != 1 || req.Features[0].Source != "./sample" || req.Features[0].Metadata.PostCreateCommand.Shell != "feature") {
+				t.Fatalf("features=%+v", req.Features)
+			}
+			if dc.PostCreate.Shell != "create" || dc.PostAttach.Shell != "attach" {
+				t.Fatal("skip removed raw config hooks")
+			}
+		})
 	}
 }

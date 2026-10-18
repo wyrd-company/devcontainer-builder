@@ -1,3 +1,6 @@
+// relationships:
+//
+//	references: [metadata, override, lifecycle]
 package dockercompose
 
 import (
@@ -12,14 +15,14 @@ import (
 	"github.com/wyrd-company/devcontainer-builder/pkg/features"
 	"github.com/wyrd-company/devcontainer-builder/pkg/host/runner"
 	"github.com/wyrd-company/devcontainer-builder/pkg/lifecycle"
+	"github.com/wyrd-company/devcontainer-builder/pkg/metadata"
 	"github.com/wyrd-company/devcontainer-builder/pkg/spec"
 	"github.com/wyrd-company/devcontainer-builder/pkg/substitute"
 )
 
 // UpRequest is everything Up needs. The caller resolves features
-// (typically via pkg/features) and supplies a derived image — or, if
-// they want the package to build it, leaves PrimaryImage empty and
-// supplies an ImageBuilder.
+// (typically via pkg/features) and optionally supplies a derived image from
+// BuildPrimaryImage. Otherwise the primary Compose service selects the image.
 type UpRequest struct {
 	// Spec is the parsed devcontainer.json (must be in compose mode).
 	Spec *spec.DevContainer
@@ -37,6 +40,14 @@ type UpRequest struct {
 	// in the override layer. Used to point compose at a feature-built
 	// derived image.
 	PrimaryImage string
+	// ImageBuilt means PrimaryImage contains the complete current config and
+	// feature metadata produced by BuildPrimaryImage.BuildResult, not only a
+	// Compose service build. Such contributions must not be collected twice.
+	ImageBuilt bool
+	// SkipLifecycle suppresses all lifecycle commands for this invocation.
+	SkipLifecycle bool
+	// SkipPostAttach suppresses postAttachCommand for this invocation.
+	SkipPostAttach bool
 	// Features as resolved by pkg/features. Their containerEnv and
 	// lifecycle commands are merged into the primary service.
 	Features []features.Resolved
@@ -113,7 +124,7 @@ func (h *Host) Up(ctx context.Context, req UpRequest) (*UpResult, error) {
 	}
 	dc := substituteSpec(req.Spec, subCtx)
 
-	primary := primaryOverride(req, dc, containerWorkspace)
+	primary := OverrideInputs{Spec: dc, LocalWorkspace: req.LocalWorkspace, ContainerWorkspace: containerWorkspace, PrimaryImage: req.PrimaryImage}
 	override, err := OverrideYAML(primary)
 	if err != nil {
 		return nil, errorf("override yaml: %w", err)
@@ -139,8 +150,53 @@ func (h *Host) Up(ctx context.Context, req UpRequest) (*UpResult, error) {
 	if err != nil {
 		return nil, errorf("apply profiles: %w", err)
 	}
-	if err := h.wrapPrimaryCommand(ctx, proj, primary); err != nil {
-		return nil, err
+	// With NoRecreate an existing primary owns its captured runtime settings.
+	// Avoid inspecting its replacement image or allocating current metadata mounts.
+	existingPrimary := ""
+	if h.opts.NoRecreate {
+		existingPrimary, err = h.findExisting(ctx, proj.Name, req.Spec.Service)
+		if err != nil {
+			return nil, err
+		}
+	}
+	var entries []metadata.Entry
+	if existingPrimary == "" {
+		// Read image metadata before deriving the runtime service. Keep the raw list
+		// separate so container labels retain unresolved substitutions and all hooks.
+		svc := proj.Services[req.Spec.Service]
+		img, err := h.client.ImageInspect(ctx, svc.Image)
+		if err != nil {
+			return nil, errorf("inspect primary image metadata: %w", err)
+		}
+		var imageLabels map[string]string
+		if img.Config != nil {
+			imageLabels = img.Config.Labels
+		}
+		entries = imageMetadataEntries(req, imageLabels, h.logf)
+		merged, err := runtimeMetadata(req.Spec, entries, subCtx)
+		if err != nil {
+			return nil, err
+		}
+		dc = merged.DevContainer
+		applyPrimaryMetadata(proj, dc, req, subCtx)
+		primary.Spec, primary.Entrypoints = dc, merged.Entrypoints
+		primary.OverrideCommand = dc.OverrideCommand == nil || *dc.OverrideCommand
+		if primary.OverrideCommand {
+			svc = proj.Services[dc.Service]
+			svc.Entrypoint = types.ShellCommand{"/bin/sh", "-c"}
+			svc.Command = types.ShellCommand{keepaliveScript(primary.Entrypoints), "-"}
+			svc.StdinOpen, svc.Tty = true, true
+			proj.Services[dc.Service] = svc
+		}
+		if err := h.wrapPrimaryCommand(ctx, proj, primary); err != nil {
+			return nil, err
+		}
+	}
+
+	if existingPrimary == "" {
+		if err := setPrimaryMetadata(proj, req.Spec.Service, entries); err != nil {
+			return nil, err
+		}
 	}
 
 	materializer := newObjectMaterializer(proj.Name, req.LocalEnv)
@@ -194,6 +250,12 @@ func (h *Host) Up(ctx context.Context, req UpRequest) (*UpResult, error) {
 		}
 		hash := serviceConfigHash(*svc)
 		labels := containerLabels(proj.Name, req.LocalWorkspace, req.SpecPath, name, hash, dependsOnList(*svc), isPrimary)
+		for k, v := range svc.Labels {
+			if _, managed := labels[k]; !managed {
+				labels[k] = v
+			}
+		}
+
 		id, created, started, recreated, err := h.bringUp(ctx, proj, *svc, labels, hash, netNames, volNames, materializer)
 		if err != nil {
 			return fmt.Errorf("service %q: %w", name, err)
@@ -224,7 +286,7 @@ func (h *Host) Up(ctx context.Context, req UpRequest) (*UpResult, error) {
 	sort.Strings(res.StartedThisCall)
 	sort.Strings(res.RecreatedThisCall)
 
-	if err := h.runLifecycle(ctx, dc, req.Features, res.PrimaryContainerID, containerWorkspace, res); err != nil {
+	if err := h.runLifecycle(ctx, req, subCtx, res.PrimaryContainerID, containerWorkspace, res); err != nil {
 		return res, err
 	}
 	return res, nil
@@ -389,55 +451,34 @@ func selectServices(proj *types.Project, runServices []string) ([]string, error)
 	return runServices, nil
 }
 
-// runLifecycle drives the lifecycle plan against the primary
-// container. Same shape as the docker host: detect home, detect
-// container env (for ${containerEnv:VAR}), then runner.Run.
-// primaryOverride returns the override for the primary service of the
-// substituted spec dc.
-func primaryOverride(req UpRequest, dc *spec.DevContainer, containerWorkspace string) OverrideInputs {
-	overrideEnv := stringMap(dc.UpdateRemoteEnv)
-	for _, f := range req.Features {
-		for k, v := range f.Metadata.ContainerEnv {
-			if overrideEnv == nil {
-				overrideEnv = map[string]string{}
-			}
-			overrideEnv[k] = v
-		}
-	}
-	overrideCommand := true
-	if req.Spec.OverrideCommand != nil {
-		overrideCommand = *req.Spec.OverrideCommand
-	}
-	return OverrideInputs{
-		Spec:               dc,
-		LocalWorkspace:     req.LocalWorkspace,
-		ContainerWorkspace: containerWorkspace,
-		PrimaryImage:       req.PrimaryImage,
-		RemoteEnv:          overrideEnv,
-		OverrideCommand:    overrideCommand,
-		Entrypoints:        featureEntrypoints(req.Features),
-	}
-}
-
-// featureEntrypoints returns the features' entrypoint contributions in
-// install order.
-func featureEntrypoints(resolved []features.Resolved) []string {
-	var out []string
-	for _, f := range resolved {
-		if f.Metadata.Entrypoint != "" {
-			out = append(out, f.Metadata.Entrypoint)
-		}
-	}
-	return out
-}
-
 func (h *Host) runLifecycle(
-	ctx context.Context, dc *spec.DevContainer, resolved []features.Resolved,
+	ctx context.Context, req UpRequest, subCtx substitute.Context,
 	primaryID, containerWorkspace string, res *UpResult,
 ) error {
 	inspect, err := h.client.ContainerInspect(ctx, primaryID)
 	if err != nil {
 		return errorf("inspect primary: %w", err)
+	}
+	var labels map[string]string
+	if inspect.Config != nil {
+		labels = inspect.Config.Labels
+	}
+	entries := metadata.Read(labels, h.logf)
+	if len(entries) > 0 {
+		entries = metadata.Update(entries, req.Spec)
+	} else {
+		entries = metadata.Collect(nil, req.Features, req.Spec)
+	}
+	merged, err := runtimeMetadata(req.Spec, entries, subCtx)
+	if err != nil {
+		return err
+	}
+	dc := merged.DevContainer
+	if dc.RemoteUser == "" {
+		dc.RemoteUser = dc.ContainerUser
+		if dc.RemoteUser == "" && inspect.Config != nil {
+			dc.RemoteUser = inspect.Config.User
+		}
 	}
 	execer := h.Execer(primaryID)
 	homeDir, err := runner.DetectHome(ctx, execer, dc.RemoteUser)
@@ -453,7 +494,7 @@ func (h *Host) runLifecycle(
 	dc = substituteContainerEnv(dc, containerEnv)
 	mergedEnv := stringMap(dc.UpdateRemoteEnv)
 
-	plan := lifecycle.Plan(dc, resolved)
+	plan := runtimePlan(req, entries, subCtx, containerEnv)
 	rt := runner.Runtime{
 		User:           dc.RemoteUser,
 		Workdir:        containerWorkspace,

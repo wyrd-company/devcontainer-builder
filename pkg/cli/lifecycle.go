@@ -8,7 +8,6 @@ package cli
 
 import (
 	"github.com/spf13/cobra"
-	"github.com/wyrd-company/devcontainer-builder/pkg/features"
 	"github.com/wyrd-company/devcontainer-builder/pkg/host/runner"
 	"github.com/wyrd-company/devcontainer-builder/pkg/lifecycle"
 	"github.com/wyrd-company/devcontainer-builder/pkg/metadata"
@@ -21,25 +20,6 @@ type skipOptions struct{ postCreate, postAttach bool }
 func (o *skipOptions) flags(cmd *cobra.Command) {
 	cmd.Flags().BoolVar(&o.postCreate, "skip-post-create", false, "Skip all lifecycle commands")
 	cmd.Flags().BoolVar(&o.postAttach, "skip-post-attach", false, "Skip postAttachCommand")
-}
-
-func (o skipOptions) apply(dc *spec.DevContainer, resolved []features.Resolved) (*spec.DevContainer, []features.Resolved) {
-	copy := *dc
-	featuresCopy := append([]features.Resolved(nil), resolved...)
-	if o.postCreate {
-		copy.OnCreate, copy.UpdateContent, copy.PostCreate, copy.PostStart = spec.Command{}, spec.Command{}, spec.Command{}, spec.Command{}
-		for i := range featuresCopy {
-			m := &featuresCopy[i].Metadata
-			m.OnCreateCommand, m.UpdateContent, m.PostCreateCommand, m.PostStartCommand = spec.Command{}, spec.Command{}, spec.Command{}, spec.Command{}
-		}
-	}
-	if o.postCreate || o.postAttach {
-		copy.PostAttach = spec.Command{}
-		for i := range featuresCopy {
-			featuresCopy[i].Metadata.PostAttachCommand = spec.Command{}
-		}
-	}
-	return &copy, featuresCopy
 }
 
 func (a *application) lifecycleCommand(name string) *cobra.Command {

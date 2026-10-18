@@ -106,7 +106,7 @@ func metadataBaseSpec(ctx context.Context, dc *spec.DevContainer, workspace stri
 func (a *application) containerMetadata(dc *spec.DevContainer, labels map[string]string) ([]metadata.Entry, error) {
 	entries := metadata.Read(labels, a.logf)
 	if len(entries) > 0 {
-		return containerConfigurationEntries(dc, entries, labels), nil
+		return metadata.Update(entries, dc), nil
 	}
 	resolved, cleanup, err := a.resolveFeatures(dc)
 	if err != nil {
@@ -123,14 +123,5 @@ func effectiveContainerConfig(dc *spec.DevContainer, labels map[string]string) *
 	if len(entries) == 0 {
 		return dc
 	}
-	return metadata.Merge(dc, containerConfigurationEntries(dc, entries, labels)).DevContainer
-}
-
-// Go Compose primaries retain the image label unchanged; their current config
-// remains a separate contribution. Other labelled containers carry full lists.
-func containerConfigurationEntries(dc *spec.DevContainer, entries []metadata.Entry, labels map[string]string) []metadata.Entry {
-	if dc.Mode() == spec.ModeCompose && labels[dockercompose.LabelPrimary] == "true" {
-		return metadata.Collect(entries, nil, dc)
-	}
-	return metadata.Update(entries, dc)
+	return metadata.Merge(dc, metadata.Update(entries, dc)).DevContainer
 }

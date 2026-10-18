@@ -1,3 +1,6 @@
+// relationships:
+//
+//	references: [metadata, up, spec]
 package dockercompose
 
 import (
@@ -8,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/compose-spec/compose-go/v2/types"
+	"github.com/wyrd-company/devcontainer-builder/pkg/metadata"
 )
 
 // serviceConfigHash returns a stable hex digest of the parts of a
@@ -82,6 +86,7 @@ type volumeSnapshot struct {
 	Source      string `json:"source,omitempty"`
 	Target      string `json:"target,omitempty"`
 	ReadOnly    bool   `json:"read_only,omitempty"`
+	Consistency string `json:"consistency,omitempty"`
 	Propagation string `json:"propagation,omitempty"`
 	Subpath     string `json:"subpath,omitempty"`
 }
@@ -145,10 +150,11 @@ func makeServiceHashSnapshot(svc types.ServiceConfig) serviceHashSnapshot {
 		out.Volumes = make([]volumeSnapshot, 0, len(svc.Volumes))
 		for _, v := range svc.Volumes {
 			entry := volumeSnapshot{
-				Type:     v.Type,
-				Source:   v.Source,
-				Target:   v.Target,
-				ReadOnly: v.ReadOnly,
+				Type:        v.Type,
+				Source:      v.Source,
+				Target:      v.Target,
+				ReadOnly:    v.ReadOnly,
+				Consistency: v.Consistency,
 			}
 			if v.Bind != nil {
 				entry.Propagation = v.Bind.Propagation
@@ -225,9 +231,10 @@ func envToStringMap(env types.MappingWithEquals) map[string]string {
 	return out
 }
 
-// hashableLabels returns a copy of labels with any
+// hashableLabels retains captured metadata so hook changes trigger recreation.
+// It returns a copy of labels with other
 // `com.docker.compose.*` and `devcontainer.*` keys stripped — those
-// are stamped by the host on top of whatever the user supplied, so
+// identify resources and are stamped by the host, so
 // hashing them would mean re-hashing our own bookkeeping (and the
 // hash itself) and would change every time the project name moves.
 func hashableLabels(in types.Labels) map[string]string {
@@ -239,7 +246,7 @@ func hashableLabels(in types.Labels) map[string]string {
 		if strings.HasPrefix(k, "com.docker.compose.") {
 			continue
 		}
-		if strings.HasPrefix(k, "devcontainer.") {
+		if strings.HasPrefix(k, "devcontainer.") && k != metadata.Label {
 			continue
 		}
 		out[k] = v

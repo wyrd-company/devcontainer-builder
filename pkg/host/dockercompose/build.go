@@ -1,3 +1,6 @@
+// relationships:
+//
+//	references: [builder, metadata, spec]
 package dockercompose
 
 import (
@@ -8,6 +11,7 @@ import (
 	"time"
 
 	"github.com/wyrd-company/devcontainer-builder/pkg/builder"
+	"github.com/wyrd-company/devcontainer-builder/pkg/metadata"
 	"github.com/wyrd-company/devcontainer-builder/pkg/spec"
 )
 
@@ -38,9 +42,11 @@ type BuildPrimaryResult struct {
 	// service. Equal to the primary service's compose `image:` when
 	// no feature, server, or export customization requires a derived image.
 	Image string
-	// Built is true when a derived image was actually built.
+	// Built is true when a Compose service or derived image was built.
 	Built bool
-	// BuildResult is the underlying builder result, if a build ran.
+	// BuildResult is non-nil only for a derived build. Its image label owns
+	// the full current config/features; pass ImageBuilt: BuildResult != nil
+	// to Up. A Compose service build alone does not have that provenance.
 	BuildResult *builder.Result
 }
 
@@ -138,37 +144,13 @@ func BuildPrimaryImage(ctx context.Context, in BuildPrimaryInputs) (*BuildPrimar
 		tag = fmt.Sprintf("devcontainer-builder/compose-primary:%d", time.Now().UnixNano())
 	}
 
-	syntheticSpec := map[string]any{
-		"image":           baseImage,
-		"remoteUser":      in.Spec.RemoteUser,
-		"containerUser":   in.Spec.ContainerUser,
-		"containerEnv":    in.Spec.ContainerEnv,
-		"remoteEnv":       in.Spec.UpdateRemoteEnv,
-		"workspaceFolder": in.Spec.WorkspaceFolder,
-	}
-	if in.Spec.Features.Len() > 0 {
-		featuresOut := map[string]json.RawMessage{}
-		for _, k := range in.Spec.Features.Keys {
-			featuresOut[k] = in.Spec.Features.Values[k]
-		}
-		syntheticSpec["features"] = featuresOut
-	}
-	if len(in.Spec.OverrideFeature) > 0 {
-		syntheticSpec["overrideFeatureInstallOrder"] = in.Spec.OverrideFeature
-	}
-	body, err := json.MarshalIndent(syntheticSpec, "", "  ")
+	synthetic, err := primaryBuildSpec(in.Spec, baseImage)
 	if err != nil {
-		return nil, fmt.Errorf("synthetic spec marshal: %w", err)
+		return nil, err
 	}
-
-	var synthetic spec.DevContainer
-	if err := json.Unmarshal(body, &synthetic); err != nil {
-		return nil, fmt.Errorf("synthetic spec parse: %w", err)
-	}
-	synthetic.Path, synthetic.Raw = in.Spec.Path, body
 
 	opts := in.BuilderOptions
-	opts.Spec, opts.SpecPath = &synthetic, in.Spec.Path
+	opts.Spec, opts.SpecPath = synthetic, in.Spec.Path
 	opts.Workspace = in.Workspace
 	if in.Spec.Path != "" && opts.FeatureBaseDir == "" {
 		opts.FeatureBaseDir = filepath.Dir(in.Spec.Path)
@@ -194,4 +176,42 @@ func BuildPrimaryImage(ctx context.Context, in BuildPrimaryInputs) (*BuildPrimar
 func needsDerivedImage(in BuildPrimaryInputs) bool {
 	o := in.BuilderOptions
 	return in.Spec.Features.Len() > 0 || o.InstallVSCodeServer || len(o.Tags) > 0 || in.Tag != "" || o.Push || o.OutputDir != "" || len(o.Labels) > 0 || len(o.Platforms) > 0 || o.Pull || o.NoCache || len(o.CacheFrom) > 0 || len(o.CacheTo) > 0
+}
+
+// primaryBuildSpec retains all persistable config properties while selecting
+// the Compose service image as the derived build base.
+func primaryBuildSpec(dc *spec.DevContainer, baseImage string) (*spec.DevContainer, error) {
+	// A derived image owns the full current config contribution. Runtime callers
+	// can then use ImageBuilt without losing hooks or duplicating feature entries.
+	configBody, err := json.Marshal(metadata.FromConfig(dc))
+	if err != nil {
+		return nil, fmt.Errorf("synthetic config marshal: %w", err)
+	}
+	syntheticSpec := map[string]any{}
+	if err := json.Unmarshal(configBody, &syntheticSpec); err != nil {
+		return nil, err
+	}
+	syntheticSpec["image"] = baseImage
+	syntheticSpec["workspaceFolder"] = dc.WorkspaceFolder
+	if dc.Features.Len() > 0 {
+		featuresOut := map[string]json.RawMessage{}
+		for _, k := range dc.Features.Keys {
+			featuresOut[k] = dc.Features.Values[k]
+		}
+		syntheticSpec["features"] = featuresOut
+	}
+	if len(dc.OverrideFeature) > 0 {
+		syntheticSpec["overrideFeatureInstallOrder"] = dc.OverrideFeature
+	}
+	body, err := json.MarshalIndent(syntheticSpec, "", "  ")
+	if err != nil {
+		return nil, fmt.Errorf("synthetic spec marshal: %w", err)
+	}
+
+	var synthetic spec.DevContainer
+	if err := json.Unmarshal(body, &synthetic); err != nil {
+		return nil, fmt.Errorf("synthetic spec parse: %w", err)
+	}
+	synthetic.Path, synthetic.Raw = dc.Path, body
+	return &synthetic, nil
 }

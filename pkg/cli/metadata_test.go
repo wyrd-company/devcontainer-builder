@@ -42,12 +42,10 @@ func TestReadMergedConfiguration(t *testing.T) {
 			}
 			t.Setenv("SAMPLE_VALUE", "host-value")
 			entries := []metadata.Entry{{ID: "base", RemoteUser: "inherited", PostCreate: spec.Command{Shell: "echo base"}}}
-			if source == "container" || source == "discovered" {
+			if source == "container" || source == "compose-container" || source == "discovered" {
 				entries = append(entries, metadata.Entry{ID: "./sample-feature", CapAdd: []string{"SYS_PTRACE"}, PostCreate: spec.Command{Shell: "echo feature"}}, metadata.Entry{PostCreate: spec.Command{Shell: "echo config"}})
 			}
-			if source == "compose-container" {
-				entries = append(entries, metadata.Entry{ID: "./sample-feature", CapAdd: []string{"SYS_PTRACE"}, PostCreate: spec.Command{Shell: "echo feature"}})
-			}
+
 			value, err := metadata.Encode(entries)
 			if err != nil {
 				t.Fatal(err)
@@ -181,42 +179,27 @@ func TestMetadataDoesNotChangeDevcontainerID(t *testing.T) {
 	}
 }
 
-func TestComposeImageMetadataRetainsCurrentHooks(t *testing.T) {
-	dc := &spec.DevContainer{DockerComposeFile: spec.StringOrSlice{"compose.yml"}, Service: "app", ContainerUser: "current", ContainerEnv: map[string]any{"CURRENT": "config"}, PostCreate: spec.Command{Shell: "echo config"}, PostAttach: spec.Command{Shell: "echo attach"}}
-	value, err := metadata.Encode([]metadata.Entry{{ID: "./sample", ContainerUser: "base", PostCreate: spec.Command{Shell: "echo feature"}}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	labels := map[string]string{metadata.Label: value, dockercompose.LabelPrimary: "true"}
-	app := &application{}
-	entries, err := app.containerMetadata(dc, labels)
-	if err != nil {
-		t.Fatal(err)
-	}
-	plan := metadata.Plan(entries)
-	if len(plan) != 3 || plan[0].Command.Shell != "echo feature" || plan[1].Command.Shell != "echo config" || plan[2].Command.Shell != "echo attach" {
-		t.Fatalf("current Compose hooks dropped: %+v", plan)
-	}
-	effective := effectiveContainerConfig(dc, labels)
-	if effective.ContainerUser != "current" || effective.ContainerEnv["CURRENT"] != "config" {
-		t.Fatalf("current Compose properties dropped: %+v", effective)
-	}
-}
-
 func TestComposeCapturedContainerMetadataKeepsUpstreamPolicy(t *testing.T) {
-	dc := &spec.DevContainer{DockerComposeFile: spec.StringOrSlice{"compose.yml"}, Service: "app", PostCreate: spec.Command{Shell: "echo current"}}
-	value, err := metadata.Encode([]metadata.Entry{{ID: "./sample", PostCreate: spec.Command{Shell: "echo captured"}}})
+	dc := &spec.DevContainer{DockerComposeFile: spec.StringOrSlice{"compose.yml"}, Service: "app", PostCreate: spec.Command{Shell: "echo current"}, ContainerUser: "current", ContainerEnv: map[string]any{"CURRENT": "config"}, RemoteUser: "current-remote", UpdateRemoteEnv: map[string]any{"UPDATE": "value"}}
+	value, err := metadata.Encode([]metadata.Entry{{ID: "./sample", ContainerUser: "stored", ContainerEnv: map[string]any{"STORED": "stored"}, PostCreate: spec.Command{Shell: "echo captured"}}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	app := &application{}
-	entries, err := app.containerMetadata(dc, map[string]string{metadata.Label: value})
-	if err != nil {
-		t.Fatal(err)
-	}
-	plan := metadata.Plan(entries)
-	if len(plan) != 1 || plan[0].Command.Shell != "echo captured" {
-		t.Fatalf("captured container hooks changed: %+v", plan)
+	for _, primary := range []string{"", "true"} {
+		labels := map[string]string{metadata.Label: value, dockercompose.LabelPrimary: primary}
+		entries, err := app.containerMetadata(dc, labels)
+		if err != nil {
+			t.Fatal(err)
+		}
+		effective := effectiveContainerConfig(dc, labels)
+		if effective.ContainerUser != "stored" || effective.ContainerEnv["CURRENT"] != nil || effective.RemoteUser != "current-remote" || effective.UpdateRemoteEnv["UPDATE"] != "value" {
+			t.Fatalf("captured settings: %+v", effective)
+		}
+		plan := metadata.Plan(entries)
+		if len(plan) != 1 || plan[0].Command.Shell != "echo captured" {
+			t.Fatalf("captured container hooks changed: %+v", plan)
+		}
 	}
 }
 

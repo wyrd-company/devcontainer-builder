@@ -1,3 +1,6 @@
+// relationships:
+//
+//	references: [confighash, metadata]
 package dockercompose
 
 import (
@@ -92,5 +95,14 @@ func TestServiceConfigHash_VolumeOrderMatters(t *testing.T) {
 	})
 	if a == b {
 		t.Fatal("hash should reflect volume order")
+	}
+}
+
+func TestServiceConfigHash_ChangesWhenMountConsistencyChanges(t *testing.T) {
+	svc := types.ServiceConfig{Image: "alpine", Volumes: []types.ServiceVolumeConfig{{Type: "bind", Source: "/source", Target: "/target", Consistency: "cached"}}}
+	before := serviceConfigHash(svc)
+	svc.Volumes[0].Consistency = "delegated"
+	if before == serviceConfigHash(svc) {
+		t.Fatal("mount consistency change was ignored")
 	}
 }
