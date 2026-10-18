@@ -11,14 +11,13 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/wyrd-company/devcontainer-builder/pkg/buildkit"
 )
 
 // TestFeatureInstallIntegration builds a generic base image with a
 // published feature (common-utils, non-default options) and a local
 // feature, starts it with up, and asserts the effects inside the
-// container.
+// container. It builds on the Docker daemon's BuildKit, or on
+// BUILDKIT_HOST when set.
 func TestFeatureInstallIntegration(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping Docker integration test in short mode")
@@ -28,9 +27,6 @@ func TestFeatureInstallIntegration(t *testing.T) {
 
 	cli := requireDocker(t, ctx)
 	defer cli.Close()
-	if buildkit.DefaultAddress() == "" {
-		skipOrFail(t, "BuildKit is required for feature install integration; set BUILDKIT_HOST or expose /run/buildkit/buildkitd.sock")
-	}
 
 	bin := buildBinary(t)
 	workspace := copyFixture(t, filepath.Join("..", "..", "testdata", "smoke", "published-feature"))
