@@ -28,6 +28,8 @@ jobs:
       (github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.head_repository.full_name == github.repository)
     runs-on: ubuntu-latest
+    env:
+      REPO_WYRD_FOO_PUBLISHER_COMMIT: PUBLISHER_COMMIT_UNSET
     permissions:
       contents: read
       actions: read
@@ -48,11 +50,15 @@ jobs:
           path: handoff
           github-token: ${{ secrets.GITHUB_TOKEN }}
           run-id: ${{ steps.release_run.outputs.run_id }}
-      - run: task release:handoff
+      - id: handoff
+        run: task release:handoff
         env:
           EXPECTED_TAG: ${{ inputs.tag }}
           RELEASE_COMMIT: ${{ steps.release_run.outputs.head_sha }}
-      - uses: wyrd-company/repo.wyrd.foo/.github/actions/submit-release@b83f283412e576dcdb448a4b288ae781165b8c7c
+      - run: task release:publisher-pin
+        env:
+          RELEASE_VERSION: ${{ steps.handoff.outputs.version }}
+      - uses: wyrd-company/repo.wyrd.foo/.github/actions/submit-release@PUBLISHER_COMMIT_UNSET
         with:
           manifest: handoff/release-manifest.json
           app-client-id: ${{ secrets.REPO_WYRD_FOO_PUBLISHER_APP_ID }}

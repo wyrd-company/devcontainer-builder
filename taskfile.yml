@@ -195,3 +195,16 @@ tasks:
     desc: Install the YAML reader used by release agreement tests
     cmds:
       - go install github.com/mikefarah/yq/v4@v4.54.1
+  release:publisher-pin:
+    desc: Refuse release until the approved package publisher commit is set
+    cmds:
+      - python3 scripts/release/publisher-pin.py
+  release:compatibility:
+    desc: Validate and stage the snapshot through the pinned package publisher locally
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+    cmds:
+      - >-
+        bash scripts/release/compatibility.sh "$PUBLISHER_ROOT"
+        "$REPO_WYRD_FOO_PUBLISHER_COMMIT" dist/release-manifest.json
+        dist artifacts/publisher-compatibility

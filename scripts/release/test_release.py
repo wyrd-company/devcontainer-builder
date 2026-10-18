@@ -570,7 +570,16 @@ class IdentityTests(unittest.TestCase):
                 self.assertIn("permissions", job)
                 for step in job["steps"]:
                     if "uses" in step:
-                        self.assertRegex(step["uses"], r"@[a-f0-9]{40}$")
+                        if step["uses"].startswith(
+                            "wyrd-company/repo.wyrd.foo/.github/actions/submit-release@"
+                        ):
+                            pin = step["uses"].split("@", 1)[1]
+                            self.assertTrue(
+                                pin == "PUBLISHER_COMMIT_UNSET"
+                                or manifest.COMMIT.fullmatch(pin)
+                            )
+                        else:
+                            self.assertRegex(step["uses"], r"@[a-f0-9]{40}$")
                     if "run" in step:
                         self.assertTrue(step["run"].startswith("task "))
 

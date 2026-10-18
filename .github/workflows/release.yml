@@ -9,7 +9,47 @@ concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
 jobs:
+  compatibility:
+    name: Prove package publisher compatibility
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    # Bob must merge the dcb entry, then set this and the submit action to one SHA.
+    env:
+      REPO_WYRD_FOO_PUBLISHER_COMMIT: PUBLISHER_COMMIT_UNSET
+      RELEASE_VERSION: ${{ github.ref_name }}
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: go-task/setup-task@01a4adf9db2d14c1de7a560f09170b6e0df736aa # v2
+      - run: task release:publisher-pin
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: wyrd-company/repo.wyrd.foo
+          ref: ${{ env.REPO_WYRD_FOO_PUBLISHER_COMMIT }}
+          path: .repo-wyrd-foo-contract
+          persist-credentials: false
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+      # ryl disable-line rule:line-length
+      - uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7
+        with:
+          version: v2.17.0
+          install-only: true
+      - run: task release:inspectors
+      - run: task release:snapshot
+      - run: task release:compatibility
+        env:
+          PUBLISHER_ROOT: .repo-wyrd-foo-contract
   release:
+    needs: compatibility
     runs-on: ubuntu-latest
     permissions:
       contents: write
