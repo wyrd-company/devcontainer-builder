@@ -8,6 +8,7 @@ builds:
   - id: dcb
     main: ./cmd/dcb
     binary: dcb
+    mod_timestamp: "{{ .CommitTimestamp }}"
     env: [ CGO_ENABLED=0 ]
     goos: [ linux, darwin ]
     goarch: [ amd64, arm64 ]
@@ -24,7 +25,6 @@ archives:
     builds_info:
       owner: root
       group: root
-      mtime: '{{ .CommitDate }}'
     files:
       - src: LICENSE
         info:
