@@ -109,11 +109,12 @@ func buildContainerConfigWithEntrypoints(dc *spec.DevContainer, resolved []featu
 		labels[LabelConfigFile] = configFilePath
 	}
 
+	// Like upstream, the working directory stays the image's; exec and
+	// lifecycle commands set the workspace folder themselves.
 	cfg := &container.Config{
-		Image:      image,
-		Env:        envSlice,
-		Labels:     labels,
-		WorkingDir: containerWorkspaceFolder,
+		Image:  image,
+		Env:    envSlice,
+		Labels: labels,
 	}
 	if overrideCommand(dc) || len(entrypoints) > 0 {
 		// Match upstream: shell entrypoint that runs the feature

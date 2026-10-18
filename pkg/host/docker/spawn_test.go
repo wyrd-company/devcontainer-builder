@@ -73,8 +73,8 @@ func TestBuildContainerConfig_DefaultsAndLabels(t *testing.T) {
 	if cfg.Image != "img:latest" {
 		t.Errorf("image: got %q", cfg.Image)
 	}
-	if cfg.WorkingDir != "/workspaces/proj" {
-		t.Errorf("workdir: got %q", cfg.WorkingDir)
+	if cfg.WorkingDir != "" {
+		t.Errorf("workdir = %q, want the image's (empty)", cfg.WorkingDir)
 	}
 	if cfg.User != "vscode" {
 		t.Errorf("user: got %q", cfg.User)

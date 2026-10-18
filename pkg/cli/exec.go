@@ -75,10 +75,7 @@ func (a *application) execCommand() *cobra.Command {
 		}
 		wd := workdir
 		if wd == "" {
-			wd = containerWorkspace(dc, workspace)
-			if dc.WorkspaceFolder == "" && info.Config.WorkingDir != "" {
-				wd = info.Config.WorkingDir
-			}
+			wd = remoteWorkspaceFolder(dc, workspace, info)
 		}
 		a.execStarted = true
 		res, err := a.execute(cmd.Context(), cli, dc, hostdocker.ExecRequest{ContainerID: containerID, TTY: tty, Cmd: args, User: user, WorkDir: wd, Env: execEnv, Stdin: a.stdin, Stdout: a.stdout, Stderr: a.stderr})

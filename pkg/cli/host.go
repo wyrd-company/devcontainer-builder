@@ -143,11 +143,7 @@ func (a *application) containerResult(ctx context.Context, cli *dockerclient.Cli
 	}
 	a.result["containerId"] = id
 	a.result["remoteUser"] = user
-	folder := containerWorkspace(dc, workspace)
-	if dc.WorkspaceFolder == "" && info.Config != nil && info.Config.WorkingDir != "" {
-		folder = info.Config.WorkingDir
-	}
-	a.result["remoteWorkspaceFolder"] = folder
+	a.result["remoteWorkspaceFolder"] = remoteWorkspaceFolder(dc, workspace, info)
 	return nil
 }
 

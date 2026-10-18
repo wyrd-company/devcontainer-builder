@@ -280,8 +280,8 @@ func buildOnePlatform(
 // image. It clones whatever the base resolver/upstream returned (so
 // ENV / USER / WORKDIR / ENTRYPOINT carry through) and then layers in
 // the devcontainer's own image-time contributions: containerEnv,
-// workspaceFolder, remoteUser, the ENV from each feature, and labels.
-// remoteEnv is intentionally left for runtime exec/attach paths.
+// remoteUser, the ENV from each feature, and labels. Like upstream, the
+// base WORKDIR is kept; remoteEnv is left for runtime exec/attach paths.
 func mergeImageConfig(base []byte, g GraphInputs, labels map[string]string, p ocispecs.Platform) ([]byte, error) {
 	var img dockerspec.DockerOCIImage
 	if len(base) > 0 {
@@ -307,9 +307,6 @@ func mergeImageConfig(base []byte, g GraphInputs, labels map[string]string, p oc
 	}
 	img.Config.Env = envSlice(envIndex)
 
-	if g.Spec.WorkspaceFolder != "" {
-		img.Config.WorkingDir = g.Spec.WorkspaceFolder
-	}
 	if u := remoteUser(g); u != "" && u != "root" {
 		img.Config.User = u
 	}

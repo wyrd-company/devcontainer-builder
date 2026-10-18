@@ -39,8 +39,9 @@ func TestDockerBuildIntegration(t *testing.T) {
 			assertion: func(t *testing.T, tag string) {
 				cfg := inspectImage(t, tag)
 				assertEnv(t, cfg.Env, "DCB_SMOKE=image")
-				if cfg.WorkingDir != "/workspaces/smoke-image" {
-					t.Fatalf("working dir = %q, want /workspaces/smoke-image", cfg.WorkingDir)
+				// The base image's WORKDIR survives, as in upstream builds.
+				if cfg.WorkingDir != "/" {
+					t.Fatalf("working dir = %q, want alpine's /", cfg.WorkingDir)
 				}
 				if cfg.User != "nobody" {
 					t.Fatalf("user = %q, want nobody", cfg.User)

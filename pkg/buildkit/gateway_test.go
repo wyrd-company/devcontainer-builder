@@ -17,7 +17,7 @@ import (
 	"github.com/wyrd-company/devcontainer-builder/pkg/spec"
 )
 
-func TestMergeImageConfig_AppendsEnvAndOverridesUserAndWorkdir(t *testing.T) {
+func TestMergeImageConfig_AppendsEnvOverridesUserAndKeepsWorkdir(t *testing.T) {
 	base := dockerspec.DockerOCIImage{}
 	base.Config.Env = []string{"PATH=/usr/bin", "EXISTING=keep"}
 	base.Config.User = "1000:1000"
@@ -51,8 +51,8 @@ func TestMergeImageConfig_AppendsEnvAndOverridesUserAndWorkdir(t *testing.T) {
 	if got.OS != "linux" || got.Architecture != "arm64" {
 		t.Fatalf("expected linux/arm64, got %s/%s", got.OS, got.Architecture)
 	}
-	if got.Config.WorkingDir != "/workspaces/x" {
-		t.Errorf("WorkingDir not overridden: %q", got.Config.WorkingDir)
+	if got.Config.WorkingDir != "/old" {
+		t.Errorf("WorkingDir = %q, want the base image's /old", got.Config.WorkingDir)
 	}
 	if got.Config.User != "vscode" {
 		t.Errorf("User not overridden: %q", got.Config.User)

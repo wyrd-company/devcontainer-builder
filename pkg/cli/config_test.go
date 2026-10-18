@@ -7,6 +7,9 @@
 package cli
 
 import (
+	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/mount"
+	"github.com/wyrd-company/devcontainer-builder/pkg/spec"
 	"github.com/wyrd-company/devcontainer-builder/pkg/substitute"
 	"os"
 	"path/filepath"
@@ -88,5 +91,34 @@ func TestOverrideConfigurationRetainsSourcePaths(t *testing.T) {
 	result, _ = invoke(t, 0, "read-configuration", "--workspace-folder", workspace, "--config", original, "--override-config", override)
 	if result["configuration"].(map[string]any)["configFilePath"] != original {
 		t.Fatalf("override source=%v", result)
+	}
+}
+
+func TestRemoteWorkspaceFolder(t *testing.T) {
+	single := &spec.DevContainer{Path: "/host/sample/.devcontainer.json", Image: "alpine:3.20"}
+	compose := &spec.DevContainer{Path: "/host/sample/.devcontainer.json", DockerComposeFile: spec.StringOrSlice{"compose.yml"}, Service: "app"}
+	inspected := func(workingDir string, mounts ...container.MountPoint) container.InspectResponse {
+		return container.InspectResponse{Config: &container.Config{WorkingDir: workingDir, Labels: map[string]string{"devcontainer.local_folder": "/host/sample"}}, Mounts: mounts}
+	}
+	workspaceMount := container.MountPoint{Type: mount.TypeBind, Source: "/host/sample", Destination: "/mounted"}
+	otherMount := container.MountPoint{Type: mount.TypeBind, Source: "/host/other", Destination: "/other"}
+	for _, tc := range []struct {
+		name string
+		dc   *spec.DevContainer
+		info container.InspectResponse
+		want string
+	}{
+		{"single ignores image workdir", single, inspected("/srv", workspaceMount), "/workspaces/sample"},
+		{"single configured folder", &spec.DevContainer{Path: single.Path, WorkspaceFolder: "/sample"}, inspected("/srv"), "/sample"},
+		{"compose service workdir", compose, inspected("/srv"), "/srv"},
+		{"no configuration uses workspace mount", &spec.DevContainer{}, inspected("/srv", otherMount, workspaceMount), "/mounted"},
+		{"no configuration without mount", &spec.DevContainer{}, inspected("/srv", otherMount), "/srv"},
+		{"no workdir", compose, inspected(""), "/workspaces/sample"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := remoteWorkspaceFolder(tc.dc, "/host/sample", tc.info); got != tc.want {
+				t.Fatalf("remoteWorkspaceFolder = %q, want %q", got, tc.want)
+			}
+		})
 	}
 }

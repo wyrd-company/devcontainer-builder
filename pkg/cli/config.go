@@ -14,7 +14,10 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/mount"
 	"github.com/spf13/cobra"
+	hostdocker "github.com/wyrd-company/devcontainer-builder/pkg/host/docker"
 	"github.com/wyrd-company/devcontainer-builder/pkg/spec"
 	"github.com/wyrd-company/devcontainer-builder/pkg/substitute"
 )
@@ -145,6 +148,28 @@ func substituteValues(value any, ctx substitute.Context) any {
 	default:
 		return value
 	}
+}
+
+// remoteWorkspaceFolder is the folder reported and used for exec. With a
+// single-container configuration it follows upstream and never reads the
+// container's working directory. Without a configuration, the workspace bind
+// mount is the record; Compose services report the working directory their
+// host set.
+func remoteWorkspaceFolder(dc *spec.DevContainer, workspace string, info container.InspectResponse) string {
+	if dc.WorkspaceFolder != "" || dc.Path != "" && dc.Mode() == spec.ModeSingle || info.Config == nil {
+		return containerWorkspace(dc, workspace)
+	}
+	if local := info.Config.Labels[hostdocker.LabelLocalFolder]; dc.Path == "" && local != "" {
+		for _, m := range info.Mounts {
+			if m.Type == mount.TypeBind && m.Source == local {
+				return m.Destination
+			}
+		}
+	}
+	if info.Config.WorkingDir != "" {
+		return info.Config.WorkingDir
+	}
+	return containerWorkspace(dc, workspace)
 }
 
 func containerWorkspace(dc *spec.DevContainer, workspace string) string {
