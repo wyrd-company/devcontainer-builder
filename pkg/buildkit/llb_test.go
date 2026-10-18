@@ -1,3 +1,6 @@
+// relationships:
+//   references: [llb]
+
 package buildkit
 
 import (
@@ -65,10 +68,17 @@ func TestBuild_RestoresBaseStateUser(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			found := false
 			for _, op := range decodeOps(t, def.ToPB()) {
-				if e := op.GetExec(); e != nil && len(e.Meta.Args) == 2 && e.Meta.Args[0] == "id" && e.Meta.User != imageUser {
-					t.Fatalf("final state user = %q, want base user %q", e.Meta.User, imageUser)
+				if e := op.GetExec(); e != nil && len(e.Meta.Args) == 2 && e.Meta.Args[0] == "id" && e.Meta.Args[1] == "-u" {
+					found = true
+					if e.Meta.User != imageUser {
+						t.Fatalf("final state user = %q, want base user %q", e.Meta.User, imageUser)
+					}
 				}
+			}
+			if !found {
+				t.Fatal("missing id -u exec probe in final state")
 			}
 		})
 	}

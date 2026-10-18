@@ -273,7 +273,7 @@ func TestGenerate_BaseUserLookupFailureFallsBackToRoot(t *testing.T) {
 	// The metadata read succeeds; the user lookup after it fails.
 	df, logs := generate(t, reg.builder(), ws, func(o *Options) { o.Docker = userEngine(t, "local-user", 1) })
 	wantBuiltinUser(t, df, "root")
-	if !strings.Contains(strings.Join(logs, "\n"), "base image user unknown") {
+	if !strings.Contains(strings.Join(logs, "\n"), "base image user unknown, feature user defaults and final generated image USER fall back to root:") {
 		t.Fatalf("missing warning in logs: %v", logs)
 	}
 }
@@ -373,5 +373,96 @@ func TestGeneratedDockerfilesRestoreBaseImageUser(t *testing.T) {
 				t.Fatalf("generated Dockerfile did not restore base image user:\n%s", body)
 			}
 		})
+	}
+}
+
+// Exercise both generator callers with and without features, including the
+// authenticated registry path when the Engine has no local image.
+func TestGeneratedDockerfilesBaseUserResolution(t *testing.T) {
+	for _, source := range []string{"local", "private", "failure", "skipped"} {
+		for _, prepare := range []bool{false, true} {
+			for _, skipFeatures := range []bool{false, true} {
+				t.Run(fmt.Sprintf("%s/prepare=%v/skip-features=%v", source, prepare, skipFeatures), func(t *testing.T) {
+					reg := newImageRegistry(t, "library/base", "1", "registry-user")
+					ws := writeWorkspace(t, `"image":"`+reg.host()+`/library/base:1"`, nil)
+					opts := Options{Workspace: ws, WorkDir: t.TempDir(), SkipFeatures: skipFeatures}
+					want := "local-user"
+					switch source {
+					case "local":
+						opts.Docker = userEngine(t, want, -1)
+					case "private":
+						want = "registry-user"
+						auth := base64.StdEncoding.EncodeToString([]byte("testuser:testpassword"))
+						reg.basic = "Basic " + auth
+						config := t.TempDir()
+						writeFile(t, filepath.Join(config, "config.json"), `{"auths":{"`+reg.host()+`":{"auth":"`+auth+`"}}}`)
+						t.Setenv("DOCKER_CONFIG", config)
+						t.Setenv("DOCKER_AUTH_CONFIG", "")
+						opts.Docker = userEngine(t, "", -1)
+					case "failure":
+						want = "root"
+						// Let metadata resolve, then fail the USER lookup.
+						opts.Docker = userEngine(t, "local-user", 1)
+					case "skipped":
+						want = "root"
+						opts.SkipImageMetaResolve = true
+						t.Setenv("DOCKER_HOST", "invalid-default-engine")
+					}
+					df, logs := generatedUserDockerfile(t, reg.builder(), opts, prepare)
+					wantFinalUser(t, df, want)
+					if !skipFeatures {
+						wantBuiltinUser(t, df, want)
+					}
+					if source == "failure" && !strings.Contains(strings.Join(logs, "\n"), "feature user defaults and final generated image USER fall back to root:") {
+						t.Fatalf("missing root fallback warning: %v", logs)
+					}
+					if (source == "local" || source == "skipped") && reg.count() != 0 {
+						t.Fatalf("registry requests = %d, want none", reg.count())
+					}
+					if source == "private" && reg.count() == 0 {
+						t.Fatal("private registry was not consulted")
+					}
+				})
+			}
+		}
+	}
+}
+
+func generatedUserDockerfile(t *testing.T, b *Builder, opts Options, prepare bool) (string, []string) {
+	t.Helper()
+	var logs []string
+	logf := func(f string, a ...any) { logs = append(logs, fmt.Sprintf(f, a...)) }
+	opts.Logger = logf
+	var path string
+	if prepare {
+		_, _, _, _, _, _, _, dfPath, _, err := b.prepareBuildContext(context.Background(), opts, logf)
+		if err != nil {
+			t.Fatal(err)
+		}
+		path = dfPath
+	} else {
+		res, err := b.Generate(context.Background(), opts)
+		if err != nil {
+			t.Fatal(err)
+		}
+		path = res.FinalDockerfile
+	}
+	body, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(body), logs
+}
+
+func wantFinalUser(t *testing.T, dockerfile, want string) {
+	t.Helper()
+	var got string
+	for _, line := range strings.Split(dockerfile, "\n") {
+		if strings.HasPrefix(line, "USER ") {
+			got = strings.TrimPrefix(line, "USER ")
+		}
+	}
+	if got != want {
+		t.Fatalf("final USER = %q, want %q:\n%s", got, want, dockerfile)
 	}
 }

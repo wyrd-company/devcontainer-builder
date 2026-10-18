@@ -1,3 +1,6 @@
+// relationships:
+//   references: [generator, metadata]
+
 package builder
 
 import (
@@ -13,14 +16,15 @@ import (
 // Dockerfile's final USER and feature builtins, or "" (root) when
 // the lookup is skipped (SkipImageMetaResolve). When the lookup fails
 // (for example, a registry whose credentials are missing) it logs a
-// warning and features see root, so the build still runs.
+// warning. In both cases, feature user defaults and the final generated
+// image USER fall back to root.
 func (b *Builder) baseImageUser(ctx context.Context, dc *spec.DevContainer, opts Options, logf func(string, ...any)) string {
 	if opts.SkipImageMetaResolve {
 		return ""
 	}
 	user, err := b.imageUser(ctx, dc, opts)
 	if err != nil {
-		logf("warning: base image user unknown, features see root: %v", err)
+		logf("warning: base image user unknown, feature user defaults and final generated image USER fall back to root: %v", err)
 		return ""
 	}
 	return user

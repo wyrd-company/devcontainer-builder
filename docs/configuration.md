@@ -160,7 +160,10 @@ cached by BuildKit.
 
 ## Container and remote users
 
-Built images and generated Dockerfiles preserve the base image's `USER`.
+Native builds preserve the base image's `USER`. Generated Dockerfiles preserve
+it when the base image user can be resolved. If that lookup fails or image
+metadata resolution is skipped, feature user defaults and the final generated
+image `USER` fall back to `root`. A failed lookup also logs a warning.
 `containerUser` sets the identity of PID 1 and feature entrypoints when the
 container starts. Without `containerUser`, they use the image user.
 `remoteUser` sets the identity of `dcb exec` and lifecycle commands; it does
