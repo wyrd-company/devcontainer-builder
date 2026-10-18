@@ -4,3 +4,4 @@
 /.task/
 /coverage.out
 /lefthook-local.yml
+__pycache__/
