@@ -324,3 +324,35 @@ func TestPrepareGoPreservesNativeBuildOptions(t *testing.T) {
 		t.Fatal("harness injected unsupported Docker CLI build options into native build")
 	}
 }
+
+func TestLegacyAdapterNativeBuildInvocation(t *testing.T) {
+	bin := t.TempDir()
+	calls := filepath.Join(bin, "calls")
+	script := filepath.Join(bin, "cli")
+	if err := os.WriteFile(script, []byte("#!/bin/sh\nprintf '%s\\n' \"$@\" >> \"$PARITY_ADAPTER_CALLS\"\n"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	log, err := os.CreateTemp(t.TempDir(), "log")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer log.Close()
+	r := &Runner{root: t.TempDir(), runID: "sample", env: append(os.Environ(), "PARITY_ADAPTER_CALLS="+calls), log: log}
+	if _, err := (LegacyAdapter{Build: script, Runtime: script}).Up(context.Background(), r, "/workspace", "sample:latest"); err != nil {
+		t.Fatal(err)
+	}
+	body, err := os.ReadFile(calls)
+	if err != nil {
+		t.Fatal(err)
+	}
+	args := string(body)
+	if strings.Contains(args, "--engine\n") {
+		t.Fatal("removed engine flag sent to native CLI")
+	}
+	if !strings.Contains(args, "--label\n"+r.label()+"\n") {
+		t.Fatal("native output image ownership label omitted")
+	}
+	if !strings.Contains(args, "up\n--workspace\n/workspace\n--image\nsample:latest\n--skip-build\n") {
+		t.Fatalf("runtime did not use the labelled native image: %s", args)
+	}
+}
