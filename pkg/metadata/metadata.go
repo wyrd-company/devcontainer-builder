@@ -132,18 +132,20 @@ func Collect(base []Entry, resolved []features.Resolved, dc *spec.DevContainer) 
 			UpdateContent: m.UpdateContent, PostCreate: m.PostCreateCommand,
 			PostStart: m.PostStartCommand, PostAttach: m.PostAttachCommand})
 	}
-	entry := FromConfig(dc)
-	// Empty config entries are omitted by upstream.
-	data, _ := json.Marshal(entry)
-	if string(data) != "{}" {
-		entries = append(entries, entry)
-	}
-	return entries
+	return appendNonEmpty(entries, FromConfig(dc))
 }
 
 // Update appends only the properties upstream permits to change on an existing
 // labelled container. Its persisted lifecycle and container settings stay intact.
 func Update(entries []Entry, dc *spec.DevContainer) []Entry {
-	return append(append([]Entry(nil), entries...), Entry{RemoteUser: dc.RemoteUser,
+	return appendNonEmpty(append([]Entry(nil), entries...), Entry{RemoteUser: dc.RemoteUser,
 		UserEnvProbe: dc.UserEnvProbe, RemoteEnv: dc.UpdateRemoteEnv})
+}
+
+// appendNonEmpty omits empty entries, as upstream does.
+func appendNonEmpty(entries []Entry, entry Entry) []Entry {
+	if data, _ := json.Marshal(entry); string(data) != "{}" {
+		entries = append(entries, entry)
+	}
+	return entries
 }

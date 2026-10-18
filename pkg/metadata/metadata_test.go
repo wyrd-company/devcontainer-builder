@@ -95,6 +95,9 @@ func TestCollect(t *testing.T) {
 	if len(updated) != 5 || updated[4].RemoteUser != "other" || updated[4].Privileged != nil || !updated[4].PostCreate.IsZero() {
 		t.Fatalf("update=%v", updated[4])
 	}
+	if got := Update(entries, &spec.DevContainer{Image: "alpine", PostCreate: spec.Command{Shell: "not persisted"}}); len(got) != 4 {
+		t.Fatalf("empty update entry=%v", got[len(got)-1])
+	}
 }
 
 // These cases mirror mergeConfiguration, should-deduplicate-mounts, and GPU
