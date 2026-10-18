@@ -73,6 +73,13 @@ func TestBuildOptions(t *testing.T) {
 			invoke(t, tc.code, args...)
 		})
 	}
+
+	// The shared conflict guard must protect build even when up's separate local
+	// export guard would also reject this invocation.
+	conflict, _ := invoke(t, 2, "build", "--config", cfg, "--push", "--load")
+	if conflict["message"] != "--push and --load are mutually exclusive" {
+		t.Fatalf("push/load conflict: %v", conflict)
+	}
 	a := &application{logs: &logWriter{dst: io.Discard}}
 	o := buildOptions{buildArgs: []string{"KEY=one=two"}, labels: []string{"example.label=value"}}
 	dc, err := spec.Load(cfg)

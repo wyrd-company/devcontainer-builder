@@ -7,7 +7,6 @@
 package cli
 
 import (
-	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -22,13 +21,16 @@ func TestIntegrationScriptsInvokeUnifiedCLI(t *testing.T) {
 		t.Fatal(err)
 	}
 	tools := t.TempDir()
-	stub := `#!/usr/bin/env python3
-import json, os, sys
-with open(os.environ["DCB_INVOCATION_LOG"], "a") as log:
-    log.write(json.dumps(sys.argv[1:]) + "\n")
-if "--work-dir" in sys.argv:
-    os.makedirs(sys.argv[sys.argv.index("--work-dir") + 1], exist_ok=True)
-print('{"outcome":"success"}')
+
+	stub := `#!/bin/sh
+printf '%s\n' "$@" >> "$DCB_INVOCATION_LOG"
+printf '\n' >> "$DCB_INVOCATION_LOG"
+previous=
+for arg do
+    if [ "$previous" = "--work-dir" ]; then mkdir -p "$arg"; fi
+    previous=$arg
+done
+printf '{"outcome":"success"}\n'
 `
 	if err := os.WriteFile(filepath.Join(tools, "go"), []byte(stub), 0o755); err != nil {
 		t.Fatal(err)
@@ -48,11 +50,8 @@ print('{"outcome":"success"}')
 				t.Fatal(err)
 			}
 			sawTest, sawGenerate := false, false
-			for _, line := range strings.Split(strings.TrimSpace(string(data)), "\n") {
-				var args []string
-				if err := json.Unmarshal([]byte(line), &args); err != nil {
-					t.Fatal(err)
-				}
+			for _, line := range strings.Split(strings.TrimSpace(string(data)), "\n\n") {
+				args := strings.Split(line, "\n")
 				if !slices.Contains(args, "./cmd/dcb") || slices.Contains(args, "./cmd/devcontainer-docker") {
 					t.Fatalf("wrong CLI target: %q", args)
 				}
