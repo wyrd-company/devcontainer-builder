@@ -8,6 +8,7 @@ package cli
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/spf13/cobra"
 	hostdocker "github.com/wyrd-company/devcontainer-builder/pkg/host/docker"
@@ -48,10 +49,12 @@ func (a *application) execCommand() *cobra.Command {
 		if err != nil {
 			return err
 		}
-		execer := a.execer(cli, dc, containerID)
-		env, err := runner.DetectContainerEnv(cmd.Context(), execer)
-		if err != nil {
-			return fmt.Errorf("detect container env: %w", err)
+		var env map[string]string
+		if referencesContainerEnv(dc.UpdateRemoteEnv) {
+			env, err = runner.DetectContainerEnv(cmd.Context(), a.execer(cli, dc, containerID))
+			if err != nil {
+				return fmt.Errorf("detect container env: %w", err)
+			}
 		}
 		info, err := cli.ContainerInspect(cmd.Context(), containerID)
 		if err != nil {
@@ -87,4 +90,15 @@ func (a *application) execCommand() *cobra.Command {
 		return nil
 	}
 	return cmd
+}
+
+// Container environment probing is needed only for values with this placeholder.
+// Non-root containers may not permit reading PID 1's environment even as root.
+func referencesContainerEnv(env map[string]any) bool {
+	for _, value := range env {
+		if strings.Contains(fmt.Sprint(value), "${containerEnv:") {
+			return true
+		}
+	}
+	return false
 }

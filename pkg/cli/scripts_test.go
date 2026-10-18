@@ -72,14 +72,13 @@ printf '{"outcome":"success"}\n'
 					if !slices.Contains(args, "docker_integration") {
 						t.Fatalf("missing integration tag: %q", args)
 					}
-					if script == "docker-host-integration.sh" {
-						run := slices.Index(args, "-run")
-						if run < 0 || run+1 >= len(args) {
-							t.Fatalf("missing test selection: %q", args)
-						}
-						for _, name := range []string{"TestDockerHost", "TestDockerComposeCLI", "TestDockerLifecycleCLI"} {
-							if !strings.Contains(args[run+1], name) {
-								t.Fatalf("missing %s: %q", name, args)
+					if slices.Contains(args, "-run") {
+						t.Fatalf("integration suite must not narrow test coverage: %q", args)
+					}
+					if script == "docker-build-integration.sh" {
+						for _, target := range []string{"./pkg/builder", "./pkg/buildkit"} {
+							if !slices.Contains(args, target) {
+								t.Fatalf("missing integration target %s: %q", target, args)
 							}
 						}
 					}

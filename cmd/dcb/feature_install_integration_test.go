@@ -1,5 +1,8 @@
 //go:build docker_integration
 
+// relationships:
+//
+// references: [CONTRIBUTING]
 package main
 
 import (
@@ -25,22 +28,22 @@ func TestFeatureInstallIntegration(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
 	defer cancel()
 
-	cli := requireDocker(t, ctx)
+	cli := hostRequireDocker(t, ctx)
 	defer cli.Close()
 
-	bin := buildBinary(t)
+	bin := hostBuildBinary(t)
 	workspace := copyFixture(t, filepath.Join("..", "..", "testdata", "smoke", "published-feature"))
 	tag := fmt.Sprintf("devcontainer-builder/feature-install-%d:latest", time.Now().UnixNano())
 	t.Cleanup(func() {
-		_ = runCommandAllowError(bin, "down", "--workspace", workspace)
+		_ = hostRunCommandAllowError(bin, "down", "--workspace-folder", workspace)
 		_ = exec.Command("docker", "image", "rm", "-f", tag).Run()
 	})
 
-	runCommand(t, os.Environ(), bin,
+	hostRunCommand(t, os.Environ(), bin,
 		"up",
-		"--workspace", workspace,
-		"--tag", tag,
-		"--update-remote-user-uid", "off",
+		"--workspace-folder", workspace,
+		"--image-name", tag,
+		"--update-remote-user-uid-default", "off",
 	)
 
 	img, err := cli.ImageInspect(ctx, tag)
@@ -51,10 +54,10 @@ func TestFeatureInstallIntegration(t *testing.T) {
 		t.Fatalf("image user = %+v, want devuser", img.Config)
 	}
 
-	out := runCommand(t, os.Environ(), bin,
+	out := hostRunCommand(t, os.Environ(), bin,
 		"exec",
-		"--workspace", workspace,
-		"-t=false",
+		"--workspace-folder", workspace,
+		"--tty=false",
 		"--",
 		"sh", "-c",
 		`id -un; id -u devuser; cat /usr/local/share/dcb-smoke-install.txt; cat /tmp/dcb-smoke-entrypoint.txt; cat /tmp/dcb-smoke-hooks.log`,
@@ -100,4 +103,52 @@ func copyFixture(t *testing.T, src string) string {
 		t.Fatalf("copy fixture: %v\n%s", err, out)
 	}
 	return workspace
+}
+
+// TestDockerFeatureWiringCLI keeps the build-to-host agreement observable for
+// both host modes: the installed image alone cannot run these contributions.
+func TestDockerFeatureWiringCLI(t *testing.T) {
+	cli := hostRequireDocker(t, context.Background())
+	t.Cleanup(func() { _ = cli.Close() })
+	hostEnsureImage(t, context.Background(), cli, "alpine:3.20")
+	bin := hostBuildBinary(t)
+	for _, mode := range []string{"image", "compose"} {
+		t.Run(mode, func(t *testing.T) {
+			workspace := hostPrepareWorkspace(t, "alpine:3.20")
+			configDir := filepath.Join(workspace, ".devcontainer")
+			featureDir := filepath.Join(configDir, "features", "marker")
+			if err := os.MkdirAll(featureDir, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			files := map[string]string{
+				"devcontainer-feature.json": `{"id":"marker","version":"1.0.0","entrypoint":"/usr/local/bin/example-start","postCreateCommand":"echo feature >> /tmp/example-hooks"}`,
+				"install.sh":                "#!/bin/sh\nset -e\nprintf '#!/bin/sh\\necho started > /tmp/example-started\\n' > /usr/local/bin/example-start\nchmod +x /usr/local/bin/example-start\n",
+			}
+			for name, body := range files {
+				if err := os.WriteFile(filepath.Join(featureDir, name), []byte(body), 0o755); err != nil {
+					t.Fatal(err)
+				}
+			}
+			body := `{"image":"alpine:3.20","features":{"./features/marker":{}},"postCreateCommand":"echo config >> /tmp/example-hooks"}`
+			if mode == "compose" {
+				body = `{"dockerComposeFile":"compose.yml","service":"app","overrideCommand":false,"features":{"./features/marker":{}},"postCreateCommand":"echo config >> /tmp/example-hooks"}`
+				if err := os.WriteFile(filepath.Join(configDir, "compose.yml"), []byte("services:\n  app:\n    image: alpine:3.20\n    command: [sleep, infinity]\n"), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := os.WriteFile(filepath.Join(configDir, "devcontainer.json"), []byte(body), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			tag := fmt.Sprintf("dcb-test/feature-wiring-%s:%d", mode, time.Now().UnixNano())
+			t.Cleanup(func() {
+				_ = hostRunCommandAllowError(bin, "down", "--workspace-folder", workspace)
+				removeImage(t, tag)
+			})
+			hostRunCommand(t, os.Environ(), bin, "up", "--workspace-folder", workspace, "--image-name", tag, "--update-remote-user-uid-default", "off")
+			out := hostRunCommand(t, os.Environ(), bin, "exec", "--workspace-folder", workspace, "--", "sh", "-c", "cat /tmp/example-started /tmp/example-hooks")
+			if got := strings.TrimSpace(string(out)); got != "started\nfeature\nconfig" {
+				t.Fatalf("feature contributions = %q, want entrypoint then feature/config hooks", got)
+			}
+		})
+	}
 }
