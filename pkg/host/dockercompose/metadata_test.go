@@ -109,7 +109,7 @@ func TestComposeMetadataRuntimeMappings(t *testing.T) {
 			if native && (!containsAll([]string(host.CapAdd), "NET_ADMIN") || !containsAll(host.SecurityOpt, "seccomp=unconfined") || len(host.CapAdd) != 2 || len(host.SecurityOpt) != 2) {
 				t.Fatalf("native settings lost: %+v", host)
 			}
-			if cfg.User != "sample" || merged.RemoteUser != "root" || !reflect.DeepEqual(got.Command, svc.Command) || !containsAll(cfg.Env, "NATIVE=native", "PRIORITY=metadata", "FROM_META=hello $LITERAL", "REMOTE=remote") || !reflect.DeepEqual(merged.Entrypoints, []string{"echo hello $LITERAL"}) {
+			if cfg.User != "sample" || merged.RemoteUser != "root" || !reflect.DeepEqual(got.Command, svc.Command) || !containsAll(cfg.Env, "NATIVE=native", "PRIORITY=metadata", "FROM_META=hello $LITERAL") || containsAll(cfg.Env, "REMOTE=remote") || !reflect.DeepEqual(merged.Entrypoints, []string{"echo hello $LITERAL"}) {
 				t.Fatalf("config=%+v merged=%+v", cfg, merged)
 			}
 			if len(host.Mounts) != 2 || host.Mounts[0].Source != "native-scoped" || host.Mounts[0].Target != "/cache" || !host.Mounts[0].ReadOnly || host.Mounts[1].Source != "/workspace" || host.Mounts[1].Target != "/bind" || !host.Mounts[1].ReadOnly || host.Mounts[1].Consistency != "cached" {

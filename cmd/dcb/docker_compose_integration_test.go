@@ -14,6 +14,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -202,5 +204,39 @@ func TestDockerComposeCLIDefaultWorkspaceFolder(t *testing.T) {
 	out := hostRunCommand(t, os.Environ(), bin, "exec", "--workspace-folder", workspace, "--", "sh", "-c", "cat /tmp/lifecycle-dir; pwd; test -d /workspaces/"+filepath.Base(workspace)+"/.devcontainer && echo mounted")
 	if string(out) != "/\n/\nmounted\n" {
 		t.Fatalf("lifecycle dir, exec dir, workspace mount = %q", out)
+	}
+}
+
+// Like upstream, remoteEnv reaches exec and lifecycle commands but not the
+// service's container environment.
+func TestDockerComposeCLIRemoteEnvScope(t *testing.T) {
+	cli := hostRequireDocker(t, context.Background())
+	t.Cleanup(func() { _ = cli.Close() })
+	hostEnsureImage(t, context.Background(), cli, "alpine:3.20")
+	workspace := hostPrepareWorkspace(t, "alpine:3.20")
+	config := filepath.Join(workspace, ".devcontainer", "devcontainer.json")
+	body := `{"dockerComposeFile":"compose.yml","service":"app","workspaceFolder":"/workspace","containerEnv":{"SAMPLE_CONTAINER":"container"},"remoteEnv":{"SAMPLE_REMOTE":"remote"},"postCreateCommand":"echo $SAMPLE_REMOTE > /tmp/lifecycle-env"}`
+	if err := os.WriteFile(config, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(filepath.Dir(config), "compose.yml"), []byte("services:\n  app:\n    image: alpine:3.20\n    command: [sleep, infinity]\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	bin := hostBuildBinary(t)
+	t.Cleanup(func() { _ = hostRunCommandAllowError(bin, "down", "--workspace-folder", workspace) })
+	var result map[string]any
+	if err := json.Unmarshal(hostRunCommand(t, os.Environ(), bin, "up", "--workspace-folder", workspace), &result); err != nil {
+		t.Fatal(err)
+	}
+	info, err := cli.ContainerInspect(context.Background(), result["containerId"].(string))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Contains(info.Config.Env, "SAMPLE_CONTAINER=container") || slices.ContainsFunc(info.Config.Env, func(e string) bool { return strings.HasPrefix(e, "SAMPLE_REMOTE=") }) {
+		t.Fatalf("container env = %v, want containerEnv only", info.Config.Env)
+	}
+	out := hostRunCommand(t, os.Environ(), bin, "exec", "--workspace-folder", workspace, "--", "sh", "-c", "cat /tmp/lifecycle-env; echo $SAMPLE_REMOTE")
+	if string(out) != "remote\nremote\n" {
+		t.Fatalf("lifecycle and exec remoteEnv = %q", out)
 	}
 }

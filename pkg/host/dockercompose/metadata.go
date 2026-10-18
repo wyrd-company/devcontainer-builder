@@ -64,10 +64,9 @@ func applyPrimaryMetadata(proj *types.Project, dc *spec.DevContainer, req UpRequ
 	if dc.ContainerUser != "" {
 		svc.User = dc.ContainerUser
 	}
-	env := stringMap(dc.UpdateRemoteEnv) // Retain the host's remoteEnv overlay.
-	if env == nil {
-		env = map[string]string{}
-	}
+	// Like upstream's override, only containerEnv reaches the service;
+	// remoteEnv applies to exec and lifecycle commands.
+	env := map[string]string{}
 	if !req.ImageBuilt {
 		for _, f := range req.Features {
 			for key, value := range f.Metadata.ContainerEnv {

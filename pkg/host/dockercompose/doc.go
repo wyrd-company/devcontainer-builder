@@ -2,8 +2,8 @@
 // against a docker-compatible daemon. The package owns the full
 // orchestration loop natively: it parses and merges compose files
 // through compose-spec/compose-go, generates an in-memory override
-// layer that injects the workspace mount + remoteEnv + the
-// feature-derived image into the primary service, and creates
+// layer that injects the workspace mount and the feature-derived image
+// into the primary service, and creates
 // networks / volumes / containers via the docker engine API. There is
 // no shell-out to the `docker compose` CLI.
 //
