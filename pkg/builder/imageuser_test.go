@@ -234,6 +234,23 @@ func TestGenerate_FeaturesSeeLocalImageUser(t *testing.T) {
 	}
 }
 
+// Without features, the generated Dockerfile restores the user of an
+// image that only the Docker daemon has.
+func TestGenerate_RestoresLocalImageUserWithoutFeatures(t *testing.T) {
+	reg := newImageRegistry(t, "library/base", "1", "registry-user")
+	ws := writeWorkspace(t, `"image":"`+reg.host()+`/library/base:1"`, nil)
+	df, _ := generate(t, reg.builder(), ws, func(o *Options) {
+		o.SkipFeatures = true
+		o.Docker = userEngine(t, "local-user", -1)
+	})
+	if !strings.Contains(df, "USER local-user\n") {
+		t.Fatalf("Dockerfile did not restore the local image user:\n%s", df)
+	}
+	if n := reg.count(); n != 0 {
+		t.Fatalf("registry requests = %d, want none for a local image", n)
+	}
+}
+
 func TestGenerate_FeaturesSeePrivateRegistryImageUser(t *testing.T) {
 	reg := newImageRegistry(t, "library/base", "1", "image-user")
 	reg.basic = "Basic " + base64.StdEncoding.EncodeToString([]byte("testuser:testpassword"))
