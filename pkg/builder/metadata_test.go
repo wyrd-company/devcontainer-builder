@@ -6,6 +6,7 @@ package builder
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -17,6 +18,17 @@ import (
 	"github.com/wyrd-company/devcontainer-builder/pkg/metadata"
 	"github.com/wyrd-company/devcontainer-builder/pkg/spec"
 )
+
+type metadataTestTransport func(*http.Request) (*http.Response, error)
+
+func (f metadataTestTransport) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+func offlineMetadataBuilder() *Builder {
+	b := New()
+	b.Resolver.OCI.HTTP = &http.Client{Transport: metadataTestTransport(func(r *http.Request) (*http.Response, error) {
+		return nil, fmt.Errorf("unexpected registry request to %s", r.URL.Host)
+	})}
+	return b
+}
 
 func TestBaseMetadataUsesLoadedConfigAndDockerfileTarget(t *testing.T) {
 	var images []string
@@ -54,7 +66,7 @@ func TestBaseMetadataUsesLoadedConfigAndDockerfileTarget(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			images = nil
-			entries, err := New().BaseMetadata(context.Background(), tc.dc, Options{Docker: cli, BuildArgs: tc.args})
+			entries, err := offlineMetadataBuilder().BaseMetadata(context.Background(), tc.dc, Options{Docker: cli, BuildArgs: tc.args})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -136,20 +148,21 @@ func TestBaseMetadataRegistryFallbackAndPlatform(t *testing.T) {
 }
 
 func TestBaseMetadataRejectsInvalidDockerfile(t *testing.T) {
-	for _, tc := range []struct{ name, source, target string }{
-		{"parse", "not an instruction\n", ""}, {"no-stages", "ARG BASE=alpine\n", ""},
-		{"missing-target", "FROM scratch AS sample\n", "other"}, {"cycle", "FROM sample AS sample\n", ""},
+	for _, tc := range []struct{ name, source, target, want string }{
+		{"parser", "FROM alpine\nRUN <<EOF\n", "", "unterminated heredoc"},
+		{"parse", "not an instruction\n", "", "unknown instruction"}, {"no-stages", "ARG BASE=alpine\n", "", "has no stages"},
+		{"missing-target", "FROM scratch AS sample\n", "other", "has no stage"}, {"cycle", "FROM sample AS sample\n", "", "depends on itself"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			dir := t.TempDir()
 			writeFile(t, filepath.Join(dir, "Dockerfile"), tc.source)
-			_, err := New().BaseMetadata(context.Background(), &spec.DevContainer{Path: filepath.Join(dir, ".devcontainer.json"), Build: &spec.Build{Dockerfile: "Dockerfile", Target: tc.target}}, Options{})
-			if err == nil {
-				t.Fatal("invalid Dockerfile accepted")
+			_, err := offlineMetadataBuilder().BaseMetadata(context.Background(), &spec.DevContainer{Path: filepath.Join(dir, ".devcontainer.json"), Build: &spec.Build{Dockerfile: "Dockerfile", Target: tc.target}}, Options{})
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("invalid Dockerfile error=%v want %s", err, tc.want)
 			}
 		})
 	}
-	if _, err := New().BaseMetadata(context.Background(), nil, Options{}); err == nil {
+	if _, err := offlineMetadataBuilder().BaseMetadata(context.Background(), nil, Options{}); err == nil {
 		t.Fatal("nil config accepted")
 	}
 }
