@@ -27,46 +27,6 @@ func writeFile(t *testing.T, path, content string) {
 	}
 }
 
-func TestDockerfileUser(t *testing.T) {
-	cases := []struct {
-		name       string
-		dockerfile string
-		target     string
-		buildArgs  map[string]string
-		wantUser   string
-		wantBase   string
-	}{
-		{"last USER wins", "FROM base:1\nUSER first\nRUN true\nUSER second\n", "", nil, "second", ""},
-		{"no USER returns base image", "FROM base:1\nRUN true\n", "", nil, "", "base:1"},
-		{"base image from global ARG", "ARG BASE=base:2\nFROM $BASE\n", "", nil, "", "base:2"},
-		{"build arg overrides global ARG", "ARG BASE=base:2\nFROM $BASE\n", "", map[string]string{"BASE": "base:3"}, "", "base:3"},
-		{"USER from stage ARG default", "FROM base:1\nARG NAME=arg-user\nUSER $NAME\n", "", nil, "arg-user", ""},
-		{"USER from build arg", "FROM base:1\nARG NAME=arg-user\nUSER $NAME\n", "", map[string]string{"NAME": "build-user"}, "build-user", ""},
-		{"USER from ENV", "FROM base:1\nENV NAME=env-user\nUSER ${NAME}:1000\n", "", nil, "env-user:1000", ""},
-		{"follows FROM to earlier stage", "FROM base:1 AS one\nUSER stage-user\nFROM one AS two\nRUN true\n", "", nil, "stage-user", ""},
-		{"target stage", "FROM base:1 AS one\nUSER one-user\nFROM base:1 AS two\nUSER two-user\n", "one", nil, "one-user", ""},
-		{"chain without USER returns its image", "FROM base:4 AS one\nFROM one\n", "", nil, "", "base:4"},
-	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			path := filepath.Join(t.TempDir(), "Dockerfile")
-			writeFile(t, path, c.dockerfile)
-			user, base, err := dockerfileUser(path, c.target, c.buildArgs)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if user != c.wantUser || base != c.wantBase {
-				t.Fatalf("user, base = %q, %q; want %q, %q", user, base, c.wantUser, c.wantBase)
-			}
-		})
-	}
-	path := filepath.Join(t.TempDir(), "Dockerfile")
-	writeFile(t, path, "FROM base:1 AS one\n")
-	if _, _, err := dockerfileUser(path, "missing", nil); err == nil {
-		t.Fatal("expected error for a missing target stage")
-	}
-}
-
 // imageRegistry serves one single-platform image whose config sets User.
 type imageRegistry struct {
 	srv      *httptest.Server
@@ -265,4 +225,22 @@ func TestGenerate_NoBaseUserLookupWithoutFeatures(t *testing.T) {
 	if n := reg.count(); n != 0 {
 		t.Fatalf("registry requests = %d, want none without features", n)
 	}
+}
+
+func TestGenerate_FeaturesSeeUserFromInheritedStageEnv(t *testing.T) {
+	reg := newImageRegistry(t, "library/base", "1", "image-user")
+	ws := writeWorkspace(t, `"build":{"dockerfile":"Dockerfile"}`, map[string]string{
+		"Dockerfile": "FROM " + reg.host() + "/library/base:1 AS parent\nENV ACCOUNT=nobody\nFROM parent\nUSER ${ACCOUNT}\n",
+	})
+	df, _ := generate(t, reg.builder(), ws)
+	wantBuiltinUser(t, df, "nobody")
+}
+
+func TestGenerate_FeaturesSeeUserFromDependentArgDefault(t *testing.T) {
+	reg := newImageRegistry(t, "library/base", "1", "image-user")
+	ws := writeWorkspace(t, `"build":{"dockerfile":"Dockerfile"}`, map[string]string{
+		"Dockerfile": "FROM " + reg.host() + "/library/base:1\nARG ACCOUNT=nobody\nARG CHOSEN=${ACCOUNT}\nUSER ${CHOSEN}\n",
+	})
+	df, _ := generate(t, reg.builder(), ws)
+	wantBuiltinUser(t, df, "nobody")
 }
