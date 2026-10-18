@@ -107,7 +107,7 @@ func (a *application) lifecycleCommand(name string) *cobra.Command {
 		if err != nil {
 			return err
 		}
-		a.result["phasesRun"] = result.RanPhases()
+		a.result["phasesRun"] = phaseResults(result.RanPhases())
 		return a.containerResult(cmd.Context(), cli, dc, workspace, containerID)
 	}
 	return cmd
@@ -130,4 +130,17 @@ func resolveCommand(c spec.Command, ctx substitute.Context, env map[string]strin
 		}
 	}
 	return out
+}
+
+type phaseResult struct {
+	Hook   lifecycle.Hook `json:"hook"`
+	Origin string         `json:"origin"`
+}
+
+func phaseResults(phases []lifecycle.Phase) []phaseResult {
+	results := make([]phaseResult, 0, len(phases))
+	for _, phase := range phases {
+		results = append(results, phaseResult{Hook: phase.Hook, Origin: phase.Origin.Source})
+	}
+	return results
 }

@@ -112,12 +112,10 @@ func TestDockerComposeCLI(t *testing.T) {
 	if !ok || exit.ExitCode() != 7 {
 		t.Fatalf("exec failure=%v output=%s logs=%s", err, output, logs.String())
 	}
-	if err := json.Unmarshal(output, &result); err != nil || result["outcome"] != "error" || result["exitCode"] != float64(7) || bytes.Count(output, []byte("\n")) != 1 {
-		t.Fatalf("exec error result=%s (%v)", output, err)
+	if string(output) != "diagnostic\n" || logs.Len() != 0 {
+		t.Fatalf("exec pass-through stdout=%q stderr=%q", output, logs.String())
 	}
-	if !bytes.Contains(logs.Bytes(), []byte("diagnostic")) {
-		t.Fatalf("command output missing from stderr: %s", logs.String())
-	}
+
 	if err := os.Remove(config); err != nil {
 		t.Fatal(err)
 	}
@@ -145,7 +143,14 @@ func TestDockerLifecycleCLI(t *testing.T) {
 		t.Fatal(err)
 	}
 	hostRunCommand(t, os.Environ(), bin, "exec", "--workspace-folder", workspace, "--", "test", "!", "-e", "/tmp/hooks")
-	hostRunCommand(t, os.Environ(), bin, "run-user-commands", "--workspace-folder", workspace, "--skip-post-attach")
+	phaseOutput := hostRunCommand(t, os.Environ(), bin, "run-user-commands", "--workspace-folder", workspace, "--skip-post-attach")
+	var phaseResult map[string]json.RawMessage
+	if err := json.Unmarshal(phaseOutput, &phaseResult); err != nil {
+		t.Fatal(err)
+	}
+	if string(phaseResult["phasesRun"]) != `[{"hook":"onCreateCommand","origin":"devcontainer.json"}]` {
+		t.Fatalf("lifecycle phasesRun=%s", phaseResult["phasesRun"])
+	}
 	hostRunCommand(t, os.Environ(), bin, "set-up", "--workspace-folder", workspace, "--container-id", first["containerId"].(string), "--skip-post-attach")
 	logs := hostRunCommand(t, os.Environ(), bin, "exec", "--workspace-folder", workspace, "--", "cat", "/tmp/hooks")
 	if string(logs) != "create\n" {

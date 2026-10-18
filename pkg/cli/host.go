@@ -55,16 +55,11 @@ func (a *application) upCommand() *cobra.Command {
 			return err
 		}
 
-		if cmd.Flags().Changed("load") && !opts.options.Load {
-			return usageError("up requires a loaded image; use build --load=false for cache-only builds")
-		}
-		bo, err := opts.prepare(a, dc, workspace, cmd.Flags().Changed("load"))
+		bo, err := opts.prepare(a, dc, workspace, false)
 		if err != nil {
 			return err
 		}
-		if bo.Push || bo.OutputDir != "" {
-			return usageError("up requires a local image; use build for --push or --output")
-		}
+
 		cli, err := newDockerClient()
 		if err != nil {
 			return err
@@ -148,9 +143,9 @@ func (a *application) containerResult(ctx context.Context, cli *dockerclient.Cli
 
 func resolveUIDUpdate(mode string) (*hostdocker.RemoteUserUIDUpdate, error) {
 	switch mode {
-	case "off", "never":
+	case "never":
 		return nil, nil
-	case "on":
+	case "on", "off":
 		if runtime.GOOS != "linux" && runtime.GOOS != "darwin" {
 			return nil, nil
 		}
@@ -161,7 +156,7 @@ func resolveUIDUpdate(mode string) (*hostdocker.RemoteUserUIDUpdate, error) {
 	if uid < 0 || gid < 0 {
 		return nil, nil
 	}
-	return &hostdocker.RemoteUserUIDUpdate{HostUID: uid, HostGID: gid}, nil
+	return &hostdocker.RemoteUserUIDUpdate{HostUID: uid, HostGID: gid, DefaultOff: mode == "off"}, nil
 }
 
 func (a *application) remove(ctx context.Context, cli *dockerclient.Client, dc *spec.DevContainer, workspace string) error {

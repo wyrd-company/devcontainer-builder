@@ -49,8 +49,7 @@ func invoke(t *testing.T, wantCode int, args ...string) (map[string]any, string)
 
 func TestHelpContract(t *testing.T) {
 	for _, args := range [][]string{{"--help"}, {"help"}, {}} {
-		result, logs := invoke(t, 0, args...)
-		help := result["help"].(string)
+		help, logs := invokeHelp(t, args...)
 		for _, command := range []string{"up", "build", "exec", "read-configuration", "run-user-commands", "set-up", "down", "inspect", "generate", "features", "server", "version", "skills"} {
 			if !strings.Contains(help, "  "+command+" ") {
 				t.Errorf("help does not describe %s:\n%s", command, help)
@@ -78,7 +77,7 @@ func TestErrorResults(t *testing.T) {
 	}{
 		{"up", 1, []string{"up", "--workspace-folder", missing}},
 		{"build", 1, []string{"build", "--workspace-folder", missing}},
-		{"exec", 1, []string{"exec", "echo", "--config", missing}},
+
 		{"read", 1, []string{"read-configuration", "--workspace-folder", missing}},
 		{"unknown-command", 2, []string{"unknown-command"}},
 		{"legacy-flag", 2, []string{"build", "--workspace", missing}},
@@ -99,10 +98,7 @@ func TestErrorResults(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) { invoke(t, tc.code, tc.args...) })
 	}
-	result, _ := invoke(t, 1, "exec", "echo", "--config", missing)
-	if !strings.Contains(result["message"].(string), missing) {
-		t.Fatalf("flag after positional did not reach config loader: %v", result)
-	}
+
 }
 
 func TestReadConfiguration(t *testing.T) {
@@ -139,7 +135,7 @@ func TestBundledSkills(t *testing.T) {
 	result, _ := invoke(t, 0, "skills")
 	skill := result["skills"].([]any)[0].(map[string]any)
 	content := skill["content"].(string)
-	for _, text := range []string{"name: dcb", "description:", "--workspace-folder", "--log-format", "stderr", "run-user-commands", "dcb exec"} {
+	for _, text := range []string{"name: dcb", "description:", "--workspace-folder", "--log-format", "stderr", "run-user-commands", "dcb exec", "Help is plain text on stdout", "Invocations except help and exec", "Capture\nstdout", "phasesRun", "type: diagnostic", "type: output"} {
 		if !strings.Contains(content, text) {
 			t.Errorf("skill missing %q", text)
 		}
@@ -185,7 +181,7 @@ func TestJSONDiagnosticStream(t *testing.T) {
 	}
 	for i, want := range []string{"first", "second", "unterminated"} {
 		var entry map[string]string
-		if err := json.Unmarshal([]byte(lines[i]), &entry); err != nil || entry["text"] != want || entry["level"] != "info" {
+		if err := json.Unmarshal([]byte(lines[i]), &entry); err != nil || entry["text"] != want || entry["type"] != "output" || entry["level"] != "" {
 			t.Fatalf("log line %q: %v", lines[i], err)
 		}
 	}
@@ -212,5 +208,104 @@ func TestGenerateAndJSONLogs(t *testing.T) {
 	_, quiet := invoke(t, 0, "generate", "--workspace-folder", workspace, "--work-dir", t.TempDir(), "--log-level", "off")
 	if quiet != "" {
 		t.Fatalf("log-level off: %q", quiet)
+	}
+}
+
+func invokeHelp(t *testing.T, args ...string) (string, string) {
+	t.Helper()
+	var out, logs bytes.Buffer
+	code := Run(context.Background(), args, "test", nil, &out, &logs)
+	if code != 0 || json.Valid(out.Bytes()) || strings.Contains(out.String(), `"outcome":`) || !strings.Contains(out.String(), "Usage:") {
+		t.Fatalf("help: code=%d stdout=%q stderr=%q", code, out.String(), logs.String())
+	}
+	return out.String(), logs.String()
+}
+
+func TestCommandHelpPlainText(t *testing.T) {
+	for _, command := range []string{"up", "build", "exec", "generate", "read-configuration", "run-user-commands", "set-up", "inspect", "down", "features", "server", "skills", "version"} {
+		t.Run(command, func(t *testing.T) {
+			help, logs := invokeHelp(t, command, "--help")
+			if !strings.Contains(help, "dcb "+command) || logs != "" {
+				t.Fatalf("help=%q logs=%q", help, logs)
+			}
+		})
+	}
+}
+
+func TestExecOperationError(t *testing.T) {
+	t.Chdir(t.TempDir())
+	t.Setenv("DOCKER_HOST", "unix://"+filepath.Join(t.TempDir(), "missing.sock"))
+	for _, format := range []string{"text", "json"} {
+		for _, level := range []string{"info", "off"} {
+			var out, logs bytes.Buffer
+			missing := filepath.Join(t.TempDir(), "missing")
+			code := Run(context.Background(), []string{"exec", "echo", "--config", missing, "--log-format", format, "--log-level", level}, "test", nil, &out, &logs)
+			if code != 1 || out.Len() != 0 || !strings.Contains(logs.String(), missing) {
+				t.Fatalf("code=%d out=%q logs=%q", code, out.String(), logs.String())
+			}
+			if format == "json" {
+				var record map[string]string
+				if err := json.Unmarshal(logs.Bytes(), &record); err != nil || record["type"] != "diagnostic" || record["level"] != "error" {
+					t.Fatalf("error diagnostic=%q (%v)", logs.String(), err)
+				}
+			}
+		}
+	}
+}
+
+func TestDiagnosticLevels(t *testing.T) {
+	for _, level := range []string{"trace", "debug", "info", "warn", "error", "off"} {
+		var logs bytes.Buffer
+		a := &application{logLevel: level, logs: &logWriter{dst: &logs, json: true}}
+		a.diagnostic("trace", "trace detail")
+		a.diagnostic("debug", "debug detail")
+		a.logf("info detail")
+		a.logf("%s", "warning: detail")
+		a.diagnostic("error", "error detail")
+		ranks := []string{"trace", "debug", "info", "warn", "error", "off"}
+		start := 0
+		for ranks[start] != level {
+			start++
+		}
+		var got []string
+		dec := json.NewDecoder(&logs)
+		for dec.More() {
+			var record map[string]string
+			if err := dec.Decode(&record); err != nil {
+				t.Fatal(err)
+			}
+			if record["type"] != "diagnostic" {
+				t.Fatalf("record=%v", record)
+			}
+			got = append(got, record["level"])
+		}
+		if strings.Join(got, ",") != strings.Join(ranks[start:5], ",") {
+			t.Fatalf("%s: levels=%v", level, got)
+		}
+	}
+}
+
+func TestCommandOutputIgnoresDiagnosticLevel(t *testing.T) {
+	for _, format := range []bool{false, true} {
+		var logs bytes.Buffer
+		a := &application{logLevel: "off", logs: &logWriter{dst: &logs, json: format}}
+		a.logf("hidden")
+		_, _ = a.logs.Write([]byte("command output"))
+		_ = a.logs.Flush()
+		if !strings.Contains(logs.String(), "command output") || strings.Contains(logs.String(), "hidden") {
+			t.Fatalf("logs=%q", logs.String())
+		}
+	}
+}
+
+func TestVerboseDiagnostics(t *testing.T) {
+	for _, level := range []string{"info", "debug", "trace"} {
+		_, logs := invoke(t, 0, "version", "--log-level", level)
+		if strings.Contains(logs, "running dcb version") != (level != "info") {
+			t.Fatalf("%s start diagnostics=%q", level, logs)
+		}
+		if strings.Contains(logs, "arguments:") != (level == "trace") {
+			t.Fatalf("%s trace diagnostics=%q", level, logs)
+		}
 	}
 }

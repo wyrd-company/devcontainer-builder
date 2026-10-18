@@ -43,7 +43,7 @@ func (w *logWriter) Write(p []byte) (int, error) {
 }
 
 func (w *logWriter) emit(s string) error {
-	return json.NewEncoder(w.dst).Encode(map[string]string{"type": "text", "level": "info", "text": s})
+	return json.NewEncoder(w.dst).Encode(map[string]string{"type": "output", "text": s})
 }
 
 func (w *logWriter) Flush() error {
@@ -55,4 +55,21 @@ func (w *logWriter) Flush() error {
 	err := w.emit(string(w.pending))
 	w.pending = nil
 	return err
+}
+
+// diagnostic shares the stream lock so concurrent output cannot split a record.
+func (w *logWriter) diagnostic(level, text string) error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if !w.json {
+		_, err := io.WriteString(w.dst, text+"\n")
+		return err
+	}
+	if len(w.pending) > 0 {
+		if err := w.emit(string(w.pending)); err != nil {
+			return err
+		}
+		w.pending = nil
+	}
+	return json.NewEncoder(w.dst).Encode(map[string]string{"type": "diagnostic", "level": level, "text": text})
 }

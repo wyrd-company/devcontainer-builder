@@ -3,6 +3,8 @@ package docker
 import (
 	"strings"
 	"testing"
+
+	"github.com/wyrd-company/devcontainer-builder/pkg/spec"
 )
 
 func TestIsAllDigits(t *testing.T) {
@@ -58,6 +60,30 @@ func TestUIDUpdateScript_Shape(t *testing.T) {
 	} {
 		if !strings.Contains(uidUpdateScript, want) {
 			t.Errorf("uidUpdateScript missing %q", want)
+		}
+	}
+}
+
+func TestUIDUpdateDecisionMatrix(t *testing.T) {
+	yes, no := true, false
+	for _, mode := range []string{"never", "on", "off"} {
+		for _, config := range []struct {
+			name    string
+			value   *bool
+			on, off bool
+		}{
+			{"unset", nil, true, false}, {"true", &yes, true, true}, {"false", &no, false, false},
+		} {
+			t.Run(mode+"/"+config.name, func(t *testing.T) {
+				var update *RemoteUserUIDUpdate
+				if mode != "never" {
+					update = &RemoteUserUIDUpdate{DefaultOff: mode == "off"}
+				}
+				want := mode == "on" && config.on || mode == "off" && config.off
+				if got := shouldUpdateUID(&spec.DevContainer{UpdateRemoteUserUID: config.value}, update); got != want {
+					t.Fatalf("remap=%v want %v", got, want)
+				}
+			})
 		}
 	}
 }

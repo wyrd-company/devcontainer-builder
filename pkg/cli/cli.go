@@ -1,6 +1,7 @@
 // Package cli composes the devcontainer libraries into the dcb command surface.
-// Run returns an exit code and writes exactly one JSON result line to stdout.
-// Diagnostics and container command output are sent to stderr.
+// Run writes one JSON result line except for help and exec.
+// Help is plain text on stdout. Exec passes child streams through unchanged.
+// Diagnostics and other build/lifecycle output use stderr.
 // ---
 // relationships:
 //
@@ -15,18 +16,22 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/spf13/cobra"
 )
 
 type application struct {
-	version             string
-	stdin               io.Reader
-	stderr              io.Writer
-	logFormat, logLevel string
-	result              map[string]any
-	running             bool
-	logs                *logWriter
+	version                string
+	stdin                  io.Reader
+	stderr                 io.Writer
+	stdout                 io.Writer
+	helpShown, execStarted bool
+	outputErr              error
+	logFormat, logLevel    string
+	result                 map[string]any
+	running                bool
+	logs                   *logWriter
 }
 
 type exitError struct {
@@ -40,12 +45,14 @@ func usageError(format string, args ...any) error { return &exitError{2, fmt.Err
 
 // Run executes one invocation. Exit codes: 0 success, 1 operation failure,
 // 2 invalid invocation. Exec returns the container command's nonzero exit code.
-// Help and embedded skills are carried in the JSON result as strings.
+// Help is plain text. Exec emits no result after starting the child; operation
+// failures before the child use stderr and exit 1. Invalid invocations use JSON.
+// Embedded skills are carried in the JSON result as strings.
 func Run(ctx context.Context, args []string, version string, stdin io.Reader, stdout, stderr io.Writer) int {
-	a := &application{version: version, stdin: stdin, stderr: stderr, result: map[string]any{}}
+	a := &application{version: version, stdin: stdin, stderr: stderr, stdout: stdout, result: map[string]any{}}
 	root := a.command()
 	root.SetArgs(args)
-	err := root.ExecuteContext(ctx)
+	cmd, err := root.ExecuteContextC(ctx)
 	if a.logs != nil {
 		_ = a.logs.Flush()
 	}
@@ -65,6 +72,19 @@ func Run(ctx context.Context, args []string, version string, stdin io.Reader, st
 	} else {
 		a.result["outcome"] = "success"
 	}
+	if a.outputErr != nil {
+		return 1
+	}
+	if a.helpShown || a.execStarted {
+		return code
+	}
+	if cmd != nil && cmd.Name() == "exec" && code == 1 {
+		// Operation failures are errors, even when optional diagnostics are off.
+		if a.logs != nil {
+			_ = a.logs.diagnostic("error", err.Error())
+		}
+		return code
+	}
 	if err := json.NewEncoder(stdout).Encode(a.result); err != nil {
 		return 1
 	}
@@ -74,7 +94,7 @@ func Run(ctx context.Context, args []string, version string, stdin io.Reader, st
 func (a *application) command() *cobra.Command {
 	root := &cobra.Command{
 		Use: "dcb", Short: "Build and manage development containers",
-		Long:         "Build and manage development containers through the Docker Engine API.\n\nEvery invocation writes one JSON result line to stdout; logs and command output use stderr.\nExit codes: 0 success, 1 operation failure, 2 invalid invocation; exec propagates the command exit code.\nUse -- before a container command's own flags.",
+		Long:         "Build and manage development containers through the Docker Engine API.\n\nInvocations except help and exec write one JSON result line to stdout. Help is plain text.\nExec passes child stdout/stderr through unchanged without a result line; other logs and command output use stderr.\nExit codes: 0 success, 1 operation failure, 2 invalid invocation; exec propagates the command exit code.\nUse -- before a container command's own flags.",
 		Example:      "  dcb up --workspace-folder .\n  dcb build --workspace-folder . --image-name example:dev\n  dcb exec --workspace-folder . -- sh -c 'id && pwd'\n  dcb read-configuration --workspace-folder .\n  dcb skills install --dir .agents/skills",
 		SilenceUsage: true, SilenceErrors: true,
 		Args: cobra.NoArgs,
@@ -84,9 +104,17 @@ func (a *application) command() *cobra.Command {
 	root.SetOut(io.Discard)
 	root.SetErr(io.Discard)
 	root.SetHelpFunc(func(cmd *cobra.Command, _ []string) {
-		a.result["help"] = cmd.Long + "\n\n" + cmd.UsageString()
+		a.helpShown = true
+		help := cmd.Long
+		if help == "" {
+			help = cmd.Short
+		}
+		help += "\n\n" + cmd.UsageString()
 		if cmd.Parent() == nil {
-			a.result["help"] = a.result["help"].(string) + "\nCommon configuration flags (on workspace commands):\n  --workspace-folder string  Local workspace folder (default .)\n  --config string            Explicit devcontainer.json path\n  --override-config string   Alternate content, with original relative paths\n"
+			help += "\nCommon configuration flags (on workspace commands):\n  --workspace-folder string  Local workspace folder (default .)\n  --config string            Explicit devcontainer.json path\n  --override-config string   Alternate content, with original relative paths\n"
+		}
+		if _, err := io.WriteString(a.stdout, help); err != nil {
+			a.outputErr = err
 		}
 	})
 	root.PersistentFlags().StringVar(&a.logFormat, "log-format", "text", "Diagnostic format: text or json")
@@ -109,11 +137,21 @@ func (a *application) command() *cobra.Command {
 	return root
 }
 
+// logf adapts the libraries' printf logger, including their warning prefix.
 func (a *application) logf(format string, args ...any) {
-	if a.logLevel == "warn" || a.logLevel == "error" || a.logLevel == "off" {
-		return
+	text := fmt.Sprintf(format, args...)
+	level := "info"
+	if strings.HasPrefix(text, "warning:") {
+		level = "warn"
 	}
-	_, _ = fmt.Fprintf(a.logs, format+"\n", args...)
+	a.diagnostic(level, text)
+}
+
+func (a *application) diagnostic(level, text string) {
+	ranks := map[string]int{"trace": 0, "debug": 1, "info": 2, "warn": 3, "error": 4, "off": 5}
+	if a.logs != nil && ranks[level] >= ranks[a.logLevel] {
+		_ = a.logs.diagnostic(level, text)
+	}
 }
 
 // Cobra validates required flags after pre-run hooks. Mark operation errors only
@@ -121,7 +159,12 @@ func (a *application) logf(format string, args ...any) {
 func wrapActions(cmd *cobra.Command, a *application) {
 	if cmd.RunE != nil {
 		action := cmd.RunE
-		cmd.RunE = func(cmd *cobra.Command, args []string) error { a.running = true; return action(cmd, args) }
+		cmd.RunE = func(cmd *cobra.Command, args []string) error {
+			a.running = true
+			a.diagnostic("debug", "running "+cmd.CommandPath())
+			a.diagnostic("trace", "arguments: "+fmt.Sprint(args))
+			return action(cmd, args)
+		}
 	}
 	for _, child := range cmd.Commands() {
 		wrapActions(child, a)

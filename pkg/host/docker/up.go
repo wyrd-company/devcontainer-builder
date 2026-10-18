@@ -156,8 +156,7 @@ func (h *Host) Up(ctx context.Context, req UpRequest) (*UpResult, error) {
 	// bind-mounted files don't land with surprising ownership. Runs
 	// before lifecycle so onCreate/postCreate already see the new
 	// IDs. Idempotent — converges on every Up.
-	if req.RemoteUserUIDUpdate != nil &&
-		(dc.UpdateRemoteUserUID == nil || *dc.UpdateRemoteUserUID) {
+	if shouldUpdateUID(dc, req.RemoteUserUIDUpdate) {
 		if err := h.applyUIDUpdate(ctx, id, dc.RemoteUser, *req.RemoteUserUIDUpdate); err != nil {
 			return res, err
 		}

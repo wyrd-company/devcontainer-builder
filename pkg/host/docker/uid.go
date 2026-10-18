@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"strings"
+
+	"github.com/wyrd-company/devcontainer-builder/pkg/spec"
 )
 
 // RemoteUserUIDUpdate, when supplied on UpRequest, asks the host to
@@ -18,6 +20,7 @@ import (
 // The update is skipped — without error — when:
 //
 //   - the spec sets `updateRemoteUserUID: false`,
+//   - DefaultOff is set and the spec does not explicitly enable remapping,
 //   - the resolved remoteUser is "root" or a numeric UID,
 //   - the in-image UID/GID already match HostUID/HostGID,
 //   - or the in-image /etc/passwd does not contain remoteUser.
@@ -30,6 +33,8 @@ type RemoteUserUIDUpdate struct {
 	// on linux/macOS; the package never does so itself.
 	HostUID int
 	HostGID int
+	// DefaultOff requires an explicit updateRemoteUserUID: true in the spec.
+	DefaultOff bool
 }
 
 // uidUpdateScript is the runtime equivalent of upstream's
@@ -108,4 +113,15 @@ func isAllDigits(s string) bool {
 		}
 	}
 	return true
+}
+
+// shouldUpdateUID applies the explicit spec setting before the caller's default.
+func shouldUpdateUID(dc *spec.DevContainer, update *RemoteUserUIDUpdate) bool {
+	if update == nil {
+		return false
+	}
+	if dc.UpdateRemoteUserUID != nil {
+		return *dc.UpdateRemoteUserUID
+	}
+	return !update.DefaultOff
 }

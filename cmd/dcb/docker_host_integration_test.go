@@ -94,6 +94,48 @@ func TestDockerHostIntegration(t *testing.T) {
 		t.Fatalf("exec output = %q, want %q", got, wantExec)
 	}
 
+	t.Run("exec-pass-through", func(t *testing.T) {
+		for _, format := range []string{"text", "json"} {
+			for _, code := range []int{0, 1, 7} {
+				t.Run(fmt.Sprintf("%s/%d", format, code), func(t *testing.T) {
+					command := exec.Command(bin, "exec", "--workspace-folder", workspace, "--log-format", format, "--log-level", "off", "--", "sh", "-c", fmt.Sprintf("printf 'out\\nunterminated'; printf 'err\\nunterminated' >&2; exit %d", code))
+					var out, logs bytes.Buffer
+					command.Stdout, command.Stderr = &out, &logs
+					err := command.Run()
+					actual := 0
+					if err != nil {
+						var exit *exec.ExitError
+						if !errors.As(err, &exit) {
+							t.Fatal(err)
+						}
+						actual = exit.ExitCode()
+					}
+					if actual != code {
+						t.Fatalf("child exit=%d want %d", actual, code)
+					}
+					if out.String() != "out\nunterminated" {
+						t.Fatalf("child stdout changed or result appended: %q", out.String())
+					}
+					if logs.String() != "err\nunterminated" {
+						t.Fatalf("child stderr changed: %q", logs.String())
+					}
+				})
+			}
+		}
+		command := exec.Command(bin, "exec", "--workspace-folder", workspace, "--container-id", "missing-container", "--log-format", "json", "--", "true")
+		var out, logs bytes.Buffer
+		command.Stdout, command.Stderr = &out, &logs
+		err := command.Run()
+		var exit *exec.ExitError
+		if !errors.As(err, &exit) || exit.ExitCode() != 1 || out.Len() != 0 {
+			t.Fatalf("exec operation error=%v stdout=%q", err, out.String())
+		}
+		var diagnostic map[string]string
+		if err := json.Unmarshal(logs.Bytes(), &diagnostic); err != nil || diagnostic["type"] != "diagnostic" || diagnostic["level"] != "error" {
+			t.Fatalf("exec diagnostic=%q (%v)", logs.String(), err)
+		}
+	})
+
 	inspectOut := hostRunCommand(t, cmdEnv, bin, "inspect", "--workspace-folder", workspace)
 	hostWriteArtifact(t, "docker-host-cli-inspect.txt", inspectOut)
 	for _, want := range []string{
@@ -426,13 +468,10 @@ func hostRunCommand(t *testing.T, env []string, name string, args ...string) []b
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	out, err := cmd.Output()
-	if name != "go" || (len(args) > 0 && args[0] == "run") {
+	if (name != "go" || (len(args) > 0 && args[0] == "run")) && !(len(args) > 0 && args[0] == "exec") {
 		var result map[string]any
 		if decodeErr := json.Unmarshal(out, &result); decodeErr != nil || result["outcome"] != "success" || bytes.Count(out, []byte("\n")) != 1 {
 			t.Fatalf("CLI result: %s, stderr: %s, error: %v", out, stderr.String(), err)
-		}
-		if len(args) > 0 && args[0] == "exec" {
-			out = stderr.Bytes()
 		}
 	}
 	if err != nil {

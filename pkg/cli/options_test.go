@@ -12,6 +12,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/spf13/cobra"
@@ -61,11 +62,10 @@ func TestBuildOptions(t *testing.T) {
 		args []string
 		code int
 	}{
-		{"push-load", []string{"--push", "--load"}, 2},
+
 		{"invalid-arg", []string{"--build-arg", "invalid"}, 2},
 		{"empty-label-key", []string{"--label", "=value"}, 2},
-		{"up-export", []string{"--output", t.TempDir()}, 2},
-		{"up-cache-only", []string{"--load=false"}, 2},
+
 		{"invalid-uid", []string{"--update-remote-user-uid-default", "invalid"}, 2},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -75,8 +75,7 @@ func TestBuildOptions(t *testing.T) {
 		})
 	}
 
-	// The shared conflict guard must protect build even when up's separate local
-	// export guard would also reject this invocation.
+	// Build retains its mutually exclusive export modes.
 	conflict, _ := invoke(t, 2, "build", "--config", cfg, "--push", "--load")
 	if conflict["message"] != "--push and --load are mutually exclusive" {
 		t.Fatalf("push/load conflict: %v", conflict)
@@ -186,5 +185,57 @@ func TestImageUpPreservesBuildCustomization(t *testing.T) {
 				t.Fatalf("%s was discarded", tc.name)
 			}
 		})
+	}
+}
+
+func TestUpFlagSurface(t *testing.T) {
+	a := &application{}
+	up, build := a.upCommand(), a.buildCommand(false)
+	for _, name := range []string{"push", "load", "output", "no-cache"} {
+		if up.Flags().Lookup(name) != nil {
+			t.Errorf("up registers --%s", name)
+		}
+		if build.Flags().Lookup(name) == nil {
+			t.Errorf("build missing --%s", name)
+		}
+		invoke(t, 2, "up", "--"+name+"=value")
+	}
+	for _, name := range []string{"build-no-cache", "workspace-folder", "image-name", "label"} {
+		if up.Flags().Lookup(name) == nil {
+			t.Errorf("up missing --%s", name)
+		}
+	}
+}
+
+func TestUIDModeMapping(t *testing.T) {
+	for _, mode := range []string{"on", "off", "never"} {
+		update, err := resolveUIDUpdate(mode)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if mode == "never" {
+			if update != nil {
+				t.Fatal("never requests remapping")
+			}
+			continue
+		}
+		if (runtime.GOOS == "linux" || runtime.GOOS == "darwin") && update == nil {
+			t.Fatalf("%s: expected UID request", mode)
+		}
+		if update != nil && update.DefaultOff != (mode == "off") {
+			t.Fatalf("%s: %+v", mode, update)
+		}
+	}
+}
+
+func TestLifecycleResultShape(t *testing.T) {
+	phases := []lifecycle.Phase{{Hook: lifecycle.HookPostAttach, When: lifecycle.WhenAttach, Origin: lifecycle.Origin{Source: "devcontainer.json"}, Command: spec.Command{Shell: "echo example"}}}
+	encoded, err := json.Marshal(map[string]any{"phasesRun": phaseResults(phases)})
+	if err != nil || string(encoded) != `{"phasesRun":[{"hook":"postAttachCommand","origin":"devcontainer.json"}]}` {
+		t.Fatalf("phases result=%s (%v)", encoded, err)
+	}
+	encoded, err = json.Marshal(phaseResults(nil))
+	if err != nil || string(encoded) != "[]" {
+		t.Fatalf("empty phases=%s (%v)", encoded, err)
 	}
 }

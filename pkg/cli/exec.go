@@ -21,7 +21,7 @@ func (a *application) execCommand() *cobra.Command {
 	var id, user, workdir string
 	var remoteEnv []string
 	var tty bool
-	cmd := &cobra.Command{Use: "exec [flags] -- <command> [args...]", Short: "Run a command in the devcontainer; stream its output to stderr", Args: cobra.MinimumNArgs(1)}
+	cmd := &cobra.Command{Use: "exec [flags] -- <command> [args...]", Short: "Run a command in the devcontainer; pass through its stdout and stderr", Args: cobra.MinimumNArgs(1)}
 	cfg.flags(cmd)
 	cmd.Flags().BoolVar(&tty, "tty", false, "Allocate a pseudo-terminal for the container command")
 	cmd.Flags().StringVar(&id, "container-id", "", "Target an existing container by ID")
@@ -78,12 +78,12 @@ func (a *application) execCommand() *cobra.Command {
 				wd = info.Config.WorkingDir
 			}
 		}
-		res, err := a.execute(cmd.Context(), cli, dc, hostdocker.ExecRequest{ContainerID: containerID, TTY: tty, Cmd: args, User: user, WorkDir: wd, Env: execEnv, Stdin: a.stdin, Stdout: a.logs, Stderr: a.logs})
+		a.execStarted = true
+		res, err := a.execute(cmd.Context(), cli, dc, hostdocker.ExecRequest{ContainerID: containerID, TTY: tty, Cmd: args, User: user, WorkDir: wd, Env: execEnv, Stdin: a.stdin, Stdout: a.stdout, Stderr: a.stderr})
 		if err != nil {
+			a.execStarted = false
 			return err
 		}
-		a.result["containerId"] = containerID
-		a.result["exitCode"] = res.ExitCode
 		if res.ExitCode != 0 {
 			return &exitError{res.ExitCode, fmt.Errorf("container command exited with code %d", res.ExitCode)}
 		}

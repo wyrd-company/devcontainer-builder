@@ -41,11 +41,15 @@ func (o *buildOptions) flags(cmd *cobra.Command, generate bool) {
 	f.BoolVar(&o.options.VSCode.AlpineLibc, "vscode-alpine", false, "Use the musl VS Code server variant")
 	f.Var(&platformValue{target: &o.options.VSCode.Platform}, "vscode-platform", "VS Code server platform override")
 	if !generate {
-		f.BoolVar(&o.options.Push, "push", false, "Push the resulting image")
-		f.BoolVar(&o.options.Load, "load", false, "Load the image into Docker (default unless --push or --output)")
-		f.BoolVar(&o.options.NoCache, "no-cache", false, "Disable build cache")
+		if cmd.Name() != "up" {
+			f.BoolVar(&o.options.Push, "push", false, "Push the resulting image")
+			f.BoolVar(&o.options.Load, "load", false, "Load the image into Docker (default unless --push or --output)")
+			f.BoolVar(&o.options.NoCache, "no-cache", false, "Disable build cache")
+		}
 		f.BoolVar(&o.options.Pull, "pull", false, "Always pull referenced images")
-		f.StringVar(&o.options.OutputDir, "output", "", "Export image filesystem to a local directory")
+		if cmd.Name() != "up" {
+			f.StringVar(&o.options.OutputDir, "output", "", "Export image filesystem to a local directory")
+		}
 		f.StringArrayVar(&o.options.CacheFrom, "cache-from", nil, "Cache import spec (repeat)")
 		f.StringArrayVar(&o.options.CacheTo, "cache-to", nil, "Cache export spec (repeat)")
 		f.StringArrayVar(&o.buildArgs, "build-arg", nil, "Build argument KEY=VALUE (repeat)")
