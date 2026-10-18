@@ -4,7 +4,9 @@ package buildkit
 
 import (
 	"archive/tar"
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -148,6 +150,54 @@ func TestDaemonPushIntegration(t *testing.T) {
 	err := push(unreachable)
 	if err == nil || !strings.Contains(err.Error(), "push "+unreachable) {
 		t.Fatalf("push to an unreachable registry: err = %v, want a push error", err)
+	}
+}
+
+// TestDaemonLoadWriterIntegration builds on the daemon's BuildKit with a
+// LoadWriter and checks the writer receives an image tarball whose
+// manifest names the tag.
+func TestDaemonLoadWriterIntegration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping Docker integration test in short mode")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+	t.Setenv("BUILDKIT_HOST", "")
+	cli := requireEngine(t, ctx)
+
+	tag := fmt.Sprintf("devcontainer-builder/buildkit-it-tarball:%d", time.Now().UnixNano())
+	t.Cleanup(func() {
+		if _, err := cli.ImageRemove(context.Background(), tag, imagetypes.RemoveOptions{Force: true}); err != nil && !dockerclient.IsErrNotFound(err) {
+			t.Logf("remove %s: %v", tag, err)
+		}
+	})
+	dir := t.TempDir()
+	writeTestFile(t, filepath.Join(dir, "Dockerfile"), "FROM alpine:3.20\nRUN true\n")
+	var tarball bytes.Buffer
+	if _, err := SolveDockerfile(ctx, DockerfileBuild{ContextDir: dir}, SolveOptions{
+		Docker: cli, Tags: []string{tag}, Load: true, LoadWriter: &tarball, Progress: "plain", Stderr: testLogWriter{t},
+	}); err != nil {
+		t.Fatalf("SolveDockerfile with LoadWriter: %v", err)
+	}
+
+	var manifest []struct{ RepoTags []string }
+	tr := tar.NewReader(&tarball)
+	for {
+		hdr, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatalf("read tarball: %v", err)
+		}
+		if hdr.Name == "manifest.json" {
+			if err := json.NewDecoder(tr).Decode(&manifest); err != nil {
+				t.Fatalf("decode manifest.json: %v", err)
+			}
+		}
+	}
+	if len(manifest) != 1 || len(manifest[0].RepoTags) == 0 || !strings.HasSuffix(manifest[0].RepoTags[0], tag) {
+		t.Fatalf("manifest.json = %+v, want one image tagged %s", manifest, tag)
 	}
 }
 

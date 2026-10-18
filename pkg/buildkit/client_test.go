@@ -97,6 +97,15 @@ func TestExportsFor(t *testing.T) {
 		assertSingleExport(t, p.entries, client.ExporterDocker, map[string]string{"name": "example.test/app:1"})
 	})
 
+	t.Run("load writer on daemon exports into the store, then saves", func(t *testing.T) {
+		var buf bytes.Buffer
+		p := plan(t, SolveOptions{Load: true, Tags: tags[:1], LoadWriter: &buf}, daemon, false)
+		assertSingleExport(t, p.entries, exporterMoby, map[string]string{"name": "example.test/app:1"})
+		if p.finish == nil || p.load != nil {
+			t.Fatal("daemon LoadWriter must save through the Engine API after the export")
+		}
+	})
+
 	t.Run("push on daemon exports into the store, then pushes", func(t *testing.T) {
 		p := plan(t, SolveOptions{Push: true, Tags: tags[:1]}, daemon, true)
 		assertSingleExport(t, p.entries, exporterMoby, map[string]string{"name": "example.test/app:1"})

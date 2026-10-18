@@ -43,7 +43,9 @@ type SolveOptions struct {
 	// endpoint.
 	Load bool
 	// LoadWriter, when set with Load, receives a docker-format image
-	// tarball instead of the image being loaded into the daemon.
+	// tarball. With a separate BuildKit the image is not loaded into the
+	// daemon; with the daemon's BuildKit it is also kept in the daemon's
+	// image store, from which the Engine API saves it.
 	LoadWriter io.Writer
 	// OutputDir, when non-empty, requests a "local" exporter writing
 	// the image filesystem to this directory.

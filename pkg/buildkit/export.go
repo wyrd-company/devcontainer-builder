@@ -32,10 +32,11 @@ type exportPlan struct {
 
 // exportsFor plans the export of opt's result on conn.
 //
-// A push on the daemon's BuildKit exports into the daemon's image store
-// and then pushes through the Engine API: the classic store's "moby"
-// exporter ignores push, so asking it to push would report success
-// without pushing.
+// On the daemon's BuildKit every image export goes into the daemon's
+// image store, and Push and LoadWriter are then served by the Engine
+// API from the stored image. The classic store offers only the "moby"
+// exporter, which ignores push and cannot write a tarball, so asking it
+// to push would report success without pushing.
 func exportsFor(ctx context.Context, opt SolveOptions, conn *Connection, multi bool) (*exportPlan, error) {
 	if opt.Push && opt.Load {
 		return nil, errors.New("--push and --load are mutually exclusive")
@@ -70,6 +71,15 @@ func exportsFor(ctx context.Context, opt SolveOptions, conn *Connection, multi b
 		}
 		if len(opt.Tags) == 0 {
 			return nil, errors.New("--load requires at least one tag")
+		}
+		if opt.LoadWriter != nil && conn.Daemon {
+			tags := append([]string(nil), opt.Tags...)
+			return &exportPlan{
+				entries: []client.ExportEntry{{Type: exporterMoby, Attrs: map[string]string{"name": name}}},
+				finish: func(ctx context.Context) error {
+					return saveTags(ctx, conn.Docker, tags, opt.LoadWriter)
+				},
+			}, nil
 		}
 		if opt.LoadWriter != nil {
 			return &exportPlan{entries: []client.ExportEntry{{
@@ -209,6 +219,24 @@ func pushTags(ctx context.Context, docker *dockerclient.Client, tags []string, p
 		if err != nil {
 			return fmt.Errorf("push %s: %w", tag, err)
 		}
+	}
+	return nil
+}
+
+// saveTags writes the daemon's image tarball for tags to w through the
+// Engine API, then closes w when it is a Closer, as an exporter output
+// is closed.
+func saveTags(ctx context.Context, docker *dockerclient.Client, tags []string, w io.Writer) error {
+	rc, err := docker.ImageSave(ctx, tags)
+	if err != nil {
+		return fmt.Errorf("save %s: %w", strings.Join(tags, ","), err)
+	}
+	defer rc.Close()
+	if _, err := io.Copy(w, rc); err != nil {
+		return fmt.Errorf("save %s: %w", strings.Join(tags, ","), err)
+	}
+	if c, ok := w.(io.Closer); ok {
+		return c.Close()
 	}
 	return nil
 }

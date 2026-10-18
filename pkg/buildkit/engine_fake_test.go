@@ -12,13 +12,15 @@ import (
 	dockerclient "github.com/docker/docker/client"
 )
 
-// fakeEngine serves the Engine API image push endpoint and records the
-// requests it receives.
+// fakeEngine serves the Engine API image push and save endpoints and
+// records the requests it receives.
 type fakeEngine struct {
 	pushBody string
+	saveBody string
 
 	mu     sync.Mutex
 	pushes []string
+	saves  [][]string
 }
 
 func (f *fakeEngine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -31,6 +33,12 @@ func (f *fakeEngine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		f.mu.Unlock()
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(f.pushBody))
+	case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/images/get"):
+		f.mu.Lock()
+		f.saves = append(f.saves, r.URL.Query()["names"])
+		f.mu.Unlock()
+		w.Header().Set("Content-Type", "application/x-tar")
+		_, _ = w.Write([]byte(f.saveBody))
 	default:
 		http.Error(w, "unexpected "+r.Method+" "+r.URL.Path, http.StatusNotImplemented)
 	}
@@ -91,4 +99,31 @@ func TestDaemonPushFinish(t *testing.T) {
 			t.Fatalf("pushes = %v, want to stop after the first failure", f.pushes)
 		}
 	})
+}
+
+// closeRecorder is a writer that records whether it was closed.
+type closeRecorder struct {
+	bytes.Buffer
+	closed bool
+}
+
+func (c *closeRecorder) Close() error { c.closed = true; return nil }
+
+func TestDaemonSaveFinish(t *testing.T) {
+	f := &fakeEngine{saveBody: "tarball-bytes"}
+	conn := &Connection{Daemon: true, Docker: newFakeEngineClient(t, f)}
+	var out closeRecorder
+	p, err := exportsFor(context.Background(), SolveOptions{Load: true, Tags: []string{"example.test/app:1", "example.test/app:2"}, LoadWriter: &out}, conn, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := p.finish(context.Background()); err != nil {
+		t.Fatalf("finish: %v", err)
+	}
+	if out.String() != "tarball-bytes" || !out.closed {
+		t.Fatalf("writer got %q (closed=%v), want the saved tarball, closed", out.String(), out.closed)
+	}
+	if len(f.saves) != 1 || strings.Join(f.saves[0], ",") != "example.test/app:1,example.test/app:2" {
+		t.Fatalf("saves = %v, want one save of both tags", f.saves)
+	}
 }
