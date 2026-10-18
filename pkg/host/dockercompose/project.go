@@ -3,6 +3,7 @@ package dockercompose
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 
 	"github.com/compose-spec/compose-go/v2/loader"
 	"github.com/compose-spec/compose-go/v2/types"
@@ -15,8 +16,7 @@ import (
 type LoadInputs struct {
 	// Spec is the parsed devcontainer.json. Must be in compose mode.
 	Spec *spec.DevContainer
-	// Workspace is the host workspace path; used for the project name
-	// and as a fallback working directory.
+	// Workspace is the host workspace path; used for the project name.
 	Workspace string
 	// LocalEnv is the host environment forwarded to compose's
 	// `${VAR}` interpolation. Pass an empty map (not nil) for none.
@@ -57,13 +57,10 @@ func LoadProject(ctx context.Context, in LoadInputs) (*types.Project, error) {
 		})
 	}
 
-	workingDir := in.Workspace
-	if workingDir == "" && len(files) > 0 {
-		workingDir = files[0]
-	}
-
+	// As docker compose without --project-directory, relative paths in every
+	// file resolve against the first file's directory.
 	details := types.ConfigDetails{
-		WorkingDir:  workingDir,
+		WorkingDir:  filepath.Dir(files[0]),
 		ConfigFiles: configFiles,
 		Environment: types.Mapping(in.LocalEnv),
 	}

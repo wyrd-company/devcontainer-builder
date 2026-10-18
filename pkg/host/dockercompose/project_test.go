@@ -125,3 +125,41 @@ func TestLoadProject_RejectsSingleMode(t *testing.T) {
 		t.Errorf("LoadProject error = %q, want substring %q", err.Error(), "not in compose mode")
 	}
 }
+
+// Docker Compose resolves relative paths against the first file's directory,
+// not the devcontainer workspace.
+func TestLoadProjectResolvesPathsFromComposeFileDirectory(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, ".devcontainer")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "compose.yml"), []byte("services:\n  app:\n    image: alpine:3.20\n    volumes: [./data:/data, ..:/workspace]\n    env_file: [sample.env]\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "sample.env"), []byte("SAMPLE=value\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "devcontainer.json"), []byte(`{"dockerComposeFile":"compose.yml","service":"app"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	dc, err := spec.Load(filepath.Join(dir, "devcontainer.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	proj, err := LoadProject(context.Background(), LoadInputs{Spec: dc, Workspace: root, LocalEnv: map[string]string{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	app := proj.Services["app"]
+	sources := map[string]string{}
+	for _, v := range app.Volumes {
+		sources[v.Target] = v.Source
+	}
+	if proj.WorkingDir != dir || sources["/data"] != filepath.Join(dir, "data") || sources["/workspace"] != root {
+		t.Fatalf("working dir %s, sources %v", proj.WorkingDir, sources)
+	}
+	if v := app.Environment["SAMPLE"]; v == nil || *v != "value" {
+		t.Fatalf("env_file not read from the Compose file directory: %v", app.Environment)
+	}
+}
