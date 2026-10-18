@@ -52,6 +52,7 @@ func TestDockerComposeIntegration(t *testing.T) {
 		defer cleanupCancel()
 		dockertest.RemoveImage(t, cleanupCtx, cli, helperTag)
 		dockertest.RemoveImage(t, cleanupCtx, cli, primaryTag)
+		dockertest.RemoveImage(t, cleanupCtx, cli, primaryTag+"-derived")
 	})
 	writeComposeFixture(t, workspace, primaryTag, helperTag, "one")
 	requireBindableComposePath(t, ctx, cli, "alpine:3.20", workspace)
@@ -76,8 +77,11 @@ func TestDockerComposeIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("BuildPrimaryImage: %v", err)
 	}
-	if !primary.Built || primary.Image != primaryTag {
-		t.Fatalf("primary build result = %+v, want Compose service image %s", primary, primaryTag)
+	if !primary.Built || primary.Image != primaryTag+"-derived" {
+		t.Fatalf("primary build result = %+v, want requested image %s", primary, primaryTag+"-derived")
+	}
+	if _, err := cli.ImageInspect(ctx, primary.Image); err != nil {
+		t.Fatalf("inspect requested primary image: %v", err)
 	}
 
 	h := New(cli, Options{
