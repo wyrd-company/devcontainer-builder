@@ -3,6 +3,7 @@ package oci
 import (
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -24,7 +25,7 @@ func (c *Client) do(req *http.Request, ref Reference) (*http.Response, error) {
 	if h, ok := c.authorization[ref.Registry]; ok {
 		req.Header.Set("Authorization", h)
 	}
-	resp, err := c.HTTP.Do(req)
+	resp, err := c.send(req, false)
 	if err != nil {
 		return nil, err
 	}
@@ -39,7 +40,7 @@ func (c *Client) do(req *http.Request, ref Reference) (*http.Response, error) {
 		c.authorization[ref.Registry] = h
 		newReq := req.Clone(req.Context())
 		newReq.Header.Set("Authorization", h)
-		resp, err = c.HTTP.Do(newReq)
+		resp, err = c.send(newReq, false)
 		if err == nil && credErr != nil && resp.StatusCode == http.StatusUnauthorized {
 			_ = resp.Body.Close()
 			return nil, withCredentialError(fmt.Errorf("registry %s refused anonymous access", ref.Registry), credErr)
@@ -146,26 +147,84 @@ func (c *Client) acquireToken(ref Reference, params map[string]string, creds reg
 			req.SetBasicAuth(creds.Username, creds.Password)
 		}
 	}
-	resp, err := c.HTTP.Do(req)
+	resp, err := c.send(req, !creds.Anonymous())
 	if err != nil {
 		return "", err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-		return "", fmt.Errorf("token: %s: %s", resp.Status, string(body))
+		return "", fmt.Errorf("registry %s token request: %s", ref.Registry, resp.Status)
 	}
 	var payload struct {
 		Token       string `json:"token"`
 		AccessToken string `json:"access_token"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
-		return "", err
+	if err := json.NewDecoder(io.LimitReader(resp.Body, tokenResponseLimit)).Decode(&payload); err != nil {
+		return "", fmt.Errorf("registry %s token response is malformed", ref.Registry)
 	}
 	if payload.Token != "" {
 		return payload.Token, nil
 	}
 	return payload.AccessToken, nil
+}
+
+// tokenResponseLimit bounds a token endpoint's answer.
+const tokenResponseLimit = 1 << 20
+
+// send performs req with redirects bound to its origin. An HTTPS request
+// is never redirected to plain HTTP. A redirect that changes the scheme,
+// host or port drops the Authorization header, so that a blob redirect to
+// a CDN is anonymous; when bound is set, such a redirect is refused, so
+// that a credentialed token request reaches only the advertised realm.
+// Errors name the request without its query, which can hold a signature.
+func (c *Client) send(req *http.Request, bound bool) (*http.Response, error) {
+	client := *c.HTTP
+	client.CheckRedirect = func(next *http.Request, via []*http.Request) error {
+		if len(via) >= 10 {
+			return errors.New("stopped after 10 redirects")
+		}
+		origin := via[0].URL
+		if origin.Scheme == "https" && next.URL.Scheme != "https" {
+			return fmt.Errorf("redirect from %s to a non-HTTPS URL refused", origin.Host)
+		}
+		if !sameOrigin(origin, next.URL) {
+			if bound {
+				return fmt.Errorf("redirect of a credentialed request from %s to another origin refused", origin.Host)
+			}
+			next.Header.Del("Authorization")
+		}
+		return nil
+	}
+	resp, err := client.Do(req)
+	var uerr *url.Error
+	if errors.As(err, &uerr) {
+		target := uerr.URL
+		if u, perr := url.Parse(uerr.URL); perr == nil {
+			target = u.Scheme + "://" + u.Host + u.Path
+		}
+		return nil, fmt.Errorf("%s %s: %w", uerr.Op, target, uerr.Err)
+	}
+	return resp, err
+}
+
+// sameOrigin reports whether a and b share scheme, host and port.
+func sameOrigin(a, b *url.URL) bool {
+	return strings.EqualFold(a.Scheme, b.Scheme) &&
+		strings.EqualFold(a.Hostname(), b.Hostname()) &&
+		effectivePort(a) == effectivePort(b)
+}
+
+func effectivePort(u *url.URL) string {
+	if p := u.Port(); p != "" {
+		return p
+	}
+	switch strings.ToLower(u.Scheme) {
+	case "https":
+		return "443"
+	case "http":
+		return "80"
+	}
+	return ""
 }
 
 func basicCredential(user, password string) string {

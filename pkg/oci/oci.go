@@ -224,8 +224,7 @@ func (c *Client) fetchManifest(ref Reference, depth int, choose childSelector) (
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-		return nil, nil, fmt.Errorf("manifest %s: %s: %s", ref, resp.Status, string(body))
+		return nil, nil, fmt.Errorf("manifest %s: %s", ref, resp.Status)
 	}
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -290,8 +289,7 @@ func (c *Client) FetchBlob(ref Reference, digest string, w io.Writer) error {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-		return fmt.Errorf("blob %s@%s: %s: %s", ref, digest, resp.Status, string(body))
+		return fmt.Errorf("blob %s@%s: %s", ref, digest, resp.Status)
 	}
 	hasher := sha256.New()
 	if _, err := io.Copy(io.MultiWriter(w, hasher), resp.Body); err != nil {
