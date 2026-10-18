@@ -18,6 +18,7 @@ import (
 )
 
 const ownershipLabel = "devcontainer.parity.run"
+const discoveryLabel = "devcontainer.parity.fixture-side"
 
 type Fixture struct {
 	Name, Path, Config string
@@ -37,6 +38,12 @@ type Runner struct {
 }
 
 func (r *Runner) label() string { return ownershipLabel + "=" + r.runID }
+
+func fixtureSide(f Fixture, side string) string { return f.Name + "/" + side }
+
+func discovery(f Fixture, side string) string {
+	return discoveryLabel + "=" + fixtureSide(f, side)
+}
 
 func isolatedEnv(config string) []string {
 	var out []string
@@ -123,7 +130,7 @@ func (r *Runner) prepare(f Fixture, side string) (string, error) {
 		return "", err
 	}
 	args, _ := config["runArgs"].([]any)
-	config["runArgs"] = append(args, "--label", r.label())
+	config["runArgs"] = append(args, "--label", r.label(), "--label", discovery(f, side))
 	if build, ok := config["build"].(map[string]any); ok && side == "upstream" {
 		options, _ := build["options"].([]any)
 		build["options"] = append(options, "--label", r.label())
@@ -174,7 +181,7 @@ func (r *Runner) observe(ctx context.Context, a Adapter, f Fixture, side string)
 	}
 	// Discovery also works after a lifecycle failure, when the CLI exits after
 	// creating the container but before returning its JSON success result.
-	ids, err := r.command(ctx, "docker", "ps", "-aq", "--no-trunc", "--filter", "label="+r.label(), "--filter", "label=devcontainer.local_folder="+workspace)
+	ids, err := r.command(ctx, "docker", "ps", "-aq", "--no-trunc", "--filter", "label="+r.label(), "--filter", "label="+discovery(f, side))
 	if err != nil {
 		return out
 	}
@@ -204,6 +211,9 @@ func (r *Runner) observe(ctx context.Context, a Adapter, f Fixture, side string)
 		return out
 	}
 	c := containers[0]
+	if c.ID != id || c.Config.Labels[ownershipLabel] != r.runID || c.Config.Labels[discoveryLabel] != fixtureSide(f, side) {
+		return out
+	}
 	n := Normalizer{map[string]string{workspace: "<workspace>", r.temp: "<temp>", id: "<container>", id[:12]: "<container>", c.Image: "<image>", c.Config.Hostname: "<hostname>", tag: "<image-tag>"}}
 	if out["result"].Error == "" {
 		out["result"] = Observation{Value: n.Result(out["result"].Value)}
@@ -216,7 +226,7 @@ func (r *Runner) observe(ctx context.Context, a Adapter, f Fixture, side string)
 	out["env"] = Observation{Value: n.Value(env)}
 	labels := map[string]any{}
 	for k, v := range c.Config.Labels {
-		if k != ownershipLabel {
+		if k != ownershipLabel && k != discoveryLabel {
 			if k == "devcontainer.metadata" {
 				if parsed, e := jsonValue([]byte(v)); e == nil {
 					labels[k] = parsed

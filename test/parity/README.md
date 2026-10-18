@@ -23,9 +23,15 @@ it is not a baseline score.
 
 The three curated upstream fixtures cover an image, a Dockerfile and two local
 v2 features. Each run copies them into separate workspaces under `.tmp/` and
-adds a unique teardown label to runtime arguments. Upstream Dockerfile build
-options carry the same label; the Go adapter labels its output image through the
-build command, without adding Docker CLI options to its configuration.
+adds the run ownership label `devcontainer.parity.run` and fixture/side label
+`devcontainer.parity.fixture-side` to runtime arguments. Discovery requires both
+labels and exactly one full container ID, then verifies that ID and both labels
+in inspection. It does not filter on compared labels such as
+`devcontainer.local_folder`; missing or different values remain observable.
+Both harness labels are excluded from scoring. Upstream Dockerfile build
+options carry the run ownership label; the Go adapter labels its output image
+through the build command, without adding Docker CLI options to its
+configuration.
 The fixture bodies and feature scripts otherwise stay intact. No credentials or
 host Docker configuration are copied. Every subprocess receives a private
 `DOCKER_CONFIG` containing only `{}` and no inherited `DOCKER_AUTH_CONFIG`.
@@ -57,4 +63,5 @@ Teardown selects only this run's labels, rechecks full Docker IDs and ownership,
 then removes containers and labelled images, including after normal errors or
 interrupts. Pulled base images and BuildKit cache remain available. Hard kills
 cannot run cleanup; use the unique label recorded in `run.log` to identify
-residue. Logs contain fixture output and local paths; review before sharing.
+residue. Discovery regressions create stopped `alpine:3.20` containers through
+Docker, skip when Docker is unavailable, and retain the pulled base image. Logs contain fixture output and local paths; review before sharing.

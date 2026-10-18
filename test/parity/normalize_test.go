@@ -238,7 +238,7 @@ func TestPreparePreservesFixtureAndAddsOwnership(t *testing.T) {
 	}
 	args := config["runArgs"].([]any)
 	options := config["build"].(map[string]any)["options"].([]any)
-	if !reflect.DeepEqual(args, []any{"-e", "VALUE=one", "--label", r.label()}) {
+	if !reflect.DeepEqual(args, []any{"-e", "VALUE=one", "--label", r.label(), "--label", discovery(f, "upstream")}) {
 		t.Fatalf("runtime ownership: %v", args)
 	}
 	if !reflect.DeepEqual(options, []any{"--pull", "--label", r.label()}) {
