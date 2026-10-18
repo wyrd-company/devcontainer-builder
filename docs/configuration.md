@@ -127,16 +127,21 @@ cached by BuildKit.
 
 ## Remote user UID
 
-On Linux and macOS, `dcb up` changes the UID and GID of `remoteUser` in the
+On Linux, `dcb up` changes the UID and GID of `remoteUser` in the
 container to those of the local user, so files in the workspace mount keep
 the right owner. It does not change `root`, a numeric user, a user whose
 IDs already match, or IDs that another user or group has.
 
-`--update-remote-user-uid-default` sets the behavior when the configuration
-has no `updateRemoteUserUID`:
+On macOS, remapping is disabled by default, even with
+`updateRemoteUserUID: true`. Pass `--update-remote-user-uid-default on`
+explicitly to opt in. The configuration's `updateRemoteUserUID: false`
+still disables remapping. Other host platforms do not remap.
+
+On Linux, or after opting in on macOS, `--update-remote-user-uid-default`
+sets the behavior when the configuration has no `updateRemoteUserUID`:
 
 | Value | Behavior |
 | --- | --- |
-| `on` | The default. Changes the IDs unless the configuration sets `updateRemoteUserUID: false`. |
-| `off` | Changes the IDs only when the configuration sets `updateRemoteUserUID: true`. |
+| `on` | The Linux default and explicit macOS opt-in. Changes the IDs unless the configuration sets `updateRemoteUserUID: false`. |
+| `off` | On Linux, changes the IDs only when the configuration sets `updateRemoteUserUID: true`. Disables remapping on macOS. |
 | `never` | Never changes the IDs. |

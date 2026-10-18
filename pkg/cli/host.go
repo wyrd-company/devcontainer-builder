@@ -38,19 +38,18 @@ func (a *application) upCommand() *cobra.Command {
 	var opts buildOptions
 	var skip skipOptions
 	var remove bool
-	var uidMode string
 	cmd := &cobra.Command{Use: "up", Short: "Build, create, start, and run lifecycle commands", Args: cobra.NoArgs}
 	opts.flags(cmd, false)
 	skip.flags(cmd)
 	cmd.Flags().BoolVar(&remove, "remove-existing-container", false, "Remove the workspace container before creating it")
 	cmd.Flags().BoolVar(&opts.options.NoCache, "build-no-cache", false, "Disable build cache (upstream up flag)")
-	cmd.Flags().StringVar(&uidMode, "update-remote-user-uid-default", "on", "Remote user UID update default: on, off, or never (single-container mode)")
+	cmd.Flags().String("update-remote-user-uid-default", "on", "Remote user UID update default: on, off, or never (Linux default on; macOS requires explicit on; single-container mode)")
 	cmd.RunE = func(cmd *cobra.Command, _ []string) error {
 		dc, workspace, err := opts.cfg.load()
 		if err != nil {
 			return err
 		}
-		uid, err := resolveUIDUpdate(uidMode)
+		uid, err := resolveUIDUpdate(cmd, runtime.GOOS)
 		if err != nil {
 			return err
 		}
@@ -147,12 +146,19 @@ func (a *application) containerResult(ctx context.Context, cli *dockerclient.Cli
 	return nil
 }
 
-func resolveUIDUpdate(mode string) (*hostdocker.RemoteUserUIDUpdate, error) {
+// resolveUIDUpdate gates the spec/default decision on the host platform.
+// On macOS only an explicit on flag opts into UID remapping.
+func resolveUIDUpdate(cmd *cobra.Command, platform string) (*hostdocker.RemoteUserUIDUpdate, error) {
+	const flag = "update-remote-user-uid-default"
+	mode, err := cmd.Flags().GetString(flag)
+	if err != nil {
+		return nil, err
+	}
 	switch mode {
 	case "never":
 		return nil, nil
 	case "on", "off":
-		if runtime.GOOS != "linux" && runtime.GOOS != "darwin" {
+		if platform != "linux" && !(platform == "darwin" && mode == "on" && cmd.Flags().Changed(flag)) {
 			return nil, nil
 		}
 	default:

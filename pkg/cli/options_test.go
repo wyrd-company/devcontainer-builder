@@ -12,7 +12,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"runtime"
 	"testing"
 
 	"github.com/spf13/cobra"
@@ -180,22 +179,33 @@ func TestUpFlagSurface(t *testing.T) {
 }
 
 func TestUIDModeMapping(t *testing.T) {
-	for _, mode := range []string{"on", "off", "never"} {
-		update, err := resolveUIDUpdate(mode)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if mode == "never" {
-			if update != nil {
-				t.Fatal("never requests remapping")
-			}
-			continue
-		}
-		if (runtime.GOOS == "linux" || runtime.GOOS == "darwin") && update == nil {
-			t.Fatalf("%s: expected UID request", mode)
-		}
-		if update != nil && update.DefaultOff != (mode == "off") {
-			t.Fatalf("%s: %+v", mode, update)
+	for _, platform := range []string{"linux", "darwin", "windows"} {
+		for _, mode := range []string{"default", "on", "off", "never", "invalid", ""} {
+			t.Run(platform+"/"+mode, func(t *testing.T) {
+				cmd := (&application{}).upCommand()
+				if mode != "default" {
+					if err := cmd.ParseFlags([]string{"--update-remote-user-uid-default=" + mode}); err != nil {
+						t.Fatal(err)
+					}
+				}
+				update, err := resolveUIDUpdate(cmd, platform)
+				if mode == "invalid" || mode == "" {
+					if err == nil {
+						t.Fatal("invalid mode accepted")
+					}
+					return
+				}
+				if err != nil {
+					t.Fatal(err)
+				}
+				want := platform == "linux" && mode != "never" || platform == "darwin" && mode == "on"
+				if (update != nil) != want {
+					t.Fatalf("UID request=%+v, want enabled=%v", update, want)
+				}
+				if update != nil && (update.DefaultOff != (mode == "off") || update.HostUID != os.Getuid() || update.HostGID != os.Getgid()) {
+					t.Fatalf("unexpected UID request: %+v", update)
+				}
+			})
 		}
 	}
 }

@@ -74,8 +74,9 @@ for a cache-only build, or `outputDir` for a filesystem export. `generate` retur
 `up` uses `--build-no-cache` to disable build cache. Export flags `--push`,
 `--load`, and `--output`, and `--no-cache`, belong to `build`.
 `up --update-remote-user-uid-default on` remaps unless the configuration sets
-`updateRemoteUserUID: false`; `off` remaps only with an explicit `true`;
-`never` disables remapping. The existing linux and darwin host defaults apply.
+`updateRemoteUserUID: false`; on Linux, `off` remaps only with an explicit `true`;
+`never` disables remapping. Linux remaps by default. macOS requires explicit
+`--update-remote-user-uid-default on`, even with `updateRemoteUserUID: true`.
 
 `up --skip-post-create` skips all lifecycle commands;
 `--skip-post-attach` skips only postAttachCommand. Use

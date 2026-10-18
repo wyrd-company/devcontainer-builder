@@ -17,6 +17,10 @@ import (
 // `docker exec` instead of rebuilding the image, which keeps the
 // package shell-out-free.
 //
+// The caller controls host-platform eligibility by omitting this request.
+// The CLI enables it by default on Linux; macOS requires an explicit
+// --update-remote-user-uid-default on flag.
+//
 // The update is skipped — without error — when:
 //
 //   - the spec sets `updateRemoteUserUID: false`,
