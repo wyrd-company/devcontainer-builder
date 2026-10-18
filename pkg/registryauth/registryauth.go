@@ -6,9 +6,9 @@
 // config.json, and the credential-helper protocol
 // (docker-credential-<name> get) for "credsStore" and "credHelpers".
 //
-// Credentials are read on demand and held in memory only. Errors never
-// carry credential-helper output, so that a misbehaving helper cannot put
-// a secret into a log.
+// Credentials are read on demand and held in memory only. A credential
+// helper's output never reaches the process output or an error, so that a
+// misbehaving helper cannot put a secret into a log.
 package registryauth
 
 import (
@@ -21,6 +21,7 @@ import (
 	"github.com/distribution/reference"
 	"github.com/docker/cli/cli/config"
 	"github.com/docker/cli/cli/config/configfile"
+	"github.com/docker/cli/cli/config/credentials"
 	"github.com/docker/docker/api/types/registry"
 )
 
@@ -88,18 +89,53 @@ func (s *Store) Credentials(host string) (Credentials, error) {
 	if err != nil {
 		return Credentials{}, err
 	}
-	ac, err := file.GetAuthConfig(key)
+	c, err := lookup(file, key)
 	if err != nil {
-		return Credentials{}, fmt.Errorf("registry credentials for %s from %s: %s", host, source(file, key), redact(err))
+		return Credentials{}, fmt.Errorf("registry credentials for %s: %w", host, err)
 	}
-	c := Credentials{
+	s.cache[key] = c
+	return c, nil
+}
+
+// lookup resolves key as the docker CLI does: DOCKER_AUTH_CONFIG first;
+// then the credential helper that credHelpers or credsStore names, which
+// alone answers when one is configured; otherwise the static auths.
+func lookup(file *configfile.ConfigFile, key string) (Credentials, error) {
+	if env := os.Getenv(envAuthConfig); env != "" {
+		envFile := configfile.New("")
+		if err := envFile.LoadFromReader(strings.NewReader(env)); err != nil {
+			return Credentials{}, fmt.Errorf("%s is not valid", envAuthConfig)
+		}
+		if c := staticCredentials(envFile, key); !c.Anonymous() {
+			return c, nil
+		}
+	}
+	if helper := helperFor(file, key); helper != "" {
+		return helperCredentials(helper, key)
+	}
+	return staticCredentials(file, key), nil
+}
+
+// envAuthConfig holds auths entries in the environment, as the docker CLI
+// reads them.
+const envAuthConfig = "DOCKER_AUTH_CONFIG"
+
+func staticCredentials(file *configfile.ConfigFile, key string) Credentials {
+	ac, _ := credentials.NewFileStore(file).Get(key)
+	return Credentials{
 		Username:      ac.Username,
 		Password:      ac.Password,
 		IdentityToken: ac.IdentityToken,
 		RegistryToken: ac.RegistryToken,
 	}
-	s.cache[key] = c
-	return c, nil
+}
+
+// helperFor is the credential helper configured for key, or "".
+func helperFor(file *configfile.ConfigFile, key string) string {
+	if helper, ok := file.CredentialHelpers[key]; ok {
+		return helper
+	}
+	return file.CredentialsStore
 }
 
 // EngineAuth returns the X-Registry-Auth value for an Engine API pull or
@@ -157,25 +193,4 @@ func configKey(host string) string {
 		return dockerHubKey
 	}
 	return host
-}
-
-// source names where key's credentials come from, for errors.
-func source(file *configfile.ConfigFile, key string) string {
-	if helper, ok := file.CredentialHelpers[key]; ok {
-		return "credential helper docker-credential-" + helper
-	}
-	if file.CredentialsStore != "" {
-		return "credential helper docker-credential-" + file.CredentialsStore
-	}
-	return file.Filename
-}
-
-// redact drops the helper output the credential-helper client appends to
-// its errors (", out: `...`"), so that only the failure itself remains.
-func redact(err error) string {
-	msg := err.Error()
-	if i := strings.Index(msg, ", out: `"); i >= 0 {
-		msg = msg[:i]
-	}
-	return msg
 }
