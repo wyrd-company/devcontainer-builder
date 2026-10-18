@@ -134,6 +134,10 @@ func (r *AuthRegistry) StaticAuthConfig(t testing.TB) string {
 	return DockerConfig(t, `{"auths":{"`+r.Addr+`":{"auth":"`+auth+`"}}}`)
 }
 
+// HelperStderrMarker is what the fake credential helper writes to its
+// stderr on every call, so that tests can check it never surfaces.
+const HelperStderrMarker = "synthetic-helper-stderr-marker"
+
 // HelperConfig puts a fake docker-credential-<name> on PATH that answers
 // "get" for the registry with its credentials, and writes a Docker client
 // configuration whose credHelpers name it for the registry. It returns
@@ -147,6 +151,7 @@ func (r *AuthRegistry) HelperConfig(t testing.TB, name string) (dir, log string)
 [ "$1" = get ] || exit 2
 read -r url
 printf '%s\n' "$url" >> '` + log + `'
+printf '` + HelperStderrMarker + `' >&2
 if [ "$url" = '` + r.Addr + `' ]; then
   printf '{"ServerURL":"%s","Username":"` + RegistryUsername + `","Secret":"` + RegistryPassword + `"}' "$url"
   exit 0

@@ -3,10 +3,13 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"strings"
 	"testing"
 	"time"
@@ -61,11 +64,21 @@ func TestDockerHostUpPullsPrivateImage(t *testing.T) {
 		_ = hostRunCommandAllowError(bin, "down", "--workspace-folder", workspace)
 	})
 	config, log := reg.HelperConfig(t, "dcbtest")
-	hostRunCommand(t, append(os.Environ(), "DOCKER_CONFIG="+config, "DCB_HOST_VALUE=local-value"), bin,
-		"up",
-		"--workspace-folder", workspace,
-		"--update-remote-user-uid-default", "off",
-	)
+	cmd := exec.Command(bin, "up", "--workspace-folder", workspace, "--update-remote-user-uid-default", "off")
+	cmd.Env = append(os.Environ(), "DOCKER_CONFIG="+config, "DCB_HOST_VALUE=local-value")
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout, cmd.Stderr = &stdout, &stderr
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("dcb up: %v\nstdout: %s\nstderr: %s", err, stdout.String(), stderr.String())
+	}
+	var result map[string]any
+	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil || result["outcome"] != "success" {
+		t.Fatalf("dcb up result %s: %v", stdout.String(), err)
+	}
+	// The helper's stderr reaches neither the JSON result nor dcb's logs.
+	if strings.Contains(stdout.String()+stderr.String(), dockertest.HelperStderrMarker) {
+		t.Fatalf("credential helper output surfaced:\nstdout: %s\nstderr: %s", stdout.String(), stderr.String())
+	}
 
 	if _, err := cli.ImageInspect(ctx, imageRef); err != nil {
 		t.Fatalf("image %s not in the daemon after up: %v", imageRef, err)
