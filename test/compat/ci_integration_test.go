@@ -18,12 +18,13 @@ func TestCIIntegrationRunner(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, suite := range []string{"all", "remote"} {
-		for _, fail := range []bool{false, true} {
-			name := suite + "/success"
-			if fail {
-				name = suite + "/failure"
+	for _, suite := range []string{"all", "remote", "classic"} {
+		for _, scenario := range []string{"success", "failure", "wrong-store"} {
+			if scenario == "wrong-store" && suite != "classic" {
+				continue
 			}
+			fail := scenario == "failure"
+			name := suite + "/" + scenario
 			t.Run(name, func(t *testing.T) {
 				dir := t.TempDir()
 				bin := filepath.Join(dir, "bin")
@@ -38,16 +39,19 @@ func TestCIIntegrationRunner(t *testing.T) {
 				}
 				write("docker", `#!/bin/sh
 printf '%s\n' "$*" >> "$RECORD_DIR/docker"
+printf '%s\n' "${DOCKER_HOST-unset}" >> "$RECORD_DIR/docker-endpoints"
 case "$1" in
 run) echo fixture-container ;;
 port) echo 127.0.0.1:1234 ;;
-logs) echo 'running server' ;;
+logs) echo 'running server'; echo 'API listen on [::]:2375' ;;
+exec) echo "$TEST_DRIVER" ;;
 esac
 `)
 				write("go", `#!/bin/sh
 printf '%s\n' "$*" > "$RECORD_DIR/go"
 printf '%s\n' "${BUILDKIT_HOST-unset}" > "$RECORD_DIR/host"
 printf '%s\n' "$DOCKER_CONFIG" > "$RECORD_DIR/config-path"
+printf '%s\n' "${DOCKER_HOST-unset}|${DOCKER_TLS_VERIFY-unset}|${DOCKER_CERT_PATH-unset}" > "$RECORD_DIR/engine-env"
 cat "$DOCKER_CONFIG/config.json" > "$RECORD_DIR/config"
 exit "$GO_EXIT"
 `)
@@ -61,6 +65,14 @@ exit "$GO_EXIT"
 				// Populate actual process overrides; the child inherits them before setup.
 				t.Setenv("DOCKER_CONFIG", originalConfig)
 				t.Setenv("BUILDKIT_HOST", "tcp://operator-buildkit:4321")
+				t.Setenv("DOCKER_HOST", "tcp://parent-daemon:2375")
+				t.Setenv("DOCKER_TLS_VERIFY", "1")
+				t.Setenv("DOCKER_CERT_PATH", originalConfig)
+				driver := "overlay2"
+				if scenario == "wrong-store" {
+					driver = "overlayfs"
+				}
+				t.Setenv("TEST_DRIVER", driver)
 				t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
 				t.Setenv("RECORD_DIR", dir)
 				t.Setenv("TMPDIR", dir)
@@ -72,7 +84,11 @@ exit "$GO_EXIT"
 				cmd := exec.Command("bash", script, suite)
 				cmd.Dir = dir
 				out, runErr := cmd.CombinedOutput()
-				if fail {
+				if scenario == "wrong-store" {
+					if exit, ok := runErr.(*exec.ExitError); !ok || exit.ExitCode() != 1 {
+						t.Fatalf("wrong store accepted: %v\n%s", runErr, out)
+					}
+				} else if fail {
 					if exit, ok := runErr.(*exec.ExitError); !ok || exit.ExitCode() != 23 {
 						t.Fatalf("failure propagation: %v\n%s", runErr, out)
 					}
@@ -86,6 +102,27 @@ exit "$GO_EXIT"
 						t.Fatal(err)
 					}
 					return strings.TrimSpace(string(body))
+				}
+				if scenario == "wrong-store" {
+					if _, err := os.Stat(filepath.Join(dir, "go")); !os.IsNotExist(err) {
+						t.Fatal("tests ran on wrong store")
+					}
+					if !strings.Contains(string(out), "want overlay2") {
+						t.Fatalf("missing store diagnostic: %s", out)
+					}
+					if got := read("docker"); !strings.HasSuffix(got, "rm -fv fixture-container") {
+						t.Fatalf("owned helper not cleaned: %q", got)
+					}
+					entries, err := os.ReadDir(dir)
+					if err != nil {
+						t.Fatal(err)
+					}
+					for _, entry := range entries {
+						if strings.HasPrefix(entry.Name(), "tmp.") {
+							t.Fatalf("temporary config not cleaned: %s", entry.Name())
+						}
+					}
+					return
 				}
 				if got := read("config"); got != "{}" {
 					t.Fatalf("isolated config = %q", got)
@@ -109,6 +146,28 @@ exit "$GO_EXIT"
 					}
 					if _, err := os.Stat(filepath.Join(dir, "docker")); !os.IsNotExist(err) {
 						t.Fatalf("stock Docker launched a helper: %v", err)
+					}
+				} else if suite == "classic" {
+					if got := read("go"); got != "test -v -tags docker_integration ./pkg/buildkit ./pkg/builder -run TestDaemon.*Integration|TestEngineBuildIntegration -count=1" {
+						t.Fatalf("classic invocation = %q", got)
+					}
+					if got := read("host"); got != "unset" {
+						t.Fatalf("classic inherited BUILDKIT_HOST = %q", got)
+					}
+					if got := read("engine-env"); got != "tcp://127.0.0.1:1234|unset|unset" {
+						t.Fatalf("classic engine environment = %q", got)
+					}
+					commands := read("docker")
+					if !strings.Contains(commands, "docker:dind --storage-driver=overlay2 --feature containerd-snapshotter=false") {
+						t.Fatalf("classic store not selected: %q", commands)
+					}
+					if !strings.HasSuffix(commands, "rm -fv fixture-container") {
+						t.Fatalf("owned helper not cleaned: %q", commands)
+					}
+					for _, endpoint := range strings.Split(read("docker-endpoints"), "\n") {
+						if endpoint != "tcp://parent-daemon:2375" {
+							t.Fatalf("container management changed endpoints: %q", endpoint)
+						}
 					}
 				} else {
 					if got := read("go"); got != "test -v -tags docker_integration ./pkg/builder -run TestEngineBuildIntegration -count=1" {

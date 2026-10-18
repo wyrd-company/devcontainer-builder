@@ -81,6 +81,10 @@ tasks:
     desc: Run every Docker integration suite on stock Docker
     cmds:
       - bash scripts/ci-integration.sh all
+  integration:classic:
+    desc: Run engine integration on a disposable classic-store Docker daemon
+    cmds:
+      - bash scripts/ci-integration.sh classic
   integration:remote:
     desc: Check the optional remote BuildKit path
     cmds:
