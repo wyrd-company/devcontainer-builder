@@ -28,6 +28,11 @@ import (
 
 // Options drive a single Build invocation.
 type Options struct {
+	// Spec supplies an already loaded configuration. When set, Build and Generate
+	// use this snapshot instead of reading SpecPath or discovering another file.
+	// The caller must keep it immutable for the duration of the call. Path retains
+	// the original configuration location for relative build and feature paths.
+	Spec *spec.DevContainer
 	// SpecPath is an explicit path to a devcontainer.json. When empty,
 	// Workspace is searched for the conventional locations.
 	SpecPath string
@@ -169,23 +174,15 @@ func (b *Builder) prepareBuildContext(ctx context.Context, opts Options, logf fu
 	resolved []features.Resolved, sr *vscode.Result,
 	dfPath string, df []byte, err error,
 ) {
-	specPath := opts.SpecPath
-	if specPath == "" {
-		var dctmp *spec.DevContainer
-		dctmp, err = spec.LoadFromWorkspace(opts.Workspace)
-		if err != nil {
-			return
-		}
-		specPath = dctmp.Path
-	}
-	dc, err = spec.Load(specPath)
+
+	dc, err = loadBuildSpec(opts)
 	if err != nil {
 		return
 	}
 	if err = validateBuildSupport(dc); err != nil {
 		return
 	}
-	logf("loaded spec from %s", specPath)
+	logf("loaded spec from %s", dc.Path)
 
 	workDir = opts.WorkDir
 	if workDir == "" {

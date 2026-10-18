@@ -7,4 +7,4 @@ artifact_dir="${DCB_ARTIFACT_DIR:-artifacts/docker-host-integration}"
 mkdir -p "${artifact_dir}"
 
 export DCB_ARTIFACT_DIR="${artifact_dir}"
-go test -v -tags docker_integration ./cmd/devcontainer-docker -count=1
+go test -v -tags docker_integration ./cmd/dcb -count=1

@@ -3,6 +3,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -68,12 +69,28 @@ func TestDockerBuildIntegration(t *testing.T) {
 
 			args := []string{
 				"build",
-				"--workspace", filepath.Join(root, "testdata", "smoke", tc.fixture),
-				"--tag", tag,
+				"--workspace-folder", filepath.Join(root, "testdata", "smoke", tc.fixture),
+				"--image-name", tag,
 				"--load",
 				"--progress", "plain",
 			}
-			runCommand(t, bin, args...)
+
+			cmd := exec.Command(bin, args...)
+			var diagnostics bytes.Buffer
+			cmd.Stderr = &diagnostics
+			out, err := cmd.Output()
+			if err != nil {
+				t.Fatalf("build: %v, stdout=%s stderr=%s", err, out, diagnostics.String())
+			}
+			var result map[string]any
+			if err := json.Unmarshal(out, &result); err != nil || result["outcome"] != "success" || bytes.Count(out, []byte("\n")) != 1 {
+				t.Fatalf("invalid build result: %s (%v)", out, err)
+			}
+			names, ok := result["imageName"].([]any)
+			if !ok || len(names) != 1 || names[0] != tag {
+				t.Fatalf("build imageName=%v, want %s", result["imageName"], tag)
+			}
+
 			tc.assertion(t, tag)
 		})
 	}

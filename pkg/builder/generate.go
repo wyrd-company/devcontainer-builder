@@ -9,7 +9,6 @@ import (
 	"github.com/wyrd-company/devcontainer-builder/pkg/dockerfile"
 	"github.com/wyrd-company/devcontainer-builder/pkg/features"
 	"github.com/wyrd-company/devcontainer-builder/pkg/platform"
-	"github.com/wyrd-company/devcontainer-builder/pkg/spec"
 	"github.com/wyrd-company/devcontainer-builder/pkg/vscode"
 )
 
@@ -27,15 +26,7 @@ func (b *Builder) Generate(ctx context.Context, opts Options) (*Result, error) {
 		logf = func(string, ...any) {}
 	}
 
-	specPath := opts.SpecPath
-	if specPath == "" {
-		dc, err := spec.LoadFromWorkspace(opts.Workspace)
-		if err != nil {
-			return nil, err
-		}
-		specPath = dc.Path
-	}
-	dc, err := spec.Load(specPath)
+	dc, err := loadBuildSpec(opts)
 	if err != nil {
 		return nil, err
 	}

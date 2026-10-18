@@ -115,7 +115,13 @@ func (h *Host) Exec(ctx context.Context, req ExecRequest) (*ExecResult, error) {
 	if req.Stdin != nil {
 		go func() {
 			_, _ = io.Copy(attachResp.Conn, req.Stdin)
-			_ = attachResp.CloseWrite()
+			if req.TTY {
+				// A TTY needs terminal EOF rather than closing the hijacked socket's
+				// input side, which can detach before the remaining output is read.
+				_, _ = attachResp.Conn.Write([]byte{4})
+			} else {
+				_ = attachResp.CloseWrite()
+			}
 		}()
 	}
 

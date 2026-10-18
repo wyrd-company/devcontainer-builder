@@ -15,7 +15,7 @@ func TestCLI_Version(t *testing.T) {
 	if err != nil {
 		t.Fatalf("go run . version: %v\n%s", err, out)
 	}
-	if !strings.Contains(string(out), "dcb dev") {
+	if !strings.Contains(string(out), `"version":"dev"`) {
 		t.Fatalf("version output = %q, want dcb version", out)
 	}
 }
@@ -66,7 +66,7 @@ func TestCLI_GenerateSmokeFixtures(t *testing.T) {
 			workDir := t.TempDir()
 			args := []string{
 				"run", ".", "generate",
-				"--workspace", filepath.Join(root, "testdata", "smoke", tc.fixture),
+				"--workspace-folder", filepath.Join(root, "testdata", "smoke", tc.fixture),
 				"--work-dir", workDir,
 			}
 			if tc.skipFeatures {

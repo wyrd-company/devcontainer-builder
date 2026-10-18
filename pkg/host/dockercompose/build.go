@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
 	"path/filepath"
 	"time"
 
@@ -23,9 +22,9 @@ type BuildPrimaryInputs struct {
 	// Tag is the image tag to assign. When empty, a timestamped tag
 	// under "devcontainer-builder/compose-primary" is generated.
 	Tag string
-	// BuilderOptions tunes the underlying builder. Engine,
-	// SpecPath, Workspace, Tags, Load are overridden by this helper —
-	// the caller's values are ignored for those fields.
+	// BuilderOptions tunes the underlying builder. Spec, SpecPath and Workspace
+	// are derived from the primary service. Tag overrides the first image name;
+	// additional Tags are retained. Load defaults on unless pushing or exporting.
 	BuilderOptions builder.Options
 }
 
@@ -33,7 +32,7 @@ type BuildPrimaryInputs struct {
 type BuildPrimaryResult struct {
 	// Image is the image reference compose should use for the primary
 	// service. Equal to the primary service's compose `image:` when
-	// no features are present (no build was needed).
+	// no feature, server, or export customization requires a derived image.
 	Image string
 	// Built is true when a derived image was actually built.
 	Built bool
@@ -44,12 +43,12 @@ type BuildPrimaryResult struct {
 // BuildPrimaryImage produces the image the primary compose service
 // should run with.
 //
-//   - When the primary declares only `image:` and the spec has no
-//     features, the compose `image:` is returned unchanged.
+//   - When the primary declares only `image:` and no feature, server, or
+//     build customization requires a derived image, the image is unchanged.
 //   - When the primary declares `build:`, that compose-side build is
 //     built with BuildKit first to produce a base image. When the
-//     spec has features, a derived image is layered on top; otherwise
-//     the build's output tag is returned directly.
+//     caller requests features or build customizations, a derived image is
+//     layered on top; otherwise the build's output tag is returned directly.
 //   - When features are present, a derived image is built FROM the
 //     base (compose `image:` or compose `build:` output) with the
 //     features (and the VS Code server, when requested) layered on, and
@@ -75,6 +74,28 @@ func BuildPrimaryImage(ctx context.Context, in BuildPrimaryInputs) (*BuildPrimar
 		return nil, fmt.Errorf("%w: %q", ErrPrimaryNotFound, in.Spec.Service)
 	}
 
+	if primary.Build != nil {
+		copied := *primary.Build
+		copied.Args = map[string]*string{}
+		for key, value := range primary.Build.Args {
+			copied.Args[key] = value
+		}
+		for key, value := range in.BuilderOptions.BuildArgs {
+			v := value
+			copied.Args[key] = &v
+		}
+		copied.Labels = map[string]string{}
+		for key, value := range primary.Build.Labels {
+			copied.Labels[key] = value
+		}
+		for key, value := range in.BuilderOptions.Labels {
+			copied.Labels[key] = value
+		}
+		copied.CacheFrom = append(append([]string(nil), copied.CacheFrom...), in.BuilderOptions.CacheFrom...)
+		copied.CacheTo = append(append([]string(nil), copied.CacheTo...), in.BuilderOptions.CacheTo...)
+		primary.Build = &copied
+		proj.Services[in.Spec.Service] = primary
+	}
 	baseImage := primary.Image
 	composeBuilt := false
 	if primary.Build != nil {
@@ -83,6 +104,7 @@ func BuildPrimaryImage(ctx context.Context, in BuildPrimaryInputs) (*BuildPrimar
 			Services:        []string{in.Spec.Service},
 			BuildKitAddress: in.BuilderOptions.BuildKitAddress,
 			Docker:          in.BuilderOptions.Docker,
+			Platforms:       in.BuilderOptions.Platforms,
 			NoCache:         in.BuilderOptions.NoCache,
 			Pull:            in.BuilderOptions.Pull,
 			Progress:        in.BuilderOptions.Progress,
@@ -100,27 +122,25 @@ func BuildPrimaryImage(ctx context.Context, in BuildPrimaryInputs) (*BuildPrimar
 		return nil, fmt.Errorf("primary service %q has neither image nor build", in.Spec.Service)
 	}
 
-	if in.Spec.Features.Len() == 0 {
+	if !needsDerivedImage(in) {
 		return &BuildPrimaryResult{Image: baseImage, Built: composeBuilt}, nil
 	}
 
 	tag := in.Tag
+	if tag == "" && len(in.BuilderOptions.Tags) > 0 {
+		tag = in.BuilderOptions.Tags[0]
+	}
 	if tag == "" {
 		tag = fmt.Sprintf("devcontainer-builder/compose-primary:%d", time.Now().UnixNano())
 	}
 
-	syntheticDir, err := os.MkdirTemp("", "dcb-compose-primary-")
-	if err != nil {
-		return nil, fmt.Errorf("synthetic spec dir: %w", err)
-	}
-	defer os.RemoveAll(syntheticDir)
-
 	syntheticSpec := map[string]any{
-		"image":         baseImage,
-		"remoteUser":    in.Spec.RemoteUser,
-		"containerUser": in.Spec.ContainerUser,
-		"containerEnv":  in.Spec.ContainerEnv,
-		"remoteEnv":     in.Spec.UpdateRemoteEnv,
+		"image":           baseImage,
+		"remoteUser":      in.Spec.RemoteUser,
+		"containerUser":   in.Spec.ContainerUser,
+		"containerEnv":    in.Spec.ContainerEnv,
+		"remoteEnv":       in.Spec.UpdateRemoteEnv,
+		"workspaceFolder": in.Spec.WorkspaceFolder,
 	}
 	if in.Spec.Features.Len() > 0 {
 		featuresOut := map[string]json.RawMessage{}
@@ -136,19 +156,26 @@ func BuildPrimaryImage(ctx context.Context, in BuildPrimaryInputs) (*BuildPrimar
 	if err != nil {
 		return nil, fmt.Errorf("synthetic spec marshal: %w", err)
 	}
-	specPath := filepath.Join(syntheticDir, "devcontainer.json")
-	if err := os.WriteFile(specPath, body, 0o644); err != nil {
-		return nil, fmt.Errorf("write synthetic spec: %w", err)
+
+	var synthetic spec.DevContainer
+	if err := json.Unmarshal(body, &synthetic); err != nil {
+		return nil, fmt.Errorf("synthetic spec parse: %w", err)
 	}
+	synthetic.Path, synthetic.Raw = in.Spec.Path, body
 
 	opts := in.BuilderOptions
-	opts.SpecPath = specPath
+	opts.Spec, opts.SpecPath = &synthetic, in.Spec.Path
 	opts.Workspace = in.Workspace
 	if in.Spec.Path != "" && opts.FeatureBaseDir == "" {
 		opts.FeatureBaseDir = filepath.Dir(in.Spec.Path)
 	}
-	opts.Tags = []string{tag}
-	if !opts.Push {
+	if len(opts.Tags) == 0 {
+		opts.Tags = []string{tag}
+	} else {
+		opts.Tags = append([]string(nil), opts.Tags...)
+		opts.Tags[0] = tag
+	}
+	if !opts.Push && opts.OutputDir == "" {
 		opts.Load = true
 	}
 
@@ -158,4 +185,9 @@ func BuildPrimaryImage(ctx context.Context, in BuildPrimaryInputs) (*BuildPrimar
 		return nil, fmt.Errorf("build derived image: %w", err)
 	}
 	return &BuildPrimaryResult{Image: tag, Built: true, BuildResult: res}, nil
+}
+
+func needsDerivedImage(in BuildPrimaryInputs) bool {
+	o := in.BuilderOptions
+	return in.Spec.Features.Len() > 0 || o.InstallVSCodeServer || len(o.Tags) > 0 || in.Tag != "" || o.Push || o.OutputDir != "" || len(o.Labels) > 0 || len(o.Platforms) > 0 || o.Pull || o.NoCache || len(o.CacheFrom) > 0 || len(o.CacheTo) > 0
 }

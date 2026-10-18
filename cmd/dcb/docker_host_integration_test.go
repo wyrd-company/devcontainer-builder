@@ -3,6 +3,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -33,34 +34,42 @@ func TestDockerHostIntegration(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
 
-	cli := requireDocker(t, ctx)
-	defer cli.Close()
+	cli := hostRequireDocker(t, ctx)
+	t.Cleanup(func() { _ = cli.Close() })
 
 	imageRef := os.Getenv("DCB_HOST_TEST_IMAGE")
 	if imageRef == "" {
 		imageRef = "alpine:3.20"
 	}
-	ensureImage(t, ctx, cli, imageRef)
+	hostEnsureImage(t, ctx, cli, imageRef)
 
-	bin := buildBinary(t)
-	workspace := prepareWorkspace(t, imageRef)
-	requireBindableWorkspace(t, ctx, cli, imageRef, workspace)
+	bin := hostBuildBinary(t)
+	workspace := hostPrepareWorkspace(t, imageRef)
+	hostRequireBindableWorkspace(t, ctx, cli, imageRef, workspace)
 	t.Cleanup(func() {
-		_ = runCommandAllowError(bin, "down", "--workspace", workspace)
+		_ = hostRunCommandAllowError(bin, "down", "--workspace-folder", workspace)
 	})
 
 	cmdEnv := append(os.Environ(), "DCB_HOST_VALUE=local-value")
 
-	runCommand(t, cmdEnv, bin,
+	upResult := hostRunCommand(t, cmdEnv, bin,
 		"up",
-		"--workspace", workspace,
-		"--image", imageRef,
-		"--skip-build",
-		"--update-remote-user-uid", "off",
+		"--workspace-folder", workspace,
+		"--update-remote-user-uid-default", "off",
 	)
 
-	info := inspectContainer(t, ctx, cli, workspace)
-	writeJSONArtifact(t, "docker-host-container-inspect.json", info)
+	var result map[string]any
+	if err := json.Unmarshal(upResult, &result); err != nil {
+		t.Fatal(err)
+	}
+	for _, field := range []string{"containerId", "remoteUser", "remoteWorkspaceFolder"} {
+		if value, ok := result[field].(string); !ok || value == "" {
+			t.Fatalf("up missing %s: %v", field, result)
+		}
+	}
+
+	info := hostInspectContainer(t, ctx, cli, workspace)
+	hostWriteJSONArtifact(t, "docker-host-container-inspect.json", info)
 	if !info.State.Running {
 		t.Fatal("container is not running after up")
 	}
@@ -71,12 +80,11 @@ func TestDockerHostIntegration(t *testing.T) {
 	if got := info.Config.Labels["devcontainer.config_file"]; got != wantConfig {
 		t.Fatalf("config file label = %q, want %q", got, wantConfig)
 	}
-	assertWorkspaceMount(t, info.Mounts, workspace, "/workspaces/docker-host")
+	hostAssertWorkspaceMount(t, info.Mounts, workspace, "/workspaces/docker-host")
 
-	execOut := runCommand(t, cmdEnv, bin,
+	execOut := hostRunCommand(t, cmdEnv, bin,
 		"exec",
-		"--workspace", workspace,
-		"-t=false",
+		"--workspace-folder", workspace,
 		"--",
 		"sh", "-lc",
 		`printf '%s\n' "$PWD|$REMOTE_STATIC|$REMOTE_FROM_CONTAINER|$REMOTE_FROM_LOCAL|$REMOTE_WORKSPACE"; printf 'exec\n' >> lifecycle.log`,
@@ -86,12 +94,12 @@ func TestDockerHostIntegration(t *testing.T) {
 		t.Fatalf("exec output = %q, want %q", got, wantExec)
 	}
 
-	inspectOut := runCommand(t, cmdEnv, bin, "inspect", "--workspace", workspace)
-	writeArtifact(t, "docker-host-cli-inspect.txt", inspectOut)
+	inspectOut := hostRunCommand(t, cmdEnv, bin, "inspect", "--workspace-folder", workspace)
+	hostWriteArtifact(t, "docker-host-cli-inspect.txt", inspectOut)
 	for _, want := range []string{
-		"running:    true",
-		"devcontainer.local_folder=" + workspace,
-		"devcontainer.config_file=" + wantConfig,
+		`"Running":true`,
+		`"devcontainer.local_folder":"` + workspace + `"`,
+		`"devcontainer.config_file":"` + wantConfig + `"`,
 	} {
 		if !strings.Contains(string(inspectOut), want) {
 			t.Fatalf("inspect output missing %q:\n%s", want, inspectOut)
@@ -99,25 +107,32 @@ func TestDockerHostIntegration(t *testing.T) {
 	}
 
 	firstID := info.ID
-	runCommand(t, cmdEnv, bin,
+	hostRunCommand(t, cmdEnv, bin,
 		"up",
-		"--workspace", workspace,
-		"--image", imageRef,
-		"--skip-build",
-		"--update-remote-user-uid", "off",
+		"--workspace-folder", workspace,
+		"--update-remote-user-uid-default", "off",
 	)
-	info = inspectContainer(t, ctx, cli, workspace)
-	writeJSONArtifact(t, "docker-host-container-inspect-second-up.json", info)
+	info = hostInspectContainer(t, ctx, cli, workspace)
+	hostWriteJSONArtifact(t, "docker-host-container-inspect-second-up.json", info)
 	if info.ID != firstID {
 		t.Fatalf("second up created %s, want reuse of %s", info.ID[:12], firstID[:12])
 	}
 
-	assertLifecycleLog(t, filepath.Join(workspace, "lifecycle.log"))
+	hostAssertLifecycleLog(t, filepath.Join(workspace, "lifecycle.log"))
 	if got, err := os.ReadFile(filepath.Join(workspace, "workspace-write.txt")); err != nil || string(got) != "writable" {
 		t.Fatalf("workspace write marker = %q, %v; want writable", got, err)
 	}
 
-	runCommand(t, cmdEnv, bin, "down", "--workspace", workspace)
+	// Existing containers remain manageable without the source configuration.
+	if err := os.Remove(wantConfig); err != nil {
+		t.Fatal(err)
+	}
+	missingConfigExec := hostRunCommand(t, cmdEnv, bin, "exec", "--workspace-folder", workspace, "--", "pwd")
+	if strings.TrimSpace(string(missingConfigExec)) != "/workspaces/docker-host" {
+		t.Fatalf("exec without config=%q", missingConfigExec)
+	}
+	hostRunCommand(t, cmdEnv, bin, "inspect", "--workspace-folder", workspace)
+	hostRunCommand(t, cmdEnv, bin, "down", "--workspace-folder", workspace)
 	_, err := cli.ContainerInspect(ctx, firstID)
 	if err == nil {
 		t.Fatalf("container %s still exists after down", firstID[:12])
@@ -127,7 +142,7 @@ func TestDockerHostIntegration(t *testing.T) {
 	}
 }
 
-// TestDockerHostUpPullsMissingImage covers up with --skip-build on an
+// TestDockerHostUpPullsMissingImage covers image-only up on an
 // image the daemon does not have: up pulls it through the Engine API.
 // The image is a test-owned tag in a test-owned registry; the test only
 // removes what it created.
@@ -139,32 +154,30 @@ func TestDockerHostUpPullsMissingImage(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
 
-	cli := requireDocker(t, ctx)
-	defer cli.Close()
+	cli := hostRequireDocker(t, ctx)
+	t.Cleanup(func() { _ = cli.Close() })
 
 	registry := dockertest.StartRegistry(t, ctx, cli)
 	dockertest.EnsureImage(t, ctx, cli, "alpine:3.20")
 	imageRef := fmt.Sprintf("%s/dcb-test/pull:%d", registry, time.Now().UnixNano())
-	publishTestImage(t, ctx, cli, "alpine:3.20", imageRef)
+	hostPublishTestImage(t, ctx, cli, "alpine:3.20", imageRef)
 
-	bin := buildBinary(t)
-	workspace := prepareWorkspace(t, imageRef)
+	bin := hostBuildBinary(t)
+	workspace := hostPrepareWorkspace(t, imageRef)
 	t.Cleanup(func() {
-		_ = runCommandAllowError(bin, "down", "--workspace", workspace)
+		_ = hostRunCommandAllowError(bin, "down", "--workspace-folder", workspace)
 	})
 
-	runCommand(t, append(os.Environ(), "DCB_HOST_VALUE=local-value"), bin,
+	hostRunCommand(t, append(os.Environ(), "DCB_HOST_VALUE=local-value"), bin,
 		"up",
-		"--workspace", workspace,
-		"--image", imageRef,
-		"--skip-build",
-		"--update-remote-user-uid", "off",
+		"--workspace-folder", workspace,
+		"--update-remote-user-uid-default", "off",
 	)
 
 	if _, err := cli.ImageInspect(ctx, imageRef); err != nil {
 		t.Fatalf("image %s not in the daemon after up: %v", imageRef, err)
 	}
-	info := inspectContainer(t, ctx, cli, workspace)
+	info := hostInspectContainer(t, ctx, cli, workspace)
 	if !info.State.Running {
 		t.Fatal("container is not running after up")
 	}
@@ -173,10 +186,10 @@ func TestDockerHostUpPullsMissingImage(t *testing.T) {
 	}
 }
 
-// publishTestImage tags source as the test-owned ref, pushes it to its
+// hostPublishTestImage tags source as the test-owned ref, pushes it to its
 // registry, and removes the local tag so the daemon must pull ref. The
 // source image is untouched; ref is removed again when the test ends.
-func publishTestImage(t *testing.T, ctx context.Context, cli *dockerclient.Client, source, ref string) {
+func hostPublishTestImage(t *testing.T, ctx context.Context, cli *dockerclient.Client, source, ref string) {
 	t.Helper()
 	if err := cli.ImageTag(ctx, source, ref); err != nil {
 		t.Fatalf("tag %s as %s: %v", source, ref, err)
@@ -205,23 +218,24 @@ func publishTestImage(t *testing.T, ctx context.Context, cli *dockerclient.Clien
 	}
 }
 
-func requireDocker(t *testing.T, ctx context.Context) *dockerclient.Client {
+func hostRequireDocker(t *testing.T, ctx context.Context) *dockerclient.Client {
 	t.Helper()
+	isolateDockerConfig(t)
 	cli, err := dockerclient.NewClientWithOpts(
 		dockerclient.FromEnv,
 		dockerclient.WithAPIVersionNegotiation(),
 	)
 	if err != nil {
-		skipOrFail(t, "docker client: %v", err)
+		hostSkipOrFail(t, "docker client: %v", err)
 	}
 	if _, err := cli.Ping(ctx); err != nil {
 		_ = cli.Close()
-		skipOrFail(t, "docker daemon is required for Docker integration tests: %v", err)
+		hostSkipOrFail(t, "docker daemon is required for Docker integration tests: %v", err)
 	}
 	return cli
 }
 
-func skipOrFail(t *testing.T, format string, args ...any) {
+func hostSkipOrFail(t *testing.T, format string, args ...any) {
 	t.Helper()
 	if os.Getenv("CI") == "true" {
 		t.Fatalf(format, args...)
@@ -229,7 +243,7 @@ func skipOrFail(t *testing.T, format string, args ...any) {
 	t.Skipf(format, args...)
 }
 
-func ensureImage(t *testing.T, ctx context.Context, cli *dockerclient.Client, ref string) {
+func hostEnsureImage(t *testing.T, ctx context.Context, cli *dockerclient.Client, ref string) {
 	t.Helper()
 	if _, err := cli.ImageInspect(ctx, ref); err == nil {
 		return
@@ -250,7 +264,7 @@ func ensureImage(t *testing.T, ctx context.Context, cli *dockerclient.Client, re
 	}
 }
 
-func requireBindableWorkspace(t *testing.T, ctx context.Context, cli *dockerclient.Client, imageRef, workspace string) {
+func hostRequireBindableWorkspace(t *testing.T, ctx context.Context, cli *dockerclient.Client, imageRef, workspace string) {
 	t.Helper()
 	resp, err := cli.ContainerCreate(
 		ctx,
@@ -266,25 +280,25 @@ func requireBindableWorkspace(t *testing.T, ctx context.Context, cli *dockerclie
 	)
 	if err != nil {
 		if strings.Contains(err.Error(), "bind source path does not exist") {
-			skipOrFail(t, "docker daemon cannot access workspace bind source %s: %v", workspace, err)
+			hostSkipOrFail(t, "docker daemon cannot access workspace bind source %s: %v", workspace, err)
 		}
 		t.Fatalf("preflight bind mount for %s: %v", workspace, err)
 	}
 	t.Cleanup(func() {
-		if err := cli.ContainerRemove(ctx, resp.ID, container.RemoveOptions{Force: true, RemoveVolumes: true}); err != nil && !dockerclient.IsErrNotFound(err) {
+		if err := cli.ContainerRemove(context.Background(), resp.ID, container.RemoveOptions{Force: true, RemoveVolumes: true}); err != nil && !dockerclient.IsErrNotFound(err) {
 			t.Logf("remove preflight container %s: %v", resp.ID[:12], err)
 		}
 	})
 }
 
-func buildBinary(t *testing.T) string {
+func hostBuildBinary(t *testing.T) string {
 	t.Helper()
-	bin := filepath.Join(t.TempDir(), "devcontainer-docker")
-	runCommand(t, os.Environ(), "go", "build", "-o", bin, ".")
+	bin := filepath.Join(t.TempDir(), "dcb")
+	hostRunCommand(t, os.Environ(), "go", "build", "-o", bin, ".")
 	return bin
 }
 
-func prepareWorkspace(t *testing.T, imageRef string) string {
+func hostPrepareWorkspace(t *testing.T, imageRef string) string {
 	t.Helper()
 	root, err := filepath.Abs(filepath.Join("..", ".."))
 	if err != nil {
@@ -334,24 +348,24 @@ func prepareWorkspace(t *testing.T, imageRef string) string {
 	return workspace
 }
 
-func inspectContainer(t *testing.T, ctx context.Context, cli *dockerclient.Client, workspace string) container.InspectResponse {
+func hostInspectContainer(t *testing.T, ctx context.Context, cli *dockerclient.Client, workspace string) container.InspectResponse {
 	t.Helper()
-	out := runCommand(t, os.Environ(), "go", "run", ".", "inspect", "--workspace", workspace)
-	if !strings.Contains(string(out), "running:    true") {
+	out := hostRunCommand(t, os.Environ(), "go", "run", ".", "inspect", "--workspace-folder", workspace)
+	if !strings.Contains(string(out), `"Running":true`) {
 		t.Fatalf("inspect before API lookup did not report running container:\n%s", out)
 	}
 
 	// The package under test owns discovery. Ask the CLI to prove discovery
 	// first, then use the API for field assertions.
-	info, err := lookupByWorkspace(ctx, cli, workspace)
+	info, err := hostLookupByWorkspace(ctx, cli, workspace)
 	if err != nil {
 		t.Fatal(err)
 	}
 	return info
 }
 
-func lookupByWorkspace(ctx context.Context, cli *dockerclient.Client, workspace string) (container.InspectResponse, error) {
-	args := filtersForWorkspace(workspace)
+func hostLookupByWorkspace(ctx context.Context, cli *dockerclient.Client, workspace string) (container.InspectResponse, error) {
+	args := hostFiltersForWorkspace(workspace)
 	list, err := cli.ContainerList(ctx, args)
 	if err != nil {
 		return container.InspectResponse{}, err
@@ -366,12 +380,12 @@ func lookupByWorkspace(ctx context.Context, cli *dockerclient.Client, workspace 
 	return resp, nil
 }
 
-func filtersForWorkspace(workspace string) container.ListOptions {
+func hostFiltersForWorkspace(workspace string) container.ListOptions {
 	args := filters.NewArgs(filters.Arg("label", "devcontainer.local_folder="+workspace))
 	return container.ListOptions{All: true, Filters: args}
 }
 
-func assertWorkspaceMount(t *testing.T, mounts []container.MountPoint, source, target string) {
+func hostAssertWorkspaceMount(t *testing.T, mounts []container.MountPoint, source, target string) {
 	t.Helper()
 	for _, m := range mounts {
 		if m.Type == mount.TypeBind && m.Source == source && m.Destination == target {
@@ -384,7 +398,7 @@ func assertWorkspaceMount(t *testing.T, mounts []container.MountPoint, source, t
 	t.Fatalf("missing workspace bind mount %s -> %s in %+v", source, target, mounts)
 }
 
-func assertLifecycleLog(t *testing.T, path string) {
+func hostAssertLifecycleLog(t *testing.T, path string) {
 	t.Helper()
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -404,12 +418,26 @@ func assertLifecycleLog(t *testing.T, path string) {
 	}
 }
 
-func runCommand(t *testing.T, env []string, name string, args ...string) []byte {
+func hostRunCommand(t *testing.T, env []string, name string, args ...string) []byte {
 	t.Helper()
 	cmd := exec.Command(name, args...)
 	cmd.Dir = "."
 	cmd.Env = env
-	out, err := cmd.CombinedOutput()
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	out, err := cmd.Output()
+	if name != "go" || (len(args) > 0 && args[0] == "run") {
+		var result map[string]any
+		if decodeErr := json.Unmarshal(out, &result); decodeErr != nil || result["outcome"] != "success" || bytes.Count(out, []byte("\n")) != 1 {
+			t.Fatalf("CLI result: %s, stderr: %s, error: %v", out, stderr.String(), err)
+		}
+		if len(args) > 0 && args[0] == "exec" {
+			out = stderr.Bytes()
+		}
+	}
+	if err != nil {
+		t.Fatalf("%s: %v\nstdout: %s\nstderr: %s", name, err, out, stderr.String())
+	}
 	if len(out) > 0 {
 		t.Logf("%s %s\n%s", name, strings.Join(args, " "), out)
 	}
@@ -419,7 +447,7 @@ func runCommand(t *testing.T, env []string, name string, args ...string) []byte 
 	return out
 }
 
-func runCommandAllowError(name string, args ...string) error {
+func hostRunCommandAllowError(name string, args ...string) error {
 	cmd := exec.Command(name, args...)
 	cmd.Dir = "."
 	out, err := cmd.CombinedOutput()
@@ -429,17 +457,17 @@ func runCommandAllowError(name string, args ...string) error {
 	return nil
 }
 
-func writeJSONArtifact(t *testing.T, name string, v any) {
+func hostWriteJSONArtifact(t *testing.T, name string, v any) {
 	t.Helper()
 	data, err := json.MarshalIndent(v, "", "  ")
 	if err != nil {
 		t.Logf("marshal artifact %s: %v", name, err)
 		return
 	}
-	writeArtifact(t, name, append(data, '\n'))
+	hostWriteArtifact(t, name, append(data, '\n'))
 }
 
-func writeArtifact(t *testing.T, name string, data []byte) {
+func hostWriteArtifact(t *testing.T, name string, data []byte) {
 	t.Helper()
 	dir := os.Getenv("DCB_ARTIFACT_DIR")
 	if dir == "" {
