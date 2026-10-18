@@ -39,7 +39,13 @@ printf '{"outcome":"success"}\n'
 		t.Run(script, func(t *testing.T) {
 			dir := t.TempDir()
 			log := filepath.Join(dir, "invocations.jsonl")
-			cmd := exec.Command("bash", filepath.Join(root, "scripts", script))
+			scriptPath := filepath.Join(root, "scripts", script)
+			// Register this external executable as a Go test-cache dependency. The
+			// assertions still observe its real invocations through the recording stub.
+			if _, err := os.ReadFile(scriptPath); err != nil {
+				t.Fatal(err)
+			}
+			cmd := exec.Command("bash", scriptPath)
 			cmd.Dir = root
 			cmd.Env = append(os.Environ(), "PATH="+tools+string(os.PathListSeparator)+os.Getenv("PATH"), "DCB_INVOCATION_LOG="+log, "DCB_ARTIFACT_DIR="+filepath.Join(dir, "artifacts"))
 			if out, err := cmd.CombinedOutput(); err != nil {
