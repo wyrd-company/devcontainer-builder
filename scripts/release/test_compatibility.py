@@ -28,6 +28,16 @@ class CompatibilityTests(unittest.TestCase):
         self.assertEqual(action["uses"].split("@")[1], pin)
         self.assertEqual(submit["env"]["REPO_WYRD_FOO_PUBLISHER_COMMIT"], pin)
         self.assertEqual(release["jobs"]["release"]["needs"], "compatibility")
+        submit_gate = next(
+            s for s in submit["steps"] if s.get("run") == "task release:publisher-pin"
+        )
+        self.assertLess(
+            submit["steps"].index(submit_gate), submit["steps"].index(action)
+        )
+        self.assertEqual(
+            submit_gate["env"]["RELEASE_VERSION"],
+            "${{ steps.handoff.outputs.version }}",
+        )
         steps = job["steps"]
         gate = next(s for s in steps if s.get("run") == "task release:publisher-pin")
         checkout = next(
@@ -106,9 +116,9 @@ if command == 'submit':
     target.parent.mkdir(parents=True)
     target.write_text('{}')
     print(os.environ.get('SUBMISSION', 'created\\t' + relative))
-elif command == 'stage':
+elif command == 'stage' and os.environ.get('SKIP_OUTPUT') != 'stage':
     (Path(sys.argv[4]) / '.new-rpms').write_text('example.rpm')
-elif command == 'render-aur':
+elif command == 'render-aur' and os.environ.get('SKIP_OUTPUT') != 'aur':
     (Path(sys.argv[3]) / 'PKGBUILD').write_text('example')
 elif command == 'validate-queue' and os.environ.get('REJECT_QUEUE'):
     sys.exit(1)
@@ -140,6 +150,28 @@ elif command == 'validate-queue' and os.environ.get('REJECT_QUEUE'):
             )
             self.assertEqual(calls[2][-1], str(publisher / "config/products.json"))
             self.assertEqual(calls[2][3], "releases/dcb/1.2.3.json")
+            for file in [
+                publisher / "scripts/repository.py",
+                publisher / "config/products.json",
+                publisher / "pubkey.gpg",
+            ]:
+                saved = file.read_bytes()
+                file.unlink()
+                log.unlink(missing_ok=True)
+                result = subprocess.run(
+                    command, env=env, capture_output=True, text=True
+                )
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("does not expose", result.stderr)
+                self.assertFalse(log.exists())
+                file.write_bytes(saved)
+            for output in ["stage", "aur"]:
+                self.assertNotEqual(
+                    subprocess.run(
+                        command, env={**env, "SKIP_OUTPUT": output}, capture_output=True
+                    ).returncode,
+                    0,
+                )
             for index, value in [(3, "b" * 40), (3, "PUBLISHER_COMMIT_UNSET")]:
                 log.unlink(missing_ok=True)
                 changed = command.copy()
