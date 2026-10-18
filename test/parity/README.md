@@ -44,9 +44,10 @@ Lifecycle probes read `/postCreateCommand.txt`; feature probes run `hello` and
 `color`. Fixtures with no applicable probes produce empty maps. Observations
 still inspect an existing container after a lifecycle failure.
 
-Normalization replaces observed container/image IDs, hostnames and temporary
-workspace paths. Result timestamps are ignored. Environment and label maps and
-mount sets are unordered; metadata and command arrays retain their order.
+Normalization replaces observed container/image IDs, hostnames, temporary
+workspace paths and the workspace folder name. Result timestamps are ignored.
+Environment and label maps and mount sets are unordered; metadata and command
+arrays retain their order.
 Unexpected environment values, metadata differences and missing results remain
 visible. The dcb adapter reads the real JSON success result; it rejects extra
 stdout lines, invalid JSON, and error outcomes. It does not manufacture a result
@@ -61,7 +62,11 @@ observation, normalization, and scoring are shared with the upstream adapter.
 
 Teardown selects only this run's labels, rechecks full Docker IDs and ownership,
 then removes containers and labelled images, including after normal errors or
-interrupts. Pulled base images and BuildKit cache remain available. Hard kills
-cannot run cleanup; use the unique label recorded in `run.log` to identify
+interrupts. Each workspace folder is named `<run>-<fixture>-<side>`, so Compose
+project names and upstream derived image names are unique to the run and side.
+Cleanup also removes image tags, Compose networks and Compose volumes whose
+name or project contains that run prefix; image tags are removed without force.
+Pulled base images and BuildKit cache remain available. Hard kills cannot run
+cleanup; use the unique label recorded in `run.log` to identify
 residue. Discovery regressions create stopped `alpine:3.20` containers through
 Docker, skip when Docker is unavailable, and retain the pulled base image. Logs contain fixture output and local paths; review before sharing.

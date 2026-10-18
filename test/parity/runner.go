@@ -331,5 +331,75 @@ func (r *Runner) cleanup(ctx context.Context) []string {
 			}
 		}
 	}
+	return append(errors, r.cleanupNamed(ctx)...)
+}
+
+const composeProjectLabel = "com.docker.compose.project"
+
+// composeKinds names each Compose resource's identity field in list and
+// inspect templates; networks call it ID in one and Id in the other.
+var composeKinds = []struct{ kind, list, inspect string }{
+	{"network", "{{.ID}}", "{{.Id}}"},
+	{"volume", "{{.Name}}", "{{.Name}}"},
+}
+
+// ownsName reports whether a name embeds this run's workspace name prefix.
+// Upstream derived image names and Compose project names carry the folder
+// name; neither CLI can add the run label to them.
+func (r *Runner) ownsName(name string) bool {
+	i := strings.Index(name, r.runID+"-")
+	if i < 0 {
+		return false
+	}
+	if i == 0 {
+		return true
+	}
+	c := name[i-1]
+	return !(c >= 'a' && c <= 'z' || c >= '0' && c <= '9')
+}
+
+// cleanupNamed removes derived image tags, then Compose networks and volumes
+// whose project carries this run's workspace name. Images are removed by tag
+// without force, so an image shared with another tag stays.
+func (r *Runner) cleanupNamed(ctx context.Context) []string {
+	var errors []string
+	body, err := r.command(ctx, "docker", "image", "ls", "--format", "{{.Repository}}:{{.Tag}}")
+	if err != nil {
+		errors = append(errors, err.Error())
+	}
+	for _, ref := range strings.Fields(string(body)) {
+		if r.ownsName(ref) {
+			if _, err := r.command(ctx, "docker", "image", "rm", ref); err != nil {
+				errors = append(errors, err.Error())
+			}
+		}
+	}
+	project := " {{.Label \"" + composeProjectLabel + "\"}}"
+	for _, k := range composeKinds {
+		body, err := r.command(ctx, "docker", k.kind, "ls", "--filter", "label="+composeProjectLabel, "--format", k.list+project)
+		if err != nil {
+			errors = append(errors, err.Error())
+			continue
+		}
+		for _, line := range strings.Split(strings.TrimSpace(string(body)), "\n") {
+			fields := strings.Fields(line)
+			if len(fields) != 2 || !r.ownsName(fields[1]) {
+				continue
+			}
+			data, err := r.command(ctx, "docker", k.kind, "inspect", fields[0], "--format", k.inspect+" {{index .Labels \""+composeProjectLabel+"\"}}")
+			if err != nil {
+				errors = append(errors, err.Error())
+				continue
+			}
+			identity := strings.Fields(string(data))
+			if len(identity) != 2 || !strings.HasPrefix(identity[0], fields[0]) || !r.ownsName(identity[1]) {
+				errors = append(errors, "ownership verification failed for "+k.kind+" "+fields[0])
+				continue
+			}
+			if _, err := r.command(ctx, "docker", k.kind, "rm", identity[0]); err != nil {
+				errors = append(errors, err.Error())
+			}
+		}
+	}
 	return errors
 }

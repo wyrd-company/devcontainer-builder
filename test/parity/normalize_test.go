@@ -183,6 +183,8 @@ case "$*" in
  'container inspect '*) if [ "$OWNER" = wrong-id ]; then echo "different-id sample"; else echo "full-container-id $OWNER"; fi ;;
  'image ls '*) echo sha256:full-image-id ;;
  'image inspect '*) if [ "$OWNER" = wrong-id ]; then echo "sha256:different-id sample"; else echo "sha256:full-image-id $OWNER"; fi ;;
+ 'network ls '*) echo "short-id sample-go_devcontainer" ;;
+ 'network inspect '*) if [ "$OWNER" = wrong-id ]; then echo "different-id sample-go_devcontainer"; else echo "short-id-full $OWNER-go_devcontainer"; fi ;;
 esac
 `
 			os.WriteFile(filepath.Join(bin, "docker"), []byte(script), 0755)
@@ -201,12 +203,13 @@ esac
 				t.Fatal(err)
 			}
 			removed := strings.Contains(string(body), "rm -f")
+			networkRemoved := strings.Contains(string(body), "network rm short-id-full")
 			if ownership == "sample" {
-				if len(errors) != 0 || !removed {
+				if len(errors) != 0 || !removed || !networkRemoved {
 					t.Fatalf("owned cleanup: %v %s", errors, body)
 				}
 			} else {
-				if len(errors) != 2 || removed {
+				if len(errors) != 3 || removed || networkRemoved {
 					t.Fatalf("foreign resource deleted: %v %s", errors, body)
 				}
 			}

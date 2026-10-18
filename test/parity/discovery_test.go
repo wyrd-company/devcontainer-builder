@@ -277,3 +277,62 @@ func TestObserveVerifiesInspectedIdentity(t *testing.T) {
 		})
 	}
 }
+
+// Derived names carry the run's workspace name; a run whose ID is a prefix of
+// another's, or a name that only contains the ID mid-word, is foreign.
+func TestCleanupRemovesOnlyRunNamedResources(t *testing.T) {
+	r, _ := discoveryRunner(t)
+	ctx := context.Background()
+	owned := r.runID + "-sample-go"
+	foreign := []string{r.runID + "9-sample-go", "x" + r.runID + "-sample-go"}
+	type resource struct{ kind, name string }
+	var created []resource
+	create := func(kind, project string) string {
+		name := "vsc-" + project
+		var args []string
+		switch kind {
+		case "image":
+			name += ":latest"
+			args = []string{"image", "tag", "alpine:3.20", name}
+		default:
+			args = []string{kind, "create", "--label", composeProjectLabel + "=" + project + "_devcontainer", name}
+		}
+		if _, err := r.command(ctx, "docker", args...); err != nil {
+			t.Fatal(err)
+		}
+		created = append(created, resource{kind, name})
+		return name
+	}
+	t.Cleanup(func() {
+		for _, c := range created {
+			args := []string{c.kind, "rm", c.name}
+			if c.kind == "image" {
+				args = []string{"image", "rm", c.name}
+			}
+			r.command(context.Background(), "docker", args...)
+		}
+	})
+	kinds := []string{"image", "network", "volume"}
+	for _, kind := range kinds {
+		create(kind, owned)
+		for _, project := range foreign {
+			create(kind, project)
+		}
+	}
+	if errors := r.cleanup(ctx); len(errors) != 0 {
+		t.Fatalf("cleanup: %v", errors)
+	}
+	for _, c := range created {
+		_, err := r.command(ctx, "docker", c.kind, "inspect", c.name)
+		if strings.Contains(c.name, owned) && !strings.Contains(c.name, "x"+owned) {
+			if err == nil {
+				t.Errorf("owned %s not removed: %s", c.kind, c.name)
+			}
+		} else if err != nil {
+			t.Errorf("foreign %s removed: %s", c.kind, c.name)
+		}
+	}
+	if _, err := r.command(ctx, "docker", "image", "inspect", "alpine:3.20"); err != nil {
+		t.Fatal("shared base image removed")
+	}
+}
