@@ -284,3 +284,15 @@ func TestFixtureVerdict(t *testing.T) {
 		t.Fatal("missing fixture passed")
 	}
 }
+
+func TestUnorderedMounts(t *testing.T) {
+	a := []any{map[string]any{"source": "/first", "rw": true}, map[string]any{"source": "/second", "rw": false}}
+	b := []any{map[string]any{"source": "/second", "rw": false}, map[string]any{"source": "/first", "rw": true}}
+	if !reflect.DeepEqual(unordered(a), unordered(b)) {
+		t.Fatal("mount order should not matter")
+	}
+	b[0].(map[string]any)["rw"] = !b[0].(map[string]any)["rw"].(bool)
+	if reflect.DeepEqual(unordered(a), unordered(b)) {
+		t.Fatal("mount permissions differ")
+	}
+}

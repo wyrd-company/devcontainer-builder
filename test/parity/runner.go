@@ -12,7 +12,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"sort"
 	"strings"
 
 	"github.com/wyrd-company/devcontainer-builder/pkg/spec"
@@ -232,12 +231,7 @@ func (r *Runner) observe(ctx context.Context, a Adapter, f Fixture, side string)
 	for _, m := range c.Mounts {
 		mounts = append(mounts, n.Value(map[string]any{"type": m.Type, "source": m.Source, "destination": m.Destination, "mode": m.Mode, "rw": m.RW}))
 	}
-	sort.Slice(mounts, func(i, j int) bool {
-		a, _ := json.Marshal(mounts[i])
-		b, _ := json.Marshal(mounts[j])
-		return string(a) < string(b)
-	})
-	out["mounts"] = Observation{Value: mounts}
+	out["mounts"] = Observation{Value: unordered(mounts)}
 	out["user"] = Observation{Value: c.Config.User}
 	out["workdir"] = Observation{Value: n.Value(c.Config.WorkingDir)}
 	image, err := r.command(ctx, "docker", "image", "inspect", c.Image, "--format", "{{json .Config.Labels}}")

@@ -110,3 +110,13 @@ func (n Normalizer) Result(v any) any {
 	}
 	return normalized
 }
+
+// unordered canonicalizes set-like observations; Value preserves array order.
+func unordered(values []any) []any {
+	sort.Slice(values, func(i, j int) bool {
+		a, _ := json.Marshal(values[i])
+		b, _ := json.Marshal(values[j])
+		return string(a) < string(b)
+	})
+	return values
+}
