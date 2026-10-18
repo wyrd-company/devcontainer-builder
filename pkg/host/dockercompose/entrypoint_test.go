@@ -131,3 +131,21 @@ func TestWrapPrimaryCommand_NoOpWithoutEntrypointsOrWhenOverriding(t *testing.T)
 		t.Fatalf("daemon requests = %d, want none", requests())
 	}
 }
+
+func TestWrapPrimaryCommand_ServiceEntrypointAndCommandNeedNoInspect(t *testing.T) {
+	h, requests := fakeImageDaemon(t, `{}`)
+	proj := &types.Project{Services: types.Services{"app": {
+		Name: "app", Image: "img:latest",
+		Entrypoint: types.ShellCommand{"/svc-entrypoint.sh"}, Command: types.ShellCommand{"svc-cmd"},
+	}}}
+	in := OverrideInputs{Spec: &spec.DevContainer{Service: "app"}, Entrypoints: []string{"/usr/local/share/alpha-init.sh"}}
+	if err := h.wrapPrimaryCommand(context.Background(), proj, in); err != nil {
+		t.Fatal(err)
+	}
+	if requests() != 0 {
+		t.Fatalf("daemon requests = %d, want none", requests())
+	}
+	if svc := proj.Services["app"]; strings.Join(append(svc.Entrypoint[4:], svc.Command...), " ") != "/svc-entrypoint.sh svc-cmd" {
+		t.Fatalf("service = %+v", svc)
+	}
+}

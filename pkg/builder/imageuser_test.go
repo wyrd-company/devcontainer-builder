@@ -74,26 +74,50 @@ type imageRegistry struct {
 	requests int
 }
 
-func newImageRegistry(t *testing.T, repo, tag, user string) *imageRegistry {
+func sha(b []byte) string {
+	sum := sha256.Sum256(b)
+	return "sha256:" + hex.EncodeToString(sum[:])
+}
+
+// newImageRegistry serves repo:tag. With one user the tag is a single
+// manifest; with "amd64=..." and "arm64=..." users it is a two-platform
+// index.
+func newImageRegistry(t *testing.T, repo, tag string, users ...string) *imageRegistry {
 	t.Helper()
-	cfg := []byte(fmt.Sprintf(`{"architecture":"amd64","os":"linux","config":{"User":%q}}`, user))
-	sum := sha256.Sum256(cfg)
-	cfgDigest := "sha256:" + hex.EncodeToString(sum[:])
-	manifest := []byte(fmt.Sprintf(`{"schemaVersion":2,"mediaType":"application/vnd.oci.image.manifest.v1+json","config":{"mediaType":"application/vnd.oci.image.config.v1+json","digest":%q,"size":%d},"layers":[]}`, cfgDigest, len(cfg)))
+	paths := map[string][]byte{}
+	manifestFor := func(arch, user string) []byte {
+		cfg := []byte(fmt.Sprintf(`{"architecture":%q,"os":"linux","config":{"User":%q}}`, arch, user))
+		paths["/v2/"+repo+"/blobs/"+sha(cfg)] = cfg
+		return []byte(fmt.Sprintf(`{"schemaVersion":2,"mediaType":"application/vnd.oci.image.manifest.v1+json","config":{"mediaType":"application/vnd.oci.image.config.v1+json","digest":%q,"size":%d},"layers":[]}`, sha(cfg), len(cfg)))
+	}
+	indexType := ""
+	if len(users) == 1 {
+		paths["/v2/"+repo+"/manifests/"+tag] = manifestFor("amd64", users[0])
+	} else {
+		var children []string
+		for _, u := range users {
+			arch, user, _ := strings.Cut(u, "=")
+			m := manifestFor(arch, user)
+			paths["/v2/"+repo+"/manifests/"+sha(m)] = m
+			children = append(children, fmt.Sprintf(`{"mediaType":"application/vnd.oci.image.manifest.v1+json","digest":%q,"size":%d,"platform":{"os":"linux","architecture":%q}}`, sha(m), len(m), arch))
+		}
+		paths["/v2/"+repo+"/manifests/"+tag] = []byte(`{"schemaVersion":2,"mediaType":"application/vnd.oci.image.index.v1+json","manifests":[` + strings.Join(children, ",") + `]}`)
+		indexType = "application/vnd.oci.image.index.v1+json"
+	}
 	r := &imageRegistry{}
 	r.srv = httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		r.mu.Lock()
 		r.requests++
 		r.mu.Unlock()
-		switch req.URL.Path {
-		case "/v2/" + repo + "/manifests/" + tag:
-			w.Header().Set("Content-Type", "application/vnd.oci.image.manifest.v1+json")
-			_, _ = w.Write(manifest)
-		case "/v2/" + repo + "/blobs/" + cfgDigest:
-			_, _ = w.Write(cfg)
-		default:
+		body, ok := paths[req.URL.Path]
+		if !ok {
 			http.NotFound(w, req)
+			return
 		}
+		if req.URL.Path == "/v2/"+repo+"/manifests/"+tag && indexType != "" {
+			w.Header().Set("Content-Type", indexType)
+		}
+		_, _ = w.Write(body)
 	}))
 	t.Cleanup(r.srv.Close)
 	return r
@@ -223,4 +247,22 @@ func TestPrepareBuildContext_FeaturesSeeImageSpecBaseUser(t *testing.T) {
 		t.Fatal(err)
 	}
 	wantBuiltinUser(t, string(df), "image-user")
+}
+
+func TestGenerate_BaseUserForPrimaryPlatform(t *testing.T) {
+	reg := newImageRegistry(t, "library/base", "1", "amd64=amd-user", "arm64=arm-user")
+	ws := writeWorkspace(t, `"image":"`+reg.host()+`/library/base:1"`, nil)
+	for platform, user := range map[string]string{"linux/arm64": "arm-user", "linux/amd64": "amd-user"} {
+		df, _ := generate(t, reg.builder(), ws, func(o *Options) { o.Platforms = []string{platform, "linux/s390x"} })
+		wantBuiltinUser(t, df, user)
+	}
+}
+
+func TestGenerate_NoBaseUserLookupWithoutFeatures(t *testing.T) {
+	reg := newImageRegistry(t, "library/base", "1", "image-user")
+	ws := writeWorkspace(t, `"image":"`+reg.host()+`/library/base:1"`, nil)
+	generate(t, reg.builder(), ws, func(o *Options) { o.SkipFeatures = true })
+	if n := reg.count(); n != 0 {
+		t.Fatalf("registry requests = %d, want none without features", n)
+	}
 }

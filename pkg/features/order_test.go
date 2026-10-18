@@ -274,3 +274,19 @@ func TestCompareNodes_NamespaceThenDigest(t *testing.T) {
 		t.Fatal("same digest and options must be equal")
 	}
 }
+
+func TestMetadataAliases_CurrentIDThenLegacyIDs(t *testing.T) {
+	cases := []struct {
+		meta Metadata
+		want string
+	}{
+		{Metadata{ID: "beta", LegacyIDs: []string{"old-beta"}}, "beta,old-beta"},
+		{Metadata{ID: "old-beta", CurrentID: "beta", LegacyIDs: []string{"old-beta"}}, "beta,old-beta"},
+		{Metadata{}, ""},
+	}
+	for _, c := range cases {
+		if got := strings.Join(c.meta.aliases(), ","); got != c.want {
+			t.Errorf("aliases(%+v) = %q, want %q", c.meta, got, c.want)
+		}
+	}
+}
