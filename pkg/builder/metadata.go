@@ -17,12 +17,21 @@ import (
 
 // BaseMetadata reads the inherited metadata for the already-loaded config.
 // Dockerfile configs follow the selected target's base-image ancestry. Image
-// configs come from opts.Docker when present locally for the requested platform,
-// otherwise from the resolver's OCI registry client. It does not build or pull
+// configs come from opts.Docker (or the default Engine client) when present
+// locally for the requested platform, otherwise from the resolver's OCI registry
+// client. SkipImageMetaResolve disables registry lookup. It does not build or pull
 // image layers, and does not reload the devcontainer configuration.
 func (b *Builder) BaseMetadata(ctx context.Context, dc *spec.DevContainer, opts Options) ([]metadata.Entry, error) {
 	if dc == nil {
 		return nil, fmt.Errorf("base metadata: config is required")
+	}
+	if opts.Docker == nil && !opts.SkipImageMetaResolve {
+		cli, err := dockerclient.NewClientWithOpts(dockerclient.FromEnv, dockerclient.WithAPIVersionNegotiation())
+		if err != nil {
+			return nil, fmt.Errorf("base metadata docker client: %w", err)
+		}
+		defer cli.Close()
+		opts.Docker = cli
 	}
 	p := primaryPlatform(opts.Platforms)
 	imageConfig := func(ref string) (*oci.ImageConfig, error) {

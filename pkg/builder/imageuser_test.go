@@ -185,6 +185,7 @@ func TestGenerate_BaseUserLookupFailureFallsBackToRoot(t *testing.T) {
 }
 
 func TestGenerate_SkipImageMetaResolveSkipsBaseUserLookup(t *testing.T) {
+	t.Setenv("DOCKER_HOST", "invalid-default-engine")
 	reg := newImageRegistry(t, "library/base", "1", "image-user")
 	ws := writeWorkspace(t, `"image":"`+reg.host()+`/library/base:1"`, nil)
 	df, _ := generate(t, reg.builder(), ws, func(o *Options) { o.SkipImageMetaResolve = true })

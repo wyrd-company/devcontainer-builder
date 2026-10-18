@@ -256,3 +256,38 @@ func TestGeneratorCallersPropagateMetadataErrors(t *testing.T) {
 		})
 	}
 }
+
+func TestGeneratorDefaultsToLocalImageMetadata(t *testing.T) {
+	base := []metadata.Entry{{ID: "base", PostCreate: spec.Command{Shell: "echo base"}}}
+	cli := metadataEngine(t, base)
+	t.Setenv("DOCKER_HOST", cli.DaemonHost())
+	t.Setenv("DOCKER_API_VERSION", "1.47")
+	for _, generate := range []bool{true, false} {
+		t.Run(fmt.Sprint(generate), func(t *testing.T) {
+			dc := &spec.DevContainer{Image: "alpine:3.20", PostCreate: spec.Command{Shell: "echo config"}}
+			opts := Options{Spec: dc, WorkDir: t.TempDir()}
+			var path string
+			if generate {
+				res, err := offlineMetadataBuilder().Generate(context.Background(), opts)
+				if err != nil {
+					t.Fatal(err)
+				}
+				path = res.FinalDockerfile
+			} else {
+				_, _, _, _, _, _, _, resultPath, _, err := offlineMetadataBuilder().prepareBuildContext(context.Background(), opts, func(string, ...any) {})
+				if err != nil {
+					t.Fatal(err)
+				}
+				path = resultPath
+			}
+			body, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			want, _ := metadata.DockerfileLabel(metadata.Collect(base, nil, dc))
+			if !strings.Contains(string(body), want) {
+				t.Fatalf("default client dropped local metadata: %s", body)
+			}
+		})
+	}
+}
