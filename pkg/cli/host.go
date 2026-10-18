@@ -85,7 +85,6 @@ func (a *application) upCommand() *cobra.Command {
 		if built != nil {
 			resolved = built.Features
 		}
-		dc, resolved = skip.apply(dc, resolved)
 		if remove {
 			if err := a.remove(cmd.Context(), cli, dc, workspace); err != nil {
 				return err
@@ -93,6 +92,7 @@ func (a *application) upCommand() *cobra.Command {
 		}
 		var id string
 		if dc.Mode() == spec.ModeCompose {
+			dc, resolved = skip.apply(dc, resolved)
 			res, err := a.composeHost(cli).Up(cmd.Context(), dockercompose.UpRequest{Spec: dc, SpecPath: dc.Path, LocalWorkspace: workspace, PrimaryImage: image, Features: resolved, LocalEnv: envMap()})
 			if err != nil {
 				return err

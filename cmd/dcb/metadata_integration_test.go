@@ -175,3 +175,62 @@ func TestMetadataPrebuiltCLIIntegration(t *testing.T) {
 	}
 
 }
+
+func TestMetadataImageOnlySkipPreservesHooks(t *testing.T) {
+	configDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(configDir, "config.json"), []byte("{}\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("DOCKER_CONFIG", configDir)
+	ctx := context.Background()
+	cli := hostRequireDocker(t, ctx)
+	t.Cleanup(func() { _ = cli.Close() })
+	hostEnsureImage(t, ctx, cli, "alpine:3.20")
+	bin := hostBuildBinary(t)
+	for _, flag := range []string{"--skip-post-create", "--skip-post-attach"} {
+		t.Run(flag, func(t *testing.T) {
+			workspace := hostPrepareWorkspace(t, "alpine:3.20")
+			path := filepath.Join(workspace, ".devcontainer", "devcontainer.json")
+			body := `{"image":"alpine:3.20","remoteUser":"root","workspaceFolder":"/workspace","workspaceMount":"type=volume,target=/workspace","remoteEnv":{"SAMPLE":"stored"},"postCreateCommand":"echo create >> /tmp/sample-create","postStartCommand":"echo start >> /tmp/sample-start","postAttachCommand":"echo attach >> /tmp/sample-attach"}`
+			if err := os.WriteFile(path, []byte(body), 0644); err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() {
+				cmd := exec.Command(bin, "down", "--workspace-folder", workspace)
+				if out, err := cmd.CombinedOutput(); err != nil {
+					t.Logf("cleanup: %v %s", err, out)
+				}
+			})
+			up := hostRunCommand(t, os.Environ(), bin, "up", "--workspace-folder", workspace, flag, "--update-remote-user-uid-default", "never")
+			var response map[string]any
+			if err := json.Unmarshal(up, &response); err != nil {
+				t.Fatal(err)
+			}
+			id := response["containerId"].(string)
+			info, err := cli.ContainerInspect(ctx, id)
+			if err != nil {
+				t.Fatal(err)
+			}
+			entries, err := metadata.Parse(info.Config.Labels[metadata.Label])
+			if err != nil {
+				t.Fatal(err)
+			}
+			merged := metadata.Merge(nil, entries)
+			if len(merged.PostCreateCommands) != 1 || len(merged.PostStartCommands) != 1 || len(merged.PostAttachCommands) != 1 || merged.UpdateRemoteEnv["SAMPLE"] != "stored" {
+				t.Fatalf("skip stripped persisted configuration: %+v", entries)
+			}
+			hostRunCommand(t, os.Environ(), bin, "exec", "--workspace-folder", workspace, "--", "test", "!", "-e", "/tmp/sample-attach")
+			if flag == "--skip-post-create" {
+				hostRunCommand(t, os.Environ(), bin, "exec", "--workspace-folder", workspace, "--", "test", "!", "-e", "/tmp/sample-create")
+			}
+			hostRunCommand(t, os.Environ(), bin, "run-user-commands", "--workspace-folder", workspace)
+			if got := string(hostRunCommand(t, os.Environ(), bin, "exec", "--workspace-folder", workspace, "--", "sh", "-c", "cat /tmp/sample-create /tmp/sample-start /tmp/sample-attach; printf '%s' \"$SAMPLE\"")); got != "create\nstart\nattach\nstored" {
+				t.Fatalf("stored hooks after skipped startup=%q", got)
+			}
+			hostRunCommand(t, os.Environ(), bin, "up", "--workspace-folder", workspace, "--update-remote-user-uid-default", "never")
+			if got := string(hostRunCommand(t, os.Environ(), bin, "exec", "--workspace-folder", workspace, "--", "cat", "/tmp/sample-attach")); got != "attach\nattach\n" {
+				t.Fatalf("reuse lost attach hook=%q", got)
+			}
+		})
+	}
+}
