@@ -100,7 +100,7 @@ func (a *application) upCommand() *cobra.Command {
 			id = res.PrimaryContainerID
 			a.result["composeProjectName"] = res.ProjectName
 		} else {
-			res, err := a.dockerHost(cli).Up(cmd.Context(), hostdocker.UpRequest{Spec: dc, SpecPath: dc.Path, LocalWorkspace: workspace, Image: image, Features: resolved, LocalEnv: envMap(), RemoteUserUIDUpdate: uid})
+			res, err := a.dockerHost(cli).Up(cmd.Context(), hostdocker.UpRequest{Spec: dc, SpecPath: dc.Path, LocalWorkspace: workspace, Image: image, ImageBuilt: built != nil, SkipLifecycle: skip.postCreate, SkipPostAttach: skip.postAttach, Features: resolved, LocalEnv: envMap(), RemoteUserUIDUpdate: uid})
 			if err != nil {
 				return err
 			}
@@ -124,6 +124,7 @@ func (a *application) containerResult(ctx context.Context, cli *dockerclient.Cli
 	if info.Config != nil {
 		labels = info.Config.Labels
 	}
+	dc = effectiveContainerConfig(dc, labels)
 	user := substitute.Substitute(substitutionContext(dc, workspace, labels), dc.RemoteUser)
 	if user == "" && info.Config != nil {
 		user = info.Config.User

@@ -81,9 +81,16 @@ func (o configOptions) optionalLoad() (*spec.DevContainer, string, error) {
 
 func (a *application) readCommand() *cobra.Command {
 	var cfg configOptions
+	var includeMerged bool
+	var containerID string
 	cmd := &cobra.Command{Use: "read-configuration", Short: "Read and substitute devcontainer configuration", Args: cobra.NoArgs}
 	cfg.flags(cmd)
-	cmd.RunE = func(_ *cobra.Command, _ []string) error {
+	cmd.Flags().BoolVar(&includeMerged, "include-merged-configuration", false, "Include configuration merged with image and feature metadata")
+	cmd.Flags().StringVar(&containerID, "container-id", "", "Container metadata source for merged configuration")
+	cmd.RunE = func(cmd *cobra.Command, _ []string) error {
+		if cmd.Flags().Changed("container-id") && containerID == "" {
+			return usageError("--container-id must not be empty")
+		}
 		dc, workspace, err := cfg.load()
 		if err != nil {
 			return err
@@ -92,6 +99,13 @@ func (a *application) readCommand() *cobra.Command {
 		if err != nil {
 			return err
 		}
+		if includeMerged {
+			merged, err := a.mergedConfiguration(cmd.Context(), dc, workspace, containerID, configuration)
+			if err != nil {
+				return err
+			}
+			a.result["mergedConfiguration"] = merged
+		}
 		a.result["configuration"] = configuration
 		a.result["workspace"] = map[string]string{"workspaceFolder": containerWorkspace(dc, workspace)}
 		return nil
@@ -99,7 +113,7 @@ func (a *application) readCommand() *cobra.Command {
 	return cmd
 }
 
-// readConfiguration is the seam for metadata's mergedConfiguration extension.
+// readConfiguration supplies the loaded snapshot for ordinary and merged output.
 // Keep the raw map so fields unknown to the Go model survive read-configuration.
 func readConfiguration(dc *spec.DevContainer, workspace string) (map[string]any, error) {
 	var raw map[string]any
@@ -142,10 +156,18 @@ func containerWorkspace(dc *spec.DevContainer, workspace string) string {
 }
 
 func substitutionContext(dc *spec.DevContainer, workspace string, labels map[string]string) substitute.Context {
-	if labels == nil {
-		labels = map[string]string{"devcontainer.local_folder": workspace, "devcontainer.config_file": dc.Path}
+	// Only discovery labels participate in the devcontainer identity. Runtime
+	// labels, including metadata and Compose state, must not change that identity.
+	idLabels := map[string]string{"devcontainer.local_folder": workspace}
+	if dc.Path != "" {
+		idLabels["devcontainer.config_file"] = dc.Path
 	}
-	return substitute.Context{LocalWorkspaceFolder: workspace, ContainerWorkspaceFolder: containerWorkspace(dc, workspace), LocalEnv: envMap(), IDLabels: labels}
+	for _, key := range []string{"devcontainer.local_folder", "devcontainer.config_file"} {
+		if value := labels[key]; value != "" {
+			idLabels[key] = value
+		}
+	}
+	return substitute.Context{LocalWorkspaceFolder: workspace, ContainerWorkspaceFolder: containerWorkspace(dc, workspace), LocalEnv: envMap(), IDLabels: idLabels}
 }
 
 func envMap() map[string]string {

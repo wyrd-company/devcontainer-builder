@@ -49,13 +49,6 @@ func (a *application) execCommand() *cobra.Command {
 		if err != nil {
 			return err
 		}
-		var env map[string]string
-		if referencesContainerEnv(dc.UpdateRemoteEnv) {
-			env, err = runner.DetectContainerEnv(cmd.Context(), a.execer(cli, dc, containerID))
-			if err != nil {
-				return fmt.Errorf("detect container env: %w", err)
-			}
-		}
 		info, err := cli.ContainerInspect(cmd.Context(), containerID)
 		if err != nil {
 			return err
@@ -63,6 +56,14 @@ func (a *application) execCommand() *cobra.Command {
 		labels := info.Config.Labels
 		if dc.Path == "" && labels[dockercompose.LabelProject] != "" {
 			dc.Service = labels[dockercompose.LabelService]
+		}
+		dc = effectiveContainerConfig(dc, labels)
+		var env map[string]string
+		if referencesContainerEnv(dc.UpdateRemoteEnv) {
+			env, err = runner.DetectContainerEnv(cmd.Context(), a.execer(cli, dc, containerID))
+			if err != nil {
+				return fmt.Errorf("detect container env: %w", err)
+			}
 		}
 		execEnv := resolveRemoteEnv(dc.UpdateRemoteEnv, substitutionContext(dc, workspace, labels), env)
 		for k, v := range extra {

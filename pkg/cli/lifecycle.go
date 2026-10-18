@@ -11,6 +11,7 @@ import (
 	"github.com/wyrd-company/devcontainer-builder/pkg/features"
 	"github.com/wyrd-company/devcontainer-builder/pkg/host/runner"
 	"github.com/wyrd-company/devcontainer-builder/pkg/lifecycle"
+	"github.com/wyrd-company/devcontainer-builder/pkg/metadata"
 	"github.com/wyrd-company/devcontainer-builder/pkg/spec"
 	"github.com/wyrd-company/devcontainer-builder/pkg/substitute"
 )
@@ -77,6 +78,14 @@ func (a *application) lifecycleCommand(name string) *cobra.Command {
 		if err != nil {
 			return err
 		}
+		entries, err := a.containerMetadata(dc, info.Config.Labels)
+		if err != nil {
+			return err
+		}
+		dc = effectiveContainerConfig(dc, info.Config.Labels)
+		if dc.RemoteUser == "" {
+			dc.RemoteUser = info.Config.User
+		}
 		execer := a.execer(cli, dc, containerID)
 		env, err := runner.DetectContainerEnv(cmd.Context(), execer)
 		if err != nil {
@@ -89,15 +98,15 @@ func (a *application) lifecycleCommand(name string) *cobra.Command {
 		if err != nil {
 			return err
 		}
-		// Resolve feature metadata for feature-supplied lifecycle commands. Staging
-		// is temporary: the running image already holds the installed feature files.
-		resolved, cleanup, err := a.resolveFeatures(dc)
-		if err != nil {
-			return err
+		var plan []lifecycle.Phase
+		if !skip.postCreate {
+			for _, phase := range metadata.Plan(entries) {
+				if skip.postAttach && phase.Hook == lifecycle.HookPostAttach {
+					continue
+				}
+				plan = append(plan, phase)
+			}
 		}
-		defer cleanup()
-		dc, resolved = skip.apply(dc, resolved)
-		plan := lifecycle.Plan(dc, resolved)
 		sub := substitutionContext(dc, workspace, info.Config.Labels)
 		for i := range plan {
 			plan[i].Command = resolveCommand(plan[i].Command, sub, env)
