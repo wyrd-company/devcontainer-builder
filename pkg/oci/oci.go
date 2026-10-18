@@ -1,3 +1,6 @@
+// relationships:
+//   references: [metadata]
+
 // Package oci is a small read-only OCI Distribution v2 client. It supports
 // anonymous and bearer-token-authenticated pulls of manifests and blobs,
 // which is sufficient for fetching devcontainer features published as OCI
@@ -166,8 +169,9 @@ func platformManifest(p Platform) childSelector {
 // reads.
 type ImageConfig struct {
 	Config struct {
-		User string   `json:"User,omitempty"`
-		Env  []string `json:"Env,omitempty"`
+		Labels map[string]string `json:"Labels,omitempty"`
+		User   string            `json:"User,omitempty"`
+		Env    []string          `json:"Env,omitempty"`
 	} `json:"config"`
 }
 

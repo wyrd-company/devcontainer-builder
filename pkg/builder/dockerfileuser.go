@@ -1,3 +1,6 @@
+// relationships:
+//   references: [imageuser, metadata]
+
 package builder
 
 import (
@@ -32,20 +35,37 @@ import (
 // is an error, as it fails the build. The image config is fetched only when an expansion needs a variable
 // that only the image can define, or when no stage sets USER.
 func dockerfileUser(path, target string, buildArgs map[string]string, p platform.Platform, imageConfig func(string) (*oci.ImageConfig, error)) (string, error) {
-	data, err := os.ReadFile(path)
+	st, err := dockerfileState(path, target, buildArgs, p, imageConfig)
 	if err != nil {
 		return "", err
 	}
+	user, err := st.user()
+	if err != nil {
+		return "", err
+	}
+	if st.root != nil && st.root.err != nil {
+		return "", st.root.err
+	}
+	return user, nil
+}
+
+// dockerfileState shares stage selection and expansion between the user and
+// metadata readers, including target-stage ancestry and global build arguments.
+func dockerfileState(path, target string, buildArgs map[string]string, p platform.Platform, imageConfig func(string) (*oci.ImageConfig, error)) (*stageState, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
 	ast, err := parser.Parse(bytes.NewReader(data))
 	if err != nil {
-		return "", fmt.Errorf("parse %s: %w", path, err)
+		return nil, fmt.Errorf("parse %s: %w", path, err)
 	}
 	stages, metaArgs, err := instructions.Parse(ast.AST, nil)
 	if err != nil {
-		return "", fmt.Errorf("parse %s: %w", path, err)
+		return nil, fmt.Errorf("parse %s: %w", path, err)
 	}
 	if len(stages) == 0 {
-		return "", fmt.Errorf("%s has no stages", path)
+		return nil, fmt.Errorf("%s has no stages", path)
 	}
 	e := &stageEvaluator{
 		lex:         shell.NewLex(ast.EscapeToken),
@@ -61,7 +81,7 @@ func dockerfileUser(path, target string, buildArgs map[string]string, p platform
 			} else if kv.Value != nil {
 				v, err := e.expand(*kv.Value, &env{vars: e.global})
 				if err != nil {
-					return "", fmt.Errorf("%s: ARG %s: %w", path, kv.Key, err)
+					return nil, fmt.Errorf("%s: ARG %s: %w", path, kv.Key, err)
 				}
 				e.global[kv.Key] = v
 			}
@@ -75,21 +95,14 @@ func dockerfileUser(path, target string, buildArgs map[string]string, p platform
 	stage := &stages[len(stages)-1]
 	if target != "" {
 		if stage = e.byName[target]; stage == nil {
-			return "", fmt.Errorf("%s has no stage %q", path, target)
+			return nil, fmt.Errorf("%s has no stage %q", path, target)
 		}
 	}
 	st, err := e.eval(stage, map[*instructions.Stage]bool{})
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	user, err := st.user()
-	if err != nil {
-		return "", err
-	}
-	if st.root != nil && st.root.err != nil {
-		return "", st.root.err
-	}
-	return user, nil
+	return st, nil
 }
 
 type stageEvaluator struct {
