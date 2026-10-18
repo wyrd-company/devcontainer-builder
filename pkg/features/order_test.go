@@ -190,3 +190,23 @@ func TestInstallOrder_SameResourceSortsByTag(t *testing.T) {
 		t.Fatalf("first tag = %q, want 1", out[0].Reference.Tag)
 	}
 }
+
+func TestCompareNodes_NamespaceThenDigest(t *testing.T) {
+	other, err := oci.ParseReference("registry.example.test/another/zeta:1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := &node{res: Resolved{Source: "registry.example.test/another/zeta:1", Reference: &other, Digest: "sha256:z", Metadata: Metadata{ID: "zeta"}}}
+	if compareNodes(a, ociNode(t, "alpha:1")) >= 0 {
+		t.Fatal("namespace must sort before id")
+	}
+	x, y := ociNode(t, "alpha:1"), ociNode(t, "alpha:1")
+	x.res.Digest, y.res.Digest = "sha256:1", "sha256:2"
+	if compareNodes(x, y) >= 0 || compareNodes(y, x) <= 0 {
+		t.Fatal("same feature, tag and options must sort by digest")
+	}
+	y.res.Digest = x.res.Digest
+	if !x.equals(y) {
+		t.Fatal("same digest and options must be equal")
+	}
+}

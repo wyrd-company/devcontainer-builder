@@ -72,6 +72,8 @@ func TestEnvFileContent(t *testing.T) {
 			"count":       float64(3),
 			"list":        []any{"a", "b"},
 			"tricky":      `say "hi" $HOME ` + "`x` \\",
+			"nothing":     nil,
+			"nested":      map[string]any{"a": "b"},
 		},
 	}
 	want := strings.Join([]string{
@@ -79,6 +81,8 @@ func TestEnvFileContent(t *testing.T) {
 		`ENABLED="true"`,
 		`LIST="a,b"`,
 		`MY_OPTION_1="two words"`,
+		`NESTED="[object Object]"`,
+		`NOTHING="null"`,
 		`TRICKY="say \"hi\" \$HOME \` + "`x\\`" + ` \\"`,
 	}, "\n") + "\n"
 	if got := r.EnvFileContent(); got != want {
@@ -149,7 +153,7 @@ func runShell(t *testing.T, script string) string {
 func TestInstallWrapper_ExportsOptionsAndBuiltinsToInstallScript(t *testing.T) {
 	r := Resolved{
 		Source:  "./alpha",
-		Options: map[string]any{"my-option.1": "two words $HOME", "enabled": false},
+		Options: map[string]any{"my-option.1": "two words $HOME", "enabled": false, "quoted": "a \"b\" `c` \\d"},
 		Metadata: Metadata{
 			ID:         "alpha",
 			Name:       "Alpha's feature",
@@ -171,6 +175,7 @@ func TestInstallWrapper_ExportsOptionsAndBuiltinsToInstallScript(t *testing.T) {
 	for _, want := range []string{
 		"MY_OPTION_1=two words $HOME",
 		"ENABLED=false",
+		"QUOTED=a \"b\" `c` \\d\n",
 		"LEVEL=high",
 		"_CONTAINER_USER=root",
 		"_REMOTE_USER=nobody-such-user",
