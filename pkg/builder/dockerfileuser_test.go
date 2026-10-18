@@ -42,6 +42,8 @@ func TestDockerfileUser(t *testing.T) {
 		{"build arg feeds a dependent ARG default", "FROM base:1\nARG ACCOUNT=nobody\nARG CHOSEN=${ACCOUNT}\nUSER ${CHOSEN}\n", "", map[string]string{"ACCOUNT": "built"}, "built", ""},
 		{"ARG without default takes the global value", "ARG NAME=global-user\nFROM base:1\nARG NAME\nUSER $NAME\n", "", nil, "global-user", ""},
 		{"global ARG is not in stage scope undeclared", "ARG NAME=global-user\nFROM base:1\nUSER x${NAME}\n", "", nil, "x", "base:1"},
+		{"one ENV instruction expands before it assigns", "FROM base:1\nENV ACCOUNT=old-user\nENV ACCOUNT=new-user CHOSEN=${ACCOUNT}\nUSER ${CHOSEN}\n", "", nil, "old-user", ""},
+		{"ENV keys expand", "FROM base:1\nENV NAME=dyn\nENV ${NAME}=key-user\nUSER $dyn\n", "", nil, "key-user", ""},
 		{"USER from ENV", "FROM base:1\nENV NAME=env-user\nUSER ${NAME}:1000\n", "", nil, "env-user:1000", ""},
 		{"USER from the image env", "FROM base:1\nUSER ${IMAGE_ACCOUNT}\n", "", nil, "from-image", "base:1"},
 		{"ENV inherited from the parent stage", "FROM base:1 AS parent\nENV ACCOUNT=nobody\nFROM parent\nUSER ${ACCOUNT}\n", "", nil, "nobody", ""},
@@ -78,10 +80,15 @@ func TestDockerfileUser(t *testing.T) {
 	}
 
 	failing := func(string) (*oci.ImageConfig, error) { return nil, fmt.Errorf("registry down") }
+	load0 := func(string) (*oci.ImageConfig, error) { return &oci.ImageConfig{}, nil }
 	path := filepath.Join(t.TempDir(), "Dockerfile")
 	writeFile(t, path, "FROM base:1\nUSER ${IMAGE_ACCOUNT}\n")
 	if _, err := dockerfileUser(path, "", nil, platform.Current(), failing); err == nil || !strings.Contains(err.Error(), "registry down") {
 		t.Fatalf("expected the image config error when the image env is needed, got %v", err)
+	}
+	writeFile(t, path, "FROM base:1\nUSER ${MISSING:?a user is required}\n")
+	if _, err := dockerfileUser(path, "", nil, platform.Current(), load0); err == nil || !strings.Contains(err.Error(), "a user is required") {
+		t.Fatalf("expected the expansion error, got %v", err)
 	}
 	writeFile(t, path, "FROM base:1 AS one\n")
 	if _, err := dockerfileUser(path, "missing", nil, platform.Current(), failing); err == nil {

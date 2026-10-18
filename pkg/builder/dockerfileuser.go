@@ -23,10 +23,13 @@ import (
 //   - A stage starts from its parent stage's environment and user (FROM
 //     another stage), or from the image's Config.Env and Config.User.
 //   - In a stage, ARG takes the build arg, else its default expanded in
-//     the current environment, else (with neither) the global value; ENV
-//     values expand in the current environment; USER expands likewise.
+//     the current environment, else (with neither) the global value. ENV
+//     and USER are expanded as a whole, keys and values, by the
+//     instruction's own Expand against the environment before the
+//     instruction, then applied.
 //
-// The image config is fetched only when an expansion needs a variable
+// Expansion uses BuildKit's Dockerfile shell lexer; an expansion error
+// is an error, as it fails the build. The image config is fetched only when an expansion needs a variable
 // that only the image can define, or when no stage sets USER.
 func dockerfileUser(path, target string, buildArgs map[string]string, p platform.Platform, imageConfig func(string) (*oci.ImageConfig, error)) (string, error) {
 	data, err := os.ReadFile(path)
@@ -56,7 +59,11 @@ func dockerfileUser(path, target string, buildArgs map[string]string, p platform
 			if v, ok := buildArgs[kv.Key]; ok {
 				e.global[kv.Key] = v
 			} else if kv.Value != nil {
-				e.global[kv.Key] = e.expand(*kv.Value, &env{vars: e.global})
+				v, err := e.expand(*kv.Value, &env{vars: e.global})
+				if err != nil {
+					return "", fmt.Errorf("%s: ARG %s: %w", path, kv.Key, err)
+				}
+				e.global[kv.Key] = v
 			}
 		}
 	}
@@ -181,7 +188,10 @@ func (e *stageEvaluator) eval(stage *instructions.Stage, seen map[*instructions.
 		return nil, fmt.Errorf("stage %q depends on itself", stage.Name)
 	}
 	seen[stage] = true
-	base := e.expand(stage.BaseName, &env{vars: e.global})
+	base, err := e.expand(stage.BaseName, &env{vars: e.global})
+	if err != nil {
+		return nil, fmt.Errorf("FROM %s: %w", stage.BaseName, err)
+	}
 	var st *stageState
 	if parent := e.byName[base]; parent != nil {
 		ps, err := e.eval(parent, seen)
@@ -193,34 +203,54 @@ func (e *stageEvaluator) eval(stage *instructions.Stage, seen map[*instructions.
 		st = &stageState{env: env{vars: map[string]string{}, root: &rootImage{name: base, load: e.imageConfig}}}
 	}
 	for _, cmd := range stage.Commands {
-		switch c := cmd.(type) {
-		case *instructions.ArgCommand:
-			for _, kv := range c.Args {
-				if v, ok := e.buildArgs[kv.Key]; ok {
-					st.vars[kv.Key] = v
-				} else if kv.Value != nil {
-					st.vars[kv.Key] = e.expand(*kv.Value, &st.env)
-				} else if v, ok := e.global[kv.Key]; ok {
-					st.vars[kv.Key] = v
-				}
-			}
-		case *instructions.EnvCommand:
-			for _, kv := range c.Env {
-				st.vars[kv.Key] = e.expand(kv.Value, &st.env)
-			}
-		case *instructions.UserCommand:
-			st.userSet, st.userVal = true, e.expand(c.User, &st.env)
+		if err := e.dispatch(st, cmd); err != nil {
+			return nil, err
 		}
 	}
 	return st, nil
 }
 
-func (e *stageEvaluator) expand(word string, vars shell.EnvGetter) string {
-	out, _, err := e.lex.ProcessWord(word, vars)
-	if err != nil {
-		return word
+// dispatch applies one instruction to the stage state. Like BuildKit's
+// dispatch, every instruction but ARG is first expanded as a whole by
+// its own Expand (keys and values) against the environment before the
+// instruction, and only then applied; ARG expands each default in turn.
+func (e *stageEvaluator) dispatch(st *stageState, cmd instructions.Command) error {
+	expander := func(word string) (string, error) { return e.expand(word, &st.env) }
+	switch c := cmd.(type) {
+	case *instructions.ArgCommand:
+		for _, kv := range c.Args {
+			if v, ok := e.buildArgs[kv.Key]; ok {
+				st.vars[kv.Key] = v
+			} else if kv.Value != nil {
+				v, err := e.expand(*kv.Value, &st.env)
+				if err != nil {
+					return fmt.Errorf("ARG %s: %w", kv.Key, err)
+				}
+				st.vars[kv.Key] = v
+			} else if v, ok := e.global[kv.Key]; ok {
+				st.vars[kv.Key] = v
+			}
+		}
+	case *instructions.EnvCommand:
+		if err := c.Expand(expander); err != nil {
+			return fmt.Errorf("ENV: %w", err)
+		}
+		for _, kv := range c.Env {
+			st.vars[kv.Key] = kv.Value
+		}
+	case *instructions.UserCommand:
+		if err := c.Expand(expander); err != nil {
+			return fmt.Errorf("USER: %w", err)
+		}
+		st.userSet, st.userVal = true, c.User
 	}
-	return out
+	return nil
+}
+
+// expand expands word with BuildKit's Dockerfile shell lexer.
+func (e *stageEvaluator) expand(word string, vars shell.EnvGetter) (string, error) {
+	out, _, err := e.lex.ProcessWord(word, vars)
+	return out, err
 }
 
 // platformArgs returns BuildKit's automatic platform ARGs for the target
