@@ -146,3 +146,40 @@ func TestResolve_DependsOnOverridesUserOrder(t *testing.T) {
 		t.Fatalf("order = %s, want beta,alpha", g)
 	}
 }
+
+// Equality is by resolved feature, not by spelling: a dependency written
+// as another path to the same feature installs once.
+func TestResolve_DependsOnEqualFeatureByOtherSpelling(t *testing.T) {
+	base := t.TempDir()
+	writeLocalFeature(t, base, "alpha", `,"dependsOn":{"./sub/../beta":{}}`)
+	writeLocalFeature(t, base, "beta", "")
+
+	got, err := resolveLocal(t, base, userFeatures("./beta", `{}`, "./alpha", `{}`))
+	if err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+	if g := strings.Join(ids(got), ","); g != "beta,alpha" {
+		t.Fatalf("order = %s, want beta installed once before alpha", g)
+	}
+}
+
+func TestResolve_ScalarOptionSetsVersionOnlyWhenDeclared(t *testing.T) {
+	base := t.TempDir()
+	writeLocalFeature(t, base, "versioned", `,"options":{"version":{"type":"string","default":"latest"}}`)
+	writeLocalFeature(t, base, "plain", "")
+
+	got, err := resolveLocal(t, base, userFeatures("./versioned", `"1.2"`, "./plain", `true`))
+	if err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+	byID := map[string]Resolved{}
+	for _, r := range got {
+		byID[r.Metadata.ID] = r
+	}
+	if v := byID["versioned"].Options["version"]; v != "1.2" {
+		t.Errorf("versioned options = %v, want version 1.2", byID["versioned"].Options)
+	}
+	if opts := byID["plain"].Options; len(opts) != 0 {
+		t.Errorf("plain options = %v, want none", opts)
+	}
+}
