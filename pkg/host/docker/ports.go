@@ -10,18 +10,16 @@ import (
 	"github.com/docker/go-connections/nat"
 )
 
-// applyPorts folds the spec's forwardPorts and appPort entries into the
-// container Config / HostConfig.
+// applyPorts publishes the spec's appPort entries on the container
+// Config / HostConfig.
 //
-// Upstream's IDE-in-the-loop CLI treats forwardPorts as metadata and
-// only translates appPort to docker -p. We don't have an IDE, so the
-// only way for either to actually surface to the user is via daemon
-// port publishing — so we publish both, using the same convention
-// upstream uses for appPort: a bare port number binds 127.0.0.1:N:N
-// so listeners stay on loopback by default. Strings already in
-// "host:container" or "iface:host:container" form are honored verbatim.
-func applyPorts(forward []any, app any, cfg *container.Config, host *container.HostConfig) error {
-	specs, err := portSpecs(forward, app)
+// As upstream does, only appPort becomes daemon port publishing:
+// forwardPorts are for a connected tool to forward on demand and are
+// not published. A bare port number binds 127.0.0.1:N:N so listeners
+// stay on loopback by default. Strings already in "host:container" or
+// "iface:host:container" form are honored verbatim.
+func applyPorts(app any, cfg *container.Config, host *container.HostConfig) error {
+	specs, err := portSpecs(app)
 	if err != nil {
 		return err
 	}
@@ -47,19 +45,10 @@ func applyPorts(forward []any, app any, cfg *container.Config, host *container.H
 	return nil
 }
 
-// portSpecs flattens forwardPorts and appPort into a docker -p style
-// list, normalizing bare numeric entries to the loopback-bound form.
-func portSpecs(forward []any, app any) ([]string, error) {
+// portSpecs flattens appPort into a docker -p style list, normalizing
+// bare numeric entries to the loopback-bound form.
+func portSpecs(app any) ([]string, error) {
 	out := []string{}
-	for _, v := range forward {
-		s, err := normalizePort(v, "forwardPorts")
-		if err != nil {
-			return nil, err
-		}
-		if s != "" {
-			out = append(out, s)
-		}
-	}
 	switch v := app.(type) {
 	case nil:
 		// nothing
@@ -85,8 +74,8 @@ func portSpecs(forward []any, app any) ([]string, error) {
 	return out, nil
 }
 
-// normalizePort accepts a number or string entry from forwardPorts /
-// appPort and returns a docker -p compatible spec.
+// normalizePort accepts a number or string appPort entry and returns a
+// docker -p compatible spec.
 //
 // Rules:
 //   - Numeric N or "N"          → "127.0.0.1:N:N"

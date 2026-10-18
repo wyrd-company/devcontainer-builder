@@ -35,7 +35,7 @@ func TestNormalizePort(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			got, err := normalizePort(c.in, "forwardPorts")
+			got, err := normalizePort(c.in, "appPort")
 			if (err != nil) != c.wantErr {
 				t.Fatalf("err=%v wantErr=%v", err, c.wantErr)
 			}
@@ -46,10 +46,10 @@ func TestNormalizePort(t *testing.T) {
 	}
 }
 
-func TestApplyPorts_FromSpecForwardPorts(t *testing.T) {
+func TestApplyPorts_AppPortBindings(t *testing.T) {
 	cfg := &container.Config{}
 	host := &container.HostConfig{}
-	if err := applyPorts([]any{3000, "9000", "127.0.0.1:8080:80"}, nil, cfg, host); err != nil {
+	if err := applyPorts([]any{3000, "9000", "127.0.0.1:8080:80"}, cfg, host); err != nil {
 		t.Fatalf("applyPorts: %v", err)
 	}
 
@@ -82,7 +82,7 @@ func TestApplyPorts_FromSpecForwardPorts(t *testing.T) {
 func TestApplyPorts_AppPortVariants(t *testing.T) {
 	t.Run("scalar int", func(t *testing.T) {
 		cfg, host := &container.Config{}, &container.HostConfig{}
-		if err := applyPorts(nil, 4000, cfg, host); err != nil {
+		if err := applyPorts(4000, cfg, host); err != nil {
 			t.Fatal(err)
 		}
 		if _, ok := cfg.ExposedPorts["4000/tcp"]; !ok {
@@ -91,7 +91,7 @@ func TestApplyPorts_AppPortVariants(t *testing.T) {
 	})
 	t.Run("scalar string with proto", func(t *testing.T) {
 		cfg, host := &container.Config{}, &container.HostConfig{}
-		if err := applyPorts(nil, "5000/udp", cfg, host); err != nil {
+		if err := applyPorts("5000/udp", cfg, host); err != nil {
 			t.Fatal(err)
 		}
 		if _, ok := cfg.ExposedPorts["5000/udp"]; !ok {
@@ -100,7 +100,7 @@ func TestApplyPorts_AppPortVariants(t *testing.T) {
 	})
 	t.Run("array form", func(t *testing.T) {
 		cfg, host := &container.Config{}, &container.HostConfig{}
-		if err := applyPorts(nil, []any{4000, "5000"}, cfg, host); err != nil {
+		if err := applyPorts([]any{4000, "5000"}, cfg, host); err != nil {
 			t.Fatal(err)
 		}
 		if len(cfg.ExposedPorts) != 2 {
@@ -109,30 +109,33 @@ func TestApplyPorts_AppPortVariants(t *testing.T) {
 	})
 }
 
-func TestApplyPorts_ForwardPortsAppendsToRunArgs(t *testing.T) {
+func TestBuildContainerConfig_ForwardPortsAreNotPublished(t *testing.T) {
 	dc := &spec.DevContainer{
-		ForwardPorts: []any{3000},
-		// User also published port 4000 explicitly via runArgs.
-		RunArgs: []string{"-p", "127.0.0.1:4000:4000"},
+		ForwardPorts: []any{3000, "db:5432"},
+		AppPort:      4000,
+		// User also published port 5000 explicitly via runArgs.
+		RunArgs: []string{"-p", "127.0.0.1:5000:5000"},
 	}
 	cfg, host, err := buildContainerConfig(dc, nil, "img", "/w", "/h", "")
 	if err != nil {
 		t.Fatalf("buildContainerConfig: %v", err)
 	}
-	if _, ok := cfg.ExposedPorts["3000/tcp"]; !ok {
-		t.Errorf("3000/tcp from forwardPorts missing: %v", cfg.ExposedPorts)
+	if _, ok := cfg.ExposedPorts["3000/tcp"]; ok {
+		t.Errorf("3000/tcp from forwardPorts was published: %v", cfg.ExposedPorts)
 	}
-	if _, ok := cfg.ExposedPorts["4000/tcp"]; !ok {
-		t.Errorf("4000/tcp from runArgs missing: %v", cfg.ExposedPorts)
+	for _, p := range []nat.Port{"4000/tcp", "5000/tcp"} {
+		if _, ok := cfg.ExposedPorts[p]; !ok {
+			t.Errorf("%s missing: %v", p, cfg.ExposedPorts)
+		}
 	}
 	if len(host.PortBindings) != 2 {
-		t.Errorf("expected 2 port bindings, got %d: %v", len(host.PortBindings), host.PortBindings)
+		t.Errorf("expected 2 port bindings (appPort + runArgs), got %d: %v", len(host.PortBindings), host.PortBindings)
 	}
 }
 
 func TestApplyPorts_InvalidEntryReturnsError(t *testing.T) {
 	cfg, host := &container.Config{}, &container.HostConfig{}
-	if err := applyPorts([]any{"not-a-port"}, nil, cfg, host); err == nil {
-		t.Errorf("expected error for invalid forwardPorts entry")
+	if err := applyPorts([]any{"not-a-port"}, cfg, host); err == nil {
+		t.Errorf("expected error for invalid appPort entry")
 	}
 }

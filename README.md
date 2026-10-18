@@ -238,12 +238,13 @@ flags are rejected so a typo doesn't silently change container
 behavior. The `--entrypoint` flag is rejected because the host owns the
 keepalive entrypoint that holds the container open.
 
-`forwardPorts` and `appPort` are translated to docker port publishing.
-Bare port numbers (`3000`, `"3000"`, `"3000/udp"`, `"8000-8002"`) bind
-to `127.0.0.1:N:N` so listeners stay on loopback by default; entries
-already in `host:container` or `iface:host:container` form are
-honored verbatim. Both merge with any `-p` / `--publish` entries in
-`runArgs` rather than replacing them.
+`appPort` is translated to docker port publishing; `forwardPorts` is
+not published, as upstream. Bare port numbers (`3000`, `"3000"`,
+`"3000/udp"`, `"8000-8002"`) bind to `127.0.0.1:N:N` so listeners stay
+on loopback by default; entries already in `host:container` or
+`iface:host:container` form are honored verbatim. Published ports merge
+with any `-p` / `--publish` entries in `runArgs` rather than replacing
+them.
 
 `updateRemoteUserUID` is honored: when the embedder passes
 `UpRequest.RemoteUserUIDUpdate{HostUID, HostGID}` (and the spec

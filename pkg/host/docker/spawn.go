@@ -117,7 +117,7 @@ func buildContainerConfig(
 	}
 	host.Mounts = mounts
 
-	if err := applyPorts(dc.ForwardPorts, dc.AppPort, cfg, host); err != nil {
+	if err := applyPorts(dc.AppPort, cfg, host); err != nil {
 		return nil, nil, err
 	}
 
