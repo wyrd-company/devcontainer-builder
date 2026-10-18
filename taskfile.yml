@@ -208,3 +208,10 @@ tasks:
         bash scripts/release/compatibility.sh "$PUBLISHER_ROOT"
         "$REPO_WYRD_FOO_PUBLISHER_COMMIT" dist/release-manifest.json
         dist artifacts/publisher-compatibility
+  release:reproducible:
+    desc: Prove that two snapshot builds produce the same release and npm bytes
+    env:
+      RELEASE_VERSION: '{{.RELEASE_VERSION | default "0.0.0"}}'
+      PYTHONDONTWRITEBYTECODE: '1'
+    cmds:
+      - python3 scripts/release/reproducible.py

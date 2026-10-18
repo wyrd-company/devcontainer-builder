@@ -111,11 +111,12 @@ with open(os.environ['CALL_LOG'], 'a') as out:
     out.write(json.dumps(sys.argv[1:]) + '\\n')
 command = sys.argv[1]
 if command == 'submit':
-    relative = 'releases/dcb/1.2.3.json'
+    reply = os.environ.get('SUBMISSION', 'created\t' + 'releases/dcb/1.2.3.json')
+    relative = reply.split('\t')[1]
     target = Path(sys.argv[3]) / relative
     target.parent.mkdir(parents=True)
     target.write_text('{}')
-    print(os.environ.get('SUBMISSION', 'created\\t' + relative))
+    print(reply)
 elif command == 'stage' and os.environ.get('SKIP_OUTPUT') != 'stage':
     (Path(sys.argv[4]) / '.new-rpms').write_text('example.rpm')
 elif command == 'render-aur' and os.environ.get('SKIP_OUTPUT') != 'aur':
@@ -180,6 +181,11 @@ elif command == 'validate-queue' and os.environ.get('REJECT_QUEUE'):
                     subprocess.run(changed, env=env, capture_output=True).returncode, 0
                 )
                 self.assertFalse(log.exists())
+                if value == "PUBLISHER_COMMIT_UNSET":
+                    result = subprocess.run(
+                        changed, env=env, capture_output=True, text=True
+                    )
+                    self.assertIn("full commit SHA", result.stderr)
             for extra in [
                 {"REJECT_QUEUE": "1"},
                 {"SUBMISSION": "unchanged\treleases/dcb/1.2.3.json"},

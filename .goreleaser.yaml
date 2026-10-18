@@ -21,7 +21,23 @@ archives:
     name_template: >-
       {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_
       {{- if eq .Arch "amd64" }}x86_64{{ else }}aarch64{{ end }}
-    files: [ LICENSE, README.md ]
+    builds_info:
+      owner: root
+      group: root
+      mtime: '{{ .CommitDate }}'
+    files:
+      - src: LICENSE
+        info:
+          owner: root
+          group: root
+          mode: 0644
+          mtime: '{{ .CommitDate }}'
+      - src: README.md
+        info:
+          owner: root
+          group: root
+          mode: 0644
+          mtime: '{{ .CommitDate }}'
 nfpms:
   - id: packages
     ids: [ dcb ]
@@ -33,14 +49,19 @@ nfpms:
     description: Build and run development containers
     license: MIT
     bindir: /usr/bin
+    mtime: "{{ .CommitDate }}"
     file_name_template: >-
       {{ .PackageName }}_{{ .Version }}_{{ .Os }}_
       {{- if eq .Arch "amd64" }}x86_64{{ else }}aarch64{{ end }}
     contents:
       - src: LICENSE
         dst: /usr/share/licenses/dcb/LICENSE
+        file_info:
+          mtime: "{{ .CommitDate }}"
       - src: README.md
         dst: /usr/share/doc/dcb/README.md
+        file_info:
+          mtime: "{{ .CommitDate }}"
 checksum:
   name_template: checksums.txt
 changelog:

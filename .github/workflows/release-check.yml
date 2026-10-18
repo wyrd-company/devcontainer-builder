@@ -35,5 +35,5 @@ jobs:
       - run: task release:yaml-tool
       - run: task release:inspectors
       - run: task release:check
-      - run: task release:snapshot
+      - run: task release:reproducible
       - run: task release:verify

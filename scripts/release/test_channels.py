@@ -217,7 +217,10 @@ class ChannelsTests(unittest.TestCase):
             self.state["release"].update(change)
             self.save()
             with self.subTest(change=change):
-                self.assertNotEqual(self.execute("github").returncode, 0)
+                result = self.execute("github")
+                self.assertNotEqual(result.returncode, 0)
+                if "assets" in change:
+                    self.assertIn("duplicate or unexpected assets", result.stderr)
         self.assertFalse(
             any(
                 c[:3] in [["gh", "release", "create"], ["gh", "release", "upload"]]
