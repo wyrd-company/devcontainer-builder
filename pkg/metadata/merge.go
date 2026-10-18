@@ -93,6 +93,7 @@ func Merge(config *spec.DevContainer, entries []Entry) Merged {
 	dc.OtherPortsAttributes, dc.HostRequirements, dc.Customizations = nil, nil, nil
 	dc.OnCreate, dc.UpdateContent, dc.PostCreate, dc.PostStart, dc.PostAttach = spec.Command{}, spec.Command{}, spec.Command{}, spec.Command{}, spec.Command{}
 	var mounts []any
+	seenPorts := map[string]bool{}
 	for _, e := range entries {
 		init = init || e.Init != nil && *e.Init
 		privileged = privileged || e.Privileged != nil && *e.Privileged
@@ -134,17 +135,21 @@ func Merge(config *spec.DevContainer, entries []Entry) Merged {
 			dc.OtherPortsAttributes = e.OtherPortsAttributes
 		}
 		for _, port := range e.ForwardPorts {
-			normalized := fmt.Sprint(port)
-			if strings.HasPrefix(normalized, "localhost:") {
-				normalized = strings.TrimPrefix(normalized, "localhost:")
+			key, isString := port.(string)
+			if !isString {
+				key = "localhost:" + fmt.Sprint(port)
 			}
-			var value any = port
-			if n, err := strconv.Atoi(normalized); err == nil {
-				value = n
+			if seenPorts[key] {
+				continue
 			}
-			if !slices.ContainsFunc(dc.ForwardPorts, func(p any) bool { return fmt.Sprint(p) == fmt.Sprint(value) }) {
-				dc.ForwardPorts = append(dc.ForwardPorts, value)
+			seenPorts[key] = true
+			var value any = key
+			if suffix, ok := strings.CutPrefix(key, "localhost:"); ok {
+				if n, err := strconv.Atoi(suffix); err == nil {
+					value = n
+				}
 			}
+			dc.ForwardPorts = append(dc.ForwardPorts, value)
 		}
 		dc.HostRequirements = mergeHostRequirements(dc.HostRequirements, e.HostRequirements)
 	}

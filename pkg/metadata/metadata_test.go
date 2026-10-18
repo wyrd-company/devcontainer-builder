@@ -105,6 +105,7 @@ func TestMergeUpstreamRules(t *testing.T) {
 		want        map[string]any
 	}{
 		{"empty", `[]`, map[string]any{"remoteEnv": map[string]any{}, "containerEnv": map[string]any{}, "portsAttributes": map[string]any{}, "onCreateCommands": []any{}, "updateContentCommands": []any{}, "postCreateCommands": []any{}, "postStartCommands": []any{}, "postAttachCommands": []any{}}},
+		{"forward-port-types", `[{"forwardPorts":["3000",3000,"localhost:4000","service:5432",3000,"localhost:3000","3000"]}]`, map[string]any{"forwardPorts": []any{"3000", float64(3000), float64(4000), "service:5432"}}},
 		{"env", `[{"remoteEnv":{"ENV1":"a","ENV2":"a","ENV3":"a","ENV4":"a"}},{"remoteEnv":{"ENV1":"b","ENV2":"b"}},{"remoteEnv":{"ENV1":"config","ENV3":"config","NULL":null}}]`, map[string]any{"remoteEnv": map[string]any{"ENV1": "config", "ENV2": "b", "ENV3": "config", "ENV4": "a", "NULL": nil}}},
 		{"booleans", `[{"init":true,"privileged":true,"overrideCommand":true,"updateRemoteUserUID":true},{"init":false,"privileged":false,"overrideCommand":false,"updateRemoteUserUID":false}]`, map[string]any{"init": true, "privileged": true, "overrideCommand": false, "updateRemoteUserUID": false}},
 		{"union", `[{"capAdd":["A","B"],"securityOpt":["one","two"]},{"capAdd":["B","C"],"securityOpt":["two","three"]}]`, map[string]any{"capAdd": []any{"A", "B", "C"}, "securityOpt": []any{"one", "two", "three"}}},
