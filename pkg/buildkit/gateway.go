@@ -240,9 +240,6 @@ func buildOnePlatform(
 	}
 	effective := metadata.Merge(graph.Spec, metadata.Collect(metadata.Read(baseImage.Config.Labels, nil), nil, graph.Spec))
 	buildGraph.Spec = effective.DevContainer
-	if buildGraph.RemoteUser == "" {
-		buildGraph.RemoteUser = effective.RemoteUser
-	}
 	finalState, err := Build(buildGraph)
 	if err != nil {
 		return nil, nil, fmt.Errorf("author llb: %w", err)

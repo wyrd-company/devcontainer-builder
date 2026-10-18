@@ -259,3 +259,21 @@ func TestCollectUpstreamPropertyAllowlists(t *testing.T) {
 		})
 	}
 }
+
+func TestGPURequirementsBranches(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		a, b, want any
+	}{
+		{"absent", nil, nil, nil}, {"false-left", false, true, true}, {"false-right", true, false, true},
+		{"optional-only", "optional", nil, "optional"}, {"optional-both", "optional", "optional", "optional"},
+		{"required-over-optional", true, "optional", map[string]any{}},
+		{"maxima", map[string]any{"cores": 8, "memory": "8gb"}, map[string]any{"cores": 4, "memory": "4gb"}, map[string]any{"cores": float64(8), "memory": "8589934592"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := mergeGPU(tc.a, tc.b); !reflect.DeepEqual(got, tc.want) {
+				t.Fatalf("gpu=%#v want %#v", got, tc.want)
+			}
+		})
+	}
+}

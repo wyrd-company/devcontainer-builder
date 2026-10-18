@@ -140,3 +140,19 @@ func TestRuntimePlanSkipAndSubstitute(t *testing.T) {
 		})
 	}
 }
+
+func TestRuntimePlanSubstitutesEveryCommandForm(t *testing.T) {
+	entries := []metadata.Entry{{PostCreate: spec.Command{Shell: "${localEnv:GREETING} ${containerEnv:SAMPLE}"}, PostStart: spec.Command{Parallel: map[string]spec.Command{"one": {Args: []string{"echo", "${localEnv:GREETING} ${containerEnv:SAMPLE}"}}, "two": {Shell: "${localEnv:GREETING} ${containerEnv:SAMPLE}"}}}}}
+	plan := runtimePlan(UpRequest{}, entries, substituteCtxForTest(), map[string]string{"SAMPLE": "container"})
+	if len(plan) != 2 || plan[0].Command.Shell != "hello container" || plan[1].Command.Parallel["one"].Args[1] != "hello container" || plan[1].Command.Parallel["two"].Shell != "hello container" {
+		t.Fatalf("plan=%+v", plan)
+	}
+}
+
+func TestFeatureContainerEnvRetainsSpecPrecedence(t *testing.T) {
+	resolved := []features.Resolved{{Metadata: features.Metadata{ContainerEnv: map[string]string{"A": "one", "B": "${localEnv:GREETING}", "C": "one"}}}, {Metadata: features.Metadata{ContainerEnv: map[string]string{"A": "two"}}}}
+	got := featureContainerEnv(map[string]any{"C": "config"}, resolved, substituteCtxForTest())
+	if !reflect.DeepEqual(got, map[string]any{"A": "two", "B": "hello", "C": "config"}) {
+		t.Fatalf("env=%v", got)
+	}
+}
