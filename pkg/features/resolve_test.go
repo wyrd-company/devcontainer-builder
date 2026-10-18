@@ -82,3 +82,74 @@ func TestExtractTarMaybeGz_RejectsSymlink(t *testing.T) {
 		t.Fatalf("expected symlink rejection, got %v", err)
 	}
 }
+
+func tarGz(t *testing.T, entries []tar.Header, bodies map[string]string) []byte {
+	t.Helper()
+	var buf bytes.Buffer
+	gz := gzip.NewWriter(&buf)
+	tw := tar.NewWriter(gz)
+	for _, h := range entries {
+		h := h
+		body := bodies[h.Name]
+		h.Size = int64(len(body))
+		if err := tw.WriteHeader(&h); err != nil {
+			t.Fatal(err)
+		}
+		if body != "" {
+			if _, err := tw.Write([]byte(body)); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	if err := tw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := gz.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return buf.Bytes()
+}
+
+// Published features (e.g. ghcr.io/devcontainers/features/*) are packed
+// with a leading "./" directory entry.
+func TestExtractTarMaybeGz_AcceptsCurrentDirEntry(t *testing.T) {
+	data := tarGz(t, []tar.Header{
+		{Name: "./", Typeflag: tar.TypeDir, Mode: 0o755},
+		{Name: ".", Typeflag: tar.TypeDir, Mode: 0o755},
+		{Name: "./install.sh", Typeflag: tar.TypeReg, Mode: 0o755},
+		{Name: "./scripts/", Typeflag: tar.TypeDir, Mode: 0o755},
+		{Name: "./scripts/helper.sh", Typeflag: tar.TypeReg, Mode: 0o644},
+	}, map[string]string{"./install.sh": "#!/bin/sh\n", "./scripts/helper.sh": "echo ok\n"})
+	dir := t.TempDir()
+	if err := extractTarMaybeGz(data, dir); err != nil {
+		t.Fatalf("extract: %v", err)
+	}
+	for _, p := range []string{"install.sh", "scripts/helper.sh"} {
+		if _, err := os.Stat(filepath.Join(dir, p)); err != nil {
+			t.Fatalf("missing %s: %v", p, err)
+		}
+	}
+}
+
+func TestExtractTarMaybeGz_RejectsEscapes(t *testing.T) {
+	for _, name := range []string{"../escape", "./../escape", "a/../../escape", "/abs/escape"} {
+		t.Run(name, func(t *testing.T) {
+			data := tarGz(t, []tar.Header{{Name: name, Typeflag: tar.TypeReg, Mode: 0o644}}, map[string]string{name: "x"})
+			err := extractTarMaybeGz(data, t.TempDir())
+			if err == nil || !strings.Contains(err.Error(), "unsafe path") {
+				t.Fatalf("expected unsafe path rejection, got %v", err)
+			}
+		})
+	}
+}
+
+func TestExtractTarMaybeGz_AcceptsDotDotPrefixedName(t *testing.T) {
+	data := tarGz(t, []tar.Header{{Name: "..hidden", Typeflag: tar.TypeReg, Mode: 0o644}}, map[string]string{"..hidden": "x"})
+	dir := t.TempDir()
+	if err := extractTarMaybeGz(data, dir); err != nil {
+		t.Fatalf("extract: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "..hidden")); err != nil {
+		t.Fatal(err)
+	}
+}

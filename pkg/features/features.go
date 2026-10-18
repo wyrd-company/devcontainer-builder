@@ -228,7 +228,12 @@ func extractTarMaybeGz(data []byte, dir string) error {
 		}
 		// Sanitize: refuse paths that escape the destination.
 		clean := filepath.Clean(hdr.Name)
-		if strings.HasPrefix(clean, "..") || strings.HasPrefix(clean, "/") {
+		if clean == "." {
+			// The archive root ("./" or "."), which is the destination
+			// itself. Published features carry this entry.
+			continue
+		}
+		if clean == ".." || strings.HasPrefix(clean, "../") || filepath.IsAbs(clean) {
 			return fmt.Errorf("tar: unsafe path %q", hdr.Name)
 		}
 		target := filepath.Join(dir, clean)
