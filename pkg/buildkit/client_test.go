@@ -1,0 +1,200 @@
+package buildkit
+
+import (
+	"bytes"
+	"context"
+	"reflect"
+	"strings"
+	"testing"
+
+	"github.com/moby/buildkit/client"
+	"github.com/moby/buildkit/client/llb"
+	"github.com/moby/buildkit/solver/pb"
+	digest "github.com/opencontainers/go-digest"
+)
+
+func TestParseCacheRefs(t *testing.T) {
+	got := ParseCacheRefs([]string{
+		"type=registry,ref=example.test/cache:main",
+		"type=local,src=.cache,mode=max",
+		"example.test/bare:cache",
+		"",
+		"ref=no-type",
+	})
+	want := []CacheRef{
+		{Type: "registry", Attrs: map[string]string{"ref": "example.test/cache:main"}},
+		{Type: "local", Attrs: map[string]string{"src": ".cache", "mode": "max"}},
+		{Type: "registry", Attrs: map[string]string{"ref": "example.test/bare:cache"}},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("ParseCacheRefs = %#v, want %#v", got, want)
+	}
+}
+
+func TestResolveMode(t *testing.T) {
+	cases := []struct {
+		name   string
+		pull   bool
+		daemon bool
+		want   string
+	}{
+		{"daemon prefers local images", false, true, pb.AttrImageResolveModePreferLocal},
+		{"separate buildkit resolves from registry", false, false, pb.AttrImageResolveModeDefault},
+		{"pull forces registry on daemon", true, true, pb.AttrImageResolveModeForcePull},
+		{"pull forces registry on separate buildkit", true, false, pb.AttrImageResolveModeForcePull},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := resolveMode(SolveOptions{Pull: c.pull}, &Connection{Daemon: c.daemon})
+			if got != c.want {
+				t.Fatalf("resolveMode = %q, want %q", got, c.want)
+			}
+		})
+	}
+}
+
+func TestExportsFor(t *testing.T) {
+	daemon := &Connection{Daemon: true}
+	remote := &Connection{Address: "tcp://buildkit.test:1234"}
+	tags := []string{"example.test/app:1", "example.test/app:latest"}
+
+	t.Run("load on daemon exports into the image store", func(t *testing.T) {
+		exports, load, err := exportsFor(context.Background(), SolveOptions{Load: true, Tags: tags}, daemon, false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if load != nil {
+			t.Fatal("daemon load must not stream through the image-load endpoint")
+		}
+		assertSingleExport(t, exports, exporterMoby, map[string]string{"name": "example.test/app:1,example.test/app:latest"})
+		if exports[0].Output != nil {
+			t.Fatal("moby exporter must not have an output stream")
+		}
+	})
+
+	t.Run("load on separate buildkit streams to the engine", func(t *testing.T) {
+		exports, load, err := exportsFor(context.Background(), SolveOptions{Load: true, Tags: tags}, remote, false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if load == nil {
+			t.Fatal("separate buildkit load must stream through the image-load endpoint")
+		}
+		assertSingleExport(t, exports, client.ExporterDocker, map[string]string{"name": "example.test/app:1,example.test/app:latest"})
+		if exports[0].Output == nil {
+			t.Fatal("docker exporter needs an output stream")
+		}
+	})
+
+	t.Run("load writer receives a tarball on either buildkit", func(t *testing.T) {
+		for _, conn := range []*Connection{daemon, remote} {
+			var buf bytes.Buffer
+			exports, load, err := exportsFor(context.Background(), SolveOptions{Load: true, Tags: tags[:1], LoadWriter: &buf}, conn, false)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if load != nil {
+				t.Fatal("LoadWriter must not load into the daemon")
+			}
+			assertSingleExport(t, exports, client.ExporterDocker, map[string]string{"name": "example.test/app:1"})
+		}
+	})
+
+	t.Run("push uses moby on daemon and image on separate buildkit", func(t *testing.T) {
+		want := map[string]string{"name": "example.test/app:1", "push": "true", "name-canonical": "true"}
+		exports, _, err := exportsFor(context.Background(), SolveOptions{Push: true, Tags: tags[:1]}, daemon, true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		assertSingleExport(t, exports, exporterMoby, want)
+		exports, _, err = exportsFor(context.Background(), SolveOptions{Push: true, Tags: tags[:1]}, remote, true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		assertSingleExport(t, exports, client.ExporterImage, want)
+	})
+
+	t.Run("rejections", func(t *testing.T) {
+		for _, c := range []struct {
+			name  string
+			opt   SolveOptions
+			multi bool
+			want  string
+		}{
+			{"push and load", SolveOptions{Push: true, Load: true, Tags: tags}, false, "mutually exclusive"},
+			{"push without tag", SolveOptions{Push: true}, false, "--push requires"},
+			{"load without tag", SolveOptions{Load: true}, false, "--load requires"},
+			{"load multi-platform", SolveOptions{Load: true, Tags: tags}, true, "multi-platform"},
+		} {
+			_, _, err := exportsFor(context.Background(), c.opt, daemon, c.multi)
+			if err == nil || !strings.Contains(err.Error(), c.want) {
+				t.Errorf("%s: err = %v, want containing %q", c.name, err, c.want)
+			}
+		}
+	})
+
+	t.Run("no output requested exports nothing", func(t *testing.T) {
+		exports, load, err := exportsFor(context.Background(), SolveOptions{Tags: tags}, daemon, false)
+		if err != nil || exports != nil || load != nil {
+			t.Fatalf("exports = %v, load = %v, err = %v; want none", exports, load, err)
+		}
+	})
+}
+
+func assertSingleExport(t *testing.T, exports []client.ExportEntry, typ string, attrs map[string]string) {
+	t.Helper()
+	if len(exports) != 1 {
+		t.Fatalf("exports = %d, want 1", len(exports))
+	}
+	if exports[0].Type != typ {
+		t.Fatalf("export type = %q, want %q", exports[0].Type, typ)
+	}
+	if !reflect.DeepEqual(exports[0].Attrs, attrs) {
+		t.Fatalf("export attrs = %v, want %v", exports[0].Attrs, attrs)
+	}
+}
+
+func TestEngineLoad_UnstartedLoadFailsAfterSuccessfulSolve(t *testing.T) {
+	l := newEngineLoad(context.Background(), nil)
+	if err := l.wait(nil); err == nil {
+		t.Fatal("a successful solve that never opened the load stream must be reported")
+	}
+	if err := l.wait(context.Canceled); err != nil {
+		t.Fatalf("a failed solve reports its own error, got load error %v", err)
+	}
+}
+
+func TestMarshalOpts_NoCacheIgnoresCacheOnEveryVertex(t *testing.T) {
+	st := llb.Image("docker.io/library/alpine:latest").Run(llb.Shlex("true")).Root()
+	def, err := st.Marshal(context.Background(), marshalOpts(SolveOptions{NoCache: true})...)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := countIgnoreCache(t, def.ToPB()); n.total == 0 || n.ignored != n.total {
+		t.Fatalf("NoCache: %d of %d vertices ignore cache, want all", n.ignored, n.total)
+	}
+
+	def, err = st.Marshal(context.Background(), marshalOpts(SolveOptions{})...)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := countIgnoreCache(t, def.ToPB()); n.total == 0 || n.ignored != 0 {
+		t.Fatalf("default: %d of %d vertices ignore cache, want none", n.ignored, n.total)
+	}
+}
+
+type cacheCount struct{ ignored, total int }
+
+// countIgnoreCache counts the operation vertices of def that ignore the
+// cache. The terminal vertex, which only names the result, is skipped.
+func countIgnoreCache(t *testing.T, def *pb.Definition) cacheCount {
+	t.Helper()
+	var n cacheCount
+	for _, dt := range def.Def[:len(def.Def)-1] {
+		n.total++
+		if md, ok := def.Metadata[string(digest.FromBytes(dt))]; ok && md.IgnoreCache {
+			n.ignored++
+		}
+	}
+	return n
+}

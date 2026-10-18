@@ -19,6 +19,8 @@ import (
 	"strings"
 	"time"
 
+	dockerclient "github.com/docker/docker/client"
+
 	"github.com/wyrd-company/devcontainer-builder/pkg/buildkit"
 	"github.com/wyrd-company/devcontainer-builder/pkg/buildx"
 	"github.com/wyrd-company/devcontainer-builder/pkg/dockerfile"
@@ -65,9 +67,12 @@ type Options struct {
 	Platforms []string
 	// Builder is the buildx instance name (buildx engine only).
 	Builder string
-	// BuildKitAddress overrides the buildkitd endpoint. Empty falls
-	// back to BUILDKIT_HOST and then a unix-socket default.
+	// BuildKitAddress selects a separate BuildKit. Empty falls back to
+	// BUILDKIT_HOST, then to the Docker daemon's built-in BuildKit.
 	BuildKitAddress string
+	// Docker is the Engine API client used to reach the daemon. When
+	// nil, one is created from the standard DOCKER_* environment.
+	Docker *dockerclient.Client
 	// BuildArgs / Labels.
 	BuildArgs map[string]string
 	Labels    map[string]string
@@ -78,13 +83,11 @@ type Options struct {
 
 	// Push uploads the result to the registry described by Tags.
 	Push bool
-	// Load loads the result into the local docker image store. With
-	// the BuildKit engine, this writes a docker tarball under WorkDir
-	// and then `docker load`s it.
+	// Load loads the result into the Docker daemon's image store.
 	Load bool
-	// NoCache disables build cache (buildx engine only).
+	// NoCache disables the build cache.
 	NoCache bool
-	// Pull always re-pulls referenced images (buildx engine only).
+	// Pull always re-pulls referenced images.
 	Pull bool
 	// Progress one of "auto" | "plain" | "tty" | "rawjson".
 	Progress string
@@ -134,10 +137,6 @@ type Result struct {
 	Features []features.Resolved
 	// BuildxArgs is set when Engine=buildx, for logging.
 	BuildxArgs []string
-	// LoadTarball is set when Engine=buildkit and Load=true, pointing
-	// at the docker-format tarball (which has already been loaded into
-	// docker by the time Build returns).
-	LoadTarball string
 }
 
 // Builder is reusable across builds.
@@ -351,27 +350,28 @@ func (b *Builder) runBuildKit(ctx context.Context, opts Options, ctxDir string,
 	resolved []features.Resolved, sr *vscode.Result, result *Result,
 	logf func(string, ...any),
 ) error {
-	cacheImports, cacheExports := translateCache(mergeSlices(buildCacheFrom(dc), opts.CacheFrom), opts.CacheTo)
 	solveOpts := buildkit.SolveOptions{
 		Address:          opts.BuildKitAddress,
+		Docker:           opts.Docker,
 		LocalContextName: "context",
 		LocalContextDir:  ctxDir,
 		Tags:             opts.Tags,
 		Push:             opts.Push,
 		Load:             opts.Load,
 		OutputDir:        opts.OutputDir,
-		CacheImports:     cacheImports,
-		CacheExports:     cacheExports,
+		CacheImports:     buildkit.ParseCacheRefs(mergeSlices(buildCacheFrom(dc), opts.CacheFrom)),
+		CacheExports:     buildkit.ParseCacheRefs(opts.CacheTo),
 		Platforms:        opts.Platforms,
+		NoCache:          opts.NoCache,
+		Pull:             opts.Pull,
 		Progress:         opts.Progress,
 		Stdout:           opts.Stdout,
 		Stderr:           opts.Stderr,
-		WorkDir:          filepath.Dir(ctxDir),
 	}
 	if opts.Push && len(opts.Tags) == 0 {
 		return fmt.Errorf("--push requires at least one --tag")
 	}
-	logf("solving via buildkit (addr=%s, platforms=%d)", solveOptsAddr(solveOpts), max(1, len(opts.Platforms)))
+	logf("solving via buildkit (%s, platforms=%d)", buildKitEndpoint(solveOpts), max(1, len(opts.Platforms)))
 	bspec := buildkit.BuildSpec{
 		Graph: buildkit.GraphInputs{
 			Spec:                  dc,
@@ -385,44 +385,20 @@ func (b *Builder) runBuildKit(ctx context.Context, opts Options, ctxDir string,
 		},
 		Upstream: upstream,
 	}
-	res, err := buildkit.SolveDevcontainer(ctx, bspec, solveOpts)
-	if err != nil {
-		return err
-	}
-	if res.LoadTarball != "" {
-		result.LoadTarball = res.LoadTarball
-		logf("loading docker tarball %s", res.LoadTarball)
-		if err := dockerLoad(ctx, res.LoadTarball, opts.Stdout, opts.Stderr); err != nil {
-			return fmt.Errorf("docker load: %w", err)
-		}
-	}
-	return nil
+	_, err := buildkit.SolveDevcontainer(ctx, bspec, solveOpts)
+	return err
 }
 
-// solveOptsAddr returns a friendly representation of the resolved
-// buildkit address for logging.
-func solveOptsAddr(opt buildkit.SolveOptions) string {
-	if opt.Address != "" {
-		return opt.Address
+// buildKitEndpoint names the BuildKit a solve will use, for logging.
+func buildKitEndpoint(opt buildkit.SolveOptions) string {
+	switch {
+	case opt.Address != "":
+		return "addr=" + opt.Address
+	case buildkit.DefaultAddress() != "":
+		return "addr=" + buildkit.DefaultAddress() + " (BUILDKIT_HOST)"
+	default:
+		return "docker daemon"
 	}
-	if v := buildkit.DefaultAddress(); v != "" {
-		return v + " (default)"
-	}
-	return "<unset>"
-}
-
-// dockerLoad invokes `docker load -i path`.
-func dockerLoad(ctx context.Context, path string, stdout, stderr io.Writer) error {
-	if stdout == nil {
-		stdout = os.Stdout
-	}
-	if stderr == nil {
-		stderr = os.Stderr
-	}
-	c := exec.CommandContext(ctx, "docker", "load", "-i", path)
-	c.Stdout = stdout
-	c.Stderr = stderr
-	return c.Run()
 }
 
 func dockerImageRemove(ctx context.Context, image string) error {
@@ -430,34 +406,6 @@ func dockerImageRemove(ctx context.Context, image string) error {
 	c.Stdout = io.Discard
 	c.Stderr = io.Discard
 	return c.Run()
-}
-
-// translateCache parses buildx-style "type=...,ref=..." strings into
-// CacheRef entries for the BuildKit client.
-func translateCache(from, to []string) ([]buildkit.CacheRef, []buildkit.CacheRef) {
-	parse := func(s []string) []buildkit.CacheRef {
-		out := make([]buildkit.CacheRef, 0, len(s))
-		for _, raw := range s {
-			ref := buildkit.CacheRef{Attrs: map[string]string{}}
-			for _, kv := range strings.Split(raw, ",") {
-				eq := strings.IndexByte(kv, '=')
-				if eq < 0 {
-					continue
-				}
-				k, v := kv[:eq], kv[eq+1:]
-				if k == "type" {
-					ref.Type = v
-					continue
-				}
-				ref.Attrs[k] = v
-			}
-			if ref.Type != "" {
-				out = append(out, ref)
-			}
-		}
-		return out
-	}
-	return parse(from), parse(to)
 }
 
 // prepareBaseImage resolves what should appear "above" the devcontainer

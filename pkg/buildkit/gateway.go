@@ -5,8 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
 	"sort"
 	"strings"
 
@@ -16,7 +14,6 @@ import (
 	"github.com/moby/buildkit/client/llb/sourceresolver"
 	"github.com/moby/buildkit/exporter/containerimage/exptypes"
 	gateway "github.com/moby/buildkit/frontend/gateway/client"
-	"github.com/moby/buildkit/util/progress/progressui"
 	dockerspec "github.com/moby/docker-image-spec/specs-go/v1"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	fsutil "github.com/tonistiigi/fsutil"
@@ -43,6 +40,8 @@ type DockerfileBuild struct {
 	Target string
 	// BuildArgs become "build-arg:KEY=VAL" frontend opts.
 	BuildArgs map[string]string
+	// Labels become "label:KEY=VAL" frontend opts.
+	Labels map[string]string
 }
 
 // BuildSpec is the input to SolveDevcontainer. It bundles the LLB graph
@@ -67,6 +66,13 @@ const (
 	upstreamDockerfileLocal = "upstream-dockerfile"
 )
 
+// dockerfileContextLocal / dockerfileDockerfileLocal are the local mount
+// names SolveDockerfile uses; they are the dockerfile frontend defaults.
+const (
+	dockerfileContextLocal    = "context"
+	dockerfileDockerfileLocal = "dockerfile"
+)
+
 // SolveDevcontainer drives a devcontainer build through the BuildKit
 // gateway. Compared to Solve, it can:
 //
@@ -75,118 +81,90 @@ const (
 //   - Chain an upstream Dockerfile build directly (via the dockerfile.v0
 //     frontend) so the base image never has to round-trip through the
 //     local docker store.
-//
-// Single-platform, image-spec builds without an upstream Dockerfile are
-// still cheaper through Solve, but SolveDevcontainer handles them too.
 func SolveDevcontainer(ctx context.Context, spec BuildSpec, opt SolveOptions) (*Result, error) {
-	addr := opt.Address
-	if addr == "" {
-		addr = DefaultAddress()
-	}
-	if addr == "" {
-		return nil, errors.New("buildkit: no address provided and no default could be determined " +
-			"(set BUILDKIT_HOST or pass --buildkit-addr)")
-	}
-
 	targetPlatforms, err := parseTargetPlatforms(opt.Platforms, spec.Graph.Platform)
 	if err != nil {
 		return nil, err
 	}
 	multi := len(targetPlatforms) > 1
-
-	if opt.Load && multi {
-		return nil, errors.New("--load is incompatible with multi-platform builds " +
-			"(docker's image store only stores single-platform images)")
-	}
 	if spec.Upstream == nil && spec.Graph.BaseImage == "" {
 		return nil, errors.New("buildkit: BuildSpec needs either Upstream or Graph.BaseImage")
 	}
 
-	c, err := client.New(ctx, addr)
-	if err != nil {
-		return nil, fmt.Errorf("dial %s: %w", addr, err)
-	}
-	defer c.Close()
-
-	stderr := opt.Stderr
-	if stderr == nil {
-		stderr = os.Stderr
-	}
-
-	exports, loadTarball, err := buildExportsForGateway(opt, multi)
+	localMounts, err := localContextMounts(opt)
 	if err != nil {
 		return nil, err
-	}
-
-	localMounts := map[string]fsutil.FS{}
-	if opt.LocalContextName != "" && opt.LocalContextDir != "" {
-		fs, err := fsutil.NewFS(opt.LocalContextDir)
-		if err != nil {
-			return nil, fmt.Errorf("local mount %s: %w", opt.LocalContextDir, err)
-		}
-		localMounts[opt.LocalContextName] = fs
 	}
 	if spec.Upstream != nil {
-		ctxDir := spec.Upstream.ContextDir
-		if ctxDir == "" {
-			return nil, errors.New("upstream dockerfile: ContextDir is required")
+		if err := addDockerfileMounts(localMounts, spec.Upstream, upstreamContextLocal, upstreamDockerfileLocal); err != nil {
+			return nil, fmt.Errorf("upstream dockerfile: %w", err)
 		}
-		dfDir := spec.Upstream.DockerfileDir
-		if dfDir == "" {
-			dfDir = ctxDir
-		}
-		ctxFS, err := fsutil.NewFS(ctxDir)
-		if err != nil {
-			return nil, fmt.Errorf("upstream context %s: %w", ctxDir, err)
-		}
-		dfFS, err := fsutil.NewFS(dfDir)
-		if err != nil {
-			return nil, fmt.Errorf("upstream dockerfile dir %s: %w", dfDir, err)
-		}
-		localMounts[upstreamContextLocal] = ctxFS
-		localMounts[upstreamDockerfileLocal] = dfFS
 	}
 
-	cacheImports := make([]client.CacheOptionsEntry, 0, len(opt.CacheImports))
-	for _, ci := range opt.CacheImports {
-		cacheImports = append(cacheImports, client.CacheOptionsEntry{Type: ci.Type, Attrs: ci.Attrs})
-	}
-	cacheExports := make([]client.CacheOptionsEntry, 0, len(opt.CacheExports))
-	for _, ce := range opt.CacheExports {
-		cacheExports = append(cacheExports, client.CacheOptionsEntry{Type: ce.Type, Attrs: ce.Attrs})
-	}
+	return runSolve(ctx, opt, multi, localMounts, func(ctx context.Context, conn *Connection, so client.SolveOpt, ch chan *client.SolveStatus) (*client.SolveResponse, error) {
+		bs := buildSettings{resolveMode: resolveMode(opt, conn), noCache: opt.NoCache}
+		buildFunc := func(ctx context.Context, gc gateway.Client) (*gateway.Result, error) {
+			return runBuildFunc(ctx, gc, spec, targetPlatforms, multi, bs)
+		}
+		return conn.BuildKit.Build(ctx, so, "devcontainer-builder", buildFunc, ch)
+	})
+}
 
-	statusCh := make(chan *client.SolveStatus)
-	display, err := progressui.NewDisplay(stderr, displayMode(opt.Progress))
+// SolveDockerfile builds a plain Dockerfile through the dockerfile.v0
+// frontend and exports the result as opt describes. All of
+// opt.Platforms are built; more than one produces a manifest-list image.
+func SolveDockerfile(ctx context.Context, b DockerfileBuild, opt SolveOptions) (*Result, error) {
+	localMounts, err := localContextMounts(opt)
 	if err != nil {
-		return nil, fmt.Errorf("progress display: %w", err)
-	}
-
-	buildFunc := func(ctx context.Context, gc gateway.Client) (*gateway.Result, error) {
-		return runBuildFunc(ctx, gc, spec, targetPlatforms, multi)
-	}
-
-	g, gctx := errgroup.WithContext(ctx)
-	var resp *client.SolveResponse
-	g.Go(func() error {
-		var solveErr error
-		resp, solveErr = c.Build(gctx, client.SolveOpt{
-			Exports:       exports,
-			LocalMounts:   localMounts,
-			CacheImports:  cacheImports,
-			CacheExports:  cacheExports,
-			FrontendAttrs: opt.FrontendAttrs,
-		}, "devcontainer-builder", buildFunc, statusCh)
-		return solveErr
-	})
-	g.Go(func() error {
-		_, derr := display.UpdateFrom(ctx, statusCh)
-		return derr
-	})
-	if err := g.Wait(); err != nil {
 		return nil, err
 	}
-	return &Result{LoadTarball: loadTarball, SolveResponse: resp}, nil
+	if err := addDockerfileMounts(localMounts, &b, dockerfileContextLocal, dockerfileDockerfileLocal); err != nil {
+		return nil, err
+	}
+	return runSolve(ctx, opt, len(opt.Platforms) > 1, localMounts, func(ctx context.Context, conn *Connection, so client.SolveOpt, ch chan *client.SolveStatus) (*client.SolveResponse, error) {
+		bs := buildSettings{resolveMode: resolveMode(opt, conn), noCache: opt.NoCache}
+		attrs := dockerfileFrontendAttrs(&b, bs, dockerfileContextLocal, dockerfileDockerfileLocal)
+		if len(opt.Platforms) > 0 {
+			attrs["platform"] = strings.Join(opt.Platforms, ",")
+		}
+		for k, v := range so.FrontendAttrs {
+			attrs[k] = v
+		}
+		so.Frontend = "dockerfile.v0"
+		so.FrontendAttrs = attrs
+		return conn.BuildKit.Solve(ctx, nil, so, ch)
+	})
+}
+
+// buildSettings carries per-solve choices that depend on the BuildKit
+// the solve runs against.
+type buildSettings struct {
+	// resolveMode is a pb.AttrImageResolveMode* value.
+	resolveMode string
+	noCache     bool
+}
+
+// addDockerfileMounts registers b's context and Dockerfile directories
+// under the given local mount names.
+func addDockerfileMounts(mounts map[string]fsutil.FS, b *DockerfileBuild, contextName, dockerfileName string) error {
+	if b.ContextDir == "" {
+		return errors.New("dockerfile build: ContextDir is required")
+	}
+	dfDir := b.DockerfileDir
+	if dfDir == "" {
+		dfDir = b.ContextDir
+	}
+	ctxFS, err := fsutil.NewFS(b.ContextDir)
+	if err != nil {
+		return fmt.Errorf("dockerfile context %s: %w", b.ContextDir, err)
+	}
+	dfFS, err := fsutil.NewFS(dfDir)
+	if err != nil {
+		return fmt.Errorf("dockerfile dir %s: %w", dfDir, err)
+	}
+	mounts[contextName] = ctxFS
+	mounts[dockerfileName] = dfFS
+	return nil
 }
 
 // parseTargetPlatforms converts the SolveOptions list into ocispecs
@@ -220,7 +198,7 @@ func parseTargetPlatforms(in []string, fallback dcplatform.Platform) ([]ocispecs
 // image artifact.
 func runBuildFunc(
 	ctx context.Context, gc gateway.Client, spec BuildSpec,
-	targets []ocispecs.Platform, multi bool,
+	targets []ocispecs.Platform, multi bool, bs buildSettings,
 ) (*gateway.Result, error) {
 	final := gateway.NewResult()
 	platformsList := make([]exptypes.Platform, len(targets))
@@ -231,7 +209,7 @@ func runBuildFunc(
 	for i, tp := range targets {
 		i, tp := i, tp
 		eg.Go(func() error {
-			ref, cfg, err := buildOnePlatform(ctx, gc, spec, tp)
+			ref, cfg, err := buildOnePlatform(ctx, gc, spec, tp, bs)
 			if err != nil {
 				return fmt.Errorf("build %s: %w", platforms.Format(tp), err)
 			}
@@ -269,15 +247,16 @@ func runBuildFunc(
 // for a single target platform. When BuildSpec.Upstream is set, the
 // dockerfile.v0 frontend is solved first and its result becomes the
 // base; otherwise the spec's BaseImage is resolved through the gateway
-// (so each platform sees the right manifest entry).
+// (so each platform sees the right manifest entry, and the daemon's
+// BuildKit can use images from its local store).
 func buildOnePlatform(
-	ctx context.Context, gc gateway.Client, spec BuildSpec, p ocispecs.Platform,
+	ctx context.Context, gc gateway.Client, spec BuildSpec, p ocispecs.Platform, bs buildSettings,
 ) (gateway.Reference, []byte, error) {
 	var baseState llb.State
 	var baseConfig []byte
 
 	if spec.Upstream != nil {
-		ref, cfg, err := solveUpstreamDockerfile(ctx, gc, spec.Upstream, p)
+		ref, cfg, err := solveUpstreamDockerfile(ctx, gc, spec.Upstream, p, bs)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -287,33 +266,51 @@ func buildOnePlatform(
 		}
 		baseState = st
 		baseConfig = cfg
-	} else if spec.Graph.ResolveImageConfig {
+	} else {
 		imageRef, err := normalizeImageRef(spec.Graph.BaseImage)
 		if err != nil {
 			return nil, nil, err
 		}
-		_, _, cfg, err := gc.ResolveImageConfig(ctx, imageRef, sourceresolver.Opt{
-			Platform: &p,
-			ImageOpt: &sourceresolver.ResolveImageOpt{},
-		})
-		if err != nil {
-			return nil, nil, fmt.Errorf("resolve base image %s: %w", imageRef, err)
+		if spec.Graph.ResolveImageConfig {
+			_, _, cfg, err := gc.ResolveImageConfig(ctx, imageRef, sourceresolver.Opt{
+				Platform: &p,
+				ImageOpt: &sourceresolver.ResolveImageOpt{ResolveMode: bs.resolveMode},
+			})
+			if err != nil {
+				return nil, nil, fmt.Errorf("resolve base image %s: %w", imageRef, err)
+			}
+			baseConfig = cfg
 		}
-		baseConfig = cfg
+		baseState = llb.Image(imageRef,
+			llb.WithCustomNamef("FROM %s", imageRef),
+			llb.Platform(p),
+			llbResolveMode(bs.resolveMode),
+		)
+	}
+	if len(baseConfig) > 0 {
+		// Carry the base image's ENV / WORKDIR / USER into the build
+		// steps, as a Dockerfile FROM does.
+		st, err := baseState.WithImageConfig(baseConfig)
+		if err != nil {
+			return nil, nil, fmt.Errorf("apply base image config: %w", err)
+		}
+		baseState = st
 	}
 
 	graph := spec.Graph
 	graph.Platform = dcplatform.Platform{OS: p.OS, Arch: p.Architecture, Variant: p.Variant}
-	if spec.Upstream != nil {
-		graph.BaseState = &baseState
-	}
+	graph.BaseState = &baseState
 
 	finalState, err := Build(graph)
 	if err != nil {
 		return nil, nil, fmt.Errorf("author llb: %w", err)
 	}
 
-	def, err := finalState.Marshal(ctx, llb.Platform(p))
+	marshal := []llb.ConstraintsOpt{llb.Platform(p)}
+	if bs.noCache {
+		marshal = append(marshal, llb.IgnoreCache)
+	}
+	def, err := finalState.Marshal(ctx, marshal...)
 	if err != nil {
 		return nil, nil, fmt.Errorf("marshal llb: %w", err)
 	}
@@ -341,24 +338,10 @@ func buildOnePlatform(
 // The local mounts named upstreamContextLocal and upstreamDockerfileLocal
 // must be registered on the outer SolveOpt.
 func solveUpstreamDockerfile(
-	ctx context.Context, gc gateway.Client, b *DockerfileBuild, p ocispecs.Platform,
+	ctx context.Context, gc gateway.Client, b *DockerfileBuild, p ocispecs.Platform, bs buildSettings,
 ) (gateway.Reference, []byte, error) {
-	filename := b.Filename
-	if filename == "" {
-		filename = "Dockerfile"
-	}
-	attrs := map[string]string{
-		"filename":      filename,
-		"contextkey":    upstreamContextLocal,
-		"dockerfilekey": upstreamDockerfileLocal,
-		"platform":      platforms.Format(p),
-	}
-	if b.Target != "" {
-		attrs["target"] = b.Target
-	}
-	for _, k := range sortedStringMapKeys(b.BuildArgs) {
-		attrs["build-arg:"+k] = b.BuildArgs[k]
-	}
+	attrs := dockerfileFrontendAttrs(b, bs, upstreamContextLocal, upstreamDockerfileLocal)
+	attrs["platform"] = platforms.Format(p)
 	res, err := gc.Solve(ctx, gateway.SolveRequest{
 		Frontend:    "dockerfile.v0",
 		FrontendOpt: attrs,
@@ -372,6 +355,34 @@ func solveUpstreamDockerfile(
 	}
 	cfg := res.Metadata[exptypes.ExporterImageConfigKey]
 	return ref, cfg, nil
+}
+
+// dockerfileFrontendAttrs renders b as dockerfile.v0 frontend options
+// reading its context and Dockerfile from the named local mounts.
+func dockerfileFrontendAttrs(b *DockerfileBuild, bs buildSettings, contextName, dockerfileName string) map[string]string {
+	filename := b.Filename
+	if filename == "" {
+		filename = "Dockerfile"
+	}
+	attrs := map[string]string{
+		"filename":           filename,
+		"contextkey":         contextName,
+		"dockerfilekey":      dockerfileName,
+		"image-resolve-mode": bs.resolveMode,
+	}
+	if b.Target != "" {
+		attrs["target"] = b.Target
+	}
+	if bs.noCache {
+		attrs["no-cache"] = ""
+	}
+	for _, k := range sortedStringMapKeys(b.BuildArgs) {
+		attrs["build-arg:"+k] = b.BuildArgs[k]
+	}
+	for _, k := range sortedStringMapKeys(b.Labels) {
+		attrs["label:"+k] = b.Labels[k]
+	}
+	return attrs
 }
 
 // mergeImageConfig produces the serialized image config for the final
@@ -448,65 +459,4 @@ func sortedStringMapKeys(m map[string]string) []string {
 	}
 	sort.Strings(keys)
 	return keys
-}
-
-// buildExportsForGateway is buildExports with multi-platform aware
-// tweaks: the image exporter is allowed to omit a tag when push is
-// false (caller may want the gateway-cache export to still happen),
-// and the multi-platform image exporter sets `name` only when push
-// is true (otherwise BuildKit emits a meaningful warning).
-func buildExportsForGateway(opt SolveOptions, multi bool) ([]client.ExportEntry, string, error) {
-	if opt.Push && opt.Load {
-		return nil, "", errors.New("--push and --load are mutually exclusive")
-	}
-	var exports []client.ExportEntry
-	var loadPath string
-	switch {
-	case opt.Push:
-		if len(opt.Tags) == 0 {
-			return nil, "", errors.New("--push requires at least one tag")
-		}
-		attrs := map[string]string{
-			"name":           joinTags(opt.Tags),
-			"push":           "true",
-			"name-canonical": "true",
-		}
-		exports = append(exports, client.ExportEntry{
-			Type:  client.ExporterImage,
-			Attrs: attrs,
-		})
-	case opt.Load:
-		if multi {
-			return nil, "", errors.New("--load cannot be combined with multi-platform")
-		}
-		if len(opt.Tags) == 0 {
-			return nil, "", errors.New("--load requires at least one tag")
-		}
-		dest := opt.LoadWriter
-		if dest == nil {
-			if opt.WorkDir == "" {
-				return nil, "", errors.New("--load needs a WorkDir or LoadWriter")
-			}
-			loadPath = filepath.Join(opt.WorkDir, "image.tar")
-			f, err := os.Create(loadPath)
-			if err != nil {
-				return nil, "", err
-			}
-			dest = f
-		}
-		exports = append(exports, client.ExportEntry{
-			Type:   client.ExporterDocker,
-			Attrs:  map[string]string{"name": joinTags(opt.Tags)},
-			Output: outputFunc(dest),
-		})
-	case opt.OutputDir != "":
-		if err := os.MkdirAll(opt.OutputDir, 0o755); err != nil {
-			return nil, "", err
-		}
-		exports = append(exports, client.ExportEntry{
-			Type:      client.ExporterLocal,
-			OutputDir: opt.OutputDir,
-		})
-	}
-	return exports, loadPath, nil
 }
