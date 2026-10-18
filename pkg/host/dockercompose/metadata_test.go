@@ -98,7 +98,7 @@ func TestComposeMetadataRuntimeMappings(t *testing.T) {
 			}
 			applyPrimaryMetadata(proj, merged.DevContainer, UpRequest{}, sub)
 			got := proj.Services["app"]
-			translated, err := translateService(proj, got, "sample", nil, nil, map[string]string{"dcb-metadata-sample-cache": "sample-cache"}, nil)
+			translated, err := translateService(proj, got, "sample", nil, nil, map[string]string{"sample-cache": "native-scoped"}, nil)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -112,10 +112,10 @@ func TestComposeMetadataRuntimeMappings(t *testing.T) {
 			if cfg.User != "sample" || merged.RemoteUser != "root" || !reflect.DeepEqual(got.Command, svc.Command) || !containsAll(cfg.Env, "NATIVE=native", "PRIORITY=metadata", "FROM_META=hello $LITERAL", "REMOTE=remote") || !reflect.DeepEqual(merged.Entrypoints, []string{"echo hello $LITERAL"}) {
 				t.Fatalf("config=%+v merged=%+v", cfg, merged)
 			}
-			if len(host.Mounts) != 2 || host.Mounts[0].Source != "sample-cache" || host.Mounts[0].Target != "/cache" || !host.Mounts[0].ReadOnly || host.Mounts[1].Source != "/workspace" || host.Mounts[1].Target != "/bind" || !host.Mounts[1].ReadOnly || host.Mounts[1].Consistency != "cached" {
+			if len(host.Mounts) != 2 || host.Mounts[0].Source != "native-scoped" || host.Mounts[0].Target != "/cache" || !host.Mounts[0].ReadOnly || host.Mounts[1].Source != "/workspace" || host.Mounts[1].Target != "/bind" || !host.Mounts[1].ReadOnly || host.Mounts[1].Consistency != "cached" {
 				t.Fatalf("mounts=%+v", host.Mounts)
 			}
-			if proj.Volumes["sample-cache"].Name != "native-scoped" || !proj.Volumes["dcb-metadata-sample-cache"].External {
+			if len(proj.Volumes) != 1 || proj.Volumes["sample-cache"].Name != "native-scoped" {
 				t.Fatalf("volumes=%+v", proj.Volumes)
 			}
 			encoded, _ := metadata.Encode(entries)
@@ -183,18 +183,21 @@ func TestComposeRuntimePlanSkipsRetainRawHooks(t *testing.T) {
 
 func TestMetadataVolumeForms(t *testing.T) {
 	for _, tc := range []struct {
-		name  string
-		input any
-		want  types.ServiceVolumeConfig
+		name     string
+		input    any
+		want     types.ServiceVolumeConfig
+		external bool
 	}{
-		{"aliases", "src=/source,destination=/target,ro=1,consistency=delegated", types.ServiceVolumeConfig{Type: "bind", Source: "/source", Target: "/target", ReadOnly: true, Consistency: "delegated"}},
-		{"false", map[string]any{"source": "/source", "target": "/target", "readonly": false}, types.ServiceVolumeConfig{Type: "bind", Source: "/source", Target: "/target"}},
-		{"string-bool", map[string]any{"type": "volume", "source": "sample", "target": "/target", "readonly": "true"}, types.ServiceVolumeConfig{Type: "volume", Source: "sample", Target: "/target", ReadOnly: true}},
-		{"invalid", 42, types.ServiceVolumeConfig{Type: "bind"}},
+		{"aliases", "src=/source,destination=/target,ro=1,consistency=delegated", types.ServiceVolumeConfig{Type: "bind", Source: "/source", Target: "/target", ReadOnly: true, Consistency: "delegated"}, false},
+		{"false", map[string]any{"source": "/source", "target": "/target", "readonly": false, "external": false}, types.ServiceVolumeConfig{Type: "bind", Source: "/source", Target: "/target"}, false},
+		{"string-bool", map[string]any{"type": "volume", "source": "sample", "target": "/target", "readonly": "true"}, types.ServiceVolumeConfig{Type: "volume", Source: "sample", Target: "/target", ReadOnly: true}, false},
+		{"external-string", "type=volume,source=sample,target=/target,external=true", types.ServiceVolumeConfig{Type: "volume", Source: "sample", Target: "/target"}, true},
+		{"external-object", map[string]any{"type": "volume", "source": "sample", "target": "/target", "external": true}, types.ServiceVolumeConfig{Type: "volume", Source: "sample", Target: "/target"}, true},
+		{"invalid", 42, types.ServiceVolumeConfig{Type: "bind"}, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := metadataVolume(tc.input); !reflect.DeepEqual(got, tc.want) {
-				t.Fatalf("mount=%+v want=%+v", got, tc.want)
+			if got, external := metadataVolume(tc.input); !reflect.DeepEqual(got, tc.want) || external != tc.external {
+				t.Fatalf("mount=%+v external=%v want=%+v %v", got, external, tc.want, tc.external)
 			}
 		})
 	}
@@ -240,15 +243,29 @@ func TestComposeMetadataLabelAffectsConfigHash(t *testing.T) {
 	}
 }
 
-func TestComposeMetadataVolumeCollisionAndInvalidTargets(t *testing.T) {
-	proj := &types.Project{Services: types.Services{"app": {Image: "alpine", Volumes: []types.ServiceVolumeConfig{{Type: "volume", Source: "sample", Target: "/native"}}}}, Volumes: types.Volumes{"sample": {Name: "native-scoped"}, "dcb-metadata-sample": {Name: "other-native"}}}
-	dc := &spec.DevContainer{Service: "app", Mounts: []any{"type=volume,source=sample,target=/cache", "type=bind,source=/missing-target", map[string]any{"type": "volume", "source": "missing-target"}}}
+func TestComposeMetadataVolumeDeclarations(t *testing.T) {
+	proj := &types.Project{Name: "sample-project", Services: types.Services{"app": {Image: "alpine", Volumes: []types.ServiceVolumeConfig{{Type: "volume", Source: "native", Target: "/native"}}}}, Volumes: types.Volumes{"native": {Name: "native-scoped"}}}
+	dc := &spec.DevContainer{Service: "app", Mounts: []any{
+		"type=volume,source=native,target=/reuse",
+		"type=volume,source=scoped,target=/scoped",
+		map[string]any{"type": "volume", "source": "shared", "target": "/shared", "external": true},
+		"type=bind,source=/missing-target",
+		map[string]any{"type": "volume", "source": "missing-target"},
+	}}
 	applyPrimaryMetadata(proj, dc, UpRequest{}, substitute.Context{})
-	svc := proj.Services["app"]
-	if len(svc.Volumes) != 2 || svc.Volumes[0].Source != "sample" || svc.Volumes[1].Source != "dcb-metadata-sample-" {
-		t.Fatalf("volumes=%+v", svc.Volumes)
+	var sources []string
+	for _, vol := range proj.Services["app"].Volumes {
+		sources = append(sources, vol.Source)
 	}
-	if proj.Volumes["sample"].Name != "native-scoped" || proj.Volumes["dcb-metadata-sample"].Name != "other-native" || proj.Volumes["dcb-metadata-sample-"].Name != "sample" || !proj.Volumes["dcb-metadata-sample-"].External {
+	if !reflect.DeepEqual(sources, []string{"native", "native", "scoped", "shared"}) {
+		t.Fatalf("service volume sources=%v", sources)
+	}
+	want := types.Volumes{
+		"native": {Name: "native-scoped"},
+		"scoped": {Name: "sample-project_scoped"},
+		"shared": {Name: "shared", External: true},
+	}
+	if !reflect.DeepEqual(proj.Volumes, want) {
 		t.Fatalf("declarations=%+v", proj.Volumes)
 	}
 }

@@ -85,7 +85,7 @@ func applyPrimaryMetadata(proj *types.Project, dc *spec.DevContainer, req UpRequ
 		svc.Environment[key] = &value
 	}
 	for _, raw := range dc.Mounts {
-		vol := metadataVolume(raw)
+		vol, external := metadataVolume(raw)
 		if vol.Target == "" {
 			continue
 		}
@@ -93,32 +93,22 @@ func applyPrimaryMetadata(proj *types.Project, dc *spec.DevContainer, req UpRequ
 		svc.Volumes = slices.DeleteFunc(svc.Volumes, func(v types.ServiceVolumeConfig) bool { return v.Target == vol.Target })
 		svc.Volumes = append(svc.Volumes, vol)
 		if vol.Type == types.VolumeTypeVolume && vol.Source != "" {
-			source := vol.Source
-			// Metadata volume sources are literal Engine names, as in upstream's
-			// external top-level declarations, rather than Compose project names.
+			// As in upstream's override file, the source is a project volume
+			// (<project>_<source>, removed by down) unless marked external. A
+			// native declaration of the same key is used as is.
 			if proj.Volumes == nil {
 				proj.Volumes = types.Volumes{}
 			}
-			if _, exists := proj.Volumes[vol.Source]; exists {
-				vol.Source = metadataVolumeKey(proj, vol.Source)
-				svc.Volumes[len(svc.Volumes)-1] = vol
+			if _, exists := proj.Volumes[vol.Source]; !exists {
+				declaration := types.VolumeConfig{Name: proj.Name + "_" + vol.Source}
+				if external {
+					declaration = types.VolumeConfig{Name: vol.Source, External: true}
+				}
+				proj.Volumes[vol.Source] = declaration
 			}
-			proj.Volumes[vol.Source] = types.VolumeConfig{Name: source, External: true}
 		}
 	}
 	proj.Services[dc.Service] = svc
-}
-
-// metadataVolumeKey avoids changing native volumes when their Compose key is
-// also used as a literal metadata volume source.
-func metadataVolumeKey(proj *types.Project, source string) string {
-	key := "dcb-metadata-" + source
-	for {
-		if _, exists := proj.Volumes[key]; !exists {
-			return key
-		}
-		key += "-"
-	}
 }
 
 func appendUnique(dst, src []string) []string {
@@ -130,9 +120,10 @@ func appendUnique(dst, src []string) []string {
 	return dst
 }
 
-// metadataVolume accepts the devcontainer string and object forms. Unknown
-// fields follow the Docker host's permissive mount parsing.
-func metadataVolume(raw any) types.ServiceVolumeConfig {
+// metadataVolume accepts the devcontainer string and object forms and reports
+// whether the mount is marked external. Unknown fields follow the Docker
+// host's permissive mount parsing.
+func metadataVolume(raw any) (types.ServiceVolumeConfig, bool) {
 	fields := map[string]any{}
 	switch value := raw.(type) {
 	case string:
@@ -144,6 +135,7 @@ func metadataVolume(raw any) types.ServiceVolumeConfig {
 		fields = value
 	}
 	vol := types.ServiceVolumeConfig{Type: types.VolumeTypeBind}
+	external := false
 	for key, raw := range fields {
 		value, _ := raw.(string)
 		switch key {
@@ -163,9 +155,12 @@ func metadataVolume(raw any) types.ServiceVolumeConfig {
 			} else {
 				vol.ReadOnly = value == "" || value == "true" || value == "1"
 			}
+		case "external":
+			flag, _ := raw.(bool)
+			external = flag || value == "true"
 		}
 	}
-	return vol
+	return vol, external
 }
 
 func runtimePlan(req UpRequest, entries []metadata.Entry, ctx substitute.Context, containerEnv map[string]string) []lifecycle.Phase {

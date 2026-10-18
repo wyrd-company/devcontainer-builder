@@ -40,7 +40,7 @@ func TestMetadataPrebuiltComposeIntegration(t *testing.T) {
 	t.Setenv("SAMPLE_VALUE", "local-value")
 	truth, falsity := true, false
 	entries := []metadata.Entry{
-		{ID: "./sample", Init: &truth, Privileged: &truth, CapAdd: []string{"SYS_PTRACE"}, SecurityOpt: []string{"no-new-privileges"}, Mounts: []any{map[string]any{"type": "bind", "source": "${localWorkspaceFolder}", "target": "/sample-source", "readOnly": true}}, ContainerUser: "nobody", RemoteUser: "root", OverrideCommand: &falsity, ContainerEnv: map[string]any{"IMAGE": "image", "VALUE": "${localEnv:SAMPLE_VALUE}"}, RemoteEnv: map[string]any{"HOOK_VALUE": "${containerEnv:VALUE}"}, Entrypoint: "echo feature > /tmp/sample-entrypoint", PostCreate: spec.Command{Shell: "printf 'feature:%s:%s:%s\\n' \"$HOOK_VALUE\" \"$(id -u)\" \"$UPDATED\" >> /tmp/sample-hooks"}, PostAttach: spec.Command{Shell: "echo feature-attach >> /tmp/sample-attach"}},
+		{ID: "./sample", Init: &truth, Privileged: &truth, CapAdd: []string{"SYS_PTRACE"}, SecurityOpt: []string{"no-new-privileges"}, Mounts: []any{map[string]any{"type": "bind", "source": "${localWorkspaceFolder}", "target": "/sample-source", "readOnly": true}, "type=volume,source=sample-cache,target=/sample-cache"}, ContainerUser: "nobody", RemoteUser: "root", OverrideCommand: &falsity, ContainerEnv: map[string]any{"IMAGE": "image", "VALUE": "${localEnv:SAMPLE_VALUE}"}, RemoteEnv: map[string]any{"HOOK_VALUE": "${containerEnv:VALUE}"}, Entrypoint: "echo feature > /tmp/sample-entrypoint", PostCreate: spec.Command{Shell: "printf 'feature:%s:%s:%s\\n' \"$HOOK_VALUE\" \"$(id -u)\" \"$UPDATED\" >> /tmp/sample-hooks"}, PostAttach: spec.Command{Shell: "echo feature-attach >> /tmp/sample-attach"}},
 		{PostCreate: spec.Command{Shell: "echo image-config >> /tmp/sample-hooks"}},
 	}
 	tag := metadataImage(t, ctx, cli, entries)
@@ -85,6 +85,20 @@ func TestMetadataPrebuiltComposeIntegration(t *testing.T) {
 	}
 	if !mounted {
 		t.Fatalf("metadata mount missing: %+v", inspect.Mounts)
+	}
+	// Metadata volumes are project volumes, as in upstream's override file.
+	project := cfg.Labels[dockercompose.LabelProject]
+	volumeName := ""
+	for _, m := range inspect.Mounts {
+		if m.Destination == "/sample-cache" {
+			volumeName = m.Name
+		}
+	}
+	if volumeName != project+"_sample-cache" {
+		t.Fatalf("metadata volume=%q, want %s_sample-cache", volumeName, project)
+	}
+	if vol, err := cli.VolumeInspect(ctx, volumeName); err != nil || vol.Labels[dockercompose.LabelProject] != project {
+		t.Fatalf("metadata volume labels=%v (%v)", vol.Labels, err)
 	}
 	raw := cfg.Labels[metadata.Label]
 	stored, err := metadata.Parse(raw)
