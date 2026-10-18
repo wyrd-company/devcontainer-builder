@@ -42,7 +42,7 @@ func TestDockerComposeCLI(t *testing.T) {
 		t.Fatal(err)
 	}
 	projectName := "sample-" + strings.TrimPrefix(filepath.Base(workspace), ".tmp-")
-	if err := os.WriteFile(filepath.Join(filepath.Dir(config), "compose.yml"), []byte("name: "+projectName+"\nservices:\n  app:\n    image: alpine:3.20\n    command: [sleep, infinity]\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(filepath.Dir(config), "compose.yml"), []byte("name: "+projectName+"\nservices:\n  app:\n    image: alpine:3.20\n    volumes: [\"..:/workspace\"]\n    command: [sleep, infinity]\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	bin := hostBuildBinary(t)
@@ -182,7 +182,7 @@ func TestDockerLifecycleCLI(t *testing.T) {
 }
 
 // Without workspaceFolder, upstream reports "/" and runs lifecycle commands
-// there; dcb still mounts the workspace at /workspaces/<basename>.
+// there; the Compose file owns mounts and no automatic bind is added.
 func TestDockerComposeCLIDefaultWorkspaceFolder(t *testing.T) {
 	cli := hostRequireDocker(t, context.Background())
 	t.Cleanup(func() { _ = cli.Close() })
@@ -215,12 +215,12 @@ func TestDockerComposeCLIDefaultWorkspaceFolder(t *testing.T) {
 	for _, m := range info.Mounts {
 		modes[m.Destination] = m.Mode
 	}
-	if modes["/created"] != "rw" || modes["/workspaces/"+filepath.Base(workspace)] != "rw" {
+	if len(modes) != 1 || modes["/created"] != "rw" {
 		t.Fatalf("bind modes = %v", modes)
 	}
-	out := hostRunCommand(t, os.Environ(), bin, "exec", "--workspace-folder", workspace, "--", "sh", "-c", "cat /tmp/lifecycle-dir; pwd; test -d /workspaces/"+filepath.Base(workspace)+"/.devcontainer && echo mounted")
-	if string(out) != "/\n/\nmounted\n" {
-		t.Fatalf("lifecycle dir, exec dir, workspace mount = %q", out)
+	out := hostRunCommand(t, os.Environ(), bin, "exec", "--workspace-folder", workspace, "--", "sh", "-c", "cat /tmp/lifecycle-dir; pwd")
+	if string(out) != "/\n/\n" {
+		t.Fatalf("lifecycle and exec dir = %q", out)
 	}
 }
 
@@ -236,7 +236,7 @@ func TestDockerComposeCLIRemoteEnvScope(t *testing.T) {
 	if err := os.WriteFile(config, []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(filepath.Dir(config), "compose.yml"), []byte("services:\n  app:\n    image: alpine:3.20\n    command: [sleep, infinity]\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(filepath.Dir(config), "compose.yml"), []byte("services:\n  app:\n    image: alpine:3.20\n    volumes: [\"..:/workspace\"]\n    command: [sleep, infinity]\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	bin := hostBuildBinary(t)
