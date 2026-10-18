@@ -67,37 +67,39 @@ func assertOrder(t *testing.T, got []string, want ...string) {
 	}
 }
 
+// The dependency sorts after its dependent by id, so only the edge can
+// put it first.
 func TestInstallOrder_UntaggedInstallsAfterMatchesTaggedFeature(t *testing.T) {
 	got := mustOrder(t, []*node{
-		ociNode(t, "beta:2", testRegistry+"/alpha"),
-		ociNode(t, "alpha:1"),
+		ociNode(t, "alpha:2", testRegistry+"/beta"),
+		ociNode(t, "beta:1"),
 	})
-	assertOrder(t, got, "alpha", "beta")
+	assertOrder(t, got, "beta", "alpha")
 }
 
 func TestInstallOrder_InstallsAfterIgnoresTagAndDigest(t *testing.T) {
 	for _, after := range []string{
-		testRegistry + "/alpha:9",
-		testRegistry + "/alpha@sha256:0000000000000000000000000000000000000000000000000000000000000000",
+		testRegistry + "/beta:9",
+		testRegistry + "/beta@sha256:0000000000000000000000000000000000000000000000000000000000000000",
 	} {
 		t.Run(after, func(t *testing.T) {
 			got := mustOrder(t, []*node{
-				ociNode(t, "beta:2", after),
-				ociNode(t, "alpha:1"),
+				ociNode(t, "alpha:2", after),
+				ociNode(t, "beta:1"),
 			})
-			assertOrder(t, got, "alpha", "beta")
+			assertOrder(t, got, "beta", "alpha")
 		})
 	}
 }
 
 func TestInstallOrder_InstallsAfterHonorsLegacyIDs(t *testing.T) {
-	alpha := ociNode(t, "alpha:1")
-	alpha.res.Metadata.LegacyIDs = []string{"old-alpha"}
+	beta := ociNode(t, "beta:1")
+	beta.res.Metadata.LegacyIDs = []string{"old-beta"}
 	got := mustOrder(t, []*node{
-		ociNode(t, "beta:2", testRegistry+"/old-alpha"),
-		alpha,
+		ociNode(t, "alpha:2", testRegistry+"/old-beta"),
+		beta,
 	})
-	assertOrder(t, got, "alpha", "beta")
+	assertOrder(t, got, "beta", "alpha")
 }
 
 func TestInstallOrder_InstallsAfterOtherRegistryDoesNotMatch(t *testing.T) {
@@ -146,10 +148,10 @@ func TestInstallOrder_OverrideSetsPriority(t *testing.T) {
 
 func TestInstallOrder_OverrideDoesNotBreakInstallsAfter(t *testing.T) {
 	got := mustOrder(t, []*node{
-		ociNode(t, "alpha:1"),
-		ociNode(t, "gamma:1", testRegistry+"/alpha"),
-	}, testRegistry+"/gamma")
-	assertOrder(t, got, "alpha", "gamma")
+		ociNode(t, "alpha:1", testRegistry+"/gamma"),
+		ociNode(t, "gamma:1"),
+	}, testRegistry+"/alpha")
+	assertOrder(t, got, "gamma", "alpha")
 }
 
 func TestInstallOrder_OverrideUnparseableIsError(t *testing.T) {
@@ -171,10 +173,10 @@ func TestInstallOrder_InstallsAfterCycleIsError(t *testing.T) {
 
 func TestInstallOrder_LocalInstallsAfterResolvesRelativeToBaseDir(t *testing.T) {
 	got := mustOrder(t, []*node{
-		localNode("/base/beta", "beta", "./alpha"),
-		localNode("/base/alpha", "alpha"),
+		localNode("/base/alpha", "alpha", "./beta"),
+		localNode("/base/beta", "beta"),
 	})
-	assertOrder(t, got, "alpha", "beta")
+	assertOrder(t, got, "beta", "alpha")
 }
 
 func TestInstallOrder_SameResourceSortsByTag(t *testing.T) {

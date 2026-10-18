@@ -35,6 +35,7 @@ func TestBuildOnePlatform_FeaturesSeeBaseImageUser(t *testing.T) {
 		in := featureGraphInputs(testFeature)
 		in.Spec.RemoteUser = ""
 		in.ResolveImageConfig = true
+		in.ImageUser = "" // the base config must supply it
 		bs := BuildSpec{Graph: in}
 		if upstream {
 			bs.Upstream = &DockerfileBuild{ContextDir: "."}
