@@ -1,3 +1,6 @@
+// relationships:
+//   references: [builder, generator, metadata]
+
 package builder
 
 import (
@@ -80,8 +83,13 @@ func (b *Builder) Generate(ctx context.Context, opts Options) (*Result, error) {
 	if sr != nil {
 		serverCtx = relPath(ctxDir, sr.TarballPath)
 	}
+	baseMetadata, err := b.BaseMetadata(ctx, dc, opts)
+	if err != nil {
+		return nil, err
+	}
 	df, err := dockerfile.Generate(dockerfile.Inputs{
 		Spec:                    dc,
+		BaseMetadata:            baseMetadata,
 		BaseImage:               baseImage,
 		Features:                resolved,
 		FeaturesContextDir:      "_features",

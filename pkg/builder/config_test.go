@@ -28,7 +28,7 @@ func TestBuildAndGenerateUseConfigurationSnapshot(t *testing.T) {
 	if err := os.WriteFile(config, []byte(`{"image":"busybox:latest"}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	opts := Options{Spec: snapshot, SpecPath: config, Workspace: filepath.Dir(config), WorkDir: t.TempDir()}
+	opts := Options{Docker: metadataEngine(t, nil), Spec: snapshot, SpecPath: config, Workspace: filepath.Dir(config), WorkDir: t.TempDir()}
 	result, err := New().Generate(context.Background(), opts)
 	if err != nil {
 		t.Fatal(err)

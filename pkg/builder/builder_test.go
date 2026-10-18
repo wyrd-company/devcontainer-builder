@@ -1,3 +1,6 @@
+// relationships:
+//   references: [builder, metadata]
+
 package builder
 
 import (
@@ -67,6 +70,7 @@ func TestVSCodeServerIsOptIn(t *testing.T) {
 			b.Downloader.HTTP = &http.Client{Transport: rt}
 			_, err := run(b, Options{
 				SpecPath:            specPath,
+				Docker:              metadataEngine(t, nil),
 				WorkDir:             t.TempDir(),
 				InstallVSCodeServer: install,
 			})

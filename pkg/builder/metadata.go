@@ -41,9 +41,12 @@ func (b *Builder) BaseMetadata(ctx context.Context, dc *spec.DevContainer, opts 
 					}
 					return cfg, nil
 				}
-			} else if !dockerclient.IsErrNotFound(err) {
+			} else if !dockerclient.IsErrNotFound(err) && !dockerclient.IsErrConnectionFailed(err) {
 				return nil, err
 			}
+		}
+		if opts.SkipImageMetaResolve {
+			return &oci.ImageConfig{}, nil
 		}
 		parsed, err := oci.ParseReference(ref)
 		if err != nil {

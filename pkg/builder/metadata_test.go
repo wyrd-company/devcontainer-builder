@@ -7,8 +7,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -108,12 +110,19 @@ func TestBaseMetadataRegistryFallbackAndPlatform(t *testing.T) {
 		_, _ = w.Write(body)
 	}))
 	defer registry.Close()
-	for _, mode := range []string{"registry-only", "missing-local", "wrong-local-platform", "inspect-error"} {
+	for _, mode := range []string{"registry-only", "missing-local", "wrong-local-platform", "inspect-error", "disconnected-engine"} {
 		t.Run(mode, func(t *testing.T) {
 			b := New()
 			b.Resolver.OCI.HTTP = registry.Client()
 			opts := Options{Platforms: []string{"linux/arm64"}}
-			if mode != "registry-only" {
+			if mode == "disconnected-engine" {
+				cli, err := dockerclient.NewClientWithOpts(dockerclient.WithHost("unix://"+filepath.Join(t.TempDir(), "missing.sock")), dockerclient.WithVersion("1.47"))
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer cli.Close()
+				opts.Docker = cli
+			} else if mode != "registry-only" {
 				daemon := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					if mode == "missing-local" {
 						http.Error(w, `{"message":"not found"}`, http.StatusNotFound)
@@ -164,5 +173,86 @@ func TestBaseMetadataRejectsInvalidDockerfile(t *testing.T) {
 	}
 	if _, err := offlineMetadataBuilder().BaseMetadata(context.Background(), nil, Options{}); err == nil {
 		t.Fatal("nil config accepted")
+	}
+}
+
+func metadataEngine(t *testing.T, entries []metadata.Entry) *dockerclient.Client {
+	t.Helper()
+	value, err := metadata.Encode(entries)
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.Contains(r.URL.Path, "/images/") || !strings.HasSuffix(r.URL.Path, "/json") {
+			t.Errorf("unexpected image configuration request %s", r.URL.Path)
+			http.Error(w, "unexpected", 500)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"Id": "sha256:sample", "Config": map[string]any{"User": "root", "Labels": map[string]string{metadata.Label: value}}})
+	}))
+	t.Cleanup(srv.Close)
+	cli, err := dockerclient.NewClientWithOpts(dockerclient.WithHost("tcp://"+strings.TrimPrefix(srv.URL, "http://")), dockerclient.WithVersion("1.47"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = cli.Close() })
+	return cli
+}
+
+func TestGeneratedDockerfilesRetainBaseMetadata(t *testing.T) {
+	for _, entrypoint := range []string{"Generate", "prepareBuildContext", "Generate-local-offline", "prepareBuildContext-local-offline"} {
+		t.Run(entrypoint, func(t *testing.T) {
+			base := []metadata.Entry{{ID: "base", RemoteUser: "root", CapAdd: []string{"SYS_PTRACE"}, PostCreate: spec.Command{Shell: "echo base"}}}
+			dc := &spec.DevContainer{Image: "alpine:3.20", PostCreate: spec.Command{Shell: "echo config"}}
+			opts := Options{Spec: dc, WorkDir: t.TempDir(), Docker: metadataEngine(t, base), SkipImageMetaResolve: strings.HasSuffix(entrypoint, "-local-offline")}
+			var path string
+			if strings.HasPrefix(entrypoint, "Generate") {
+				res, err := offlineMetadataBuilder().Generate(context.Background(), opts)
+				if err != nil {
+					t.Fatal(err)
+				}
+				path = res.FinalDockerfile
+			} else {
+				_, _, _, _, _, _, _, resultPath, _, err := offlineMetadataBuilder().prepareBuildContext(context.Background(), opts, func(string, ...any) {})
+				if err != nil {
+					t.Fatal(err)
+				}
+				path = resultPath
+			}
+			body, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			label, err := metadata.DockerfileLabel(metadata.Collect(base, nil, dc))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(string(body), label) {
+				t.Fatalf("generated label dropped inherited metadata: %s", body)
+			}
+		})
+	}
+}
+
+func TestGeneratorCallersPropagateMetadataErrors(t *testing.T) {
+	for _, generate := range []bool{true, false} {
+		t.Run(fmt.Sprint(generate), func(t *testing.T) {
+			cli, err := dockerclient.NewClientWithOpts(dockerclient.WithHost("tcp://127.0.0.1:1"), dockerclient.WithVersion("1.47"), dockerclient.WithHTTPClient(&http.Client{Transport: metadataTestTransport(func(r *http.Request) (*http.Response, error) {
+				return &http.Response{StatusCode: 500, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(`{"message":"sample unavailable"}`))}, nil
+			})}))
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer cli.Close()
+			opts := Options{Spec: &spec.DevContainer{Image: "alpine:3.20"}, WorkDir: t.TempDir(), Docker: cli}
+			if generate {
+				_, err = offlineMetadataBuilder().Generate(context.Background(), opts)
+			} else {
+				_, _, _, _, _, _, _, _, _, err = offlineMetadataBuilder().prepareBuildContext(context.Background(), opts, func(string, ...any) {})
+			}
+			if err == nil || !strings.Contains(err.Error(), "sample unavailable") {
+				t.Fatalf("metadata lookup error lost: %v", err)
+			}
+		})
 	}
 }

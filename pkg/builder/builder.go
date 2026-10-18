@@ -1,3 +1,6 @@
+// relationships:
+//   references: [generate, metadata, buildkit]
+
 // Package builder is the top-level orchestrator. It loads a
 // devcontainer.json, resolves devcontainer features, downloads the VS
 // Code server when asked, and builds the image with BuildKit: an
@@ -85,7 +88,8 @@ type Options struct {
 	// Off by default: editors that attach install their own server.
 	InstallVSCodeServer bool
 	// SkipImageMetaResolve disables the registry roundtrip that
-	// inherits ENV/USER/WORKDIR from the base image.
+	// inherits ENV/USER/WORKDIR and metadata from the base image.
+	// A locally supplied Docker image is still inspected for metadata labels.
 	SkipImageMetaResolve bool
 
 	// VSCode controls server resolution. Zero value = stable, current
@@ -245,8 +249,14 @@ func (b *Builder) prepareBuildContext(ctx context.Context, opts Options, logf fu
 	if wrapperBase == "" && upstream != nil {
 		wrapperBase = "<upstream-dockerfile>"
 	}
+	baseMetadata, metadataErr := b.BaseMetadata(ctx, dc, opts)
+	if metadataErr != nil {
+		err = metadataErr
+		return
+	}
 	df, err = dockerfile.Generate(dockerfile.Inputs{
 		Spec:                    dc,
+		BaseMetadata:            baseMetadata,
 		BaseImage:               wrapperBase,
 		Features:                resolved,
 		FeaturesContextDir:      "_features",

@@ -62,6 +62,22 @@ func TestMetadataPrebuiltIntegration(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
+			if mode == "generated-dockerfile" {
+				baseTag := fmt.Sprintf("dcb-metadata-base:%d", time.Now().UnixNano())
+				t.Cleanup(func() { _, _ = cli.ImageRemove(context.Background(), baseTag, imagetypes.RemoveOptions{Force: true}) })
+				baseDir := t.TempDir()
+				label, err := metadata.DockerfileLabel([]metadata.Entry{{ID: "base", PostCreate: spec.Command{Shell: "printf 'base\\n' >> /tmp/sample-hooks"}}})
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(filepath.Join(baseDir, "Dockerfile"), []byte("FROM alpine:3.20\n"+label+"\n"), 0644); err != nil {
+					t.Fatal(err)
+				}
+				if _, err := buildkit.SolveDockerfile(ctx, buildkit.DockerfileBuild{ContextDir: baseDir, DockerfileDir: baseDir, Filename: "Dockerfile"}, buildkit.SolveOptions{Docker: cli, Tags: []string{baseTag}, Load: true, Progress: "plain", Stderr: testLogWriter{t}}); err != nil {
+					t.Fatal(err)
+				}
+				dc["image"] = baseTag
+			}
 			raw, err := json.Marshal(dc)
 			if err != nil {
 				t.Fatal(err)
@@ -106,7 +122,7 @@ func TestMetadataPrebuiltIntegration(t *testing.T) {
 				t.Fatal(err)
 			}
 			wantEntries := 2
-			if mode == "upstream-dockerfile" {
+			if mode != "image" {
 				wantEntries = 3
 			}
 			if len(entries) != wantEntries {
@@ -169,7 +185,7 @@ func TestMetadataPrebuiltIntegration(t *testing.T) {
 						return string(out.Stdout)
 					}
 					wantHooks := "feature\nconfig\n"
-					if mode == "upstream-dockerfile" {
+					if mode != "image" {
 						wantHooks = "base\n" + wantHooks
 					}
 					if hooks := execute("cat /tmp/sample-hooks"); hooks != wantHooks {

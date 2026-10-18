@@ -1,3 +1,6 @@
+// relationships:
+//   references: [imageuser, metadata]
+
 package builder
 
 import (
@@ -166,15 +169,15 @@ func TestGenerate_FeaturesSeeDockerfileUser(t *testing.T) {
 	})
 	df, _ := generate(t, reg.builder(), ws)
 	wantBuiltinUser(t, df, "arg-user")
-	if n := reg.count(); n != 0 {
-		t.Fatalf("registry requests = %d, want none when the Dockerfile sets USER", n)
+	if n := reg.count(); n != 2 {
+		t.Fatalf("registry requests = %d, want only the inherited label manifest/config read", n)
 	}
 }
 
 func TestGenerate_BaseUserLookupFailureFallsBackToRoot(t *testing.T) {
 	reg := newImageRegistry(t, "library/base", "1", "image-user")
 	ws := writeWorkspace(t, `"image":"`+reg.host()+`/library/missing:1"`, nil)
-	df, logs := generate(t, reg.builder(), ws)
+	df, logs := generate(t, reg.builder(), ws, func(o *Options) { o.Docker = metadataEngine(t, nil) })
 	wantBuiltinUser(t, df, "root")
 	if !strings.Contains(strings.Join(logs, "\n"), "base image user unknown") {
 		t.Fatalf("missing warning in logs: %v", logs)
@@ -222,8 +225,8 @@ func TestGenerate_NoBaseUserLookupWithoutFeatures(t *testing.T) {
 	reg := newImageRegistry(t, "library/base", "1", "image-user")
 	ws := writeWorkspace(t, `"image":"`+reg.host()+`/library/base:1"`, nil)
 	generate(t, reg.builder(), ws, func(o *Options) { o.SkipFeatures = true })
-	if n := reg.count(); n != 0 {
-		t.Fatalf("registry requests = %d, want none without features", n)
+	if n := reg.count(); n != 2 {
+		t.Fatalf("registry requests = %d, want only the inherited label manifest/config read without features", n)
 	}
 }
 

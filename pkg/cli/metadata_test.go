@@ -219,3 +219,40 @@ func TestComposeCapturedContainerMetadataKeepsUpstreamPolicy(t *testing.T) {
 		t.Fatalf("captured container hooks changed: %+v", plan)
 	}
 }
+
+func TestGenerateIncludesLocalImageMetadata(t *testing.T) {
+	workspace := t.TempDir()
+	if err := os.WriteFile(filepath.Join(workspace, ".devcontainer.json"), []byte(`{"image":"alpine:3.20","postCreateCommand":"echo config"}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	entries := []metadata.Entry{{ID: "base", RemoteUser: "root", PostCreate: spec.Command{Shell: "echo base"}}}
+	label, err := metadata.Encode(entries)
+	if err != nil {
+		t.Fatal(err)
+	}
+	inspected := false
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.Contains(r.URL.Path, "/images/alpine:3.20/json") {
+			t.Errorf("unexpected request %s", r.URL.Path)
+			http.Error(w, "unexpected", 500)
+			return
+		}
+		inspected = true
+		_ = json.NewEncoder(w).Encode(map[string]any{"Config": map[string]any{"Labels": map[string]string{metadata.Label: label}}})
+	}))
+	defer srv.Close()
+	t.Setenv("DOCKER_HOST", "tcp://"+strings.TrimPrefix(srv.URL, "http://"))
+	t.Setenv("DOCKER_API_VERSION", "1.47")
+	result, _ := invoke(t, 0, "generate", "--workspace-folder", workspace, "--work-dir", t.TempDir())
+	body, err := os.ReadFile(result["dockerfile"].(string))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, err := metadata.DockerfileLabel(metadata.Collect(entries, nil, &spec.DevContainer{PostCreate: spec.Command{Shell: "echo config"}}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !inspected || !strings.Contains(string(body), want) {
+		t.Fatalf("CLI generator omitted inherited label: inspected=%v dockerfile=%s", inspected, body)
+	}
+}
