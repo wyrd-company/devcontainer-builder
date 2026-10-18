@@ -34,12 +34,14 @@ func TestGenerate_BareImage(t *testing.T) {
 	got := string(out)
 	for _, want := range []string{
 		"FROM ubuntu:22.04",
-		"WORKDIR /workspaces/demo",
 		"USER vscode",
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("missing %q in:\n%s", want, got)
 		}
+	}
+	if strings.Contains(got, "WORKDIR") {
+		t.Errorf("workspaceFolder became WORKDIR in:\n%s", got)
 	}
 }
 

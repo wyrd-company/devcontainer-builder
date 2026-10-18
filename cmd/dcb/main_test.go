@@ -34,7 +34,6 @@ func TestCLI_GenerateSmokeFixtures(t *testing.T) {
 			wantDocker: []string{
 				"FROM alpine:3.20",
 				"ENV DCB_SMOKE=image",
-				"WORKDIR /workspaces/smoke-image",
 			},
 		},
 		{
@@ -43,7 +42,6 @@ func TestCLI_GenerateSmokeFixtures(t *testing.T) {
 			wantDocker: []string{
 				"FROM <unresolved-base-build-required>",
 				"ENV DCB_SMOKE=dockerfile",
-				"WORKDIR /workspaces/smoke-dockerfile",
 			},
 		},
 		{
@@ -88,6 +86,9 @@ func TestCLI_GenerateSmokeFixtures(t *testing.T) {
 				if !strings.Contains(string(got), want) {
 					t.Errorf("generated Dockerfile missing %q:\n%s", want, got)
 				}
+			}
+			if strings.Contains(string(got), "WORKDIR") {
+				t.Errorf("generated Dockerfile replaces the base WORKDIR:\n%s", got)
 			}
 			for _, rel := range tc.wantContext {
 				matches, err := filepath.Glob(filepath.Join(workDir, "context", rel))

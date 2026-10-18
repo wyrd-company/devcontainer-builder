@@ -18,7 +18,8 @@
 //     runs install.sh (as upstream devcontainers/cli does).
 //  4. COPY the VS Code server tarball into the canonical
 //     ~/.vscode-server/bin/<commit>/ location and unpack it.
-//  5. Set ENV / USER / WORKDIR according to the spec.
+//  5. Set ENV / USER according to the spec. Like upstream, the base
+//     image's WORKDIR is kept.
 //
 // The generator does not run the build itself; it only emits the
 // Dockerfile bytes plus a list of files that must be present in the build
@@ -105,10 +106,6 @@ func Generate(in Inputs) ([]byte, error) {
 
 	if in.VSCodeServer != nil {
 		emitVSCodeServer(&b, *in.VSCodeServer, in.VSCodeServerContextPath, user)
-	}
-
-	if in.Spec.WorkspaceFolder != "" {
-		fmt.Fprintf(&b, "WORKDIR %s\n", shellQuote(in.Spec.WorkspaceFolder))
 	}
 
 	if user != "" && user != "root" {
