@@ -256,3 +256,19 @@ func TestGenerateIncludesLocalImageMetadata(t *testing.T) {
 		t.Fatalf("CLI generator omitted inherited label: inspected=%v dockerfile=%s", inspected, body)
 	}
 }
+
+// generateImageFixture keeps CLI generation tests independent of the host daemon.
+func generateImageFixture(t *testing.T) {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.Contains(r.URL.Path, "/images/") || !strings.HasSuffix(r.URL.Path, "/json") {
+			t.Errorf("unexpected configuration request %s", r.URL.Path)
+			http.Error(w, "unexpected", 500)
+			return
+		}
+		_, _ = w.Write([]byte(`{"Config":{"User":"root","Labels":{}}}`))
+	}))
+	t.Cleanup(srv.Close)
+	t.Setenv("DOCKER_HOST", "tcp://"+strings.TrimPrefix(srv.URL, "http://"))
+	t.Setenv("DOCKER_API_VERSION", "1.47")
+}

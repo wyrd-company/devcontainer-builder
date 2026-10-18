@@ -193,6 +193,8 @@ func TestCuratedCLIFixtureGeneratesWrapperDockerfile(t *testing.T) {
 		Workspace:    workspace,
 		WorkDir:      t.TempDir(),
 		SkipFeatures: true,
+		// Inspect an unresolved wrapper without registry access.
+		SkipImageMetaResolve: true,
 	})
 	if err != nil {
 		t.Fatalf("Generate: %v", err)

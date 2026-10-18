@@ -188,6 +188,7 @@ func TestJSONDiagnosticStream(t *testing.T) {
 }
 
 func TestGenerateAndJSONLogs(t *testing.T) {
+	generateImageFixture(t)
 	workspace := t.TempDir()
 	if err := os.WriteFile(filepath.Join(workspace, ".devcontainer.json"), []byte(`{"image":"alpine:3.20"}`), 0o644); err != nil {
 		t.Fatal(err)
