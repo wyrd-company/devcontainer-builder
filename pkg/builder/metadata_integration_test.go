@@ -46,15 +46,15 @@ func TestMetadataPrebuiltIntegration(t *testing.T) {
 				t.Fatal(err)
 			}
 			files := map[string]string{
-				filepath.Join(feature, "devcontainer-feature.json"): `{"id":"sample","version":"1.0.0","capAdd":["SYS_PTRACE"],"init":true,"securityOpt":["no-new-privileges"],"mounts":[{"type":"volume","target":"/sample-cache"}],"containerEnv":{"FEATURE_ENV":"feature"},"customizations":{"editor":{"sample":true}},"entrypoint":"echo entrypoint > /tmp/sample-entrypoint","postCreateCommand":"printf 'feature\\n' >> /tmp/sample-hooks"}`,
-				filepath.Join(feature, "install.sh"):                "#!/bin/sh\nset -eu\necho installed > /tmp/sample-install\n",
+				filepath.Join(feature, "devcontainer-feature.json"): `{"id":"sample","version":"1.0.0","capAdd":["SYS_PTRACE"],"init":true,"securityOpt":["no-new-privileges"],"mounts":[{"type":"volume","target":"/sample-cache"}],"containerEnv":{"FEATURE_ENV":"feature"},"customizations":{"editor":{"sample":true}},"entrypoint":"echo entrypoint > /tmp/sample-entrypoint","postCreateCommand":"printf '%s\\n' '${localEnv:SAMPLE_FEATURE}' >> /tmp/sample-hooks"}`,
+				filepath.Join(feature, "install.sh"):                "#!/bin/sh\nset -eu\necho installed > /tmp/sample-install\nadduser -D sample-user\n",
 			}
 			for path, content := range files {
 				if err := os.WriteFile(path, []byte(content), 0755); err != nil {
 					t.Fatal(err)
 				}
 			}
-			dc := map[string]any{"image": "alpine:3.20", "features": map[string]any{"./feature": map[string]any{}}, "remoteUser": "root", "containerEnv": map[string]any{"CONFIG_ENV": "config"}, "postCreateCommand": []string{"/bin/sh", "-c", `printf '%s\n' "$CONFIG_ENV" >> /tmp/sample-hooks`}}
+			dc := map[string]any{"image": "alpine:3.20", "features": map[string]any{"./feature": map[string]any{}}, "remoteUser": "sample-user", "containerUser": "root", "containerEnv": map[string]any{"CONFIG_ENV": "config"}, "postCreateCommand": []string{"/bin/sh", "-c", `printf '%s\n' "$CONFIG_ENV" >> /tmp/sample-hooks; id -un > /tmp/sample-remote-user`}}
 			if mode == "upstream-dockerfile" {
 				delete(dc, "image")
 				dc["build"] = map[string]any{"dockerfile": "Dockerfile", "context": "."}
@@ -118,6 +118,7 @@ func TestMetadataPrebuiltIntegration(t *testing.T) {
 			for _, fromCurrentSpec := range []bool{false, true} {
 				t.Run(fmt.Sprintf("built-current-spec-%t", fromCurrentSpec), func(t *testing.T) {
 					req := dockerhost.UpRequest{Spec: &spec.DevContainer{Image: tag, WorkspaceMount: "type=volume,target=/workspace", WorkspaceFolder: "/workspace"}, Image: tag, LocalWorkspace: workspace, SpecPath: specPath}
+					req.LocalEnv = map[string]string{"SAMPLE_FEATURE": "feature"}
 					req.LocalWorkspace = fmt.Sprintf("%s-%t", workspace, fromCurrentSpec)
 					if fromCurrentSpec {
 						loaded, err := spec.Load(specPath)
@@ -140,6 +141,9 @@ func TestMetadataPrebuiltIntegration(t *testing.T) {
 					inspect, err := cli.ContainerInspect(ctx, result.ContainerID)
 					if err != nil {
 						t.Fatal(err)
+					}
+					if inspect.Config.User != "root" {
+						t.Fatalf("containerUser=%q", inspect.Config.User)
 					}
 					caps := strings.Join(inspect.HostConfig.CapAdd, ",")
 					if !strings.Contains(caps, "SYS_PTRACE") || inspect.HostConfig.Init == nil || !*inspect.HostConfig.Init || !strings.Contains(strings.Join(inspect.HostConfig.SecurityOpt, ","), "no-new-privileges") {
@@ -172,6 +176,9 @@ func TestMetadataPrebuiltIntegration(t *testing.T) {
 					if got := execute("cat /tmp/sample-entrypoint; printf '%s %s' \"$FEATURE_ENV\" \"$CONFIG_ENV\""); got != "entrypoint\nfeature config" {
 						t.Fatalf("entrypoint/env=%q", got)
 					}
+					if got := execute("cat /tmp/sample-remote-user"); got != "sample-user\n" {
+						t.Fatalf("remoteUser=%q", got)
+					}
 					status := execute("cat /proc/self/status")
 					foundCapEff := false
 					for _, line := range strings.Split(status, "\n") {
@@ -187,12 +194,12 @@ func TestMetadataPrebuiltIntegration(t *testing.T) {
 						t.Fatal("CapEff missing from process status")
 					}
 					// Reuse reads the container label and does not append lifecycle hooks again.
-					req.Spec.PostAttach = spec.Command{Shell: "echo should-not-replace-persisted-hooks"}
+					req.Spec.PostAttach = spec.Command{Shell: "touch /tmp/sample-unexpected"}
 					reused, err := h.Up(ctx, req)
 					if err != nil {
 						t.Fatal(err)
 					}
-					if reused.CreatedThisCall || reused.ContainerID != result.ContainerID || execute("cat /tmp/sample-hooks") != wantHooks {
+					if reused.CreatedThisCall || reused.ContainerID != result.ContainerID || execute("cat /tmp/sample-hooks; test ! -e /tmp/sample-unexpected") != wantHooks {
 						t.Fatalf("reuse=%+v", reused)
 					}
 				})
