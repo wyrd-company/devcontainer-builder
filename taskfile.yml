@@ -65,9 +65,9 @@ tasks:
       - task: integration:kubernetes
   # The parity harness owns this task's implementation; keep additions here additive.
   parity:
-    desc: Upstream parity harness (provided by the parity task)
+    desc: Compare upstream and Go devcontainers on reference fixtures
     cmds:
-      - echo 'Parity harness is not installed yet.'
+      - go run ./test/parity {{.CLI_ARGS}}
   reference:init:
     desc: Initialize the pinned upstream reference submodules
     cmds:
