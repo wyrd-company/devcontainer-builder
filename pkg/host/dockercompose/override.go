@@ -1,3 +1,6 @@
+// relationships:
+//
+//	references: [up, configuration]
 package dockercompose
 
 import (
@@ -14,12 +17,6 @@ import (
 type OverrideInputs struct {
 	// Spec is the parsed devcontainer.json (must be compose mode).
 	Spec *spec.DevContainer
-	// LocalWorkspace is the absolute host path to bind-mount into the
-	// primary service's workspace folder.
-	LocalWorkspace string
-	// ContainerWorkspace is the in-container target for the workspace
-	// mount.
-	ContainerWorkspace string
 	// PrimaryImage, when non-empty, replaces the primary service's
 	// `image:` (used after a derived feature build).
 	PrimaryImage string
@@ -63,15 +60,6 @@ func OverrideYAML(in OverrideInputs) ([]byte, error) {
 	svc := map[string]any{}
 	if in.PrimaryImage != "" {
 		svc["image"] = in.PrimaryImage
-	}
-	if in.LocalWorkspace != "" && in.ContainerWorkspace != "" {
-		svc["volumes"] = []any{
-			map[string]any{
-				"type":   "bind",
-				"source": in.LocalWorkspace,
-				"target": in.ContainerWorkspace,
-			},
-		}
 	}
 	if len(in.RemoteEnv) > 0 {
 		svc["environment"] = stringMapToSortedSlice(in.RemoteEnv)

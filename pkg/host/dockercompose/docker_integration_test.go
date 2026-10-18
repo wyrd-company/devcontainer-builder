@@ -427,6 +427,9 @@ func writeComposeFixture(t *testing.T, workspace, primaryTag, helperTag, appVers
       - app-cache:/cache
       - type: bind
         source: %q
+        target: /workspace
+      - type: bind
+        source: %q
         target: /host-bind
     develop:
       watch:
@@ -470,7 +473,7 @@ func writeComposeFixture(t *testing.T, workspace, primaryTag, helperTag, appVers
 
 volumes:
   app-cache:
-`, primaryTag, appImage, appVersion, hostBind, watchSync, watchRestart, hostBind, hostBind, helperImage, helperTag)
+`, primaryTag, appImage, appVersion, workspace, hostBind, watchSync, watchRestart, hostBind, hostBind, helperImage, helperTag)
 	writeFile(t, filepath.Join(workspace, ".devcontainer", "docker-compose.yml"), body)
 }
 

@@ -1,11 +1,18 @@
+// relationships:
+//
+//	references: [configuration, up]
+
 // Package dockercompose brings a docker-compose-mode devcontainer up
 // against a docker-compatible daemon. The package owns the full
 // orchestration loop natively: it parses and merges compose files
 // through compose-spec/compose-go, generates an in-memory override
-// layer that injects the workspace mount and the feature-derived image
-// into the primary service, and creates
-// networks / volumes / containers via the docker engine API. There is
+// layer that injects the feature-derived image into the primary service,
+// and creates networks / volumes / containers via the docker engine API. There is
 // no shell-out to the `docker compose` CLI.
+//
+// The Compose file owns workspace mounts. Up adds no automatic workspace
+// bind; workspaceFolder selects the lifecycle working directory and defaults
+// to "/". A workspaceFolder of "/" does not add a mount at the root.
 //
 // The "primary service" is the one named in devcontainer.json's
 // `service` field: it's where lifecycle commands run and where Exec

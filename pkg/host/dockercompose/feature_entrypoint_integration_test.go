@@ -41,6 +41,7 @@ func TestDockerComposeFeatureEntrypointIntegration(t *testing.T) {
 	writeFile(t, filepath.Join(workspace, ".devcontainer", "docker-compose.yml"), `services:
   app:
     image: alpine:3.20
+    volumes: ["..:/workspace"]
     command: ["sh", "-c", "echo app-command > /tmp/app-command; while true; do sleep 1; done"]
 `)
 	writeFile(t, filepath.Join(workspace, ".devcontainer", "devcontainer.json"), `{

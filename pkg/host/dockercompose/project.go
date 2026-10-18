@@ -28,8 +28,8 @@ type LoadInputs struct {
 	LocalEnv map[string]string
 	// Override is an additional YAML layer appended to the merge chain.
 	// Optional: callers that don't need overrides can leave it nil.
-	// When the package builds an internal override (workspace mount,
-	// derived image, etc.) it appends it here.
+	// When the package builds an internal override (derived image,
+	// runtime labels, etc.) it appends it here.
 	Override []byte
 }
 

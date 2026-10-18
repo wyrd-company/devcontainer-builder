@@ -1,3 +1,6 @@
+// relationships:
+//
+//	references: [project, override]
 package dockercompose
 
 import (
@@ -35,12 +38,10 @@ func TestLoadProject_MergesAndAppliesOverride(t *testing.T) {
 	}
 
 	override, err := OverrideYAML(OverrideInputs{
-		Spec:               dc,
-		LocalWorkspace:     dir,
-		ContainerWorkspace: "/workspaces/proj",
-		PrimaryImage:       "registry/derived:tag",
-		RemoteEnv:          map[string]string{"FOO": "bar"},
-		OverrideCommand:    true,
+		Spec:            dc,
+		PrimaryImage:    "registry/derived:tag",
+		RemoteEnv:       map[string]string{"FOO": "bar"},
+		OverrideCommand: true,
 	})
 	if err != nil {
 		t.Fatalf("OverrideYAML: %v", err)
@@ -69,14 +70,8 @@ func TestLoadProject_MergesAndAppliesOverride(t *testing.T) {
 	if v, ok := app.Environment["FOO"]; !ok || v == nil || *v != "bar" {
 		t.Errorf("env FOO: got %v want bar", app.Environment["FOO"])
 	}
-	gotMount := false
-	for _, vol := range app.Volumes {
-		if vol.Type == "bind" && vol.Source == dir && vol.Target == "/workspaces/proj" {
-			gotMount = true
-		}
-	}
-	if !gotMount {
-		t.Errorf("workspace bind mount not present in primary service: %#v", app.Volumes)
+	if len(app.Volumes) != 0 {
+		t.Errorf("override added mounts: %#v", app.Volumes)
 	}
 	if len(app.Command) == 0 {
 		t.Errorf("override command not applied; got empty command")
