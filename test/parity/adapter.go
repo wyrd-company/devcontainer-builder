@@ -23,7 +23,7 @@ func (LegacyAdapter) Name() string {
 	return "dcb + devcontainer-docker (native BuildKit, no VS Code server)"
 }
 func (a LegacyAdapter) Up(ctx context.Context, r *Runner, workspace, tag string) ([]byte, error) {
-	_, err := r.command(ctx, a.Build, "build", "--workspace", workspace, "--skip-vscode-server", "--load", "--tag", tag, "--label", r.label())
+	_, err := r.command(ctx, a.Build, "build", "--workspace", workspace, "--load", "--tag", tag, "--label", r.label())
 	if err != nil {
 		return nil, fmt.Errorf("build: %w", err)
 	}

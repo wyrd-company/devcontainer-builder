@@ -346,8 +346,8 @@ func TestLegacyAdapterNativeBuildInvocation(t *testing.T) {
 		t.Fatal(err)
 	}
 	args := string(body)
-	if strings.Contains(args, "--engine\n") {
-		t.Fatal("removed engine flag sent to native CLI")
+	if strings.Contains(args, "--engine\n") || strings.Contains(args, "--skip-vscode-server\n") || strings.Contains(args, "--vscode-server\n") {
+		t.Fatal("obsolete flag or opt-in server flag sent to native CLI")
 	}
 	if !strings.Contains(args, "--label\n"+r.label()+"\n") {
 		t.Fatal("native output image ownership label omitted")
