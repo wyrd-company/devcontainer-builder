@@ -1,4 +1,4 @@
-// Command dcb builds devcontainer-spec images via docker buildx.
+// Command dcb builds devcontainer-spec images with Docker's built-in BuildKit.
 //
 // Subcommands:
 //
@@ -21,7 +21,6 @@ import (
 	"syscall"
 
 	"github.com/wyrd-company/devcontainer-builder/pkg/builder"
-	"github.com/wyrd-company/devcontainer-builder/pkg/buildx"
 	"github.com/wyrd-company/devcontainer-builder/pkg/features"
 	"github.com/wyrd-company/devcontainer-builder/pkg/platform"
 	"github.com/wyrd-company/devcontainer-builder/pkg/spec"
@@ -69,7 +68,7 @@ func main() {
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, `dcb - build devcontainer-spec images with docker buildx
+	fmt.Fprintln(os.Stderr, `dcb - build devcontainer-spec images with Docker's BuildKit
 
 Usage:
   dcb <command> [flags]
@@ -116,11 +115,9 @@ func cmdBuild(ctx context.Context, args []string) error {
 	var (
 		workspace = fs.String("workspace", ".", "workspace folder containing .devcontainer/")
 		specPath  = fs.String("spec", "", "path to devcontainer.json (overrides workspace lookup)")
-		engine    = fs.String("engine", "buildkit", "build engine: buildkit | buildx")
-		bkAddr    = fs.String("buildkit-addr", "", "buildkitd address (default: $BUILDKIT_HOST or unix socket)")
-		builderID = fs.String("builder", "", "buildx builder name (buildx engine only)")
+		bkAddr    = fs.String("buildkit-addr", "", "separate BuildKit address (default: $BUILDKIT_HOST, else the Docker daemon's BuildKit)")
 		progress  = fs.String("progress", "auto", "progress display (auto|plain|tty)")
-		outputDir = fs.String("output", "", "export filesystem to local dir (buildkit engine only)")
+		outputDir = fs.String("output", "", "export filesystem to local dir")
 		workDir   = fs.String("work-dir", "", "directory for staged build context (default: temp dir)")
 		keepWork  = fs.Bool("keep", false, "keep the staged work directory after build")
 		push      = fs.Bool("push", false, "push the resulting image (mutually exclusive with --load)")
@@ -145,8 +142,8 @@ func cmdBuild(ctx context.Context, args []string) error {
 	)
 	fs.Var(&tags, "tag", "image tag (repeat for multiple)")
 	fs.Var(&platforms, "platform", "target platform (repeat for multiple)")
-	fs.Var(&cacheFrom, "cache-from", "buildx --cache-from spec (repeat)")
-	fs.Var(&cacheTo, "cache-to", "buildx --cache-to spec (repeat)")
+	fs.Var(&cacheFrom, "cache-from", "cache import spec, e.g. type=registry,ref=... (repeat)")
+	fs.Var(&cacheTo, "cache-to", "cache export spec, e.g. type=inline (repeat)")
 	fs.Var(buildArgs, "build-arg", "KEY=VAL build arg (repeat)")
 	fs.Var(labels, "label", "KEY=VAL image label (repeat)")
 	if err := fs.Parse(args); err != nil {
@@ -158,21 +155,14 @@ func cmdBuild(ctx context.Context, args []string) error {
 	if len(tags) == 0 && (*push || *load) {
 		return fmt.Errorf("--tag is required with --push/--load")
 	}
-	switch *engine {
-	case string(builder.EngineBuildKit), string(builder.EngineBuildx):
-	default:
-		return fmt.Errorf("invalid --engine %q (want buildkit|buildx)", *engine)
-	}
 
 	logger := stderrLogger("build")
 
 	opts := builder.Options{
-		Engine:           builder.Engine(*engine),
 		SpecPath:         *specPath,
 		Workspace:        *workspace,
 		Tags:             tags,
 		Platforms:        platforms,
-		Builder:          *builderID,
 		BuildKitAddress:  *bkAddr,
 		BuildArgs:        buildArgs,
 		Labels:           labels,
@@ -356,11 +346,8 @@ func cmdServer(ctx context.Context, args []string) error {
 	return nil
 }
 
-func cmdVersion(ctx context.Context) error {
+func cmdVersion(context.Context) error {
 	fmt.Printf("dcb %s\n", Version)
-	if v, err := buildx.Version(ctx); err == nil {
-		fmt.Printf("  buildx: %s\n", v)
-	}
 	return nil
 }
 

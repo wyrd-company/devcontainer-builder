@@ -47,7 +47,7 @@ type BuildPrimaryResult struct {
 //   - When the primary declares only `image:` and the spec has no
 //     features, the compose `image:` is returned unchanged.
 //   - When the primary declares `build:`, that compose-side build is
-//     run through pkg/buildx first to produce a base image. When the
+//     built with BuildKit first to produce a base image. When the
 //     spec has features, a derived image is layered on top; otherwise
 //     the build's output tag is returned directly.
 //   - When features are present, a derived image is built FROM the
@@ -79,15 +79,16 @@ func BuildPrimaryImage(ctx context.Context, in BuildPrimaryInputs) (*BuildPrimar
 	composeBuilt := false
 	if primary.Build != nil {
 		bsi, err := BuildServiceImages(ctx, BuildServiceImagesInputs{
-			Project:  proj,
-			Services: []string{in.Spec.Service},
-			Builder:  in.BuilderOptions.Builder,
-			NoCache:  in.BuilderOptions.NoCache,
-			Pull:     in.BuilderOptions.Pull,
-			Progress: in.BuilderOptions.Progress,
-			Stdout:   in.BuilderOptions.Stdout,
-			Stderr:   in.BuilderOptions.Stderr,
-			Logger:   in.BuilderOptions.Logger,
+			Project:         proj,
+			Services:        []string{in.Spec.Service},
+			BuildKitAddress: in.BuilderOptions.BuildKitAddress,
+			Docker:          in.BuilderOptions.Docker,
+			NoCache:         in.BuilderOptions.NoCache,
+			Pull:            in.BuilderOptions.Pull,
+			Progress:        in.BuilderOptions.Progress,
+			Stdout:          in.BuilderOptions.Stdout,
+			Stderr:          in.BuilderOptions.Stderr,
+			Logger:          in.BuilderOptions.Logger,
 		})
 		if err != nil {
 			return nil, err

@@ -9,8 +9,9 @@ import (
 	"time"
 
 	"github.com/compose-spec/compose-go/v2/types"
+	dockerclient "github.com/docker/docker/client"
 
-	"github.com/wyrd-company/devcontainer-builder/pkg/buildx"
+	"github.com/wyrd-company/devcontainer-builder/pkg/buildkit"
 )
 
 // BuildServiceImagesInputs feeds BuildServiceImages.
@@ -26,12 +27,15 @@ type BuildServiceImagesInputs struct {
 	// service through a different path (e.g. BuildPrimaryImage for the
 	// devcontainer primary).
 	Skip []string
-	// Builder is the buildx builder name; empty uses the daemon's
-	// default builder.
-	Builder string
-	// Platforms forwarded to buildx (--platform). Empty means the
-	// daemon's default. Per-service compose `build.platforms` takes
-	// precedence over this when set.
+	// BuildKitAddress selects a separate BuildKit. Empty falls back to
+	// BUILDKIT_HOST, then to the Docker daemon's built-in BuildKit.
+	BuildKitAddress string
+	// Docker is the Engine API client the built images are loaded
+	// through. When nil, one is created from the DOCKER_* environment.
+	Docker *dockerclient.Client
+	// Platforms are the target platforms. Empty means the daemon's
+	// default. Per-service compose `build.platforms` takes precedence
+	// over this when set.
 	Platforms []string
 	// NoCache disables the build cache.
 	NoCache bool
@@ -39,9 +43,8 @@ type BuildServiceImagesInputs struct {
 	Pull bool
 	// Progress one of "auto" | "plain" | "tty" | "rawjson".
 	Progress string
-	// Stdout / Stderr forwarded to buildx. nil means discard (buildx's
-	// own default goes to os.Stdout / os.Stderr; pass io.Discard to
-	// silence).
+	// Stdout / Stderr receive build output. nil means os.Stdout /
+	// os.Stderr; pass io.Discard to silence.
 	Stdout io.Writer
 	Stderr io.Writer
 	// Logger receives informational messages.
@@ -53,14 +56,15 @@ type BuildServiceImagesResult struct {
 	// Images maps service name → built image reference. Only contains
 	// services whose `build:` was honored.
 	Images map[string]string
-	// Built lists service names actually sent through buildx (vs
-	// skipped because they had no `build:`).
+	// Built lists service names actually built (vs skipped because
+	// they had no `build:`).
 	Built []string
 }
 
 // BuildServiceImages walks every service of proj that declares a
-// `build:` block and builds it through `pkg/buildx` (i.e. shells out to
-// `docker buildx build`). Returns service-name → resulting tag.
+// `build:` block, builds it with BuildKit's dockerfile.v0 frontend, and
+// loads the result into the Docker daemon. Returns service-name →
+// resulting tag.
 //
 // Tag resolution per service:
 //
@@ -71,10 +75,9 @@ type BuildServiceImagesResult struct {
 //     `devcontainer-builder/compose-svc-<project>-<service>:<unix-nano>`
 //     is generated.
 //
-// The function is safe to call without a Host: it does its own buildx
-// invocation against the local daemon. The Host's Up wraps it for
-// convenience but embedders that own the project lifecycle can call
-// it directly.
+// The function is safe to call without a Host: it connects to BuildKit
+// itself. The Host's Up wraps it for convenience but embedders that own
+// the project lifecycle can call it directly.
 func BuildServiceImages(ctx context.Context, in BuildServiceImagesInputs) (*BuildServiceImagesResult, error) {
 	if in.Project == nil {
 		return nil, fmt.Errorf("BuildServiceImagesInputs.Project is required")
@@ -97,12 +100,12 @@ func BuildServiceImages(ctx context.Context, in BuildServiceImagesInputs) (*Buil
 	for _, name := range candidates {
 		svc, _ := in.Project.GetService(name)
 		tag, extraTags := resolveBuildTag(in.Project.Name, svc)
-		build, err := buildxFromService(in.Project, svc, tag, extraTags, in)
+		build, opt, err := serviceBuild(in.Project, svc, tag, extraTags, in)
 		if err != nil {
 			return out, fmt.Errorf("service %q build: %w", name, err)
 		}
 		logf("building service %q -> %s", name, tag)
-		if err := build.Run(ctx); err != nil {
+		if _, err := buildkit.SolveDockerfile(ctx, build, opt); err != nil {
 			return out, fmt.Errorf("service %q build: %w", name, err)
 		}
 		out.Images[name] = tag
@@ -162,18 +165,19 @@ func resolveBuildTag(projectName string, svc types.ServiceConfig) (string, []str
 	return fmt.Sprintf("devcontainer-builder/compose-svc-%s-%s:%d", projectName, svc.Name, time.Now().UnixNano()), nil
 }
 
-// buildxFromService translates a compose ServiceConfig.Build into a
-// buildx invocation.
-func buildxFromService(
+// serviceBuild translates a compose ServiceConfig.Build into a
+// Dockerfile build and the options that load its result into the
+// Docker daemon.
+func serviceBuild(
 	proj *types.Project, svc types.ServiceConfig,
 	tag string, extraTags []string, in BuildServiceImagesInputs,
-) (*buildx.Build, error) {
+) (buildkit.DockerfileBuild, buildkit.SolveOptions, error) {
 	bc := svc.Build
 	if bc == nil {
-		return nil, fmt.Errorf("service %q has no build config", svc.Name)
+		return buildkit.DockerfileBuild{}, buildkit.SolveOptions{}, fmt.Errorf("service %q has no build config", svc.Name)
 	}
 	if bc.DockerfileInline != "" {
-		return nil, fmt.Errorf("service %q: dockerfile_inline is not supported", svc.Name)
+		return buildkit.DockerfileBuild{}, buildkit.SolveOptions{}, fmt.Errorf("service %q: dockerfile_inline is not supported", svc.Name)
 	}
 
 	contextDir := bc.Context
@@ -185,7 +189,10 @@ func buildxFromService(
 	}
 
 	df := bc.Dockerfile
-	if df != "" && !filepath.IsAbs(df) {
+	if df == "" {
+		df = "Dockerfile"
+	}
+	if !filepath.IsAbs(df) {
 		df = filepath.Clean(filepath.Join(contextDir, df))
 	}
 
@@ -207,23 +214,27 @@ func buildxFromService(
 		platforms = append(platforms[:0], bc.Platforms...)
 	}
 
-	build := &buildx.Build{
-		ContextDir: contextDir,
-		Dockerfile: df,
-		Tags:       append([]string{tag}, extraTags...),
-		BuildArgs:  args,
-		Labels:     labels,
-		Platforms:  platforms,
-		Target:     bc.Target,
-		CacheFrom:  bc.CacheFrom,
-		CacheTo:    bc.CacheTo,
-		Builder:    in.Builder,
-		Load:       true,
-		NoCache:    in.NoCache || bc.NoCache,
-		Pull:       in.Pull || bc.Pull,
-		Progress:   in.Progress,
-		Stdout:     in.Stdout,
-		Stderr:     in.Stderr,
+	build := buildkit.DockerfileBuild{
+		ContextDir:    contextDir,
+		DockerfileDir: filepath.Dir(df),
+		Filename:      filepath.Base(df),
+		Target:        bc.Target,
+		BuildArgs:     args,
+		Labels:        labels,
 	}
-	return build, nil
+	opt := buildkit.SolveOptions{
+		Address:      in.BuildKitAddress,
+		Docker:       in.Docker,
+		Tags:         append([]string{tag}, extraTags...),
+		Load:         true,
+		Platforms:    platforms,
+		CacheImports: buildkit.ParseCacheRefs(bc.CacheFrom),
+		CacheExports: buildkit.ParseCacheRefs(bc.CacheTo),
+		NoCache:      in.NoCache || bc.NoCache,
+		Pull:         in.Pull || bc.Pull,
+		Progress:     in.Progress,
+		Stdout:       in.Stdout,
+		Stderr:       in.Stderr,
+	}
+	return build, opt, nil
 }

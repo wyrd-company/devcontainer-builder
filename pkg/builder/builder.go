@@ -1,12 +1,12 @@
 // Package builder is the top-level orchestrator. It loads a
-// devcontainer.json, optionally builds the upstream Dockerfile, resolves
-// devcontainer features, downloads the VS Code server, and dispatches
-// the final image build to either BuildKit (LLB-direct, default) or
-// buildx (shell wrapper, fallback).
+// devcontainer.json, resolves devcontainer features, optionally
+// downloads the VS Code server, and builds the image with BuildKit: an
+// upstream Dockerfile through the dockerfile.v0 frontend, with the
+// devcontainer overlays authored directly in LLB on top.
 //
 // The wrapper Dockerfile is always written to the work directory for
-// inspection and for the `generate` subcommand, even when BuildKit is
-// the engine actually performing the build.
+// inspection and for the `generate` subcommand; it is not what BuildKit
+// builds.
 package builder
 
 import (
@@ -14,15 +14,11 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"strings"
-	"time"
 
 	dockerclient "github.com/docker/docker/client"
 
 	"github.com/wyrd-company/devcontainer-builder/pkg/buildkit"
-	"github.com/wyrd-company/devcontainer-builder/pkg/buildx"
 	"github.com/wyrd-company/devcontainer-builder/pkg/dockerfile"
 	"github.com/wyrd-company/devcontainer-builder/pkg/features"
 	"github.com/wyrd-company/devcontainer-builder/pkg/platform"
@@ -30,23 +26,8 @@ import (
 	"github.com/wyrd-company/devcontainer-builder/pkg/vscode"
 )
 
-// Engine selects which build backend to use.
-type Engine string
-
-const (
-	// EngineBuildKit drives builds through the BuildKit Go client
-	// using LLB authored directly (the default).
-	EngineBuildKit Engine = "buildkit"
-	// EngineBuildx shells out to `docker buildx build` against the
-	// generated wrapper Dockerfile.
-	EngineBuildx Engine = "buildx"
-)
-
 // Options drive a single Build invocation.
 type Options struct {
-	// Engine selects the build backend. Defaults to BuildKit.
-	Engine Engine
-
 	// SpecPath is an explicit path to a devcontainer.json. When empty,
 	// Workspace is searched for the conventional locations.
 	SpecPath string
@@ -65,8 +46,6 @@ type Options struct {
 	// engine builds a manifest-list image when more than one is given.
 	// --load is incompatible with multi-platform.
 	Platforms []string
-	// Builder is the buildx instance name (buildx engine only).
-	Builder string
 	// BuildKitAddress selects a separate BuildKit. Empty falls back to
 	// BUILDKIT_HOST, then to the Docker daemon's built-in BuildKit.
 	BuildKitAddress string
@@ -76,8 +55,8 @@ type Options struct {
 	// BuildArgs / Labels.
 	BuildArgs map[string]string
 	Labels    map[string]string
-	// CacheFrom / CacheTo cache specs (in buildx string form, e.g.
-	// "type=registry,ref=...").
+	// CacheFrom / CacheTo cache specs in `docker build` form, e.g.
+	// "type=registry,ref=...".
 	CacheFrom []string
 	CacheTo   []string
 
@@ -92,7 +71,7 @@ type Options struct {
 	// Progress one of "auto" | "plain" | "tty" | "rawjson".
 	Progress string
 	// OutputDir, when non-empty, requests filesystem export to this
-	// path (BuildKit engine only).
+	// path.
 	OutputDir string
 
 	// SkipFeatures disables feature resolution and installation.
@@ -100,7 +79,7 @@ type Options struct {
 	// SkipVSCodeServer disables VS Code server staging.
 	SkipVSCodeServer bool
 	// SkipImageMetaResolve disables the registry roundtrip that
-	// inherits ENV/USER/WORKDIR from the base image (BuildKit engine).
+	// inherits ENV/USER/WORKDIR from the base image.
 	SkipImageMetaResolve bool
 
 	// VSCode controls server resolution. Zero value = stable, current
@@ -124,9 +103,8 @@ type Options struct {
 
 // Result describes the outcome of a successful build.
 type Result struct {
-	Engine Engine
-	// FinalDockerfile is the path to the wrapper Dockerfile. Always
-	// written, regardless of engine.
+	// FinalDockerfile is the path to the inspection-only wrapper
+	// Dockerfile.
 	FinalDockerfile string
 	// ContextDir is the on-disk build context (features + vscode
 	// tarball staging directory).
@@ -135,8 +113,6 @@ type Result struct {
 	VSCodeServer *vscode.Result
 	// Features is the resolved feature list in install order.
 	Features []features.Resolved
-	// BuildxArgs is set when Engine=buildx, for logging.
-	BuildxArgs []string
 }
 
 // Builder is reusable across builds.
@@ -159,9 +135,6 @@ func (b *Builder) Build(ctx context.Context, opts Options) (*Result, error) {
 	if logf == nil {
 		logf = func(string, ...any) {}
 	}
-	if opts.Engine == "" {
-		opts.Engine = EngineBuildKit
-	}
 
 	dc, workDir, ctxDir, baseImage, upstream, resolved, sr, dfPath, df, err := b.prepareBuildContext(ctx, opts, logf)
 	if err != nil {
@@ -175,25 +148,14 @@ func (b *Builder) Build(ctx context.Context, opts Options) (*Result, error) {
 	_ = df // already written; retained in case future engines want it inline
 
 	result := &Result{
-		Engine:          opts.Engine,
 		FinalDockerfile: dfPath,
 		ContextDir:      ctxDir,
 		VSCodeServer:    sr,
 		Features:        resolved,
 	}
 
-	switch opts.Engine {
-	case EngineBuildx:
-		if err := b.runBuildx(ctx, opts, dfPath, ctxDir, dc, baseImage, result, logf); err != nil {
-			return result, err
-		}
-	case EngineBuildKit:
-		if err := b.runBuildKit(ctx, opts, ctxDir, dc, baseImage, upstream, resolved, sr, result, logf); err != nil {
-			return result, err
-		}
-	default:
-		cleanup()
-		return nil, fmt.Errorf("unknown engine %q", opts.Engine)
+	if err := b.runBuildKit(ctx, opts, ctxDir, dc, baseImage, upstream, resolved, sr, logf); err != nil {
+		return result, err
 	}
 
 	cleanup()
@@ -219,7 +181,7 @@ func (b *Builder) prepareBuildContext(ctx context.Context, opts Options, logf fu
 	if err != nil {
 		return
 	}
-	if err = validateBuildSupport(dc, opts.Engine); err != nil {
+	if err = validateBuildSupport(dc); err != nil {
 		return
 	}
 	logf("loaded spec from %s", specPath)
@@ -240,10 +202,9 @@ func (b *Builder) prepareBuildContext(ctx context.Context, opts Options, logf fu
 		return
 	}
 
-	// Determine the base image. The BuildKit engine prefers chaining the
-	// upstream dockerfile.v0 frontend in-process (no docker round-trip);
-	// the buildx engine still needs a concrete tagged image to FROM.
-	baseImage, upstream, err = b.prepareBaseImage(ctx, dc, opts, logf)
+	// Determine the base image: the spec's image, or its Dockerfile,
+	// chained in-process through the dockerfile.v0 frontend.
+	baseImage, upstream, err = prepareBaseImage(dc, opts)
 	if err != nil {
 		return
 	}
@@ -307,47 +268,9 @@ func (b *Builder) prepareBuildContext(ctx context.Context, opts Options, logf fu
 	return
 }
 
-func (b *Builder) runBuildx(ctx context.Context, opts Options, dfPath, ctxDir string,
-	dc *spec.DevContainer, baseImage string, result *Result, logf func(string, ...any),
-) error {
-	if shouldRemoveBuildxBase(dc, baseImage) {
-		defer func() {
-			if err := dockerImageRemove(ctx, baseImage); err != nil {
-				logf("could not remove temporary base image %s: %v", baseImage, err)
-			}
-		}()
-	}
-	build := buildx.Build{
-		ContextDir: ctxDir,
-		Dockerfile: dfPath,
-		Tags:       opts.Tags,
-		BuildArgs:  opts.BuildArgs,
-		Labels:     opts.Labels,
-		Platforms:  opts.Platforms,
-		CacheFrom:  mergeSlices(buildCacheFrom(dc), opts.CacheFrom),
-		CacheTo:    opts.CacheTo,
-		ExtraArgs:  buildOptions(dc),
-		Builder:    opts.Builder,
-		Push:       opts.Push,
-		Load:       opts.Load,
-		NoCache:    opts.NoCache,
-		Pull:       opts.Pull,
-		Progress:   opts.Progress,
-		Stdout:     opts.Stdout,
-		Stderr:     opts.Stderr,
-	}
-	logf("running: docker %s", strings.Join(build.Args(), " "))
-	result.BuildxArgs = build.Args()
-	return build.Run(ctx)
-}
-
-func shouldRemoveBuildxBase(dc *spec.DevContainer, image string) bool {
-	return dc != nil && dc.DockerfilePath() != "" && strings.HasPrefix(image, "devcontainer-builder/base:")
-}
-
 func (b *Builder) runBuildKit(ctx context.Context, opts Options, ctxDir string,
 	dc *spec.DevContainer, baseImage string, upstream *buildkit.DockerfileBuild,
-	resolved []features.Resolved, sr *vscode.Result, result *Result,
+	resolved []features.Resolved, sr *vscode.Result,
 	logf func(string, ...any),
 ) error {
 	solveOpts := buildkit.SolveOptions{
@@ -401,27 +324,10 @@ func buildKitEndpoint(opt buildkit.SolveOptions) string {
 	}
 }
 
-func dockerImageRemove(ctx context.Context, image string) error {
-	c := exec.CommandContext(ctx, "docker", "image", "rm", "-f", image)
-	c.Stdout = io.Discard
-	c.Stderr = io.Discard
-	return c.Run()
-}
-
 // prepareBaseImage resolves what should appear "above" the devcontainer
-// overlays. There are three cases:
-//
-//   - The spec uses `image` directly: return it as the base.
-//   - The spec uses `dockerFile` AND we're on the BuildKit engine: return
-//     a *buildkit.DockerfileBuild so the gateway path can chain the
-//     dockerfile.v0 frontend with no docker round-trip.
-//   - The spec uses `dockerFile` AND we're on the buildx engine: pre-build
-//     it via `docker buildx`, load it into the local docker store, and
-//     return the temporary tag.
-func (b *Builder) prepareBaseImage(
-	ctx context.Context, dc *spec.DevContainer, opts Options,
-	logf func(format string, args ...any),
-) (string, *buildkit.DockerfileBuild, error) {
+// overlays: the spec's image, or a *buildkit.DockerfileBuild for its
+// Dockerfile so the gateway path can chain the dockerfile.v0 frontend.
+func prepareBaseImage(dc *spec.DevContainer, opts Options) (string, *buildkit.DockerfileBuild, error) {
 	if dc.Image != "" && dc.DockerfilePath() == "" {
 		return dc.Image, nil, nil
 	}
@@ -435,71 +341,32 @@ func (b *Builder) prepareBaseImage(
 		return "", nil, err
 	}
 
-	if opts.Engine == EngineBuildKit {
-		dfFilename := dfPath
-		dfDir := upstreamCtx
-		if filepath.IsAbs(dfPath) {
-			dfDir = filepath.Dir(dfPath)
-			dfFilename = filepath.Base(dfPath)
-		} else {
-			dfFilename = filepath.Base(dfPath)
-			if rel := filepath.Dir(dfPath); rel != "." && rel != "" {
-				dfDir = filepath.Join(upstreamCtx, rel)
-			}
-		}
-		upstream := &buildkit.DockerfileBuild{
-			ContextDir:    upstreamCtx,
-			DockerfileDir: dfDir,
-			Filename:      dfFilename,
-			BuildArgs:     mergeArgs(buildArgsFromSpec(dc), opts.BuildArgs),
-		}
-		if dc.Build != nil && dc.Build.Target != "" {
-			upstream.Target = dc.Build.Target
-		}
-		return "", upstream, nil
+	dfDir := upstreamCtx
+	if filepath.IsAbs(dfPath) {
+		dfDir = filepath.Dir(dfPath)
+	} else if rel := filepath.Dir(dfPath); rel != "." && rel != "" {
+		dfDir = filepath.Join(upstreamCtx, rel)
 	}
-
-	tag := fmt.Sprintf("devcontainer-builder/base:%d", time.Now().UnixNano())
-	logf("building upstream dockerfile %s -> %s", dfPath, tag)
-
-	upstreamDf := dfPath
-	if !filepath.IsAbs(upstreamDf) {
-		upstreamDf = filepath.Join(upstreamCtx, dfPath)
-	}
-
-	build := buildx.Build{
-		ContextDir: upstreamCtx,
-		Dockerfile: upstreamDf,
-		Tags:       []string{tag},
-		BuildArgs:  mergeArgs(buildArgsFromSpec(dc), opts.BuildArgs),
-		CacheFrom:  mergeSlices(buildCacheFrom(dc), opts.CacheFrom),
-		ExtraArgs:  buildOptions(dc),
-		Builder:    opts.Builder,
-		Load:       true,
-		Pull:       opts.Pull,
-		NoCache:    opts.NoCache,
-		Progress:   opts.Progress,
-		Platforms:  opts.Platforms,
-		Stdout:     opts.Stdout,
-		Stderr:     opts.Stderr,
+	upstream := &buildkit.DockerfileBuild{
+		ContextDir:    upstreamCtx,
+		DockerfileDir: dfDir,
+		Filename:      filepath.Base(dfPath),
+		BuildArgs:     mergeArgs(buildArgsFromSpec(dc), opts.BuildArgs),
 	}
 	if dc.Build != nil && dc.Build.Target != "" {
-		build.Target = dc.Build.Target
+		upstream.Target = dc.Build.Target
 	}
-	if err := build.Run(ctx); err != nil {
-		return "", nil, err
-	}
-	return tag, nil, nil
+	return "", upstream, nil
 }
 
-func validateBuildSupport(dc *spec.DevContainer, engine Engine) error {
+// validateBuildSupport rejects spec fields the BuildKit build cannot
+// honor. build.options are `docker build` command-line flags, which
+// have no BuildKit equivalent without the docker CLI.
+func validateBuildSupport(dc *spec.DevContainer) error {
 	if dc == nil || dc.Build == nil || len(dc.Build.Options) == 0 {
 		return nil
 	}
-	if engine == EngineBuildKit {
-		return fmt.Errorf("build.options is not supported by the buildkit engine; use engine=buildx or remove build.options")
-	}
-	return nil
+	return fmt.Errorf("build.options is not supported: dcb builds with BuildKit directly, not the docker CLI; remove build.options")
 }
 
 func buildArgsFromSpec(dc *spec.DevContainer) map[string]string {
@@ -507,13 +374,6 @@ func buildArgsFromSpec(dc *spec.DevContainer) map[string]string {
 		return nil
 	}
 	return dc.Build.Args
-}
-
-func buildOptions(dc *spec.DevContainer) []string {
-	if dc == nil || dc.Build == nil || len(dc.Build.Options) == 0 {
-		return nil
-	}
-	return append([]string(nil), dc.Build.Options...)
 }
 
 func buildCacheFrom(dc *spec.DevContainer) []string {

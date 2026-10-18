@@ -170,6 +170,7 @@ func (h *Host) Up(ctx context.Context, req UpRequest) (*UpResult, error) {
 		built, err := BuildServiceImages(ctx, BuildServiceImagesInputs{
 			Project: proj,
 			Skip:    []string{req.Spec.Service},
+			Docker:  h.client,
 			Stdout:  h.opts.Stdout,
 			Stderr:  h.opts.Stderr,
 			Logger:  h.opts.Logger,

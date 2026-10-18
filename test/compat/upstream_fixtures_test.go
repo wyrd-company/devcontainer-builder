@@ -282,7 +282,6 @@ func TestCuratedCLIUnsupportedBuildOptionsError(t *testing.T) {
 	workspace := filepath.Join(root, "reference", "cli", "src", "test", "configs", "dockerfile-with-target")
 
 	_, err := builder.New().Build(context.Background(), builder.Options{
-		Engine:           builder.EngineBuildKit,
 		Workspace:        workspace,
 		WorkDir:          t.TempDir(),
 		SkipFeatures:     true,
@@ -291,7 +290,7 @@ func TestCuratedCLIUnsupportedBuildOptionsError(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected unsupported build options error")
 	}
-	if !strings.Contains(err.Error(), "build.options is not supported by the buildkit engine") {
+	if !strings.Contains(err.Error(), "build.options is not supported") {
 		t.Fatalf("error = %q, want stable build.options message", err.Error())
 	}
 }

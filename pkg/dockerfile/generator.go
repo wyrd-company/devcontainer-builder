@@ -34,7 +34,7 @@ type Inputs struct {
 	// Spec is the loaded devcontainer.json.
 	Spec *spec.DevContainer
 	// BaseImage is the FROM image. May be either the spec's `image`
-	// field, or a tag produced by a prior `docker buildx build` of the
+	// field, or a tag produced by a prior build of the
 	// spec's upstream Dockerfile.
 	BaseImage string
 	// Features in install order, all already staged on disk.

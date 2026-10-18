@@ -13,10 +13,9 @@ import (
 	"github.com/wyrd-company/devcontainer-builder/pkg/vscode"
 )
 
-// Generate runs every step of Build except the final buildx invocation.
-// It is the dry-run companion to Build, useful for inspecting the
-// generated Dockerfile or for callers that want to drive buildx
-// themselves.
+// Generate runs every step of Build except the BuildKit solve. It is
+// the dry-run companion to Build, useful for inspecting the generated
+// Dockerfile or for callers that want to drive a build themselves.
 //
 // When the spec uses an upstream Dockerfile (rather than spec.image),
 // this method does NOT pre-build it — instead, the wrapper Dockerfile's

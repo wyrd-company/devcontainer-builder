@@ -41,7 +41,6 @@ func TestDockerComposeIntegration(t *testing.T) {
 	t.Cleanup(func() {
 		_ = cli.Close()
 	})
-	requireBuildx(t)
 
 	ensureComposeImage(t, ctx, cli, "alpine:3.20")
 	ensureComposeImage(t, ctx, cli, "busybox:1.36")
@@ -597,17 +596,6 @@ func requireComposeDocker(t *testing.T, ctx context.Context) *dockerclient.Clien
 		skipOrFailCompose(t, "docker daemon is required for Docker integration tests: %v", err)
 	}
 	return cli
-}
-
-func requireBuildx(t *testing.T) {
-	t.Helper()
-	if _, err := exec.LookPath("docker"); err != nil {
-		skipOrFailCompose(t, "docker is required for Docker integration tests: %v", err)
-	}
-	cmd := exec.Command("docker", "buildx", "version")
-	if out, err := cmd.CombinedOutput(); err != nil {
-		skipOrFailCompose(t, "docker buildx is required for compose image builds: %v\n%s", err, out)
-	}
 }
 
 func ensureComposeImage(t *testing.T, ctx context.Context, cli *dockerclient.Client, ref string) {

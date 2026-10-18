@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	"github.com/compose-spec/compose-go/v2/types"
+
+	"github.com/wyrd-company/devcontainer-builder/pkg/buildkit"
 )
 
 func TestSelectBuildableServices_FiltersAndSkips(t *testing.T) {
@@ -98,7 +100,7 @@ func TestResolveBuildTag(t *testing.T) {
 	}
 }
 
-func TestBuildxFromService_FieldsThreaded(t *testing.T) {
+func TestServiceBuild_FieldsThreaded(t *testing.T) {
 	v := "1"
 	proj := &types.Project{Name: "proj_abc", WorkingDir: "/work"}
 	svc := types.ServiceConfig{
@@ -106,7 +108,7 @@ func TestBuildxFromService_FieldsThreaded(t *testing.T) {
 		Image: "registry/helper:1",
 		Build: &types.BuildConfig{
 			Context:    "./svc",
-			Dockerfile: "Dockerfile.helper",
+			Dockerfile: "docker/Dockerfile.helper",
 			Args:       types.MappingWithEquals{"K": &v},
 			Labels:     types.Labels{"role": "helper"},
 			CacheFrom:  types.StringList{"type=registry,ref=cache"},
@@ -117,54 +119,62 @@ func TestBuildxFromService_FieldsThreaded(t *testing.T) {
 			Pull:       true,
 		},
 	}
-	in := BuildServiceImagesInputs{Builder: "mybuilder", Progress: "plain"}
+	in := BuildServiceImagesInputs{BuildKitAddress: "tcp://buildkit.test:1234", Progress: "plain"}
 	tag, extras := resolveBuildTag(proj.Name, svc)
-	build, err := buildxFromService(proj, svc, tag, extras, in)
+	build, opt, err := serviceBuild(proj, svc, tag, extras, in)
 	if err != nil {
-		t.Fatalf("buildxFromService: %v", err)
+		t.Fatalf("serviceBuild: %v", err)
 	}
-	if build.ContextDir != "/work/svc" {
-		t.Errorf("ContextDir: got %q want /work/svc", build.ContextDir)
+	wantBuild := buildkit.DockerfileBuild{
+		ContextDir:    "/work/svc",
+		DockerfileDir: "/work/svc/docker",
+		Filename:      "Dockerfile.helper",
+		Target:        "build",
+		BuildArgs:     map[string]string{"K": "1"},
+		Labels:        map[string]string{"role": "helper"},
 	}
-	if build.Dockerfile != "/work/svc/Dockerfile.helper" {
-		t.Errorf("Dockerfile: got %q want /work/svc/Dockerfile.helper", build.Dockerfile)
+	if !reflect.DeepEqual(build, wantBuild) {
+		t.Errorf("build = %+v, want %+v", build, wantBuild)
 	}
-	if build.BuildArgs["K"] != "1" {
-		t.Errorf("BuildArgs[K]: got %q want 1", build.BuildArgs["K"])
+	if !reflect.DeepEqual(opt.CacheImports, []buildkit.CacheRef{{Type: "registry", Attrs: map[string]string{"ref": "cache"}}}) {
+		t.Errorf("CacheImports: got %v", opt.CacheImports)
 	}
-	if build.Labels["role"] != "helper" {
-		t.Errorf("Labels[role]: got %q want helper", build.Labels["role"])
+	if !reflect.DeepEqual(opt.CacheExports, []buildkit.CacheRef{{Type: "inline", Attrs: map[string]string{}}}) {
+		t.Errorf("CacheExports: got %v", opt.CacheExports)
 	}
-	if !reflect.DeepEqual(build.CacheFrom, []string{"type=registry,ref=cache"}) {
-		t.Errorf("CacheFrom: got %v", build.CacheFrom)
+	if !reflect.DeepEqual(opt.Platforms, []string{"linux/amd64"}) {
+		t.Errorf("Platforms: got %v want [linux/amd64]", opt.Platforms)
 	}
-	if !reflect.DeepEqual(build.CacheTo, []string{"type=inline"}) {
-		t.Errorf("CacheTo: got %v", build.CacheTo)
+	if !opt.NoCache || !opt.Pull || !opt.Load || opt.Push {
+		t.Errorf("flags: got NoCache=%v Pull=%v Load=%v Push=%v", opt.NoCache, opt.Pull, opt.Load, opt.Push)
 	}
-	if build.Target != "build" {
-		t.Errorf("Target: got %q want build", build.Target)
+	if opt.Address != "tcp://buildkit.test:1234" || opt.Progress != "plain" {
+		t.Errorf("address/progress: got %q %q", opt.Address, opt.Progress)
 	}
-	if !reflect.DeepEqual(build.Platforms, []string{"linux/amd64"}) {
-		t.Errorf("Platforms: got %v want [linux/amd64]", build.Platforms)
-	}
-	if !build.NoCache || !build.Pull || !build.Load {
-		t.Errorf("flags: got NoCache=%v Pull=%v Load=%v", build.NoCache, build.Pull, build.Load)
-	}
-	if build.Builder != "mybuilder" || build.Progress != "plain" {
-		t.Errorf("builder/progress: got %q %q", build.Builder, build.Progress)
-	}
-	if !reflect.DeepEqual(build.Tags, []string{"registry/helper:1"}) {
-		t.Errorf("Tags: got %v want [registry/helper:1]", build.Tags)
+	if !reflect.DeepEqual(opt.Tags, []string{"registry/helper:1"}) {
+		t.Errorf("Tags: got %v want [registry/helper:1]", opt.Tags)
 	}
 }
 
-func TestBuildxFromService_RejectsDockerfileInline(t *testing.T) {
+func TestServiceBuild_DefaultDockerfile(t *testing.T) {
+	proj := &types.Project{Name: "proj", WorkingDir: "/w"}
+	svc := types.ServiceConfig{Name: "x", Build: &types.BuildConfig{Context: "."}}
+	build, _, err := serviceBuild(proj, svc, "x:1", nil, BuildServiceImagesInputs{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if build.ContextDir != "/w" || build.DockerfileDir != "/w" || build.Filename != "Dockerfile" {
+		t.Fatalf("build = %+v, want /w/Dockerfile", build)
+	}
+}
+
+func TestServiceBuild_RejectsDockerfileInline(t *testing.T) {
 	proj := &types.Project{Name: "proj", WorkingDir: "/w"}
 	svc := types.ServiceConfig{
 		Name:  "x",
 		Build: &types.BuildConfig{DockerfileInline: "FROM alpine"},
 	}
-	_, err := buildxFromService(proj, svc, "x:1", nil, BuildServiceImagesInputs{})
+	_, _, err := serviceBuild(proj, svc, "x:1", nil, BuildServiceImagesInputs{})
 	if err == nil {
 		t.Fatal("expected error for dockerfile_inline")
 	}

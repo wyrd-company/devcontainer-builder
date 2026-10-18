@@ -8,7 +8,7 @@ import (
 )
 
 // DevContainer is a partial model of the devcontainer.json schema. It covers
-// the fields needed to drive a buildx-backed image build: base image, build
+// the fields needed to drive an image build: base image, build
 // context, features, lifecycle hooks, user, and customizations relevant to
 // the VS Code remote experience.
 //

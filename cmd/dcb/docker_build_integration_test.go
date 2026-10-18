@@ -11,8 +11,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/wyrd-company/devcontainer-builder/pkg/buildkit"
 )
 
 func TestDockerBuildIntegration(t *testing.T) {
@@ -20,7 +18,6 @@ func TestDockerBuildIntegration(t *testing.T) {
 		t.Skip("skipping Docker integration test in short mode")
 	}
 	requireDocker(t)
-	requireBuildKit(t)
 
 	root := repoRoot(t)
 	bin := buildBinary(t)
@@ -28,13 +25,11 @@ func TestDockerBuildIntegration(t *testing.T) {
 
 	cases := []struct {
 		name      string
-		engine    string
 		fixture   string
 		assertion func(*testing.T, string)
 	}{
 		{
 			name:    "buildkit-image",
-			engine:  "buildkit",
 			fixture: "image",
 			assertion: func(t *testing.T, tag string) {
 				cfg := inspectImage(t, tag)
@@ -50,7 +45,6 @@ func TestDockerBuildIntegration(t *testing.T) {
 		},
 		{
 			name:    "buildkit-dockerfile",
-			engine:  "buildkit",
 			fixture: "dockerfile",
 			assertion: func(t *testing.T, tag string) {
 				runDocker(t, "run", "--rm", tag, "sh", "-lc", "grep -qx dockerfile-smoke /usr/local/share/dcb-smoke-dockerfile")
@@ -58,18 +52,9 @@ func TestDockerBuildIntegration(t *testing.T) {
 		},
 		{
 			name:    "buildkit-feature",
-			engine:  "buildkit",
 			fixture: "features",
 			assertion: func(t *testing.T, tag string) {
 				runDocker(t, "run", "--rm", tag, "sh", "-lc", "grep -qx feature-smoke /usr/local/share/dcb-smoke-feature")
-			},
-		},
-		{
-			name:    "buildx-dockerfile",
-			engine:  "buildx",
-			fixture: "dockerfile",
-			assertion: func(t *testing.T, tag string) {
-				runDocker(t, "run", "--rm", tag, "sh", "-lc", "grep -qx dockerfile-smoke /usr/local/share/dcb-smoke-dockerfile")
 			},
 		},
 	}
@@ -83,7 +68,6 @@ func TestDockerBuildIntegration(t *testing.T) {
 
 			args := []string{
 				"build",
-				"--engine", tc.engine,
 				"--workspace", filepath.Join(root, "testdata", "smoke", tc.fixture),
 				"--tag", tag,
 				"--load",
@@ -111,14 +95,6 @@ func requireDocker(t *testing.T) {
 	cmd := exec.Command("docker", "info")
 	if out, err := cmd.CombinedOutput(); err != nil {
 		skipOrFail(t, "docker daemon is required for Docker integration tests: %v\n%s", err, out)
-	}
-	runCommand(t, "docker", "buildx", "version")
-}
-
-func requireBuildKit(t *testing.T) {
-	t.Helper()
-	if buildkit.DefaultAddress() == "" {
-		skipOrFail(t, "BuildKit is required for Docker integration tests; set BUILDKIT_HOST or expose /run/buildkit/buildkitd.sock")
 	}
 }
 

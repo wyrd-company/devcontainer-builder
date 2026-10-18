@@ -10,7 +10,7 @@ substance.
 
 | Package | What it does |
 | ------- | ------------ |
-| `pkg/builder` | Build the image. Authors a BuildKit LLB graph directly so feature installs and the VS Code server are cacheable vertices; supports multi-platform, manifest-list builds, and chains the builtin `dockerfile.v0` frontend for upstream Dockerfile bases. A `docker buildx` shell-out engine is included as a fallback. |
+| `pkg/builder` | Build the image. Authors a BuildKit LLB graph directly so feature installs and the VS Code server are cacheable vertices; supports multi-platform, manifest-list builds, and chains the builtin `dockerfile.v0` frontend for upstream Dockerfile bases. Builds run on the Docker daemon's built-in BuildKit through the Engine API (no `docker` CLI shell-out); `BUILDKIT_HOST` selects a separate BuildKit instead. |
 | `pkg/host/docker` | Run the image. Talks to the Docker Engine API directly (no `docker` CLI shell-out), creates / starts / execs / removes containers, runs the lifecycle phases (`onCreate` → `postAttach`) gated by upstream-compatible marker files. Embeddable in a service. |
 | `pkg/host/dockercompose` | Run a compose-mode devcontainer (`dockerComposeFile` + `service`). Parses and merges compose files via `compose-spec/compose-go`, generates an in-memory override that injects the workspace mount + remoteEnv + the feature-derived primary image, and creates networks / volumes / containers natively through the engine API — no `docker compose` CLI shell-out. Lifecycle phases run inside the primary service container. |
 | `pkg/host/kubernetes` | Run the image on a cluster. Discover-or-create the Pod via the apiserver, wait for the target container to reach Ready, exec lifecycle phases through the pod-exec subresource (SPDY), port-forward, delete on teardown. Builds on `pkg/projection/kubernetes` for the spec → Pod translation and `pkg/host/runner` for marker gating. No CLI: this is a library for operators and services that already own a `kubernetes.Interface`. |
@@ -72,8 +72,8 @@ dcb build \
   --load
 ```
 
-Push a multi-arch-ready single-platform build to a registry, using a
-specific buildkitd endpoint:
+Push a single-platform build to a registry, using a separate BuildKit
+instead of the Docker daemon's:
 
 ```sh
 BUILDKIT_HOST=tcp://buildkit.internal:1234 \
@@ -88,12 +88,6 @@ Generate the wrapper Dockerfile for inspection without running a build:
 
 ```sh
 dcb generate --workspace . --skip-vscode-server
-```
-
-Force the buildx fallback engine:
-
-```sh
-dcb build --engine buildx --tag dev:latest --load
 ```
 
 ## Architecture
@@ -119,12 +113,12 @@ dcb build --engine buildx --tag dev:latest --load
        │  orchestrates the pipeline   │
        └──────────────┬───────────────┘
                       │
-        ┌─────────────┴─────────────┐
-        ▼                           ▼
-   ┌─────────────┐          ┌──────────────┐
-   │ pkg/buildkit │  default  │ pkg/buildx   │  fallback
-   │ (LLB graph)  │          │ (docker CLI) │
-   └─────────────┘          └──────────────┘
+                      ▼
+       ┌──────────────────────────────┐
+       │      pkg/buildkit            │
+       │  LLB graph, solved on the    │
+       │  Docker daemon's BuildKit    │
+       └──────────────────────────────┘
 ```
 
 ### Package map
@@ -137,7 +131,6 @@ dcb build --engine buildx --tag dev:latest --load
 | `pkg/vscode`      | VS Code server resolver + downloader (Microsoft update API)     |
 | `pkg/dockerfile`  | Wrapper Dockerfile generator                                    |
 | `pkg/buildkit`    | LLB graph authoring + `buildkit/client` solve                   |
-| `pkg/buildx`      | Shell wrapper over `docker buildx build`                        |
 | `pkg/platform`    | Platform/arch translation                                       |
 | `pkg/builder`     | Top-level orchestrator                                          |
 | `cmd/dcb`         | CLI entrypoint                                                  |

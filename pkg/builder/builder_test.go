@@ -2,18 +2,20 @@ package builder
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/wyrd-company/devcontainer-builder/pkg/spec"
 )
 
-func TestValidateBuildSupport_RejectsBuildKitOptions(t *testing.T) {
+func TestValidateBuildSupport_RejectsBuildOptions(t *testing.T) {
 	dc := &spec.DevContainer{Build: &spec.Build{Options: []string{"--ssh", "default"}}}
-	if err := validateBuildSupport(dc, EngineBuildKit); err == nil {
-		t.Fatal("expected buildkit build.options rejection")
+	err := validateBuildSupport(dc)
+	if err == nil || !strings.Contains(err.Error(), "build.options is not supported") {
+		t.Fatalf("err = %v, want build.options rejection", err)
 	}
-	if err := validateBuildSupport(dc, EngineBuildx); err != nil {
-		t.Fatalf("buildx should accept build.options: %v", err)
+	if err := validateBuildSupport(&spec.DevContainer{Build: &spec.Build{}}); err != nil {
+		t.Fatalf("spec without build.options rejected: %v", err)
 	}
 }
 

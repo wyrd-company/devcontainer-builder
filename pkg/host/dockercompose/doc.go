@@ -30,10 +30,10 @@
 // # Compose-side build
 //
 // Both the primary and sidecars may declare a compose `build:` block.
-// BuildPrimaryImage runs the primary's build through pkg/buildx and
+// BuildPrimaryImage runs the primary's build through BuildKit and
 // uses the result as the base for feature derivation; Up walks the
 // project for non-primary services with a build block and compiles
-// each via pkg/buildx before creating its container, then mutates the
+// each through BuildKit before creating its container, then mutates the
 // in-memory project so the spawn step uses the freshly-built tag.
 // Options.SkipServiceBuild opts out for embedders that manage their
 // own image pipeline. dockerfile_inline is rejected.
