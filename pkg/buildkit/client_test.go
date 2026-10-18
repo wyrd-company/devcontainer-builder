@@ -198,3 +198,32 @@ func countIgnoreCache(t *testing.T, def *pb.Definition) cacheCount {
 	}
 	return n
 }
+
+func TestConnect_SelectsBuildKit(t *testing.T) {
+	cases := []struct {
+		name, addr, env string
+		wantDaemon      bool
+		wantAddr        string
+	}{
+		{"default is the docker daemon", "", "", true, ""},
+		{"BUILDKIT_HOST selects a separate buildkit", "", "tcp://127.0.0.1:1", false, "tcp://127.0.0.1:1"},
+		{"explicit address wins over BUILDKIT_HOST", "tcp://127.0.0.1:2", "tcp://127.0.0.1:1", false, "tcp://127.0.0.1:2"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Setenv("BUILDKIT_HOST", c.env)
+			// Neither client dials until first use.
+			conn, err := Connect(context.Background(), c.addr, nil)
+			if err != nil {
+				t.Fatalf("Connect: %v", err)
+			}
+			defer conn.Close()
+			if conn.Daemon != c.wantDaemon || conn.Address != c.wantAddr {
+				t.Fatalf("Daemon=%v Address=%q, want Daemon=%v Address=%q", conn.Daemon, conn.Address, c.wantDaemon, c.wantAddr)
+			}
+			if conn.Docker == nil || conn.BuildKit == nil {
+				t.Fatal("Connect must set both clients")
+			}
+		})
+	}
+}
