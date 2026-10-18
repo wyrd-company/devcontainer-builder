@@ -41,7 +41,7 @@ sees it.
 | `forwardPorts` | Not published, as upstream. |
 | `overrideCommand` | |
 | `onCreateCommand`, `updateContentCommand`, `postCreateCommand`, `postStartCommand`, `postAttachCommand` | String, array, and object forms. Object entries run in parallel. |
-| `customizations` | Kept in the configuration and image metadata. |
+| `customizations` | Returned by `dcb read-configuration`. |
 | `shutdownAction` | Validated. `dcb down` always stops and removes the container. |
 
 `initializeCommand` does not run: `dcb` runs no commands on the host.
@@ -62,19 +62,6 @@ the Engine API. Flags that add to a property, such as `--cap-add`, add to it
 and do not replace it. An unknown flag is an error, so that a typing error does
 not change the container. `--entrypoint` is an error, because `dcb` sets the
 entrypoint that keeps the container running.
-
-## Image metadata
-
-`dcb build` and `dcb up` write the `devcontainer.metadata` label on the image,
-as upstream does. The label records the configuration and the contribution of
-each feature: lifecycle commands, mounts, capabilities, environment, users,
-and customizations. When `dcb up` starts a container from an image with the
-label, it merges the label with the current configuration by the upstream
-rules. An image built once can then be started from a configuration that only
-names the image.
-
-`dcb read-configuration --include-merged-configuration` adds the merged
-configuration to the result.
 
 ## Docker and BuildKit
 

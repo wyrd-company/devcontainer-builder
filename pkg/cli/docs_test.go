@@ -20,10 +20,6 @@ import (
 // upstream CLI and the docker run vocabulary that runArgs accepts.
 var foreignFlags = map[string]bool{"--docker-path": true, "--entrypoint": true, "--cap-add": true}
 
-// pendingFlags are documented flags whose implementation is not yet on this
-// branch. Remove an entry when its flag lands.
-var pendingFlags = map[string]bool{"--include-merged-configuration": true}
-
 var (
 	inlineCode = regexp.MustCompile("`([^`\n]+)`")
 	flagSpan   = regexp.MustCompile(`^--[a-z][a-z-]*`)
@@ -35,11 +31,6 @@ var (
 func TestDocumentedCommandsExist(t *testing.T) {
 	root := (&application{}).command()
 	initHelp(root)
-	for flag := range pendingFlags {
-		if hasFlag(root, strings.TrimPrefix(flag, "--")) {
-			t.Errorf("%s exists; remove it from pendingFlags", flag)
-		}
-	}
 
 	files, err := filepath.Glob("../../docs/*.md")
 	if err != nil {
@@ -63,7 +54,7 @@ func TestDocumentedCommandsExist(t *testing.T) {
 		}
 		for _, span := range spans {
 			flag := flagSpan.FindString(span)
-			if flag == "" || foreignFlags[flag] || pendingFlags[flag] {
+			if flag == "" || foreignFlags[flag] {
 				continue
 			}
 			flags++
@@ -174,9 +165,6 @@ func checkCommand(root *cobra.Command, args []string) []string {
 		if strings.HasPrefix(arg, "--") {
 			subcommands = false
 			name := strings.SplitN(strings.TrimPrefix(arg, "--"), "=", 2)[0]
-			if pendingFlags["--"+name] {
-				continue
-			}
 			if cmd.Flags().Lookup(name) == nil {
 				problems = append(problems, cmd.CommandPath()+" has no --"+name)
 			}
