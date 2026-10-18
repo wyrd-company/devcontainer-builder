@@ -110,6 +110,39 @@ BUILDKIT_HOST=tcp://buildkit.example.com:1234 \
   --image-name registry.example.com/team/dev:1.0 --push
 ```
 
+### Registry credentials
+
+`dcb` uses the registry credentials of the Docker client configuration, as
+the `docker` command does. It reads `config.json` in the `DOCKER_CONFIG`
+directory, or in `~/.docker` when `DOCKER_CONFIG` is not set:
+
+- `auths` entries, which `docker login` writes when there is no credential
+  store.
+- `credHelpers` and `credsStore`. `dcb` runs the named
+  `docker-credential-<name>` program from `PATH` to get the credentials.
+- `DOCKER_AUTH_CONFIG`, an environment variable that holds `auths` entries.
+
+These operations send the credentials:
+
+- `dcb up` pulls of an image that Docker does not have.
+- Builds: base images and `--push`.
+- OCI features.
+- Reads of the base image configuration for metadata and the feature user.
+
+A registry with no credentials is accessed anonymously. When a credential
+helper fails, image pulls, builds, and pushes fail, as they do with `docker`.
+Feature downloads and base image configuration reads continue anonymously, as
+they do with the Dev Container CLI. `dcb` keeps credentials in memory only,
+and does not write them to logs or disk.
+
+A `credsStore` or `credHelpers` value must be a plain program name suffix,
+such as `desktop` or `ecr-login`; `dcb` finds the program on `PATH` only.
+The output of a credential helper never appears in `dcb` output. Feature
+downloads send credentials only to the registry and, over HTTPS, to the token
+service that it names. They do not follow a redirect from HTTPS to HTTP, and
+fail when the registry redirects to another origin that asks for
+authentication.
+
 ## VS Code server
 
 `dcb` does not install the VS Code server unless you ask. With

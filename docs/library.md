@@ -24,6 +24,7 @@ a service or an operator can embed them.
 | `pkg/spec` | Reads `devcontainer.json`. |
 | `pkg/features` | Resolves features and their install order. |
 | `pkg/substitute` | Substitutes configuration variables. |
+| `pkg/registryauth` | Reads registry credentials from the Docker client configuration. |
 
 Package documentation is on
 [pkg.go.dev](https://pkg.go.dev/github.com/wyrd-company/devcontainer-builder).
@@ -41,7 +42,9 @@ res, err := builder.New().Build(ctx, builder.Options{
 ```
 
 `Options.Docker` takes an existing Engine API client, and
-`Options.BuildKitAddress` selects a separate BuildKit.
+`Options.BuildKitAddress` selects a separate BuildKit. Builds read registry
+credentials from the Docker client configuration. See
+[Registry credentials](/docs/dcb/configuration#registry-credentials).
 
 ## Run a container
 
@@ -67,6 +70,10 @@ res, err := host.Up(ctx, docker.UpRequest{
 
 `ImageBuilt` tells `Up` that the image was built from this configuration, so
 its metadata label already holds the feature and configuration entries.
+
+`Up` pulls a missing image anonymously. To send registry credentials, set
+`docker.Options.RegistryAuth`, for example to `registryauth.FromEnvironment()`
+from `pkg/registryauth`, which reads the Docker client configuration.
 
 `Up` is idempotent. It finds the workspace container by its labels, starts it
 if it is stopped, and runs only the lifecycle commands that the marker files
