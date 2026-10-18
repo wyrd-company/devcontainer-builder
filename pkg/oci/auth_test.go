@@ -260,8 +260,15 @@ func TestFetchManifest_CredentialsAreNotSentToPlainHTTPRealm(t *testing.T) {
 	}
 }
 
-func TestFetchManifest_AnonymousTokenFromPlainHTTPRealm(t *testing.T) {
+// The realm must be HTTPS, as the registry is, even for an anonymous
+// token request.
+func TestFetchManifest_PlainHTTPRealmIsRefusedWhenAnonymous(t *testing.T) {
+	var mu sync.Mutex
+	calls := 0
 	realm := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		calls++
+		mu.Unlock()
 		_, _ = w.Write([]byte(`{"token":"anonymous-token"}`))
 	}))
 	defer realm.Close()
@@ -269,7 +276,10 @@ func TestFetchManifest_AnonymousTokenFromPlainHTTPRealm(t *testing.T) {
 		return `Bearer realm="` + realm.URL + `/token",service="test-registry"`
 	}, "Bearer anonymous-token", nil)
 	c, ref := reg.client(&staticAuth{})
-	if _, _, err := c.FetchManifest(ref); err != nil {
-		t.Fatalf("FetchManifest: %v", err)
+	if _, _, err := c.FetchManifest(ref); err == nil || !strings.Contains(err.Error(), "not HTTPS") {
+		t.Fatalf("FetchManifest: err = %v, want a refused plain-HTTP realm", err)
+	}
+	if calls != 0 {
+		t.Fatalf("plain-HTTP realm called %d times, want 0", calls)
 	}
 }

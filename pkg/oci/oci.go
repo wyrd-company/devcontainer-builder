@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 
@@ -146,7 +147,7 @@ type ManifestAnnot map[string]string
 // needed by selecting the first child manifest. (For features, indexes are
 // rare; when present we just take whatever is first.)
 func (c *Client) FetchManifest(ref Reference) (*Manifest, []byte, error) {
-	return c.fetchManifest(ref, 0, firstManifest)
+	return c.fetchManifest(ref, ref.String(), 0, firstManifest)
 }
 
 // childSelector picks the manifest to follow from an index.
@@ -185,7 +186,7 @@ type ImageConfig struct {
 // FetchImageConfig returns the configuration of the image ref for
 // platform p, following a multi-platform index to p's manifest.
 func (c *Client) FetchImageConfig(ref Reference, p Platform) (*ImageConfig, error) {
-	m, _, err := c.fetchManifest(ref, 0, platformManifest(p))
+	m, _, err := c.fetchManifest(ref, ref.String(), 0, platformManifest(p))
 	if err != nil {
 		return nil, err
 	}
@@ -198,19 +199,21 @@ func (c *Client) FetchImageConfig(ref Reference, p Platform) (*ImageConfig, erro
 	}
 	var cfg ImageConfig
 	if err := json.Unmarshal([]byte(buf.String()), &cfg); err != nil {
-		return nil, fmt.Errorf("decode image config: %w", err)
+		return nil, fmt.Errorf("image config of %s is malformed", ref)
 	}
 	return &cfg, nil
 }
 
-func (c *Client) fetchManifest(ref Reference, depth int, choose childSelector) (*Manifest, []byte, error) {
+// fetchManifest fetches ref's manifest, following an index. Errors name
+// the reference as name, the reference the caller asked for, so that no
+// server-supplied digest reaches them.
+func (c *Client) fetchManifest(ref Reference, name string, depth int, choose childSelector) (*Manifest, []byte, error) {
 	if depth > 4 {
-		return nil, nil, fmt.Errorf("manifest index nesting too deep")
+		return nil, nil, fmt.Errorf("manifest %s: index nesting too deep", name)
 	}
-	endpoint := manifestURL(ref)
-	req, err := http.NewRequest(http.MethodGet, endpoint, nil)
+	req, err := http.NewRequest(http.MethodGet, manifestURL(ref), nil)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("manifest %s: invalid reference", name)
 	}
 	req.Header.Set("Accept", strings.Join([]string{
 		mediaTypeOCIManifest,
@@ -220,22 +223,22 @@ func (c *Client) fetchManifest(ref Reference, depth int, choose childSelector) (
 	}, ", "))
 	resp, err := c.do(req, ref)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("manifest %s: %w", name, err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return nil, nil, fmt.Errorf("manifest %s: %s", ref, resp.Status)
+		return nil, nil, fmt.Errorf("manifest %s: %s", name, statusText(resp.StatusCode))
 	}
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("manifest %s: reading the response failed", name)
 	}
 	mediaType := strings.TrimSpace(strings.Split(resp.Header.Get("Content-Type"), ";")[0])
 	var envelope struct {
 		MediaType string `json:"mediaType"`
 	}
 	if err := json.Unmarshal(body, &envelope); err != nil {
-		return nil, nil, fmt.Errorf("decode manifest: %w", err)
+		return nil, nil, fmt.Errorf("manifest %s is malformed", name)
 	}
 	if envelope.MediaType != "" {
 		mediaType = envelope.MediaType
@@ -244,74 +247,95 @@ func (c *Client) fetchManifest(ref Reference, depth int, choose childSelector) (
 	case mediaTypeOCIIndex, mediaTypeDockerManifestL:
 		var idx Index
 		if err := json.Unmarshal(body, &idx); err != nil {
-			return nil, nil, fmt.Errorf("decode index: %w", err)
+			return nil, nil, fmt.Errorf("manifest index %s is malformed", name)
 		}
 		if len(idx.Manifests) == 0 {
-			return nil, nil, fmt.Errorf("manifest index has no manifests")
+			return nil, nil, fmt.Errorf("manifest index %s has no manifests", name)
 		}
 		child, err := choose(idx.Manifests)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, fmt.Errorf("manifest index %s: %w", name, err)
 		}
-		if child.Digest == "" {
-			return nil, nil, fmt.Errorf("manifest index child has no digest")
+		if !validDigest(child.Digest) {
+			return nil, nil, fmt.Errorf("manifest index %s lists an invalid digest", name)
 		}
 		childRef := ref
 		childRef.Tag = ""
 		childRef.Digest = child.Digest
-		m, childBody, err := c.fetchManifest(childRef, depth+1, choose)
+		m, childBody, err := c.fetchManifest(childRef, name, depth+1, choose)
 		if err != nil {
 			return nil, nil, err
 		}
-		if err := verifyDigest(child.Digest, childBody); err != nil {
-			return nil, nil, fmt.Errorf("child manifest: %w", err)
+		if !matchesDigest(child.Digest, childBody) {
+			return nil, nil, fmt.Errorf("manifest index %s: child manifest does not match its digest", name)
 		}
 		return m, childBody, nil
 	}
 	var m Manifest
 	if err := json.Unmarshal(body, &m); err != nil {
-		return nil, nil, fmt.Errorf("decode manifest: %w", err)
+		return nil, nil, fmt.Errorf("manifest %s is malformed", name)
 	}
 	return &m, body, nil
 }
 
 // FetchBlob streams a blob to the supplied writer. It verifies the digest
-// before returning success.
+// before returning success. Errors name ref, not the digest, which can
+// come from a manifest.
 func (c *Client) FetchBlob(ref Reference, digest string, w io.Writer) error {
-	endpoint := blobURL(ref, digest)
-	req, err := http.NewRequest(http.MethodGet, endpoint, nil)
+	if !validDigest(digest) {
+		return fmt.Errorf("blob of %s: invalid digest", ref)
+	}
+	req, err := http.NewRequest(http.MethodGet, blobURL(ref, digest), nil)
 	if err != nil {
-		return err
+		return fmt.Errorf("blob of %s: invalid reference", ref)
 	}
 	resp, err := c.do(req, ref)
 	if err != nil {
-		return err
+		return fmt.Errorf("blob of %s: %w", ref, err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("blob %s@%s: %s", ref, digest, resp.Status)
+		return fmt.Errorf("blob of %s: %s", ref, statusText(resp.StatusCode))
 	}
 	hasher := sha256.New()
-	if _, err := io.Copy(io.MultiWriter(w, hasher), resp.Body); err != nil {
-		return err
+	body := &readErrRecorder{r: resp.Body}
+	if _, err := io.Copy(io.MultiWriter(w, hasher), body); err != nil {
+		if body.err != nil {
+			return fmt.Errorf("blob of %s: reading the response failed", ref)
+		}
+		return fmt.Errorf("blob of %s: %w", ref, err)
 	}
 	got := "sha256:" + hex.EncodeToString(hasher.Sum(nil))
 	if !strings.EqualFold(got, digest) {
-		return fmt.Errorf("digest mismatch: got %s want %s", got, digest)
+		return fmt.Errorf("blob of %s does not match its digest", ref)
 	}
 	return nil
 }
 
-func verifyDigest(want string, body []byte) error {
-	if want == "" {
-		return nil
+// readErrRecorder records a read error, so that it can be told apart from
+// an error of the destination writer.
+type readErrRecorder struct {
+	r   io.Reader
+	err error
+}
+
+func (r *readErrRecorder) Read(p []byte) (int, error) {
+	n, err := r.r.Read(p)
+	if err != nil && err != io.EOF {
+		r.err = err
 	}
+	return n, err
+}
+
+// digestPattern is a sha256 digest, the only algorithm the client
+// verifies.
+var digestPattern = regexp.MustCompile(`^sha256:[a-fA-F0-9]{64}$`)
+
+func validDigest(d string) bool { return digestPattern.MatchString(d) }
+
+func matchesDigest(want string, body []byte) bool {
 	sum := sha256.Sum256(body)
-	got := "sha256:" + hex.EncodeToString(sum[:])
-	if !strings.EqualFold(got, want) {
-		return fmt.Errorf("digest mismatch: got %s want %s", got, want)
-	}
-	return nil
+	return strings.EqualFold("sha256:"+hex.EncodeToString(sum[:]), want)
 }
 
 func manifestURL(ref Reference) string {

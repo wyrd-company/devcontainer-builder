@@ -1,11 +1,15 @@
 package oci
 
 import (
+	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -25,13 +29,18 @@ func (c *Client) do(req *http.Request, ref Reference) (*http.Response, error) {
 	if h, ok := c.authorization[ref.Registry]; ok {
 		req.Header.Set("Authorization", h)
 	}
-	resp, err := c.send(req, false)
+	resp, err := c.send(req, false, ref.Registry)
 	if err != nil {
 		return nil, err
 	}
 	if resp.StatusCode == http.StatusUnauthorized {
 		challenge := resp.Header.Get("WWW-Authenticate")
 		_ = resp.Body.Close()
+		// Credentials are bound to the registry's origin: a challenge from
+		// the target of a redirect to another origin never gets them.
+		if !sameOrigin(req.URL, resp.Request.URL) {
+			return nil, fmt.Errorf("registry %s redirected to another origin that requires authentication; the registry's credentials are not sent there", ref.Registry)
+		}
 		creds, credErr := c.credentials(ref)
 		h, aerr := c.authorize(ref, challenge, creds)
 		if aerr != nil {
@@ -40,7 +49,7 @@ func (c *Client) do(req *http.Request, ref Reference) (*http.Response, error) {
 		c.authorization[ref.Registry] = h
 		newReq := req.Clone(req.Context())
 		newReq.Header.Set("Authorization", h)
-		resp, err = c.send(newReq, false)
+		resp, err = c.send(newReq, false, ref.Registry)
 		if err == nil && credErr != nil && resp.StatusCode == http.StatusUnauthorized {
 			_ = resp.Body.Close()
 			return nil, withCredentialError(fmt.Errorf("registry %s refused anonymous access", ref.Registry), credErr)
@@ -92,24 +101,24 @@ func (c *Client) authorize(ref Reference, challenge string, creds registryauth.C
 		}
 		return "Bearer " + tok, nil
 	}
-	return "", fmt.Errorf("unsupported auth challenge: %q", challenge)
+	return "", fmt.Errorf("registry %s: unsupported authentication challenge", ref.Registry)
 }
 
 // acquireToken requests a registry token from the challenge's realm. An
 // identity token is exchanged through the OAuth2 refresh-token grant;
-// otherwise the request carries the Basic credentials, if any. Credentials
-// are sent only to an HTTPS realm.
+// otherwise the request carries the Basic credentials, if any. The realm
+// must be HTTPS, as the registry is.
 func (c *Client) acquireToken(ref Reference, params map[string]string, creds registryauth.Credentials) (string, error) {
 	realm := params["realm"]
 	if realm == "" {
-		return "", fmt.Errorf("auth challenge missing realm")
+		return "", fmt.Errorf("registry %s: authentication challenge has no realm", ref.Registry)
 	}
 	u, err := url.Parse(realm)
-	if err != nil {
-		return "", err
+	if err != nil || u.Host == "" {
+		return "", fmt.Errorf("registry %s: invalid token realm", ref.Registry)
 	}
-	if !creds.Anonymous() && u.Scheme != "https" {
-		return "", fmt.Errorf("registry %s token realm %s is not HTTPS, so its credentials are not sent", ref.Registry, u.Redacted())
+	if u.Scheme != "https" {
+		return "", fmt.Errorf("registry %s: token realm is not HTTPS", ref.Registry)
 	}
 	scope := params["scope"]
 	if scope == "" {
@@ -129,7 +138,7 @@ func (c *Client) acquireToken(ref Reference, params map[string]string, creds reg
 		}
 		req, err = http.NewRequest(http.MethodPost, u.String(), strings.NewReader(form.Encode()))
 		if err != nil {
-			return "", err
+			return "", fmt.Errorf("registry %s: invalid token realm", ref.Registry)
 		}
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	} else {
@@ -141,19 +150,19 @@ func (c *Client) acquireToken(ref Reference, params map[string]string, creds reg
 		u.RawQuery = q.Encode()
 		req, err = http.NewRequest(http.MethodGet, u.String(), nil)
 		if err != nil {
-			return "", err
+			return "", fmt.Errorf("registry %s: invalid token realm", ref.Registry)
 		}
 		if creds.Username != "" || creds.Password != "" {
 			req.SetBasicAuth(creds.Username, creds.Password)
 		}
 	}
-	resp, err := c.send(req, !creds.Anonymous())
+	resp, err := c.send(req, !creds.Anonymous(), ref.Registry)
 	if err != nil {
 		return "", err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("registry %s token request: %s", ref.Registry, resp.Status)
+		return "", fmt.Errorf("registry %s token request: %s", ref.Registry, statusText(resp.StatusCode))
 	}
 	var payload struct {
 		Token       string `json:"token"`
@@ -176,35 +185,76 @@ const tokenResponseLimit = 1 << 20
 // host or port drops the Authorization header, so that a blob redirect to
 // a CDN is anonymous; when bound is set, such a redirect is refused, so
 // that a credentialed token request reaches only the advertised realm.
-// Errors name the request without its query, which can hold a signature.
-func (c *Client) send(req *http.Request, bound bool) (*http.Response, error) {
+// Errors name registry, the configured host, and a fixed reason, never
+// a server-supplied URL or message.
+func (c *Client) send(req *http.Request, bound bool, registry string) (*http.Response, error) {
 	client := *c.HTTP
 	client.CheckRedirect = func(next *http.Request, via []*http.Request) error {
 		if len(via) >= 10 {
-			return errors.New("stopped after 10 redirects")
+			return redirectError("registry " + registry + ": stopped after 10 redirects")
 		}
 		origin := via[0].URL
 		if origin.Scheme == "https" && next.URL.Scheme != "https" {
-			return fmt.Errorf("redirect from %s to a non-HTTPS URL refused", origin.Host)
+			return redirectError("registry " + registry + ": redirect to a non-HTTPS URL refused")
 		}
 		if !sameOrigin(origin, next.URL) {
 			if bound {
-				return fmt.Errorf("redirect of a credentialed request from %s to another origin refused", origin.Host)
+				return redirectError("registry " + registry + ": redirect of a credentialed request to another origin refused")
 			}
 			next.Header.Del("Authorization")
 		}
 		return nil
 	}
 	resp, err := client.Do(req)
+	if err != nil {
+		var redirect redirectError
+		if errors.As(err, &redirect) {
+			return nil, redirect
+		}
+		return nil, fmt.Errorf("registry %s: request failed: %s", registry, transportReason(err))
+	}
+	return resp, nil
+}
+
+// redirectError is a redirect refusal; its text names only the configured
+// registry.
+type redirectError string
+
+func (e redirectError) Error() string { return string(e) }
+
+// transportReason is a fixed description of a transport failure, so that
+// no server-supplied text (a malformed status line, a redirect URL, an
+// HTTP/2 debug message) reaches an error.
+func transportReason(err error) string {
+	// *url.Error is itself a net.Error; classify what it wraps.
 	var uerr *url.Error
 	if errors.As(err, &uerr) {
-		target := uerr.URL
-		if u, perr := url.Parse(uerr.URL); perr == nil {
-			target = u.Scheme + "://" + u.Host + u.Path
-		}
-		return nil, fmt.Errorf("%s %s: %w", uerr.Op, target, uerr.Err)
+		err = uerr.Err
 	}
-	return resp, err
+	var (
+		netErr      net.Error
+		unknownCA   x509.UnknownAuthorityError
+		hostname    x509.HostnameError
+		invalid     x509.CertificateInvalidError
+		certificate *tls.CertificateVerificationError
+	)
+	switch {
+	case errors.Is(err, context.Canceled):
+		return "canceled"
+	case errors.Is(err, context.DeadlineExceeded), errors.As(err, &netErr) && netErr.Timeout():
+		return "timed out"
+	case errors.As(err, &certificate), errors.As(err, &unknownCA), errors.As(err, &hostname), errors.As(err, &invalid):
+		return "TLS certificate verification failed"
+	case errors.As(err, &netErr):
+		return "connection failed"
+	}
+	return "invalid response or redirect"
+}
+
+// statusText is an HTTP status as its code and standard text, never the
+// server's reason phrase.
+func statusText(code int) string {
+	return strings.TrimSpace(fmt.Sprintf("%d %s", code, http.StatusText(code)))
 }
 
 // sameOrigin reports whether a and b share scheme, host and port.
