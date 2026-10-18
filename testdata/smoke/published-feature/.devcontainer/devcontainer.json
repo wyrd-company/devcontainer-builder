@@ -1,6 +1,6 @@
 {
   "name": "smoke-published-feature",
-  "image": "debian:bookworm-slim",
+  "image": "mirror.gcr.io/library/debian:bookworm-slim",
   "workspaceFolder": "/workspaces/smoke-published-feature",
   "remoteUser": "devuser",
   "updateRemoteUserUID": false,
