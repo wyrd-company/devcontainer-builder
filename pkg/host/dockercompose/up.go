@@ -33,8 +33,8 @@ type UpRequest struct {
 	// the project name source and the workspace bind-mount source.
 	LocalWorkspace string
 	// ContainerWorkspace is the in-container workspace folder. When
-	// empty, falls back to spec.WorkspaceFolder, then
-	// "/workspaces/<basename>".
+	// empty, falls back to spec.WorkspaceFolder, then "/" like upstream.
+	// The workspace bind mount then targets "/workspaces/<basename>".
 	ContainerWorkspace string
 	// PrimaryImage, when set, overrides the primary service's image
 	// in the override layer. Used to point compose at a feature-built
@@ -106,10 +106,13 @@ func (h *Host) Up(ctx context.Context, req UpRequest) (*UpResult, error) {
 	if containerWorkspace == "" {
 		containerWorkspace = req.Spec.WorkspaceFolder
 	}
+	mountTarget := containerWorkspace
 	if containerWorkspace == "" {
-		containerWorkspace = "/workspaces/" + basename(req.LocalWorkspace)
+		containerWorkspace = "/"
+		mountTarget = "/workspaces/" + basename(req.LocalWorkspace)
 	}
 	containerWorkspace = ensurePosixPath(containerWorkspace)
+	mountTarget = ensurePosixPath(mountTarget)
 
 	idLabels := map[string]string{LabelLocalFolder: req.LocalWorkspace}
 	if req.SpecPath != "" {
@@ -124,7 +127,7 @@ func (h *Host) Up(ctx context.Context, req UpRequest) (*UpResult, error) {
 	}
 	dc := substituteSpec(req.Spec, subCtx)
 
-	primary := OverrideInputs{Spec: dc, LocalWorkspace: req.LocalWorkspace, ContainerWorkspace: containerWorkspace, PrimaryImage: req.PrimaryImage}
+	primary := OverrideInputs{Spec: dc, LocalWorkspace: req.LocalWorkspace, ContainerWorkspace: mountTarget, PrimaryImage: req.PrimaryImage}
 	override, err := OverrideYAML(primary)
 	if err != nil {
 		return nil, errorf("override yaml: %w", err)

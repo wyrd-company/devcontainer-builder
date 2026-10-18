@@ -174,3 +174,33 @@ func TestDockerLifecycleCLI(t *testing.T) {
 		t.Fatalf("TTY output=%q", logs)
 	}
 }
+
+// Without workspaceFolder, upstream reports "/" and runs lifecycle commands
+// there; dcb still mounts the workspace at /workspaces/<basename>.
+func TestDockerComposeCLIDefaultWorkspaceFolder(t *testing.T) {
+	cli := hostRequireDocker(t, context.Background())
+	t.Cleanup(func() { _ = cli.Close() })
+	hostEnsureImage(t, context.Background(), cli, "alpine:3.20")
+	workspace := hostPrepareWorkspace(t, "alpine:3.20")
+	config := filepath.Join(workspace, ".devcontainer", "devcontainer.json")
+	body := `{"dockerComposeFile":"compose.yml","service":"app","postCreateCommand":"pwd > /tmp/lifecycle-dir"}`
+	if err := os.WriteFile(config, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(filepath.Dir(config), "compose.yml"), []byte("services:\n  app:\n    image: alpine:3.20\n    command: [sleep, infinity]\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	bin := hostBuildBinary(t)
+	t.Cleanup(func() { _ = hostRunCommandAllowError(bin, "down", "--workspace-folder", workspace) })
+	var result map[string]any
+	if err := json.Unmarshal(hostRunCommand(t, os.Environ(), bin, "up", "--workspace-folder", workspace), &result); err != nil {
+		t.Fatal(err)
+	}
+	if result["remoteWorkspaceFolder"] != "/" {
+		t.Fatalf("remoteWorkspaceFolder = %v, want /", result["remoteWorkspaceFolder"])
+	}
+	out := hostRunCommand(t, os.Environ(), bin, "exec", "--workspace-folder", workspace, "--", "sh", "-c", "cat /tmp/lifecycle-dir; pwd; test -d /workspaces/"+filepath.Base(workspace)+"/.devcontainer && echo mounted")
+	if string(out) != "/\n/\nmounted\n" {
+		t.Fatalf("lifecycle dir, exec dir, workspace mount = %q", out)
+	}
+}

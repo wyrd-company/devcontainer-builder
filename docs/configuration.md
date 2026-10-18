@@ -33,7 +33,7 @@ sees it.
 | `remoteUser`, `containerUser` | |
 | `updateRemoteUserUID` | See [Remote user UID](#remote-user-uid). |
 | `containerEnv`, `remoteEnv` | `containerEnv` is set on the container; `remoteEnv` applies to lifecycle commands and `dcb exec`. |
-| `workspaceFolder`, `workspaceMount` | The default mounts the local workspace at `/workspaces/<folder name>`. |
+| `workspaceFolder`, `workspaceMount` | The default mounts the local workspace at `/workspaces/<folder name>`. With Docker Compose, the default workspace folder is `/`: commands run there, and the mount stays at `/workspaces/<folder name>`. |
 | `mounts` | |
 | `init`, `privileged`, `capAdd`, `securityOpt` | |
 | `runArgs` | See [runArgs](#runargs). |

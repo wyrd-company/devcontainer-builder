@@ -110,10 +110,11 @@ func TestRemoteWorkspaceFolder(t *testing.T) {
 	}{
 		{"single ignores image workdir", single, inspected("/srv", workspaceMount), "/workspaces/sample"},
 		{"single configured folder", &spec.DevContainer{Path: single.Path, WorkspaceFolder: "/sample"}, inspected("/srv"), "/sample"},
-		{"compose service workdir", compose, inspected("/srv"), "/srv"},
+		{"compose ignores service workdir", compose, inspected("/srv", workspaceMount), "/"},
+		{"compose configured folder", &spec.DevContainer{Path: compose.Path, DockerComposeFile: compose.DockerComposeFile, Service: "app", WorkspaceFolder: "/sample"}, inspected("/srv"), "/sample"},
 		{"no configuration uses workspace mount", &spec.DevContainer{}, inspected("/srv", otherMount, workspaceMount), "/mounted"},
 		{"no configuration without mount", &spec.DevContainer{}, inspected("/srv", otherMount), "/srv"},
-		{"no workdir", compose, inspected(""), "/workspaces/sample"},
+		{"compose without workdir", compose, inspected(""), "/"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := remoteWorkspaceFolder(tc.dc, "/host/sample", tc.info); got != tc.want {
