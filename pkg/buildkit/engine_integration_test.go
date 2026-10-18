@@ -17,6 +17,7 @@ import (
 	imagetypes "github.com/docker/docker/api/types/image"
 	dockerclient "github.com/docker/docker/client"
 
+	"github.com/wyrd-company/devcontainer-builder/internal/dockertest"
 	"github.com/wyrd-company/devcontainer-builder/pkg/spec"
 )
 
@@ -95,6 +96,58 @@ RUN printf '%s' "$GREETING" > /greeting
 	}
 	if got := readImageFile(t, ctx, cli, graphTag, "/greeting"); got != "hello" {
 		t.Fatalf("graph /greeting = %q, want hello", got)
+	}
+}
+
+// TestDaemonPushIntegration pushes from the daemon's BuildKit to a
+// test-owned registry and pulls the image back, so success means the
+// registry holds the image. It also checks that an unreachable registry
+// fails the solve rather than leaving only a local image.
+func TestDaemonPushIntegration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping Docker integration test in short mode")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+	t.Setenv("BUILDKIT_HOST", "")
+	cli := requireEngine(t, ctx)
+	registry := dockertest.StartRegistry(t, ctx, cli)
+
+	stamp := time.Now().UnixNano()
+	tag := fmt.Sprintf("%s/dcb-test/push:%d", registry, stamp)
+	unreachable := fmt.Sprintf("127.0.0.1:1/dcb-test/push:%d", stamp)
+	for _, ref := range []string{tag, unreachable} {
+		ref := ref
+		t.Cleanup(func() {
+			if _, err := cli.ImageRemove(context.Background(), ref, imagetypes.RemoveOptions{Force: true}); err != nil && !dockerclient.IsErrNotFound(err) {
+				t.Logf("remove %s: %v", ref, err)
+			}
+		})
+	}
+
+	dir := t.TempDir()
+	writeTestFile(t, filepath.Join(dir, "Dockerfile"), fmt.Sprintf("FROM alpine:3.20\nRUN printf %d > /pushed\n", stamp))
+	push := func(ref string) error {
+		_, err := SolveDockerfile(ctx, DockerfileBuild{ContextDir: dir}, SolveOptions{
+			Docker: cli, Tags: []string{ref}, Push: true, Progress: "plain", Stderr: testLogWriter{t},
+		})
+		return err
+	}
+
+	if err := push(tag); err != nil {
+		t.Fatalf("push to %s: %v", registry, err)
+	}
+	if _, err := cli.ImageRemove(ctx, tag, imagetypes.RemoveOptions{}); err != nil {
+		t.Fatalf("remove local %s: %v", tag, err)
+	}
+	dockertest.EnsureImage(t, ctx, cli, tag)
+	if got := readImageFile(t, ctx, cli, tag, "/pushed"); got != fmt.Sprint(stamp) {
+		t.Fatalf("pulled /pushed = %q, want %d", got, stamp)
+	}
+
+	err := push(unreachable)
+	if err == nil || !strings.Contains(err.Error(), "push "+unreachable) {
+		t.Fatalf("push to an unreachable registry: err = %v, want a push error", err)
 	}
 }
 

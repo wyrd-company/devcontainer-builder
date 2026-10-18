@@ -33,7 +33,9 @@ type SolveOptions struct {
 	LocalContextDir string
 	// Tags name the exported image.
 	Tags []string
-	// Push pushes the image to the registry named by Tags.
+	// Push pushes the image to the registry named by Tags. With the
+	// daemon's BuildKit the image is also kept in the daemon's image
+	// store, from which the Engine API pushes it.
 	Push bool
 	// Load puts the image into the Docker daemon's image store. With the
 	// daemon's BuildKit the image is exported there directly; with a
@@ -149,7 +151,7 @@ func runSolve(ctx context.Context, opt SolveOptions, multi bool, localMounts map
 		stderr = os.Stderr
 	}
 
-	exports, load, err := exportsFor(ctx, opt, conn, multi)
+	plan, err := exportsFor(ctx, opt, conn, multi)
 	if err != nil {
 		return nil, err
 	}
@@ -161,7 +163,7 @@ func runSolve(ctx context.Context, opt SolveOptions, multi bool, localMounts map
 	}
 
 	so := client.SolveOpt{
-		Exports:       exports,
+		Exports:       plan.entries,
 		LocalMounts:   localMounts,
 		CacheImports:  cacheEntries(opt.CacheImports),
 		CacheExports:  cacheEntries(opt.CacheExports),
@@ -180,10 +182,13 @@ func runSolve(ctx context.Context, opt SolveOptions, multi bool, localMounts map
 		return derr
 	})
 	err = g.Wait()
-	if load != nil {
-		if lerr := load.wait(err); err == nil && lerr != nil {
+	if plan.load != nil {
+		if lerr := plan.load.wait(err); err == nil && lerr != nil {
 			err = fmt.Errorf("load image into docker: %w", lerr)
 		}
+	}
+	if err == nil && plan.finish != nil {
+		err = plan.finish(ctx)
 	}
 	if err != nil {
 		return nil, err

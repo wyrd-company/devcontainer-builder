@@ -57,61 +57,60 @@ func TestExportsFor(t *testing.T) {
 	daemon := &Connection{Daemon: true}
 	remote := &Connection{Address: "tcp://buildkit.test:1234"}
 	tags := []string{"example.test/app:1", "example.test/app:latest"}
-
-	t.Run("load on daemon exports into the image store", func(t *testing.T) {
-		exports, load, err := exportsFor(context.Background(), SolveOptions{Load: true, Tags: tags}, daemon, false)
+	plan := func(t *testing.T, opt SolveOptions, conn *Connection, multi bool) *exportPlan {
+		t.Helper()
+		p, err := exportsFor(context.Background(), opt, conn, multi)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if load != nil {
-			t.Fatal("daemon load must not stream through the image-load endpoint")
+		return p
+	}
+
+	t.Run("load on daemon exports into the image store", func(t *testing.T) {
+		p := plan(t, SolveOptions{Load: true, Tags: tags}, daemon, false)
+		if p.load != nil || p.finish != nil {
+			t.Fatal("daemon load needs no Engine API step")
 		}
-		assertSingleExport(t, exports, exporterMoby, map[string]string{"name": "example.test/app:1,example.test/app:latest"})
-		if exports[0].Output != nil {
+		assertSingleExport(t, p.entries, exporterMoby, map[string]string{"name": "example.test/app:1,example.test/app:latest"})
+		if p.entries[0].Output != nil {
 			t.Fatal("moby exporter must not have an output stream")
 		}
 	})
 
 	t.Run("load on separate buildkit streams to the engine", func(t *testing.T) {
-		exports, load, err := exportsFor(context.Background(), SolveOptions{Load: true, Tags: tags}, remote, false)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if load == nil {
+		p := plan(t, SolveOptions{Load: true, Tags: tags}, remote, false)
+		if p.load == nil {
 			t.Fatal("separate buildkit load must stream through the image-load endpoint")
 		}
-		assertSingleExport(t, exports, client.ExporterDocker, map[string]string{"name": "example.test/app:1,example.test/app:latest"})
-		if exports[0].Output == nil {
+		assertSingleExport(t, p.entries, client.ExporterDocker, map[string]string{"name": "example.test/app:1,example.test/app:latest"})
+		if p.entries[0].Output == nil {
 			t.Fatal("docker exporter needs an output stream")
 		}
 	})
 
-	t.Run("load writer receives a tarball on either buildkit", func(t *testing.T) {
-		for _, conn := range []*Connection{daemon, remote} {
-			var buf bytes.Buffer
-			exports, load, err := exportsFor(context.Background(), SolveOptions{Load: true, Tags: tags[:1], LoadWriter: &buf}, conn, false)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if load != nil {
-				t.Fatal("LoadWriter must not load into the daemon")
-			}
-			assertSingleExport(t, exports, client.ExporterDocker, map[string]string{"name": "example.test/app:1"})
+	t.Run("load writer on separate buildkit receives the docker exporter tarball", func(t *testing.T) {
+		var buf bytes.Buffer
+		p := plan(t, SolveOptions{Load: true, Tags: tags[:1], LoadWriter: &buf}, remote, false)
+		if p.load != nil || p.finish != nil {
+			t.Fatal("LoadWriter must not load into the daemon")
+		}
+		assertSingleExport(t, p.entries, client.ExporterDocker, map[string]string{"name": "example.test/app:1"})
+	})
+
+	t.Run("push on daemon exports into the store, then pushes", func(t *testing.T) {
+		p := plan(t, SolveOptions{Push: true, Tags: tags[:1]}, daemon, true)
+		assertSingleExport(t, p.entries, exporterMoby, map[string]string{"name": "example.test/app:1"})
+		if p.finish == nil {
+			t.Fatal("daemon push must push through the Engine API after the export")
 		}
 	})
 
-	t.Run("push uses moby on daemon and image on separate buildkit", func(t *testing.T) {
-		want := map[string]string{"name": "example.test/app:1", "push": "true", "name-canonical": "true"}
-		exports, _, err := exportsFor(context.Background(), SolveOptions{Push: true, Tags: tags[:1]}, daemon, true)
-		if err != nil {
-			t.Fatal(err)
+	t.Run("push on separate buildkit pushes from the exporter", func(t *testing.T) {
+		p := plan(t, SolveOptions{Push: true, Tags: tags[:1]}, remote, true)
+		assertSingleExport(t, p.entries, client.ExporterImage, map[string]string{"name": "example.test/app:1", "push": "true", "name-canonical": "true"})
+		if p.finish != nil || p.load != nil {
+			t.Fatal("separate buildkit push needs no Engine API step")
 		}
-		assertSingleExport(t, exports, exporterMoby, want)
-		exports, _, err = exportsFor(context.Background(), SolveOptions{Push: true, Tags: tags[:1]}, remote, true)
-		if err != nil {
-			t.Fatal(err)
-		}
-		assertSingleExport(t, exports, client.ExporterImage, want)
 	})
 
 	t.Run("rejections", func(t *testing.T) {
@@ -126,7 +125,7 @@ func TestExportsFor(t *testing.T) {
 			{"load without tag", SolveOptions{Load: true}, false, "--load requires"},
 			{"load multi-platform", SolveOptions{Load: true, Tags: tags}, true, "multi-platform"},
 		} {
-			_, _, err := exportsFor(context.Background(), c.opt, daemon, c.multi)
+			_, err := exportsFor(context.Background(), c.opt, daemon, c.multi)
 			if err == nil || !strings.Contains(err.Error(), c.want) {
 				t.Errorf("%s: err = %v, want containing %q", c.name, err, c.want)
 			}
@@ -134,9 +133,9 @@ func TestExportsFor(t *testing.T) {
 	})
 
 	t.Run("no output requested exports nothing", func(t *testing.T) {
-		exports, load, err := exportsFor(context.Background(), SolveOptions{Tags: tags}, daemon, false)
-		if err != nil || exports != nil || load != nil {
-			t.Fatalf("exports = %v, load = %v, err = %v; want none", exports, load, err)
+		p := plan(t, SolveOptions{Tags: tags}, daemon, false)
+		if p.entries != nil || p.load != nil || p.finish != nil {
+			t.Fatalf("plan = %+v; want none", p)
 		}
 	})
 }

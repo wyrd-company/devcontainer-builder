@@ -3,11 +3,13 @@ package buildkit
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"strings"
 	"sync"
 
+	"github.com/docker/docker/api/types/image"
 	dockerclient "github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/jsonmessage"
 	"github.com/moby/buildkit/client"
@@ -17,70 +19,92 @@ import (
 // straight into the daemon's image store.
 const exporterMoby = "moby"
 
-// exportsFor translates SolveOptions into exporter entries for conn.
-// The returned engineLoad is non-nil when the image is streamed to the
-// Engine API image-load endpoint; the caller must wait on it.
-func exportsFor(ctx context.Context, opt SolveOptions, conn *Connection, multi bool) ([]client.ExportEntry, *engineLoad, error) {
+// exportPlan is how a solve's result leaves BuildKit.
+type exportPlan struct {
+	entries []client.ExportEntry
+	// load, when set, streams the result to the Engine API image-load
+	// endpoint; the caller must wait on it after the solve.
+	load *engineLoad
+	// finish, when set, runs after a successful solve, once the result
+	// is in the daemon's image store.
+	finish func(ctx context.Context) error
+}
+
+// exportsFor plans the export of opt's result on conn.
+//
+// A push on the daemon's BuildKit exports into the daemon's image store
+// and then pushes through the Engine API: the classic store's "moby"
+// exporter ignores push, so asking it to push would report success
+// without pushing.
+func exportsFor(ctx context.Context, opt SolveOptions, conn *Connection, multi bool) (*exportPlan, error) {
 	if opt.Push && opt.Load {
-		return nil, nil, errors.New("--push and --load are mutually exclusive")
+		return nil, errors.New("--push and --load are mutually exclusive")
 	}
 	name := strings.Join(opt.Tags, ",")
 	switch {
 	case opt.Push:
 		if len(opt.Tags) == 0 {
-			return nil, nil, errors.New("--push requires at least one tag")
+			return nil, errors.New("--push requires at least one tag")
 		}
-		typ := client.ExporterImage
 		if conn.Daemon {
-			typ = exporterMoby
+			tags := append([]string(nil), opt.Tags...)
+			return &exportPlan{
+				entries: []client.ExportEntry{{Type: exporterMoby, Attrs: map[string]string{"name": name}}},
+				finish: func(ctx context.Context) error {
+					return pushTags(ctx, conn.Docker, tags, progressOut(opt))
+				},
+			}, nil
 		}
-		return []client.ExportEntry{{
-			Type: typ,
+		return &exportPlan{entries: []client.ExportEntry{{
+			Type: client.ExporterImage,
 			Attrs: map[string]string{
 				"name":           name,
 				"push":           "true",
 				"name-canonical": "true",
 			},
-		}}, nil, nil
+		}}}, nil
 	case opt.Load:
 		if multi {
-			return nil, nil, errors.New("--load is incompatible with multi-platform builds " +
+			return nil, errors.New("--load is incompatible with multi-platform builds " +
 				"(docker's image store only stores single-platform images)")
 		}
 		if len(opt.Tags) == 0 {
-			return nil, nil, errors.New("--load requires at least one tag")
+			return nil, errors.New("--load requires at least one tag")
 		}
 		if opt.LoadWriter != nil {
-			return []client.ExportEntry{{
+			return &exportPlan{entries: []client.ExportEntry{{
 				Type:   client.ExporterDocker,
 				Attrs:  map[string]string{"name": name},
 				Output: writerOutput(opt.LoadWriter),
-			}}, nil, nil
+			}}}, nil
 		}
 		if conn.Daemon {
-			return []client.ExportEntry{{
+			return &exportPlan{entries: []client.ExportEntry{{
 				Type:  exporterMoby,
 				Attrs: map[string]string{"name": name},
-			}}, nil, nil
+			}}}, nil
 		}
 		load := newEngineLoad(ctx, conn.Docker)
-		return []client.ExportEntry{{
-			Type:   client.ExporterDocker,
-			Attrs:  map[string]string{"name": name},
-			Output: load.output,
-		}}, load, nil
+		return &exportPlan{
+			entries: []client.ExportEntry{{
+				Type:   client.ExporterDocker,
+				Attrs:  map[string]string{"name": name},
+				Output: load.output,
+			}},
+			load: load,
+		}, nil
 	case opt.OutputDir != "":
 		if err := os.MkdirAll(opt.OutputDir, 0o755); err != nil {
-			return nil, nil, err
+			return nil, err
 		}
-		return []client.ExportEntry{{
+		return &exportPlan{entries: []client.ExportEntry{{
 			Type:      client.ExporterLocal,
 			OutputDir: opt.OutputDir,
-		}}, nil, nil
+		}}}, nil
 	default:
 		// No exporter: the result stays in BuildKit's cache only.
 		// Useful for pre-warming caches.
-		return nil, nil, nil
+		return &exportPlan{}, nil
 	}
 }
 
@@ -162,4 +186,29 @@ func errOr(err, fallback error) error {
 		return err
 	}
 	return fallback
+}
+
+// progressOut is where Engine API progress for opt is written.
+func progressOut(opt SolveOptions) io.Writer {
+	if opt.Stderr != nil {
+		return opt.Stderr
+	}
+	return os.Stderr
+}
+
+// pushTags pushes each tag from the daemon's image store through the
+// Engine API. Registry pushes are anonymous.
+func pushTags(ctx context.Context, docker *dockerclient.Client, tags []string, progress io.Writer) error {
+	for _, tag := range tags {
+		rc, err := docker.ImagePush(ctx, tag, image.PushOptions{})
+		if err != nil {
+			return fmt.Errorf("push %s: %w", tag, err)
+		}
+		err = jsonmessage.DisplayJSONMessagesStream(rc, progress, 0, false, nil)
+		rc.Close()
+		if err != nil {
+			return fmt.Errorf("push %s: %w", tag, err)
+		}
+	}
+	return nil
 }
