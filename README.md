@@ -3,8 +3,8 @@
 `dcb` builds and runs [development containers](https://containers.dev/) from a
 `devcontainer.json`. It builds images on the Docker daemon's built-in BuildKit,
 and creates, starts, and runs lifecycle commands in containers through the
-Docker Engine API. Every command except help and `exec` writes one JSON result
-line to stdout.
+Docker Engine API. Every command writes one JSON result line to stdout, except
+help and a valid `exec` invocation.
 
 Documentation is at [wyrd.foo/docs/dcb](https://wyrd.foo/docs/dcb), published
 from [`docs/`](docs).
@@ -50,8 +50,9 @@ dcb build --workspace-folder . \
 ```
 
 `dcb --help` lists every command. Exit code `0` is success, `1` is an
-operation failure, and `2` is an invalid invocation; `exec` returns the exit
-code of the container command. See [Usage](https://wyrd.foo/docs/dcb/usage)
+operation failure, and `2` is an invalid invocation, with a JSON error result.
+After `exec` starts the container command, it passes the command's output
+through and returns its exit code. See [Usage](https://wyrd.foo/docs/dcb/usage)
 and [Configuration](https://wyrd.foo/docs/dcb/configuration).
 
 `dcb skills install` writes an agent skill that describes these commands for

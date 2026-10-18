@@ -73,9 +73,10 @@ created. `exec`, `run-user-commands`, and `set-up` also take
 
 ## Results
 
-Every command except help and `exec` writes exactly one JSON object on one
-line to stdout. The `outcome` field is `success` or `error`. An error result
-also has `message` and `description`:
+Every command writes exactly one JSON object on one line to stdout, except
+help and a valid `exec` invocation. An invalid invocation, including one of
+`exec`, writes a JSON error result and exits with `2`. The `outcome` field is
+`success` or `error`. An error result also has `message` and `description`:
 
 <!-- rumdl-disable MD013 -->
 
@@ -112,7 +113,8 @@ Other result fields by command:
 | `1` | The operation failed. |
 | `2` | The invocation is not valid, for example an unknown flag. |
 
-`exec` returns the exit code of the container command.
+A valid `exec` invocation returns the exit code of the container command.
+See [Run a command](#run-a-command).
 
 ### Logs
 
@@ -133,17 +135,25 @@ Put `--` before the container command so that its flags are not read as
 dcb exec --workspace-folder . -- ls -la /workspaces
 ```
 
-`exec` writes no result line. The command's stdout and stderr pass through
-unchanged, and `dcb` exits with the command's exit code. With `--tty`, the
-command runs on a pseudo-terminal, and its output arrives on stdout.
+`exec` has three outcomes:
+
+- **The command runs.** `exec` writes no result line. The command's stdout and
+  stderr pass through unchanged, and `dcb` exits with the command's exit code.
+- **The invocation is not valid**, for example no command or an unknown flag.
+  stdout has one JSON error result, stderr is empty at the default log level,
+  and the exit code is `2`.
+- **The operation fails** before or outside the command. stdout is empty,
+  stderr has the error, and the exit code is `1`.
+
+With `--tty`, the command runs on a pseudo-terminal, and its output arrives on
+stdout.
 
 `exec` runs as the configured `remoteUser` with `remoteEnv` applied. Use
 `--user`, `--remote-env KEY=VALUE`, and `--remote-workspace-folder` to change
 the user, environment, and working directory for one command.
 
-When `dcb` fails before or outside the command, stdout is empty, stderr has
-the error, and the exit code is `1`. A command can also exit with `1`. To
-tell them apart, look for the `dcb` error diagnostic on stderr. In text mode
+A command can also exit with `1`. To tell this apart from an operation
+failure, look for the `dcb` error diagnostic on stderr. In text mode
 it starts with `dcb: error: `. In JSON mode it is a record with
 `type: diagnostic` and `level: error`. The command can print the same text,
 so this check is a heuristic.
