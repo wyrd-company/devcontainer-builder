@@ -6,7 +6,7 @@ relationships:
 # Parity harness
 
 Run `git submodule update --init --depth 1`, then `task parity` from the repository
-root. Docker with buildx, Go, Node and npx are needed. The upstream executable is
+root. Docker with buildx (for upstream), Go, Node and npx are needed. The upstream executable is
 resolved with `npx --yes @devcontainers/cli@<version>` using the checked-out
 `reference/cli/package.json`, independent of any global CLI installation.
 Missing Node/npx, Docker or the CLI submodule produces a clear skip report.
@@ -44,8 +44,10 @@ visible. The current runtime has no JSON success result and will fail that
 dimension. Do not manufacture one from inspect output.
 
 `Adapter` in `adapter.go` owns CLI arguments. `LegacyAdapter` builds the current
-`dcb` and `devcontainer-docker` binaries, uses buildx with VS Code server injection
-omitted, then starts the built image. Replace it with a new adapter for the
+`dcb` and `devcontainer-docker` binaries, uses the default native BuildKit engine
+with VS Code server injection omitted, then starts the built image. BuildKit uses
+the Docker daemon unless `BUILDKIT_HOST` selects a separate existing daemon.
+Replace it with a new adapter for the
 single `dcb` CLI; fixture preparation, observation and scoring need no changes.
 
 Teardown selects only this run's labels, rechecks full Docker IDs and ownership,
