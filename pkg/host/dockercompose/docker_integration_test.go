@@ -54,7 +54,7 @@ func TestDockerComposeIntegration(t *testing.T) {
 		removeComposeImage(t, cleanupCtx, cli, helperTag)
 		removeComposeImage(t, cleanupCtx, cli, primaryTag)
 	})
-	writeComposeFixture(t, workspace, helperTag, "one")
+	writeComposeFixture(t, workspace, primaryTag, helperTag, "one")
 	requireBindableComposePath(t, ctx, cli, "alpine:3.20", workspace)
 
 	specPath := filepath.Join(workspace, ".devcontainer", "devcontainer.json")
@@ -67,7 +67,7 @@ func TestDockerComposeIntegration(t *testing.T) {
 	primary, err := BuildPrimaryImage(ctx, BuildPrimaryInputs{
 		Spec:      dc,
 		Workspace: workspace,
-		Tag:       primaryTag,
+		Tag:       primaryTag + "-derived",
 		BuilderOptions: builder.Options{
 			Progress: "plain",
 			Stdout:   testLogWriter{t: t},
@@ -78,7 +78,7 @@ func TestDockerComposeIntegration(t *testing.T) {
 		t.Fatalf("BuildPrimaryImage: %v", err)
 	}
 	if !primary.Built || primary.Image != primaryTag {
-		t.Fatalf("primary build result = %+v, want built image %s", primary, primaryTag)
+		t.Fatalf("primary build result = %+v, want Compose service image %s", primary, primaryTag)
 	}
 
 	h := New(cli, Options{
@@ -122,7 +122,7 @@ func TestDockerComposeIntegration(t *testing.T) {
 		t.Fatalf("second up primary = %s, want reuse of %s", short(again.PrimaryContainerID), short(first.PrimaryContainerID))
 	}
 
-	writeComposeFixture(t, workspace, helperTag, "two")
+	writeComposeFixture(t, workspace, primaryTag, helperTag, "two")
 	changed, err := h.Up(ctx, req)
 	if err != nil {
 		t.Fatalf("compose up after config change: %v", err)
@@ -380,7 +380,7 @@ func prepareComposeWorkspace(t *testing.T) string {
 RUN echo primary > /usr/local/share/compose-primary
 `)
 	writeFile(t, filepath.Join(workspace, "helper-image", "Dockerfile"), `FROM busybox:1.36
-RUN echo helper > /usr/local/share/compose-helper
+RUN mkdir -p /usr/local/share && echo helper > /usr/local/share/compose-helper
 `)
 	writeFile(t, filepath.Join(workspace, "watch-sync", "message.txt"), "initial")
 	writeFile(t, filepath.Join(workspace, "watch-restart", "restart.txt"), "initial")
@@ -400,7 +400,7 @@ RUN echo helper > /usr/local/share/compose-helper
 	return workspace
 }
 
-func writeComposeFixture(t *testing.T, workspace, helperTag, appVersion string) {
+func writeComposeFixture(t *testing.T, workspace, primaryTag, helperTag, appVersion string) {
 	t.Helper()
 	appImage := filepath.ToSlash(filepath.Join(workspace, "app-image"))
 	helperImage := filepath.ToSlash(filepath.Join(workspace, "helper-image"))
@@ -409,6 +409,7 @@ func writeComposeFixture(t *testing.T, workspace, helperTag, appVersion string) 
 	watchRestart := filepath.ToSlash(filepath.Join(workspace, "watch-restart"))
 	body := fmt.Sprintf(`services:
   app:
+    image: %q
     build:
       context: %q
     environment:
@@ -465,7 +466,7 @@ func writeComposeFixture(t *testing.T, workspace, helperTag, appVersion string) 
 
 volumes:
   app-cache:
-`, appImage, appVersion, hostBind, watchSync, watchRestart, hostBind, hostBind, helperImage, helperTag)
+`, primaryTag, appImage, appVersion, hostBind, watchSync, watchRestart, hostBind, hostBind, helperImage, helperTag)
 	writeFile(t, filepath.Join(workspace, ".devcontainer", "docker-compose.yml"), body)
 }
 
@@ -507,7 +508,11 @@ func assertComposeLabels(t *testing.T, c ContainerInfo, projectName, workspace, 
 func assertMount(t *testing.T, mounts []container.MountPoint, typ mount.Type, source, target string) {
 	t.Helper()
 	for _, m := range mounts {
-		if m.Type == typ && m.Source == source && m.Destination == target {
+		actualSource := m.Source
+		if typ == mount.TypeVolume {
+			actualSource = m.Name
+		}
+		if m.Type == typ && actualSource == source && m.Destination == target {
 			return
 		}
 	}
