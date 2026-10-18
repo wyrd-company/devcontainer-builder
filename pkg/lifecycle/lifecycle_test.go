@@ -7,7 +7,7 @@ import (
 	"github.com/wyrd-company/devcontainer-builder/pkg/spec"
 )
 
-func TestPlan_OrdersSpecBeforeFeaturesPerHook(t *testing.T) {
+func TestPlan_OrdersFeaturesBeforeSpecPerHook(t *testing.T) {
 	dc := &spec.DevContainer{
 		OnCreate:   spec.Command{Shell: "spec-onCreate"},
 		PostCreate: spec.Command{Shell: "spec-postCreate"},
@@ -27,11 +27,11 @@ func TestPlan_OrdersSpecBeforeFeaturesPerHook(t *testing.T) {
 		shell  string
 		source string
 	}{
-		{HookOnCreate, "spec-onCreate", "devcontainer.json"},
 		{HookOnCreate, "a-onCreate", "feat-a"},
 		{HookOnCreate, "b-onCreate", "feat-b"},
-		{HookPostCreate, "spec-postCreate", "devcontainer.json"},
+		{HookOnCreate, "spec-onCreate", "devcontainer.json"},
 		{HookPostCreate, "a-postCreate", "feat-a"},
+		{HookPostCreate, "spec-postCreate", "devcontainer.json"},
 	}
 	if len(got) != len(want) {
 		t.Fatalf("expected %d phases, got %d (%+v)", len(want), len(got), got)

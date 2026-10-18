@@ -121,15 +121,16 @@ func SystemVarFolder(override string) string {
 // Plan returns the ordered phases that should run for the given spec
 // and resolved features, with the standard execution order:
 //
-//	onCreate (spec) → onCreate (features…)
-//	updateContent (spec) → updateContent (features…)
-//	postCreate (spec) → postCreate (features…)
-//	postStart (spec) → postStart (features…)
-//	postAttach (spec) → postAttach (features…)
+//	onCreate (features…) → onCreate (spec)
+//	updateContent (features…) → updateContent (spec)
+//	postCreate (features…) → postCreate (spec)
+//	postStart (features…) → postStart (spec)
+//	postAttach (features…) → postAttach (spec)
 //
-// Within each hook, the spec's own command runs first, then each
-// feature's command in install order. Phases whose command is empty are
-// omitted, so callers can simply iterate the returned slice.
+// Within each hook, each feature's command runs in install order, then
+// the spec's own command, matching upstream's metadata order (features
+// before devcontainer.json). Phases whose command is empty are omitted,
+// so callers can simply iterate the returned slice.
 func Plan(dc *spec.DevContainer, resolved []features.Resolved) []Phase {
 	if dc == nil {
 		return nil
@@ -149,9 +150,6 @@ func Plan(dc *spec.DevContainer, resolved []features.Resolved) []Phase {
 	}
 	var out []Phase
 	for _, h := range hooks {
-		if !h.spec.IsZero() {
-			out = append(out, Phase{Hook: h.hook, When: h.when, Origin: specOrigin, Command: h.spec})
-		}
 		for _, f := range resolved {
 			cmd := h.fromFeat(f.Metadata)
 			if cmd.IsZero() {
@@ -163,6 +161,9 @@ func Plan(dc *spec.DevContainer, resolved []features.Resolved) []Phase {
 				Origin:  Origin{Source: f.Source},
 				Command: cmd,
 			})
+		}
+		if !h.spec.IsZero() {
+			out = append(out, Phase{Hook: h.hook, When: h.when, Origin: specOrigin, Command: h.spec})
 		}
 	}
 	return out
