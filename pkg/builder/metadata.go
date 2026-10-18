@@ -25,43 +25,9 @@ func (b *Builder) BaseMetadata(ctx context.Context, dc *spec.DevContainer, opts 
 	if dc == nil {
 		return nil, fmt.Errorf("base metadata: config is required")
 	}
-	if opts.Docker == nil && !opts.SkipImageMetaResolve {
-		cli, err := dockerclient.NewClientWithOpts(dockerclient.FromEnv, dockerclient.WithAPIVersionNegotiation())
-		if err != nil {
-			return nil, fmt.Errorf("base metadata docker client: %w", err)
-		}
-		defer cli.Close()
-		opts.Docker = cli
-	}
 	p := primaryPlatform(opts.Platforms)
 	imageConfig := func(ref string) (*oci.ImageConfig, error) {
-		if ref == "scratch" {
-			return &oci.ImageConfig{}, nil
-		}
-		if opts.Docker != nil {
-			img, err := opts.Docker.ImageInspect(ctx, ref)
-			if err == nil {
-				if len(opts.Platforms) == 0 || img.Os == p.OS && img.Architecture == p.Arch && (p.Variant == "" || img.Variant == p.Variant) {
-					cfg := &oci.ImageConfig{}
-					if img.Config != nil {
-						cfg.Config.User = img.Config.User
-						cfg.Config.Env = img.Config.Env
-						cfg.Config.Labels = img.Config.Labels
-					}
-					return cfg, nil
-				}
-			} else if !dockerclient.IsErrNotFound(err) && !dockerclient.IsErrConnectionFailed(err) {
-				return nil, err
-			}
-		}
-		if opts.SkipImageMetaResolve {
-			return &oci.ImageConfig{}, nil
-		}
-		parsed, err := oci.ParseReference(ref)
-		if err != nil {
-			return nil, err
-		}
-		return b.Resolver.OCI.FetchImageConfig(parsed, oci.Platform{OS: p.OS, Architecture: p.Arch, Variant: p.Variant})
+		return b.imageConfig(ctx, ref, opts)
 	}
 	var cfg *oci.ImageConfig
 	var err error
@@ -91,4 +57,46 @@ func (b *Builder) BaseMetadata(ctx context.Context, dc *spec.DevContainer, opts 
 		return nil, fmt.Errorf("base metadata: %w", err)
 	}
 	return metadata.Read(cfg.Config.Labels, opts.Logger), nil
+}
+
+// imageConfig reads local image metadata before consulting the registry.
+// SkipImageMetaResolve suppresses registry access while retaining local metadata.
+func (b *Builder) imageConfig(ctx context.Context, ref string, opts Options) (*oci.ImageConfig, error) {
+	if opts.Docker == nil && !opts.SkipImageMetaResolve {
+		cli, err := dockerclient.NewClientWithOpts(dockerclient.FromEnv, dockerclient.WithAPIVersionNegotiation())
+		if err != nil {
+			return nil, fmt.Errorf("base metadata docker client: %w", err)
+		}
+		defer cli.Close()
+		opts.Docker = cli
+	}
+	p := primaryPlatform(opts.Platforms)
+
+	if ref == "scratch" {
+		return &oci.ImageConfig{}, nil
+	}
+	if opts.Docker != nil {
+		img, err := opts.Docker.ImageInspect(ctx, ref)
+		if err == nil {
+			if len(opts.Platforms) == 0 || img.Os == p.OS && img.Architecture == p.Arch && (p.Variant == "" || img.Variant == p.Variant) {
+				cfg := &oci.ImageConfig{}
+				if img.Config != nil {
+					cfg.Config.User = img.Config.User
+					cfg.Config.Env = img.Config.Env
+					cfg.Config.Labels = img.Config.Labels
+				}
+				return cfg, nil
+			}
+		} else if !dockerclient.IsErrNotFound(err) && !dockerclient.IsErrConnectionFailed(err) {
+			return nil, err
+		}
+	}
+	if opts.SkipImageMetaResolve {
+		return &oci.ImageConfig{}, nil
+	}
+	parsed, err := oci.ParseReference(ref)
+	if err != nil {
+		return nil, err
+	}
+	return b.Resolver.OCI.FetchImageConfig(parsed, oci.Platform{OS: p.OS, Architecture: p.Arch, Variant: p.Variant})
 }

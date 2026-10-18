@@ -176,11 +176,15 @@ func TestBaseMetadataRejectsInvalidDockerfile(t *testing.T) {
 	}
 }
 
-func metadataEngine(t *testing.T, entries []metadata.Entry) *dockerclient.Client {
+func metadataEngine(t *testing.T, entries []metadata.Entry, users ...string) *dockerclient.Client {
 	t.Helper()
 	value, err := metadata.Encode(entries)
 	if err != nil {
 		t.Fatal(err)
+	}
+	user := "root"
+	if len(users) > 0 {
+		user = users[0]
 	}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !strings.Contains(r.URL.Path, "/images/") || !strings.HasSuffix(r.URL.Path, "/json") {
@@ -188,7 +192,7 @@ func metadataEngine(t *testing.T, entries []metadata.Entry) *dockerclient.Client
 			http.Error(w, "unexpected", 500)
 			return
 		}
-		_ = json.NewEncoder(w).Encode(map[string]any{"Id": "sha256:sample", "Config": map[string]any{"User": "root", "Labels": map[string]string{metadata.Label: value}}})
+		_ = json.NewEncoder(w).Encode(map[string]any{"Id": "sha256:sample", "Config": map[string]any{"User": user, "Labels": map[string]string{metadata.Label: value}}})
 	}))
 	t.Cleanup(srv.Close)
 	cli, err := dockerclient.NewClientWithOpts(dockerclient.WithHost("tcp://"+strings.TrimPrefix(srv.URL, "http://")), dockerclient.WithVersion("1.47"))

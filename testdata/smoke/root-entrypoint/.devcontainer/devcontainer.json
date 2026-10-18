@@ -1,0 +1,11 @@
+{
+  "image": "alpine:3.20",
+  "remoteUser": "sample-user",
+  "updateRemoteUserUID": false,
+  "workspaceFolder": "/workspace",
+  "workspaceMount": "type=volume,target=/workspace",
+  "features": {
+    "./features/marker": {}
+  },
+  "postCreateCommand": "id -u > /tmp/config-user"
+}

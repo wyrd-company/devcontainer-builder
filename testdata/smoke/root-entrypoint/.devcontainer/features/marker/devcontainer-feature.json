@@ -1,0 +1,6 @@
+{
+  "id": "marker",
+  "version": "1.0.0",
+  "entrypoint": "/usr/local/bin/sample-start",
+  "postCreateCommand": "id -u > /tmp/feature-user"
+}

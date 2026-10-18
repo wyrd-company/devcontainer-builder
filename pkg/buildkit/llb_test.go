@@ -48,6 +48,32 @@ func TestBuild_BareImage(t *testing.T) {
 	}
 }
 
+func TestBuild_RestoresBaseStateUser(t *testing.T) {
+	for _, imageUser := range []string{"", "root", "sample", "1000:1001"} {
+		t.Run("image-user="+imageUser, func(t *testing.T) {
+			base := llb.Image("alpine:3.20").User(imageUser)
+			in := featureGraphInputs(testFeature)
+			in.BaseState = &base
+			in.ImageUser = imageUser
+			in.Spec.ContainerUser = "container-sample"
+			in.Spec.WorkspaceFolder = "/workspace"
+			state, err := Build(in)
+			if err != nil {
+				t.Fatal(err)
+			}
+			def, err := state.Run(llb.Args([]string{"id", "-u"})).Root().Marshal(context.Background())
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, op := range decodeOps(t, def.ToPB()) {
+				if e := op.GetExec(); e != nil && len(e.Meta.Args) == 2 && e.Meta.Args[0] == "id" && e.Meta.User != imageUser {
+					t.Fatalf("final state user = %q, want base user %q", e.Meta.User, imageUser)
+				}
+			}
+		})
+	}
+}
+
 func TestNormalizeImageRef(t *testing.T) {
 	got, err := normalizeImageRef("alpine:3.20")
 	if err != nil {

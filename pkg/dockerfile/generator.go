@@ -61,8 +61,9 @@ type Inputs struct {
 	// RemoteUser overrides the spec's remoteUser. Empty means use the
 	// spec's value, falling back to root.
 	RemoteUser string
-	// ImageUser is the user configured in the base image. Features see
-	// it as the container user when the spec sets no containerUser.
+	// ImageUser is the user configured in the base image, restored after
+	// installation. Features see it as the container user when the spec
+	// sets no containerUser.
 	// Empty means root.
 	ImageUser string
 }
@@ -108,9 +109,11 @@ func Generate(in Inputs) ([]byte, error) {
 		emitVSCodeServer(&b, *in.VSCodeServer, in.VSCodeServerContextPath, user)
 	}
 
-	if user != "" && user != "root" {
-		fmt.Fprintf(&b, "USER %s\n", user)
+	imageUser := in.ImageUser
+	if imageUser == "" {
+		imageUser = "root"
 	}
+	fmt.Fprintf(&b, "USER %s\n", imageUser)
 
 	label, err := metadata.DockerfileLabel(metadata.Collect(in.BaseMetadata, in.Features, in.Spec))
 	if err != nil {

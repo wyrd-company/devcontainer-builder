@@ -47,8 +47,8 @@ func TestFeatureInstallIntegration(t *testing.T) {
 		"--update-remote-user-uid-default", "off",
 	)
 
-	// Existing lifecycle markers must also work when the image's default user
-	// is non-root and PID 1's environment cannot be read by the probe.
+	// Existing lifecycle markers must also work when remoteUser differs
+	// from PID 1 and its environment cannot be read by the remote user.
 	hostRunCommand(t, os.Environ(), bin, "run-user-commands", "--workspace-folder", workspace)
 	var result struct {
 		ContainerID string `json:"containerId"`
@@ -61,8 +61,8 @@ func TestFeatureInstallIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("inspect image %s: %v", tag, err)
 	}
-	if img.Config == nil || img.Config.User != "devuser" {
-		t.Fatalf("image user = %+v, want devuser", img.Config)
+	if img.Config == nil || img.Config.User != "" {
+		t.Fatalf("image user = %+v, want the base image's default root user", img.Config)
 	}
 
 	out := hostRunCommand(t, os.Environ(), bin,

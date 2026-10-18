@@ -34,7 +34,7 @@ func TestGenerate_BareImage(t *testing.T) {
 	got := string(out)
 	for _, want := range []string{
 		"FROM ubuntu:22.04",
-		"USER vscode",
+		"USER root",
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("missing %q in:\n%s", want, got)
@@ -63,6 +63,35 @@ func TestGenerate_DoesNotBakeRemoteEnv(t *testing.T) {
 	}
 	if strings.Contains(got, "ENV REMOTE_ONLY=") {
 		t.Fatalf("remoteEnv should not be emitted as image ENV:\n%s", got)
+	}
+}
+
+func TestGenerate_RestoresImageUser(t *testing.T) {
+	for _, imageUser := range []string{"", "root", "sample", "1000:1001"} {
+		t.Run("image-user="+imageUser, func(t *testing.T) {
+			out, err := Generate(Inputs{
+				Spec:      &spec.DevContainer{RemoteUser: "remote-sample", ContainerUser: "container-sample"},
+				BaseImage: "alpine", ImageUser: imageUser, RemoteUser: "override-sample",
+				Features: []features.Resolved{{SafeID: "marker", Metadata: features.Metadata{ID: "marker"}}},
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := imageUser
+			if want == "" {
+				want = "root"
+			}
+			lines := strings.Split(string(out), "\n")
+			var users []string
+			for _, line := range lines {
+				if strings.HasPrefix(line, "USER ") {
+					users = append(users, strings.TrimPrefix(line, "USER "))
+				}
+			}
+			if len(users) != 2 || users[0] != "root" || users[1] != want {
+				t.Fatalf("USER instructions = %v, want root then %s", users, want)
+			}
+		})
 	}
 }
 

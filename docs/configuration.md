@@ -30,7 +30,7 @@ sees it.
 | --- | --- |
 | `name` | |
 | `features`, `overrideFeatureInstallOrder` | Features from OCI registries and local paths. Each feature installs as a separate cached build step. |
-| `remoteUser`, `containerUser` | |
+| `remoteUser`, `containerUser` | See [Container and remote users](#container-and-remote-users). |
 | `updateRemoteUserUID` | See [Remote user UID](#remote-user-uid). |
 | `containerEnv`, `remoteEnv` | `containerEnv` is set on the container; `remoteEnv` applies to lifecycle commands and `dcb exec`. |
 | `workspaceFolder`, `workspaceMount` | The default mounts the local workspace at `/workspaces/<folder name>`. With Docker Compose, the default workspace folder is `/`: commands run there, and the mount stays at `/workspaces/<folder name>`. |
@@ -124,6 +124,19 @@ cached by BuildKit.
 | `--vscode-quality` | `stable` (the default) or `insider`. |
 | `--vscode-platform` | The server platform, when it differs from the image platform. |
 | `--vscode-alpine` | The musl build, for Alpine images. |
+
+## Container and remote users
+
+Built images and generated Dockerfiles preserve the base image's `USER`.
+`containerUser` sets the identity of PID 1 and feature entrypoints when the
+container starts. Without `containerUser`, they use the image user.
+`remoteUser` sets the identity of `dcb exec` and lifecycle commands; it does
+not change the image user. Without `remoteUser`, these commands use the
+container user.
+
+A feature entrypoint that requires root, such as Docker-in-Docker, can start
+as root while exec and lifecycle commands run as a non-root `remoteUser`.
+Use a root image user or `containerUser: "root"` for that configuration.
 
 ## Remote user UID
 

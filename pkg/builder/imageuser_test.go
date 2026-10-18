@@ -18,6 +18,7 @@ import (
 
 	"github.com/wyrd-company/devcontainer-builder/pkg/features"
 	"github.com/wyrd-company/devcontainer-builder/pkg/oci"
+	"github.com/wyrd-company/devcontainer-builder/pkg/spec"
 )
 
 func writeFile(t *testing.T, path, content string) {
@@ -175,12 +176,12 @@ func TestGenerate_FeaturesSeeDockerfileUser(t *testing.T) {
 }
 
 func TestGenerate_BaseUserLookupFailureFallsBackToRoot(t *testing.T) {
+	t.Setenv("DOCKER_HOST", "tcp://127.0.0.1:1")
 	reg := newImageRegistry(t, "library/base", "1", "image-user")
-	ws := writeWorkspace(t, `"image":"`+reg.host()+`/library/missing:1"`, nil)
-	df, logs := generate(t, reg.builder(), ws, func(o *Options) { o.Docker = metadataEngine(t, nil) })
-	wantBuiltinUser(t, df, "root")
-	if !strings.Contains(strings.Join(logs, "\n"), "base image user unknown") {
-		t.Fatalf("missing warning in logs: %v", logs)
+	var logs []string
+	user := reg.builder().baseImageUser(context.Background(), &spec.DevContainer{Image: reg.host() + "/library/missing:1"}, Options{}, func(f string, args ...any) { logs = append(logs, fmt.Sprintf(f, args...)) })
+	if user != "" || !strings.Contains(strings.Join(logs, "\n"), "base image user unknown") {
+		t.Fatalf("user=%q logs=%v, want root fallback with warning", user, logs)
 	}
 }
 
@@ -222,12 +223,46 @@ func TestGenerate_BaseUserForPrimaryPlatform(t *testing.T) {
 	}
 }
 
-func TestGenerate_NoBaseUserLookupWithoutFeatures(t *testing.T) {
+func TestGenerate_RestoresBaseUserWithoutFeatures(t *testing.T) {
 	reg := newImageRegistry(t, "library/base", "1", "image-user")
 	ws := writeWorkspace(t, `"image":"`+reg.host()+`/library/base:1"`, nil)
-	generate(t, reg.builder(), ws, func(o *Options) { o.SkipFeatures = true })
-	if n := reg.count(); n != 2 {
-		t.Fatalf("registry requests = %d, want only the inherited label manifest/config read without features", n)
+	df, _ := generate(t, reg.builder(), ws, func(o *Options) { o.SkipFeatures = true })
+	if !strings.Contains(df, "USER image-user\n") {
+		t.Fatalf("Dockerfile did not restore base user without features:\n%s", df)
+	}
+}
+
+func TestGeneratedDockerfilesRestoreLocalImageUser(t *testing.T) {
+	for _, prepare := range []bool{false, true} {
+		for _, offline := range []bool{false, true} {
+			t.Run(fmt.Sprintf("prepare=%v/offline=%v", prepare, offline), func(t *testing.T) {
+				opts := Options{
+					Spec:    &spec.DevContainer{Image: "sample:local", RemoteUser: "remote-sample", ContainerUser: "root"},
+					WorkDir: t.TempDir(), Docker: metadataEngine(t, nil, "image-user"), SkipImageMetaResolve: offline,
+				}
+				var path string
+				if prepare {
+					_, _, _, _, _, _, _, dfPath, _, err := offlineMetadataBuilder().prepareBuildContext(context.Background(), opts, func(string, ...any) {})
+					if err != nil {
+						t.Fatal(err)
+					}
+					path = dfPath
+				} else {
+					res, err := offlineMetadataBuilder().Generate(context.Background(), opts)
+					if err != nil {
+						t.Fatal(err)
+					}
+					path = res.FinalDockerfile
+				}
+				body, err := os.ReadFile(path)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if !strings.Contains(string(body), "USER image-user\n") {
+					t.Fatalf("generated Dockerfile did not restore local image user:\n%s", body)
+				}
+			})
+		}
 	}
 }
 

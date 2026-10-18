@@ -177,9 +177,6 @@ func Build(in GraphInputs) (llb.State, error) {
 		state = ensureDir(state, in.Spec.WorkspaceFolder, cOpts)
 		state = state.Dir(in.Spec.WorkspaceFolder)
 	}
-	if u := remoteUser(in); u != "" && u != "root" {
-		state = state.User(u)
-	}
 	return state, nil
 }
 

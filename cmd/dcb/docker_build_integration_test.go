@@ -43,10 +43,10 @@ func TestDockerBuildIntegration(t *testing.T) {
 				if cfg.WorkingDir != "/" {
 					t.Fatalf("working dir = %q, want alpine's /", cfg.WorkingDir)
 				}
-				if cfg.User != "nobody" {
-					t.Fatalf("user = %q, want nobody", cfg.User)
+				if cfg.User != "" {
+					t.Fatalf("user = %q, want alpine's default root user", cfg.User)
 				}
-				runDocker(t, "run", "--rm", tag, "sh", "-lc", "test \"$DCB_SMOKE\" = image && test \"$(id -un)\" = nobody")
+				runDocker(t, "run", "--rm", tag, "sh", "-lc", "test \"$DCB_SMOKE\" = image && test \"$(id -un)\" = root")
 			},
 		},
 		{

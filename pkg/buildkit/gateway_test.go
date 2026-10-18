@@ -17,7 +17,7 @@ import (
 	"github.com/wyrd-company/devcontainer-builder/pkg/spec"
 )
 
-func TestMergeImageConfig_AppendsEnvOverridesUserAndKeepsWorkdir(t *testing.T) {
+func TestMergeImageConfig_AppendsEnvAndKeepsBaseUserAndWorkdir(t *testing.T) {
 	base := dockerspec.DockerOCIImage{}
 	base.Config.Env = []string{"PATH=/usr/bin", "EXISTING=keep"}
 	base.Config.User = "1000:1000"
@@ -54,8 +54,8 @@ func TestMergeImageConfig_AppendsEnvOverridesUserAndKeepsWorkdir(t *testing.T) {
 	if got.Config.WorkingDir != "/old" {
 		t.Errorf("WorkingDir = %q, want the base image's /old", got.Config.WorkingDir)
 	}
-	if got.Config.User != "vscode" {
-		t.Errorf("User not overridden: %q", got.Config.User)
+	if got.Config.User != "1000:1000" {
+		t.Errorf("User = %q, want base image user 1000:1000", got.Config.User)
 	}
 
 	envIdx := envMap(got.Config.Env)
@@ -93,6 +93,31 @@ func TestParseTargetPlatforms(t *testing.T) {
 	}
 	if out[0].Architecture != "amd64" || out[1].Architecture != "arm64" {
 		t.Errorf("unexpected platforms: %+v", out)
+	}
+}
+
+func TestMergeImageConfig_PreservesBaseUser(t *testing.T) {
+	for _, imageUser := range []string{"", "root", "sample", "1000:1001"} {
+		t.Run("image-user="+imageUser, func(t *testing.T) {
+			base := dockerspec.DockerOCIImage{}
+			base.Config.User = imageUser
+			raw, err := json.Marshal(base)
+			if err != nil {
+				t.Fatal(err)
+			}
+			g := GraphInputs{Spec: &spec.DevContainer{RemoteUser: "remote-sample", ContainerUser: "container-sample"}, RemoteUser: "override-sample"}
+			out, err := mergeImageConfig(raw, g, nil, ocispecs.Platform{OS: "linux", Architecture: "amd64"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			var got dockerspec.DockerOCIImage
+			if err := json.Unmarshal(out, &got); err != nil {
+				t.Fatal(err)
+			}
+			if got.Config.User != imageUser {
+				t.Fatalf("image USER = %q, want base user %q", got.Config.User, imageUser)
+			}
+		})
 	}
 }
 
