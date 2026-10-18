@@ -101,6 +101,20 @@ func TestComposeProjectIdentityIntegration(t *testing.T) {
 			if up.ProjectName != name {
 				t.Fatalf("up name = %q, want %q", up.ProjectName, name)
 			}
+			// A newer project for another workspace must not redirect lookup.
+			// Any broken selector fails at Inspect before a destructive call.
+			foreignID := ""
+			if source == "compose" {
+				foreign, err := cli.ContainerCreate(ctx, &container.Config{
+					Image:  "alpine:3.20",
+					Labels: map[string]string{LabelProject: name + "-foreign", LabelLocalFolder: workspace + "-foreign"},
+				}, nil, nil, nil, "")
+				if err != nil {
+					t.Fatal(err)
+				}
+				foreignID = foreign.ID
+				t.Cleanup(func() { _ = cli.ContainerRemove(ctx, foreignID, container.RemoveOptions{Force: true}) })
+			}
 			info, err := h.Inspect(ctx, workspace)
 			if err != nil || info.Name != name || len(info.Containers) != 2 {
 				t.Fatalf("Inspect = %+v, %v", info, err)
@@ -157,6 +171,11 @@ func TestComposeProjectIdentityIntegration(t *testing.T) {
 				t.Fatal(err)
 			}
 			assertProjectRemoved(t, ctx, cli, name)
+			if foreignID != "" {
+				if _, err := cli.ContainerInspect(ctx, foreignID); err != nil {
+					t.Fatalf("other workspace container did not survive Remove: %v", err)
+				}
+			}
 			if _, err := os.Stat(objectDir); !errors.Is(err, os.ErrNotExist) {
 				t.Fatalf("materialized directory survived Remove: %v", err)
 			}
