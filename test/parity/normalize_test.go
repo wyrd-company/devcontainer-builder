@@ -33,6 +33,14 @@ func TestNormalizerEquivalentAndDifferentEnv(t *testing.T) {
 		t.Fatal("command order hidden")
 	}
 }
+func TestCompareRealEnvDifference(t *testing.T) {
+	a := map[string]Observation{"env": {Value: map[string]any{"VALUE": "one"}}}
+	b := map[string]Observation{"env": {Value: map[string]any{"VALUE": "two"}}}
+	if compare("different", a, b).Dimensions["env"].Pass {
+		t.Fatal("genuine environment difference scored equal")
+	}
+}
+
 func TestCompareUnavailableNeverPasses(t *testing.T) {
 	a := failedObservations(os.ErrNotExist)
 	result := compare("fixture", a, a)

@@ -32,7 +32,7 @@ type UpstreamAdapter struct{ Version string }
 
 func (a UpstreamAdapter) Name() string { return "@devcontainers/cli@" + a.Version }
 func (a UpstreamAdapter) Up(ctx context.Context, r *Runner, workspace, tag string) ([]byte, error) {
-	return r.command(ctx, "npx", "--yes", "@devcontainers/cli@"+a.Version, "up", "--workspace-folder", workspace, "--mount-workspace-git-root", "false", "--id-label", r.label(), "--id-label", "devcontainer.local_folder="+workspace)
+	return r.command(ctx, "npx", "--yes", "@devcontainers/cli@"+a.Version, "up", "--workspace-folder", workspace, "--mount-workspace-git-root", "false")
 }
 
 func buildAdapter(ctx context.Context, r *Runner) (Adapter, error) {
