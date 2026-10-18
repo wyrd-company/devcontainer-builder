@@ -82,11 +82,15 @@ func buildContainerConfig(
 	resolved []features.Resolved,
 	image, containerWorkspaceFolder, localFolder, configFilePath string,
 ) (*container.Config, *container.HostConfig, error) {
-	envSlice := mapToEnvSlice(stringMap(dc.ContainerEnv))
+	// Features first, then the spec, so the spec wins (upstream order).
+	var envSlice []string
 	for _, f := range resolved {
 		for k, v := range f.Metadata.ContainerEnv {
 			envSlice = upsertEnv(envSlice, k, v)
 		}
+	}
+	for k, v := range stringMap(dc.ContainerEnv) {
+		envSlice = upsertEnv(envSlice, k, v)
 	}
 
 	labels := map[string]string{
@@ -255,14 +259,6 @@ func parseMountObject(o map[string]any) *mount.Mount {
 		return nil
 	}
 	return m
-}
-
-func mapToEnvSlice(m map[string]string) []string {
-	out := make([]string, 0, len(m))
-	for k, v := range m {
-		out = append(out, k+"="+v)
-	}
-	return out
 }
 
 func upsertEnv(env []string, k, v string) []string {

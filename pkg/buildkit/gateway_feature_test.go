@@ -2,6 +2,7 @@ package buildkit
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/moby/buildkit/solver/pb"
@@ -45,5 +46,21 @@ func TestBuildOnePlatform_FeaturesSeeBaseImageUser(t *testing.T) {
 		if got := solvedGraph(t, gc).allMkfiles()["/"+features.BuiltinEnvFile]; got != want {
 			t.Fatalf("upstream=%v: builtin env = %q, want %q", upstream, got, want)
 		}
+	}
+}
+
+// Upstream merges features first, then devcontainer.json, so the spec's
+// containerEnv wins a key collision.
+func TestMergeImageConfig_SpecContainerEnvWinsOverFeature(t *testing.T) {
+	g := featureGraphInputs(features.Resolved{Metadata: features.Metadata{
+		ContainerEnv: map[string]string{"SHARED": "feature", "FEATURE_ONLY": "yes"},
+	}})
+	g.Spec.ContainerEnv = map[string]any{"SHARED": "spec"}
+	out, err := mergeImageConfig(nil, g, nil, ocispecs.Platform{OS: "linux", Architecture: "amd64"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(out), `"SHARED=spec"`) || !strings.Contains(string(out), `"FEATURE_ONLY=yes"`) {
+		t.Fatalf("config env = %s", out)
 	}
 }

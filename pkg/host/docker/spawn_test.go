@@ -179,3 +179,18 @@ func TestBuildContainerConfig_FeatureEntrypointsWrapImageCommand(t *testing.T) {
 		t.Fatalf("script = %q", cfg.Cmd[1])
 	}
 }
+
+func TestBuildContainerConfig_SpecContainerEnvWinsOverFeature(t *testing.T) {
+	dc := &spec.DevContainer{ContainerEnv: map[string]any{"SHARED": "spec"}}
+	resolved := []features.Resolved{{Metadata: features.Metadata{
+		ContainerEnv: map[string]string{"SHARED": "feature", "FEATURE_ONLY": "yes"},
+	}}}
+	cfg, _, err := buildContainerConfig(dc, resolved, "img:latest", "/workspaces/proj", "/host/proj", "")
+	if err != nil {
+		t.Fatalf("buildContainerConfig: %v", err)
+	}
+	env := strings.Join(cfg.Env, "\n")
+	if !strings.Contains(env, "SHARED=spec") || strings.Contains(env, "SHARED=feature") || !strings.Contains(env, "FEATURE_ONLY=yes") {
+		t.Fatalf("env = %v", cfg.Env)
+	}
+}
