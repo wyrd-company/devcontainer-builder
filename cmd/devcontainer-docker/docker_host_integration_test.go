@@ -124,6 +124,64 @@ func TestDockerHostIntegration(t *testing.T) {
 	}
 }
 
+// TestDockerHostUpPullsMissingImage covers up with --skip-build on an
+// image the daemon does not have: up pulls it through the Engine API.
+func TestDockerHostUpPullsMissingImage(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping Docker integration test in short mode")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	defer cancel()
+
+	cli := requireDocker(t, ctx)
+	defer cli.Close()
+
+	// A tag no other integration test uses, so removing it is safe.
+	imageRef := os.Getenv("DCB_PULL_TEST_IMAGE")
+	if imageRef == "" {
+		imageRef = "alpine:3.19"
+	}
+	removeImageForPull(t, ctx, cli, imageRef)
+
+	bin := buildBinary(t)
+	workspace := prepareWorkspace(t, imageRef)
+	t.Cleanup(func() {
+		_ = runCommandAllowError(bin, "down", "--workspace", workspace)
+	})
+
+	runCommand(t, append(os.Environ(), "DCB_HOST_VALUE=local-value"), bin,
+		"up",
+		"--workspace", workspace,
+		"--image", imageRef,
+		"--skip-build",
+		"--update-remote-user-uid", "off",
+	)
+
+	if _, err := cli.ImageInspect(ctx, imageRef); err != nil {
+		t.Fatalf("image %s not in the daemon after up: %v", imageRef, err)
+	}
+	info := inspectContainer(t, ctx, cli, workspace)
+	if !info.State.Running {
+		t.Fatal("container is not running after up")
+	}
+	if info.Config.Image != imageRef {
+		t.Fatalf("container image = %q, want %q", info.Config.Image, imageRef)
+	}
+}
+
+// removeImageForPull removes ref so a later step must pull it. It skips
+// when a container still uses the image.
+func removeImageForPull(t *testing.T, ctx context.Context, cli *dockerclient.Client, ref string) {
+	t.Helper()
+	if _, err := cli.ImageRemove(ctx, ref, imagetypes.RemoveOptions{}); err != nil && !dockerclient.IsErrNotFound(err) {
+		skipOrFail(t, "cannot remove %s to test pulling it: %v", ref, err)
+	}
+	if _, err := cli.ImageInspect(ctx, ref); !dockerclient.IsErrNotFound(err) {
+		t.Fatalf("image %s still present after remove (err = %v)", ref, err)
+	}
+}
+
 func requireDocker(t *testing.T, ctx context.Context) *dockerclient.Client {
 	t.Helper()
 	cli, err := dockerclient.NewClientWithOpts(

@@ -34,8 +34,8 @@ type UpRequest struct {
 	// workspace is mounted. When empty, falls back to spec
 	// workspaceFolder, then "/workspaces/<basename>".
 	ContainerWorkspace string
-	// Image is the already-built image reference (use pkg/builder to
-	// produce one).
+	// Image is the image reference to run (use pkg/builder to produce
+	// one). Up pulls it when the daemon does not have it.
 	Image string
 	// Features as resolved by pkg/features. Their containerEnv and
 	// lifecycle commands are merged into the container.
@@ -119,6 +119,9 @@ func (h *Host) Up(ctx context.Context, req UpRequest) (*UpResult, error) {
 	}
 	res := &UpResult{}
 	if id == "" {
+		if err := h.ensureImage(ctx, req.Image); err != nil {
+			return nil, err
+		}
 		id, err = h.create(ctx, dc, req, containerWorkspace)
 		if err != nil {
 			return nil, err
