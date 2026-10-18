@@ -28,6 +28,7 @@ jobs:
       (github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.head_repository.full_name == github.repository)
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     env:
       REPO_WYRD_FOO_PUBLISHER_COMMIT: PUBLISHER_COMMIT_UNSET
     permissions:

@@ -568,6 +568,7 @@ class IdentityTests(unittest.TestCase):
             self.assertEqual(workflow["permissions"], {})
             for job in workflow["jobs"].values():
                 self.assertIn("permissions", job)
+                self.assertEqual(job["timeout-minutes"], 30)
                 for step in job["steps"]:
                     if "uses" in step:
                         if step["uses"].startswith(
