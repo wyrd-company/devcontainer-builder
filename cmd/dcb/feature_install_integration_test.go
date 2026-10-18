@@ -7,6 +7,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -39,13 +40,23 @@ func TestFeatureInstallIntegration(t *testing.T) {
 		_ = exec.Command("docker", "image", "rm", "-f", tag).Run()
 	})
 
-	hostRunCommand(t, os.Environ(), bin,
+	up := hostRunCommand(t, os.Environ(), bin,
 		"up",
 		"--workspace-folder", workspace,
 		"--image-name", tag,
 		"--update-remote-user-uid-default", "off",
 	)
 
+	// Existing lifecycle markers must also work when the image's default user
+	// is non-root and PID 1's environment cannot be read by the probe.
+	hostRunCommand(t, os.Environ(), bin, "run-user-commands", "--workspace-folder", workspace)
+	var result struct {
+		ContainerID string `json:"containerId"`
+	}
+	if err := json.Unmarshal(up, &result); err != nil {
+		t.Fatal(err)
+	}
+	hostRunCommand(t, os.Environ(), bin, "set-up", "--workspace-folder", workspace, "--container-id", result.ContainerID)
 	img, err := cli.ImageInspect(ctx, tag)
 	if err != nil {
 		t.Fatalf("inspect image %s: %v", tag, err)

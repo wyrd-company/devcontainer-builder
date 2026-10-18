@@ -80,7 +80,10 @@ func (a *application) lifecycleCommand(name string) *cobra.Command {
 		execer := a.execer(cli, dc, containerID)
 		env, err := runner.DetectContainerEnv(cmd.Context(), execer)
 		if err != nil {
-			return err
+			// Match host up: a non-root PID 1 can deny this probe. Lifecycle
+			// commands can still use their configured remote environment.
+			a.logf("warning: detect container env: %v", err)
+			env = map[string]string{}
 		}
 		home, err := runner.DetectHome(cmd.Context(), execer, dc.RemoteUser)
 		if err != nil {
