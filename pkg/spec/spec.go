@@ -233,7 +233,11 @@ func Load(path string) (*DevContainer, error) {
 	if err != nil {
 		return nil, fmt.Errorf("read %s: %w", path, err)
 	}
-	stripped := StripJSONC(data)
+	// Raw holds the migrated document, which upstream reports as the configuration.
+	stripped, _, err := MigrateLegacyVSCode(StripJSONC(data), true)
+	if err != nil {
+		return nil, fmt.Errorf("parse %s: %w", path, err)
+	}
 	var dc DevContainer
 	if err := json.Unmarshal(stripped, &dc); err != nil {
 		return nil, fmt.Errorf("parse %s: %w", path, err)

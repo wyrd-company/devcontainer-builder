@@ -243,3 +243,37 @@ func TestLoad_RejectsInvalid(t *testing.T) {
 		t.Errorf("Load: error = %q, want substring %q", err.Error(), "mixes compose fields")
 	}
 }
+
+// Mirrors upstream updateFromOldProperties for configurations.
+func TestLoadMigratesLegacyVSCodeProperties(t *testing.T) {
+	for _, tc := range []struct {
+		name, input, want string
+	}{
+		{"legacy", `{"image":"alpine","extensions":["two"],"settings":{"a":1,"b":1},"devPort":8000,"customizations":{"vscode":{"extensions":["one"],"settings":{"b":2}}}}`,
+			`{"customizations":{"vscode":{"devPort":8000,"extensions":["one","two"],"settings":{"a":1,"b":2}}},"image":"alpine"}`},
+		{"devPort kept when set", `{"image":"alpine","devPort":8000,"customizations":{"vscode":{"devPort":9000}}}`,
+			`{"customizations":{"vscode":{"devPort":9000}},"devPort":8000,"image":"alpine"}`},
+		{"current", `{"image":"alpine", "customizations":{"other":true}}`, `{"image":"alpine", "customizations":{"other":true}}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "devcontainer.json")
+			if err := os.WriteFile(path, []byte(tc.input), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			dc, err := Load(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(dc.Raw) != tc.want {
+				t.Fatalf("raw=%s, want %s", dc.Raw, tc.want)
+			}
+			var want DevContainer
+			if err := json.Unmarshal([]byte(tc.want), &want); err != nil {
+				t.Fatal(err)
+			}
+			if !reflect.DeepEqual(dc.Customizations, want.Customizations) {
+				t.Fatalf("customizations=%v, want %v", dc.Customizations, want.Customizations)
+			}
+		})
+	}
+}
