@@ -1,55 +1,62 @@
+// relationships:
+//
+//	references: [project, manage, ../../../../reference/cli/src/spec-node/dockerCompose.ts]
 package dockercompose
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
+	"errors"
+	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
+	"syscall"
 )
 
-// ProjectName derives a stable compose project name from the workspace
-// path. Mirrors the devcontainers CLI's approach: a short hash of the
-// absolute workspace path so the same workspace always reuses the
-// same project, and unrelated workspaces never collide.
-//
-// The result is a compose-legal identifier: lowercase, leading
-// alphanumeric, non-empty.
-func ProjectName(workspace string) string {
-	abs, err := filepath.Abs(workspace)
-	if err != nil {
-		abs = workspace
+// ProjectName supplies the directory-based default used by the devcontainers
+// CLI: <workspace>_devcontainer for a first Compose file in <workspace>/.devcontainer,
+// otherwise the basename of that file's directory. With no file it assumes the
+// conventional .devcontainer directory. LoadProject applies environment, .env,
+// and authored Compose names ahead of this default. Names are lowercased and
+// retain only [-_a-z0-9]; they contain no workspace hash.
+func ProjectName(workspace string, composeFiles ...string) string {
+	workingDir := filepath.Join(workspace, ".devcontainer")
+	if len(composeFiles) > 0 {
+		workingDir = filepath.Dir(composeFiles[0])
 	}
-	abs = filepath.Clean(abs)
-
-	sum := sha256.Sum256([]byte(abs))
-	hash := hex.EncodeToString(sum[:])[:8]
-
-	base := strings.ToLower(filepath.Base(abs))
-	base = sanitizeProjectBase(base)
-	if base == "" {
-		base = "devcontainer"
+	if filepath.Clean(workingDir) == filepath.Clean(filepath.Join(workspace, ".devcontainer")) {
+		return toProjectName(filepath.Base(filepath.Clean(workspace)) + "_devcontainer")
 	}
-	return base + "_" + hash
+	return toProjectName(filepath.Base(workingDir))
 }
 
-// sanitizeProjectBase keeps only [a-z0-9_-], collapses runs, and
-// strips leading non-letters. Compose accepts [a-z0-9_-]+ but rejects
-// names starting with a digit or punctuation.
-func sanitizeProjectBase(s string) string {
+func toProjectName(s string) string {
 	var b strings.Builder
-	for _, r := range s {
-		switch {
-		case r >= 'a' && r <= 'z':
-			b.WriteRune(r)
-		case r >= '0' && r <= '9':
-			b.WriteRune(r)
-		case r == '_' || r == '-':
+	for _, r := range strings.ToLower(s) {
+		if r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || r == '_' || r == '-' {
 			b.WriteRune(r)
 		}
 	}
-	out := b.String()
-	for len(out) > 0 && !(out[0] >= 'a' && out[0] <= 'z') {
-		out = out[1:]
+	return b.String()
+}
+
+var projectNameEnvLine = regexp.MustCompile(`(?m)^COMPOSE_PROJECT_NAME=(.+)$`)
+
+// Upstream up sets cliHost.cwd to --workspace-folder (or process.cwd when
+// omitted). Its .env name lookup reads the first matching assignment literally,
+// trims whitespace, then sanitizes it; this is not dotenv interpolation.
+func projectNameOverride(workspace string, env map[string]string) (string, error) {
+	if name := toProjectName(env["COMPOSE_PROJECT_NAME"]); name != "" {
+		return name, nil
 	}
-	return out
+	body, err := os.ReadFile(filepath.Join(workspace, ".env"))
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) || errors.Is(err, syscall.EISDIR) {
+			return "", nil
+		}
+		return "", err
+	}
+	if match := projectNameEnvLine.FindSubmatch(body); match != nil {
+		return toProjectName(strings.TrimSpace(string(match[1]))), nil
+	}
+	return "", nil
 }

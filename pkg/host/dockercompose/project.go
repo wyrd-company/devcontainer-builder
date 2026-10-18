@@ -1,8 +1,12 @@
+// relationships:
+//
+//	references: [projectname, up, build]
 package dockercompose
 
 import (
 	"context"
 	"fmt"
+	"maps"
 	"path/filepath"
 
 	"github.com/compose-spec/compose-go/v2/loader"
@@ -16,7 +20,8 @@ import (
 type LoadInputs struct {
 	// Spec is the parsed devcontainer.json. Must be in compose mode.
 	Spec *spec.DevContainer
-	// Workspace is the host workspace path; used for the project name.
+	// Workspace is the host workspace path; used for the default project name
+	// and the upstream CLI working directory for the .env name lookup.
 	Workspace string
 	// LocalEnv is the host environment forwarded to compose's
 	// `${VAR}` interpolation. Pass an empty map (not nil) for none.
@@ -62,13 +67,22 @@ func LoadProject(ctx context.Context, in LoadInputs) (*types.Project, error) {
 	details := types.ConfigDetails{
 		WorkingDir:  filepath.Dir(files[0]),
 		ConfigFiles: configFiles,
-		Environment: types.Mapping(in.LocalEnv),
+		Environment: types.Mapping(maps.Clone(in.LocalEnv)),
 	}
 
-	projectName := ProjectName(in.Workspace)
+	projectName, err := projectNameOverride(in.Workspace, in.LocalEnv)
+	if err != nil {
+		return nil, fmt.Errorf("compose project name: %w", err)
+	}
+	imperative := projectName != ""
+	if !imperative {
+		projectName = ProjectName(in.Workspace, files...)
+	}
 
 	proj, err := loader.LoadWithContext(ctx, details, func(o *loader.Options) {
-		o.SetProjectName(projectName, true)
+		// A non-imperative default lets compose-go resolve merged/interpolated
+		// name: entries, including an explicitly authored literal devcontainer.
+		o.SetProjectName(projectName, imperative)
 		o.SkipConsistencyCheck = false
 		o.ResolvePaths = true
 	})

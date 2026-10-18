@@ -1,7 +1,11 @@
+// relationships:
+//
+//	references: [projectname, project, labels]
 package dockercompose
 
 import (
 	"context"
+	"os"
 	"strings"
 
 	"github.com/docker/docker/api/types/container"
@@ -9,6 +13,8 @@ import (
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/api/types/volume"
 	"github.com/docker/docker/client"
+
+	"github.com/wyrd-company/devcontainer-builder/pkg/spec"
 )
 
 // ProjectInfo is a small projection of a compose project's runtime
@@ -35,7 +41,10 @@ type ContainerInfo struct {
 // compose project for the supplied workspace path. Returns
 // ErrProjectNotFound if no containers match.
 func (h *Host) Inspect(ctx context.Context, localWorkspace string) (*ProjectInfo, error) {
-	projectName := ProjectName(localWorkspace)
+	projectName, err := h.projectForWorkspace(ctx, localWorkspace)
+	if err != nil {
+		return nil, err
+	}
 	containers, err := h.listProjectContainers(ctx, projectName)
 	if err != nil {
 		return nil, err
@@ -88,7 +97,11 @@ func (h *Host) findPrimary(ctx context.Context, localWorkspace string) (string, 
 		// Distinguish "no project at all" from "project exists but the
 		// primary marker is missing", so embedders can decide whether to
 		// re-run Up vs. surface a confusing partial state.
-		existing, err := h.listProjectContainers(ctx, ProjectName(localWorkspace))
+		projectName, err := h.projectForWorkspace(ctx, localWorkspace)
+		if err != nil {
+			return "", err
+		}
+		existing, err := h.listProjectContainers(ctx, projectName)
 		if err != nil {
 			return "", err
 		}
@@ -135,7 +148,10 @@ func (h *Host) inspectOne(ctx context.Context, id string) (*ContainerInfo, error
 // Stop stops every container in the project. Idempotent on
 // already-stopped containers.
 func (h *Host) Stop(ctx context.Context, localWorkspace string) error {
-	projectName := ProjectName(localWorkspace)
+	projectName, err := h.projectForWorkspace(ctx, localWorkspace)
+	if err != nil {
+		return err
+	}
 	containers, err := h.listProjectContainers(ctx, projectName)
 	if err != nil {
 		return err
@@ -158,7 +174,10 @@ func (h *Host) Stop(ctx context.Context, localWorkspace string) error {
 // then removes project-owned networks and volumes. External
 // resources are left alone.
 func (h *Host) Remove(ctx context.Context, localWorkspace string) error {
-	projectName := ProjectName(localWorkspace)
+	projectName, err := h.projectForWorkspace(ctx, localWorkspace)
+	if err != nil {
+		return err
+	}
 	if err := h.Stop(ctx, localWorkspace); err != nil && err != ErrProjectNotFound {
 		// best-effort; container removal forces below
 		h.logf("stop before remove: %v", err)
@@ -201,6 +220,40 @@ func (h *Host) Remove(ctx context.Context, localWorkspace string) error {
 		h.logf("remove materialized objects for %s: %v", projectName, err)
 	}
 	return nil
+}
+
+// projectForWorkspace reads the persisted Compose identity from the primary's
+// workspace label before consulting current configuration. Teardown still works
+// when the config is removed or its name/environment has changed since Up.
+func (h *Host) projectForWorkspace(ctx context.Context, workspace string) (string, error) {
+	args := filters.NewArgs(
+		filters.Arg("label", LabelLocalFolder+"="+workspace),
+		filters.Arg("label", LabelProject),
+	)
+	list, err := h.client.ContainerList(ctx, container.ListOptions{All: true, Filters: args})
+	if err != nil {
+		return "", errorf("find workspace project: %w", err)
+	}
+	for _, c := range list {
+		if name := c.Labels[LabelProject]; name != "" {
+			return name, nil
+		}
+	}
+	// A partial project can have only sidecars or resources left. Resolve its
+	// current config when available, otherwise use the conventional default.
+	if dc, err := spec.LoadFromWorkspace(workspace); err == nil && dc.Mode() == spec.ModeCompose {
+		env := map[string]string{}
+		for _, entry := range os.Environ() {
+			key, value, _ := strings.Cut(entry, "=")
+			env[key] = value
+		}
+		proj, err := LoadProject(ctx, LoadInputs{Spec: dc, Workspace: workspace, LocalEnv: env})
+		if err != nil {
+			return "", err
+		}
+		return proj.Name, nil
+	}
+	return ProjectName(workspace), nil
 }
 
 func (h *Host) listProjectContainers(ctx context.Context, projectName string) ([]container.Summary, error) {

@@ -41,7 +41,8 @@ func TestDockerComposeCLI(t *testing.T) {
 	if err := os.WriteFile(config, []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(filepath.Dir(config), "compose.yml"), []byte("services:\n  app:\n    image: alpine:3.20\n    command: [sleep, infinity]\n"), 0o644); err != nil {
+	projectName := "sample-" + strings.TrimPrefix(filepath.Base(workspace), ".tmp-")
+	if err := os.WriteFile(filepath.Join(filepath.Dir(config), "compose.yml"), []byte("name: "+projectName+"\nservices:\n  app:\n    image: alpine:3.20\n    command: [sleep, infinity]\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	bin := hostBuildBinary(t)
@@ -92,6 +93,9 @@ func TestDockerComposeCLI(t *testing.T) {
 		if _, exists := result[field]; exists {
 			t.Fatalf("up leaked build result field %s: %v", field, result)
 		}
+	}
+	if result["composeProjectName"] != projectName {
+		t.Fatalf("Compose result project = %v, want %q", result["composeProjectName"], projectName)
 	}
 	id := result["containerId"].(string)
 	t.Cleanup(func() {

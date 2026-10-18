@@ -101,6 +101,15 @@ Other result fields by command:
 | `skills` | `skills`; `installed` for `skills install` |
 | `version` | `version` |
 
+`composeProjectName` follows the upstream CLI order: `COMPOSE_PROJECT_NAME` in
+the host environment, then in the workspace's `.env`, then the Compose `name:`.
+An authored `name: devcontainer` is retained. Without a name, a first Compose
+file in `<workspace>/.devcontainer` uses `<workspace basename>_devcontainer`;
+other locations use the basename of the first Compose file's directory.
+Names are lowercase and retain `-`, `_`, letters, and digits. Workspace-only
+operations find the running or stopped project's captured name through its
+container labels, including when the configuration file has been removed.
+
 `phasesRun` lists the lifecycle commands that ran, in order. Each entry has
 `hook`, the upstream name such as `postCreateCommand`, and `origin`, which is
 `devcontainer.json` or the reference of the feature that contributed it.
