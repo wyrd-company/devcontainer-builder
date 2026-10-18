@@ -83,7 +83,7 @@ func (a *application) buildCommand(generate bool) *cobra.Command {
 		if err != nil {
 			return err
 		}
-		bo, err := opts.prepare(a, dc, workspace)
+		bo, err := opts.prepare(a, dc, workspace, cmd.Flags().Changed("load"))
 		if err != nil {
 			return err
 		}
@@ -102,11 +102,15 @@ func (a *application) buildCommand(generate bool) *cobra.Command {
 	return cmd
 }
 
-func (o *buildOptions) prepare(a *application, dc *spec.DevContainer, workspace string) (builder.Options, error) {
+func (o *buildOptions) prepare(a *application, dc *spec.DevContainer, workspace string, loadExplicit bool) (builder.Options, error) {
 	bo := o.options
 	if bo.Push && bo.Load {
 		return bo, usageError("--push and --load are mutually exclusive")
 	}
+	if bo.OutputDir != "" && (bo.Push || bo.Load) {
+		return bo, usageError("--output cannot be combined with --push or --load")
+	}
+
 	var err error
 	if bo.BuildArgs, err = parsePairs(o.buildArgs); err != nil {
 		return bo, err
@@ -119,7 +123,7 @@ func (o *buildOptions) prepare(a *application, dc *spec.DevContainer, workspace 
 	if len(bo.Tags) == 0 {
 		bo.Tags = []string{defaultImage(workspace)}
 	}
-	if !bo.Push && bo.OutputDir == "" {
+	if !loadExplicit && !bo.Push && bo.OutputDir == "" {
 		bo.Load = true
 	}
 	return bo, nil
@@ -133,7 +137,7 @@ func (a *application) buildImage(ctx context.Context, dc *spec.DevContainer, wor
 	images := bo.Tags
 	if dc.Mode() == spec.ModeCompose {
 		var res *dockercompose.BuildPrimaryResult
-		res, err = dockercompose.BuildPrimaryImage(ctx, dockercompose.BuildPrimaryInputs{Spec: dc, Workspace: workspace, LocalEnv: envMap(), Tag: firstImage(bo.Tags), BuilderOptions: bo})
+		res, err = dockercompose.BuildPrimaryImage(ctx, dockercompose.BuildPrimaryInputs{Spec: dc, Workspace: workspace, LocalEnv: envMap(), Tag: firstImage(bo.Tags), BuilderOptions: bo, SkipDefaultLoad: !bo.Load})
 		if res != nil {
 			result = res.BuildResult
 			if len(images) == 0 {
@@ -149,7 +153,15 @@ func (a *application) buildImage(ctx context.Context, dc *spec.DevContainer, wor
 		}
 		return result, err
 	}
-	a.result["imageName"] = images
+
+	switch {
+	case bo.OutputDir != "":
+		a.result["outputDir"] = bo.OutputDir
+	case !bo.Load && !bo.Push:
+		a.result["cacheOnly"] = true
+	default:
+		a.result["imageName"] = images
+	}
 	return result, nil
 }
 

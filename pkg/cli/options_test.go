@@ -65,6 +65,7 @@ func TestBuildOptions(t *testing.T) {
 		{"invalid-arg", []string{"--build-arg", "invalid"}, 2},
 		{"empty-label-key", []string{"--label", "=value"}, 2},
 		{"up-export", []string{"--output", t.TempDir()}, 2},
+		{"up-cache-only", []string{"--load=false"}, 2},
 		{"invalid-uid", []string{"--update-remote-user-uid-default", "invalid"}, 2},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -80,21 +81,30 @@ func TestBuildOptions(t *testing.T) {
 	if conflict["message"] != "--push and --load are mutually exclusive" {
 		t.Fatalf("push/load conflict: %v", conflict)
 	}
+	for _, mode := range []string{"--push", "--load"} {
+		invoke(t, 2, "build", "--config", cfg, "--output", t.TempDir(), mode)
+	}
+
 	a := &application{logs: &logWriter{dst: io.Discard}}
 	o := buildOptions{buildArgs: []string{"KEY=one=two"}, labels: []string{"example.label=value"}}
 	dc, err := spec.Load(cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
-	result, err := o.prepare(a, dc, "/workspace")
+	result, err := o.prepare(a, dc, "/workspace", false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !result.Load || result.BuildArgs["KEY"] != "one=two" || result.Labels["example.label"] != "value" || len(result.Tags) != 1 || result.Tags[0] == defaultImage("/other/workspace") {
 		t.Fatalf("build options=%+v", result)
 	}
+
+	cacheOnly, err := o.prepare(a, dc, "/workspace", true)
+	if err != nil || cacheOnly.Load {
+		t.Fatalf("explicit --load=false was ignored: %+v %v", cacheOnly, err)
+	}
 	o.options.Push = true
-	result, err = o.prepare(a, dc, "/workspace")
+	result, err = o.prepare(a, dc, "/workspace", false)
 	if err != nil || result.Load {
 		t.Fatalf("push options=%+v error=%v", result, err)
 	}

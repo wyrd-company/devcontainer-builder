@@ -49,7 +49,10 @@ dcb server --out ./server --platform linux/amd64
 `build` loads into Docker by default and returns an `imageName` array.
 Use `--push` for registry export, `--platform` for target platforms,
 `--no-cache` to disable cache, and repeated `--cache-from` / `--cache-to`
-for cache settings. `generate` returns `dockerfile` and `contextDir` paths.
+for cache settings. Use `build --load=false` to warm the build cache without
+exporting an image. `--output` selects a filesystem export and cannot be
+combined with `--push` or `--load`. The result contains `cacheOnly: true`
+for a cache-only build, or `outputDir` for a filesystem export. `generate` returns `dockerfile` and `contextDir` paths.
 
 `up --skip-post-create` skips all lifecycle commands;
 `--skip-post-attach` skips only postAttachCommand. Use

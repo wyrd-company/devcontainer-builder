@@ -4,8 +4,10 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
+	dockerclient "github.com/docker/docker/client"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -25,9 +27,11 @@ func TestDockerBuildIntegration(t *testing.T) {
 	tagBase := fmt.Sprintf("devcontainer-builder/integration-%d", time.Now().UnixNano())
 
 	cases := []struct {
-		name      string
-		fixture   string
-		assertion func(*testing.T, string)
+		name       string
+		fixture    string
+		cacheOnly  bool
+		filesystem bool
+		assertion  func(*testing.T, string)
 	}{
 		{
 			name:    "buildkit-image",
@@ -51,6 +55,13 @@ func TestDockerBuildIntegration(t *testing.T) {
 				runDocker(t, "run", "--rm", tag, "sh", "-lc", "grep -qx dockerfile-smoke /usr/local/share/dcb-smoke-dockerfile")
 			},
 		},
+
+		{
+			name: "cache-only", fixture: "image", cacheOnly: true,
+			assertion: func(t *testing.T, tag string) { assertImageAbsent(t, tag) },
+		},
+
+		{name: "filesystem-export", fixture: "image", filesystem: true, assertion: func(t *testing.T, tag string) { assertImageAbsent(t, tag) }},
 		{
 			name:    "buildkit-feature",
 			fixture: "features",
@@ -75,6 +86,15 @@ func TestDockerBuildIntegration(t *testing.T) {
 				"--progress", "plain",
 			}
 
+			if tc.cacheOnly {
+				args = append(args, "--load=false")
+			}
+			var outputDir string
+			if tc.filesystem {
+				outputDir = t.TempDir()
+				args = append(args, "--load=false", "--output", outputDir)
+			}
+
 			cmd := exec.Command(bin, args...)
 			var diagnostics bytes.Buffer
 			cmd.Stderr = &diagnostics
@@ -86,9 +106,23 @@ func TestDockerBuildIntegration(t *testing.T) {
 			if err := json.Unmarshal(out, &result); err != nil || result["outcome"] != "success" || bytes.Count(out, []byte("\n")) != 1 {
 				t.Fatalf("invalid build result: %s (%v)", out, err)
 			}
-			names, ok := result["imageName"].([]any)
-			if !ok || len(names) != 1 || names[0] != tag {
-				t.Fatalf("build imageName=%v, want %s", result["imageName"], tag)
+
+			if tc.filesystem {
+				if result["outputDir"] != outputDir || result["imageName"] != nil {
+					t.Fatalf("filesystem result=%v", result)
+				}
+				if _, err := os.Stat(filepath.Join(outputDir, "etc", "alpine-release")); err != nil {
+					t.Fatalf("filesystem export missing image file: %v", err)
+				}
+			} else if tc.cacheOnly {
+				if result["cacheOnly"] != true || result["imageName"] != nil {
+					t.Fatalf("cache-only result=%v", result)
+				}
+			} else {
+				names, ok := result["imageName"].([]any)
+				if !ok || len(names) != 1 || names[0] != tag {
+					t.Fatalf("build imageName=%v, want %s", result["imageName"], tag)
+				}
 			}
 
 			tc.assertion(t, tag)
@@ -207,4 +241,16 @@ func safeArtifactName(s string) string {
 		}
 		return '-'
 	}, s)
+}
+
+func assertImageAbsent(t *testing.T, tag string) {
+	t.Helper()
+	cli, err := dockerclient.NewClientWithOpts(dockerclient.FromEnv, dockerclient.WithAPIVersionNegotiation())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cli.Close()
+	if _, err := cli.ImageInspect(context.Background(), tag); !dockerclient.IsErrNotFound(err) {
+		t.Fatalf("cache-only image %s unexpectedly exported (error=%v)", tag, err)
+	}
 }

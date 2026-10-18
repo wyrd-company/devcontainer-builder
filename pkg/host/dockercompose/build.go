@@ -13,6 +13,10 @@ import (
 
 // BuildPrimaryInputs feeds BuildPrimaryImage.
 type BuildPrimaryInputs struct {
+	// SkipDefaultLoad leaves BuilderOptions.Load unchanged instead of enabling
+	// local loading by default. Push and filesystem exports retain their meaning.
+	SkipDefaultLoad bool
+
 	// Spec is the parsed devcontainer.json (compose mode).
 	Spec *spec.DevContainer
 	// Workspace is the host workspace path; used as the build context.
@@ -175,7 +179,7 @@ func BuildPrimaryImage(ctx context.Context, in BuildPrimaryInputs) (*BuildPrimar
 		opts.Tags = append([]string(nil), opts.Tags...)
 		opts.Tags[0] = tag
 	}
-	if !opts.Push && opts.OutputDir == "" {
+	if !in.SkipDefaultLoad && !opts.Push && opts.OutputDir == "" {
 		opts.Load = true
 	}
 

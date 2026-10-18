@@ -54,7 +54,11 @@ func (a *application) upCommand() *cobra.Command {
 		if err != nil {
 			return err
 		}
-		bo, err := opts.prepare(a, dc, workspace)
+
+		if cmd.Flags().Changed("load") && !opts.options.Load {
+			return usageError("up requires a loaded image; use build --load=false for cache-only builds")
+		}
+		bo, err := opts.prepare(a, dc, workspace, cmd.Flags().Changed("load"))
 		if err != nil {
 			return err
 		}

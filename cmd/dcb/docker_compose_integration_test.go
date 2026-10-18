@@ -65,6 +65,14 @@ func TestDockerComposeCLI(t *testing.T) {
 		}
 	}
 
+	cacheTag := tag + "-cache"
+	t.Cleanup(func() { _, _ = cli.ImageRemove(context.Background(), cacheTag, imagetypes.RemoveOptions{}) })
+	cacheOutput := hostRunCommand(t, os.Environ(), bin, "build", "--workspace-folder", workspace, "--image-name", cacheTag, "--load=false")
+	var cacheResult map[string]any
+	if err := json.Unmarshal(cacheOutput, &cacheResult); err != nil || cacheResult["cacheOnly"] != true || cacheResult["imageName"] != nil {
+		t.Fatalf("Compose cache-only result=%s (%v)", cacheOutput, err)
+	}
+	assertImageAbsent(t, cacheTag)
 	// Register exact workspace teardown before up so partial failures are cleaned.
 	t.Cleanup(func() { _ = hostRunCommandAllowError(bin, "down", "--workspace-folder", workspace) })
 	up := hostRunCommand(t, os.Environ(), bin, "up", "--workspace-folder", workspace)
