@@ -13,7 +13,12 @@ func TestContainerLabels_PrimaryHasDevcontainerLabels(t *testing.T) {
 		{Name: "cache", Condition: types.ServiceConditionStarted, Required: true},
 		{Name: "seeder", Condition: types.ServiceConditionCompletedSuccessfully, Required: false},
 	}
-	got := containerLabels("proj_abc", "/work", "/work/.devcontainer/devcontainer.json", "app", "deadbeef", deps, true)
+	scope := labelScope{Project: "proj_abc", WorkingDir: "/work/.devcontainer", ComposeFiles: []string{"/work/.devcontainer/compose.yml", "/work/.devcontainer/extra.yml"}, LocalWorkspace: "/work", SpecPath: "/work/.devcontainer/devcontainer.json"}
+	got := containerLabels(scope, "app", "deadbeef", deps, true)
+	// As docker compose: the Compose project directory and files.
+	if got[LabelWorkingDir] != "/work/.devcontainer" || got[LabelConfigFiles] != "/work/.devcontainer/compose.yml,/work/.devcontainer/extra.yml" {
+		t.Errorf("compose project labels: working dir %q, config files %q", got[LabelWorkingDir], got[LabelConfigFiles])
+	}
 	if got[LabelConfigHash] != "deadbeef" {
 		t.Errorf("config-hash label: got %q want deadbeef", got[LabelConfigHash])
 	}
@@ -39,7 +44,7 @@ func TestContainerLabels_PrimaryHasDevcontainerLabels(t *testing.T) {
 }
 
 func TestContainerLabels_NonPrimaryOmitsDevcontainerLabels(t *testing.T) {
-	got := containerLabels("proj_abc", "/work", "/work/.devcontainer/devcontainer.json", "db", "", nil, false)
+	got := containerLabels(labelScope{Project: "proj_abc", WorkingDir: "/work", LocalWorkspace: "/work", SpecPath: "/work/.devcontainer/devcontainer.json"}, "db", "", nil, false)
 	if _, ok := got[LabelLocalFolder]; ok {
 		t.Errorf("non-primary services must not carry %s; got %q", LabelLocalFolder, got[LabelLocalFolder])
 	}

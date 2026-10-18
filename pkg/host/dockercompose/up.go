@@ -242,6 +242,7 @@ func (h *Host) Up(ctx context.Context, req UpRequest) (*UpResult, error) {
 		return nil, err
 	}
 
+	scope := labelScope{Project: proj.Name, WorkingDir: proj.WorkingDir, ComposeFiles: req.Spec.ComposeFiles(), LocalWorkspace: req.LocalWorkspace, SpecPath: req.SpecPath}
 	if err := proj.ForEachService(startNames, func(name string, svc *types.ServiceConfig) error {
 		isPrimary := name == req.Spec.Service
 		// Wait for any service_healthy / service_completed_successfully
@@ -252,7 +253,7 @@ func (h *Host) Up(ctx context.Context, req UpRequest) (*UpResult, error) {
 			return fmt.Errorf("service %q: %w", name, err)
 		}
 		hash := serviceConfigHash(*svc)
-		labels := containerLabels(proj.Name, req.LocalWorkspace, req.SpecPath, name, hash, dependsOnList(*svc), isPrimary)
+		labels := containerLabels(scope, name, hash, dependsOnList(*svc), isPrimary)
 		for k, v := range svc.Labels {
 			if _, managed := labels[k]; !managed {
 				labels[k] = v

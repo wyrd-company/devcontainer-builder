@@ -23,22 +23,29 @@ func projectLabels(projectName, workingDir string) map[string]string {
 	}
 }
 
+// labelScope identifies the project a container belongs to. WorkingDir and
+// ComposeFiles are the Compose project's; LocalWorkspace and SpecPath are the
+// devcontainer's.
+type labelScope struct {
+	Project, WorkingDir      string
+	ComposeFiles             []string
+	LocalWorkspace, SpecPath string
+}
+
 // containerLabels extends projectLabels with the per-service keys
 // docker compose writes on each container, plus — only on the primary
 // — the devcontainer-discovery labels editor tooling looks up.
-func containerLabels(
-	projectName, localWorkspace, configFile, serviceName, configHash string,
-	deps []dependency, isPrimary bool,
-) map[string]string {
-	out := projectLabels(projectName, localWorkspace)
+func containerLabels(scope labelScope, serviceName, configHash string, deps []dependency, isPrimary bool) map[string]string {
+	out := projectLabels(scope.Project, scope.WorkingDir)
 	out[LabelService] = serviceName
 	out[LabelOneoff] = "False"
 	out[LabelContainerN] = "1"
 	if configHash != "" {
 		out[LabelConfigHash] = configHash
 	}
-	if configFile != "" {
-		out[LabelConfigFiles] = configFile
+	if len(scope.ComposeFiles) > 0 {
+		// Compose records the files it loaded, comma-joined.
+		out[LabelConfigFiles] = strings.Join(scope.ComposeFiles, ",")
 	}
 	if len(deps) > 0 {
 		// Compose serializes depends_on as a comma-joined list of
@@ -58,9 +65,9 @@ func containerLabels(
 		// every container would make the workspace ambiguous to VS
 		// Code's Dev Container extension and the upstream CLI.
 		out[LabelPrimary] = "true"
-		out[LabelLocalFolder] = localWorkspace
-		if configFile != "" {
-			out[LabelConfigFile] = configFile
+		out[LabelLocalFolder] = scope.LocalWorkspace
+		if scope.SpecPath != "" {
+			out[LabelConfigFile] = scope.SpecPath
 		}
 	}
 	return out

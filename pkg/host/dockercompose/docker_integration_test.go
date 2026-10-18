@@ -501,11 +501,13 @@ func assertComposeLabels(t *testing.T, c ContainerInfo, projectName, workspace, 
 	if c.Labels[LabelProject] != projectName {
 		t.Fatalf("container %s project label = %q, want %q", short(c.ID), c.Labels[LabelProject], projectName)
 	}
-	if c.Labels[LabelWorkingDir] != workspace {
-		t.Fatalf("container %s working dir label = %q, want %q", short(c.ID), c.Labels[LabelWorkingDir], workspace)
+	// As docker compose: the first Compose file's directory and the files.
+	composeDir := filepath.Dir(specPath)
+	if c.Labels[LabelWorkingDir] != composeDir {
+		t.Fatalf("container %s working dir label = %q, want %q", short(c.ID), c.Labels[LabelWorkingDir], composeDir)
 	}
-	if c.Labels[LabelConfigFiles] != specPath {
-		t.Fatalf("container %s config files label = %q, want %q", short(c.ID), c.Labels[LabelConfigFiles], specPath)
+	if want := filepath.Join(composeDir, "docker-compose.yml"); c.Labels[LabelConfigFiles] != want {
+		t.Fatalf("container %s config files label = %q, want %q", short(c.ID), c.Labels[LabelConfigFiles], want)
 	}
 }
 
