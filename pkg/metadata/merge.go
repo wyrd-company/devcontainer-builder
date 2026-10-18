@@ -57,6 +57,7 @@ func (m Merged) MarshalJSON() ([]byte, error) {
 		delete(out, key)
 	}
 	for key, value := range map[string]any{
+		"remoteEnv": m.UpdateRemoteEnv, "containerEnv": m.ContainerEnv, "portsAttributes": m.PortsAttributes,
 		"onCreateCommands": m.OnCreateCommands, "updateContentCommands": m.UpdateContentCommands,
 		"postCreateCommands": m.PostCreateCommands, "postStartCommands": m.PostStartCommands,
 		"postAttachCommands": m.PostAttachCommands,
