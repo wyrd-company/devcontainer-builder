@@ -41,6 +41,18 @@ func EnsureImage(t testing.TB, ctx context.Context, cli *dockerclient.Client, re
 	}
 }
 
+// RemoveImage removes a test-owned image reference. Callers must only pass
+// references created by their test; shared base images must never be removed.
+func RemoveImage(t testing.TB, ctx context.Context, cli *dockerclient.Client, ref string) {
+	t.Helper()
+	if ref == "" {
+		return
+	}
+	if _, err := cli.ImageRemove(ctx, ref, imagetypes.RemoveOptions{Force: true}); err != nil && !dockerclient.IsErrNotFound(err) {
+		t.Logf("remove image %s: %v", ref, err)
+	}
+}
+
 // StartRegistry runs a test-owned registry container on the daemon and
 // returns its address as the daemon reaches it ("127.0.0.1:<port>",
 // which the daemon treats as an insecure registry). The container is

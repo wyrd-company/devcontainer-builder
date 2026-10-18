@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -19,12 +18,12 @@ import (
 	"github.com/compose-spec/compose-go/v2/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/filters"
-	imagetypes "github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/api/types/volume"
 	dockerclient "github.com/docker/docker/client"
 
+	"github.com/wyrd-company/devcontainer-builder/internal/dockertest"
 	"github.com/wyrd-company/devcontainer-builder/pkg/builder"
 	"github.com/wyrd-company/devcontainer-builder/pkg/spec"
 )
@@ -42,8 +41,8 @@ func TestDockerComposeIntegration(t *testing.T) {
 		_ = cli.Close()
 	})
 
-	ensureComposeImage(t, ctx, cli, "alpine:3.20")
-	ensureComposeImage(t, ctx, cli, "busybox:1.36")
+	dockertest.EnsureImage(t, ctx, cli, "alpine:3.20")
+	dockertest.EnsureImage(t, ctx, cli, "busybox:1.36")
 
 	workspace := prepareComposeWorkspace(t)
 	helperTag := fmt.Sprintf("devcontainer-builder/compose-helper-%d:latest", time.Now().UnixNano())
@@ -51,8 +50,8 @@ func TestDockerComposeIntegration(t *testing.T) {
 	t.Cleanup(func() {
 		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), time.Minute)
 		defer cleanupCancel()
-		removeComposeImage(t, cleanupCtx, cli, helperTag)
-		removeComposeImage(t, cleanupCtx, cli, primaryTag)
+		dockertest.RemoveImage(t, cleanupCtx, cli, helperTag)
+		dockertest.RemoveImage(t, cleanupCtx, cli, primaryTag)
 	})
 	writeComposeFixture(t, workspace, primaryTag, helperTag, "one")
 	requireBindableComposePath(t, ctx, cli, "alpine:3.20", workspace)
@@ -603,23 +602,6 @@ func requireComposeDocker(t *testing.T, ctx context.Context) *dockerclient.Clien
 	return cli
 }
 
-func ensureComposeImage(t *testing.T, ctx context.Context, cli *dockerclient.Client, ref string) {
-	t.Helper()
-	if _, err := cli.ImageInspect(ctx, ref); err == nil {
-		return
-	} else if !dockerclient.IsErrNotFound(err) {
-		t.Fatalf("inspect image %s: %v", ref, err)
-	}
-	rc, err := cli.ImagePull(ctx, ref, imagetypes.PullOptions{})
-	if err != nil {
-		t.Fatalf("pull image %s: %v", ref, err)
-	}
-	defer rc.Close()
-	if _, err := io.Copy(io.Discard, rc); err != nil {
-		t.Fatalf("read pull stream for %s: %v", ref, err)
-	}
-}
-
 func requireBindableComposePath(t *testing.T, ctx context.Context, cli *dockerclient.Client, imageRef, hostPath string) {
 	t.Helper()
 	resp, err := cli.ContainerCreate(
@@ -647,16 +629,6 @@ func requireBindableComposePath(t *testing.T, ctx context.Context, cli *dockercl
 			t.Logf("remove preflight container %s: %v", short(resp.ID), err)
 		}
 	})
-}
-
-func removeComposeImage(t *testing.T, ctx context.Context, cli *dockerclient.Client, ref string) {
-	t.Helper()
-	if ref == "" {
-		return
-	}
-	if _, err := cli.ImageRemove(ctx, ref, imagetypes.RemoveOptions{Force: true, PruneChildren: true}); err != nil && !dockerclient.IsErrNotFound(err) {
-		t.Logf("remove image %s: %v", ref, err)
-	}
 }
 
 func repoRoot(t *testing.T) string {
