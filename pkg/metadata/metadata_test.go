@@ -175,12 +175,15 @@ func TestUpstreamLabelFixture(t *testing.T) {
 }
 
 func TestMergedJSONPreservesConfigExtensionsAndFeatureShape(t *testing.T) {
-	raw := []byte(`{"image":"alpine","features":{"./sample":{"value":true}},"extension":{"enabled":true},"remoteUser":"stale","onCreateCommand":"stale"}`)
+	raw := []byte(`{"name":"original","build":{"dockerfile":"Dockerfile","args":{"OLD":"value"},"extension":{"enabled":true}},"features":{"./sample":{"value":true}},"extension":{"enabled":true},"remoteUser":"stale","onCreateCommand":"stale"}`)
 	var dc spec.DevContainer
 	if err := json.Unmarshal(raw, &dc); err != nil {
 		t.Fatal(err)
 	}
 	dc.Raw = raw
+	dc.Name = ""
+	dc.Build.Dockerfile = "Containerfile"
+	dc.Build.Args = nil
 	m := Merge(&dc, parse(t, `[{"remoteUser":"sample"}]`))
 	encoded, err := json.Marshal(m)
 	if err != nil {
@@ -190,8 +193,11 @@ func TestMergedJSONPreservesConfigExtensionsAndFeatureShape(t *testing.T) {
 	if err := json.Unmarshal(encoded, &got); err != nil {
 		t.Fatal(err)
 	}
-	if got["remoteUser"] != "sample" || !reflect.DeepEqual(got["features"], map[string]any{"./sample": map[string]any{"value": true}}) || !reflect.DeepEqual(got["extension"], map[string]any{"enabled": true}) {
+	if got["remoteUser"] != "sample" || !reflect.DeepEqual(got["build"], map[string]any{"dockerfile": "Containerfile", "extension": map[string]any{"enabled": true}}) || !reflect.DeepEqual(got["features"], map[string]any{"./sample": map[string]any{"value": true}}) || !reflect.DeepEqual(got["extension"], map[string]any{"enabled": true}) {
 		t.Fatalf("merged=%s", encoded)
+	}
+	if _, ok := got["name"]; ok {
+		t.Fatalf("cleared config field retained: %s", encoded)
 	}
 	if _, ok := got["onCreateCommand"]; ok {
 		t.Fatalf("stale command=%s", encoded)

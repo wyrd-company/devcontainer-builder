@@ -6,6 +6,7 @@ package metadata
 import (
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"slices"
 	"strconv"
 	"strings"
@@ -37,17 +38,17 @@ func (m Merged) MarshalJSON() ([]byte, error) {
 	if err := json.Unmarshal(data, &fields); err != nil {
 		return nil, err
 	}
-	out := map[string]any{}
+	original := map[string]any{}
 	if len(m.Raw) > 0 {
-		if err := json.Unmarshal(m.Raw, &out); err != nil {
+		if err := json.Unmarshal(m.Raw, &original); err != nil {
 			return nil, err
 		}
 	}
-	for _, key := range []string{"init", "privileged", "capAdd", "securityOpt", "mounts", "remoteUser", "containerUser", "waitFor", "userEnvProbe", "shutdownAction", "overrideCommand", "updateRemoteUserUID", "remoteEnv", "containerEnv", "portsAttributes", "otherPortsAttributes", "forwardPorts", "hostRequirements"} {
-		delete(out, key)
-	}
-	for k, v := range fields {
-		out[k] = v
+	out := preserveConfigExtensions(original, fields, reflect.TypeFor[spec.DevContainer]())
+	if build, ok := fields["build"].(map[string]any); ok {
+		if rawBuild, ok := original["build"].(map[string]any); ok {
+			out["build"] = preserveConfigExtensions(rawBuild, build, reflect.TypeFor[spec.Build]())
+		}
 	}
 	delete(out, "features")
 	if m.Features.Len() > 0 {
@@ -226,4 +227,22 @@ func Plan(entries []Entry) []lifecycle.Phase {
 		}
 	}
 	return phases
+}
+
+// preserveConfigExtensions keeps unmodeled properties while the Go model
+// remains authoritative for recognized fields, including cleared values.
+func preserveConfigExtensions(original, modeled map[string]any, model reflect.Type) map[string]any {
+	known := map[string]bool{}
+	for i := 0; i < model.NumField(); i++ {
+		name := strings.Split(model.Field(i).Tag.Get("json"), ",")[0]
+		if name != "" && name != "-" {
+			known[name] = true
+		}
+	}
+	for key, value := range original {
+		if !known[key] {
+			modeled[key] = value
+		}
+	}
+	return modeled
 }
