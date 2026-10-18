@@ -1,8 +1,7 @@
-// Package docker brings a devcontainer up against a docker-compatible
-// daemon (Docker Engine, podman with the Docker-compat socket, or
-// nerdctl-on-containerd's dockerd compat shim) by talking to the
-// engine API directly — no `docker` CLI shell-out, so the package is
-// safely embeddable in services and operators.
+// Package docker brings a devcontainer up against a Docker Engine by
+// talking to the engine API directly — no `docker` CLI shell-out, so the
+// package is safely embeddable in services and operators. Podman is not
+// supported.
 //
 // Compatibility with the upstream devcontainer CLI is intentional. Container
 // labels (devcontainer.local_folder, devcontainer.config_file), marker
