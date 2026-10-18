@@ -14,6 +14,7 @@ import (
 	hostdocker "github.com/wyrd-company/devcontainer-builder/pkg/host/docker"
 	"github.com/wyrd-company/devcontainer-builder/pkg/host/dockercompose"
 	"github.com/wyrd-company/devcontainer-builder/pkg/host/runner"
+	"github.com/wyrd-company/devcontainer-builder/pkg/substitute"
 )
 
 func (a *application) execCommand() *cobra.Command {
@@ -70,7 +71,7 @@ func (a *application) execCommand() *cobra.Command {
 			execEnv[k] = v
 		}
 		if user == "" {
-			user = dc.RemoteUser
+			user = substitute.Substitute(substitutionContext(dc, workspace, labels), dc.RemoteUser)
 		}
 		wd := workdir
 		if wd == "" {

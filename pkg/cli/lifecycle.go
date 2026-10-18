@@ -83,6 +83,7 @@ func (a *application) lifecycleCommand(name string) *cobra.Command {
 			return err
 		}
 		dc = effectiveContainerConfig(dc, info.Config.Labels)
+		dc.RemoteUser = substitute.Substitute(substitutionContext(dc, workspace, info.Config.Labels), dc.RemoteUser)
 		if dc.RemoteUser == "" {
 			dc.RemoteUser = info.Config.User
 		}
