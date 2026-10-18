@@ -39,8 +39,13 @@ func (o configOptions) load() (*spec.DevContainer, string, error) {
 		original := o.path
 		if original == "" {
 			original = filepath.Join(workspace, ".devcontainer", "devcontainer.json")
-			if discovered, discoverErr := spec.LoadFromWorkspace(workspace); discoverErr == nil {
-				original = discovered.Path
+			// Discovery uses location only: override content replaces an original
+			// configuration even when the original file cannot be parsed.
+			for _, candidate := range []string{original, filepath.Join(workspace, ".devcontainer.json")} {
+				if _, statErr := os.Stat(candidate); statErr == nil {
+					original = candidate
+					break
+				}
 			}
 		}
 		if err == nil {

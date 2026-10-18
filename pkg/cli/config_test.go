@@ -50,7 +50,7 @@ func TestResolveRemoteEnv(t *testing.T) {
 func TestOverrideConfigurationRetainsSourcePaths(t *testing.T) {
 	workspace := t.TempDir()
 	original := filepath.Join(workspace, ".devcontainer.json")
-	if err := os.WriteFile(original, []byte(`{"image":"alpine:3.20"}`), 0o644); err != nil {
+	if err := os.WriteFile(original, []byte(`invalid original content`), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	feature := filepath.Join(workspace, "feature")
