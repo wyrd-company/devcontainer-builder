@@ -2,6 +2,7 @@ package docker
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -19,6 +20,7 @@ type fakeEngine struct {
 
 	mu    sync.Mutex
 	pulls []string
+	auths []string
 }
 
 func (f *fakeEngine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -34,6 +36,7 @@ func (f *fakeEngine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/images/create"):
 		f.mu.Lock()
 		f.pulls = append(f.pulls, r.URL.Query().Get("fromImage")+":"+r.URL.Query().Get("tag"))
+		f.auths = append(f.auths, r.Header.Get("X-Registry-Auth"))
 		f.mu.Unlock()
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(f.pullBody))
@@ -43,6 +46,11 @@ func (f *fakeEngine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func newFakeEngineHost(t *testing.T, f *fakeEngine) *Host {
+	t.Helper()
+	return newFakeEngineHostWith(t, f, Options{})
+}
+
+func newFakeEngineHostWith(t *testing.T, f *fakeEngine, opts Options) *Host {
 	t.Helper()
 	srv := httptest.NewServer(f)
 	t.Cleanup(srv.Close)
@@ -54,7 +62,20 @@ func newFakeEngineHost(t *testing.T, f *fakeEngine) *Host {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = cli.Close() })
-	return New(cli, Options{})
+	return New(cli, opts)
+}
+
+// engineAuth answers EngineAuth with a fixed value and records the
+// references it is asked for.
+type engineAuth struct {
+	value string
+	err   error
+	refs  []string
+}
+
+func (a *engineAuth) EngineAuth(ref string) (string, error) {
+	a.refs = append(a.refs, ref)
+	return a.value, a.err
 }
 
 func TestEnsureImage(t *testing.T) {
@@ -77,6 +98,43 @@ func TestEnsureImage(t *testing.T) {
 		}
 		if len(f.pulls) != 1 || f.pulls[0] != "docker.io/library/alpine:3.20" {
 			t.Fatalf("pulls = %v, want [docker.io/library/alpine:3.20]", f.pulls)
+		}
+	})
+
+	t.Run("pull sends the registry credentials", func(t *testing.T) {
+		f := &fakeEngine{inspectStatus: http.StatusNotFound, pullBody: okPull}
+		auth := &engineAuth{value: "encoded-test-auth"}
+		h := newFakeEngineHostWith(t, f, Options{RegistryAuth: auth})
+		if err := h.ensureImage(context.Background(), "registry.example.test/team/app:1"); err != nil {
+			t.Fatal(err)
+		}
+		if len(auth.refs) != 1 || auth.refs[0] != "registry.example.test/team/app:1" {
+			t.Fatalf("credentials requested for %v, want the pulled reference", auth.refs)
+		}
+		if len(f.auths) != 1 || f.auths[0] != "encoded-test-auth" {
+			t.Fatalf("X-Registry-Auth = %q, want the encoded credentials", f.auths)
+		}
+	})
+
+	t.Run("no registry auth pulls anonymously", func(t *testing.T) {
+		f := &fakeEngine{inspectStatus: http.StatusNotFound, pullBody: okPull}
+		if err := newFakeEngineHost(t, f).ensureImage(context.Background(), "alpine:3.20"); err != nil {
+			t.Fatal(err)
+		}
+		if len(f.auths) != 1 || f.auths[0] != "" {
+			t.Fatalf("X-Registry-Auth = %q, want none", f.auths)
+		}
+	})
+
+	t.Run("credential error fails without pulling", func(t *testing.T) {
+		f := &fakeEngine{inspectStatus: http.StatusNotFound, pullBody: okPull}
+		h := newFakeEngineHostWith(t, f, Options{RegistryAuth: &engineAuth{err: errors.New("credential helper failed")}})
+		err := h.ensureImage(context.Background(), "alpine:3.20")
+		if err == nil || !strings.Contains(err.Error(), "credential helper failed") {
+			t.Fatalf("err = %v, want the credential error", err)
+		}
+		if len(f.pulls) != 0 {
+			t.Fatalf("pulls = %v, want none", f.pulls)
 		}
 	})
 

@@ -19,6 +19,7 @@ import (
 	hostdocker "github.com/wyrd-company/devcontainer-builder/pkg/host/docker"
 	"github.com/wyrd-company/devcontainer-builder/pkg/host/dockercompose"
 	"github.com/wyrd-company/devcontainer-builder/pkg/host/runner"
+	"github.com/wyrd-company/devcontainer-builder/pkg/registryauth"
 	"github.com/wyrd-company/devcontainer-builder/pkg/spec"
 	"github.com/wyrd-company/devcontainer-builder/pkg/substitute"
 )
@@ -28,7 +29,7 @@ func newDockerClient() (*dockerclient.Client, error) {
 }
 
 func (a *application) dockerHost(cli *dockerclient.Client) *hostdocker.Host {
-	return hostdocker.New(cli, hostdocker.Options{Logger: a.logf, Stdout: a.logs, Stderr: a.logs})
+	return hostdocker.New(cli, hostdocker.Options{Logger: a.logf, Stdout: a.logs, Stderr: a.logs, RegistryAuth: registryauth.FromEnvironment()})
 }
 func (a *application) composeHost(cli *dockerclient.Client) *dockercompose.Host {
 	return dockercompose.New(cli, dockercompose.Options{Logger: a.logf, Stdout: a.logs, Stderr: a.logs})

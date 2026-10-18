@@ -56,6 +56,16 @@ type Options struct {
 	// StopTimeout bounds how long Stop waits for graceful shutdown
 	// before SIGKILL. Defaults to 10s.
 	StopTimeout time.Duration
+	// RegistryAuth supplies the registry credentials sent with image
+	// pulls. When nil, pulls are anonymous. A *registryauth.Store from
+	// registryauth.FromEnvironment reads the docker CLI's configuration.
+	RegistryAuth RegistryAuth
+}
+
+// RegistryAuth returns the Engine API X-Registry-Auth value for an image
+// reference, or "" for an anonymous request.
+type RegistryAuth interface {
+	EngineAuth(ref string) (string, error)
 }
 
 // Host is the per-daemon connection. Safe for concurrent use.
