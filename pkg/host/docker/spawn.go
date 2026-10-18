@@ -16,15 +16,43 @@ import (
 	"github.com/wyrd-company/devcontainer-builder/pkg/substitute"
 )
 
-// keepaliveCmd is the entrypoint upstream uses to keep the container
-// running after it's been created. It traps SIGTERM so `docker stop`
-// exits cleanly, and uses the `sleep & wait $!` pattern so the trap
-// actually fires (a bare `sleep infinity` would block trap delivery
-// until it returns).
-const keepaliveCmd = `echo Container started
-trap "exit 0" 15
-exec "$@"
-while sleep 1 & wait $!; do :; done`
+// keepaliveScript returns the entrypoint script upstream uses to keep
+// the container running after it's been created. It traps SIGTERM so
+// `docker stop` exits cleanly, runs the features' entrypoints, then
+// execs its arguments (the image's entrypoint and command when
+// overrideCommand is false), and uses the `sleep & wait $!` pattern so
+// the trap actually fires (a bare `sleep infinity` would block trap
+// delivery until it returns).
+func keepaliveScript(entrypoints []string) string {
+	lines := append([]string{"echo Container started", `trap "exit 0" 15`}, entrypoints...)
+	lines = append(lines, `exec "$@"`, `while sleep 1 & wait $!; do :; done`)
+	return strings.Join(lines, "\n")
+}
+
+// featureEntrypoints returns the features' entrypoint contributions in
+// install order.
+func featureEntrypoints(resolved []features.Resolved) []string {
+	var out []string
+	for _, f := range resolved {
+		if f.Metadata.Entrypoint != "" {
+			out = append(out, f.Metadata.Entrypoint)
+		}
+	}
+	return out
+}
+
+// overrideCommand reports the spec's overrideCommand, which defaults to
+// true.
+func overrideCommand(dc *spec.DevContainer) bool {
+	return dc.OverrideCommand == nil || *dc.OverrideCommand
+}
+
+// appendImageCommand passes the image's entrypoint and command to the
+// keepalive script, which execs them after the feature entrypoints.
+func appendImageCommand(cfg *container.Config, entrypoint, cmd []string) {
+	cfg.Cmd = append(cfg.Cmd, entrypoint...)
+	cfg.Cmd = append(cfg.Cmd, cmd...)
+}
 
 // findExisting returns the container ID of a previously-created
 // devcontainer for localFolder, or "" if none exists. Honors only the
@@ -74,15 +102,14 @@ func buildContainerConfig(
 		Labels:     labels,
 		WorkingDir: containerWorkspaceFolder,
 	}
-	overrideCommand := true
-	if dc.OverrideCommand != nil {
-		overrideCommand = *dc.OverrideCommand
-	}
-	if overrideCommand {
-		// Match upstream: shell entrypoint that keeps the container
-		// alive until SIGTERM.
+	entrypoints := featureEntrypoints(resolved)
+	if overrideCommand(dc) || len(entrypoints) > 0 {
+		// Match upstream: shell entrypoint that runs the feature
+		// entrypoints and keeps the container alive until SIGTERM. With
+		// overrideCommand false the caller appends the image's
+		// entrypoint and command (appendImageCommand).
 		cfg.Entrypoint = strslice.StrSlice{"/bin/sh"}
-		cfg.Cmd = strslice.StrSlice{"-c", keepaliveCmd, "-"}
+		cfg.Cmd = strslice.StrSlice{"-c", keepaliveScript(entrypoints), "-"}
 		cfg.StopSignal = "SIGTERM"
 	}
 	if dc.ContainerUser != "" {

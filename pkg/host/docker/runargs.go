@@ -564,7 +564,7 @@ func (p *runArgsParser) step(cfg *container.Config, host *container.HostConfig) 
 		host.Annotations[k] = av
 
 	// Flags whose semantics conflict with how this package keeps a
-	// devcontainer alive (we own entrypoint/cmd via keepaliveCmd) and
+	// devcontainer alive (we own entrypoint/cmd via keepaliveScript) and
 	// would silently break lifecycle if accepted.
 	case "--entrypoint":
 		return fmt.Errorf("runArgs: --entrypoint is not supported (the docker host owns the keepalive entrypoint)")

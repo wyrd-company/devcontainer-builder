@@ -3,6 +3,7 @@ package dockercompose
 import (
 	"fmt"
 	"sort"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 
@@ -31,18 +32,22 @@ type OverrideInputs struct {
 	// container regardless of the image's ENTRYPOINT/CMD. When false,
 	// the original entrypoint/command are preserved.
 	OverrideCommand bool
+	// Entrypoints are the features' entrypoint contributions, run by the
+	// keepalive command when OverrideCommand is true.
+	Entrypoints []string
 	// Labels merged onto the primary service.
 	Labels map[string]string
 }
 
-// keepaliveScript matches the docker host's keepaliveCmd: trap SIGTERM
-// cleanly so `docker stop` returns quickly, and use `sleep & wait` so
-// the trap actually fires (a bare `sleep infinity` would block trap
-// delivery until it returned).
-const keepaliveScript = `echo Container started
-trap "exit 0" 15
-exec "$@"
-while sleep 1 & wait $!; do :; done`
+// keepaliveScript matches the docker host's keepalive script: trap
+// SIGTERM cleanly so `docker stop` returns quickly, run the features'
+// entrypoints, and use `sleep & wait` so the trap actually fires (a bare
+// `sleep infinity` would block trap delivery until it returned).
+func keepaliveScript(entrypoints []string) string {
+	lines := append([]string{"echo Container started", `trap "exit 0" 15`}, entrypoints...)
+	lines = append(lines, `exec "$@"`, `while sleep 1 & wait $!; do :; done`)
+	return strings.Join(lines, "\n")
+}
 
 // OverrideYAML returns a YAML document suitable for appending to the
 // compose merge chain. Only the primary service is touched; other
@@ -77,7 +82,7 @@ func OverrideYAML(in OverrideInputs) ([]byte, error) {
 		// script's `exec "$@"` sees an empty $@ and the trap is what
 		// actually keeps the process alive.
 		svc["entrypoint"] = []any{"/bin/sh", "-c"}
-		svc["command"] = []any{keepaliveScript, "-"}
+		svc["command"] = []any{keepaliveScript(in.Entrypoints), "-"}
 		svc["stdin_open"] = true
 		svc["tty"] = true
 	}

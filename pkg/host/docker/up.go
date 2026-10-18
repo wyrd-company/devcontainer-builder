@@ -211,6 +211,15 @@ func (h *Host) create(
 	if err != nil {
 		return "", errorf("build container config: %w", err)
 	}
+	if !overrideCommand(dc) && len(featureEntrypoints(req.Features)) > 0 {
+		img, err := h.client.ImageInspect(ctx, req.Image)
+		if err != nil {
+			return "", errorf("inspect image %s: %w", req.Image, err)
+		}
+		if img.Config != nil {
+			appendImageCommand(cfg, img.Config.Entrypoint, img.Config.Cmd)
+		}
+	}
 	resp, err := h.client.ContainerCreate(ctx, cfg, host, nil, nil, "")
 	if err != nil {
 		return "", errorf("create: %w", err)
