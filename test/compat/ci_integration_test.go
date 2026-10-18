@@ -63,6 +63,7 @@ exit "$GO_EXIT"
 				t.Setenv("BUILDKIT_HOST", "tcp://operator-buildkit:4321")
 				t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
 				t.Setenv("RECORD_DIR", dir)
+				t.Setenv("TMPDIR", dir)
 				code := "0"
 				if fail {
 					code = "23"
