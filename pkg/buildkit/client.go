@@ -229,9 +229,9 @@ func marshalOpts(opt SolveOptions) []llb.ConstraintsOpt {
 }
 
 // resolveMode selects how image references resolve: always from the
-// registry when Pull is set; otherwise the daemon's BuildKit prefers its
-// local image store, so images built or pulled earlier are usable as
-// bases without a registry.
+// registry when Pull is set; otherwise the daemon's BuildKit is asked to
+// prefer its local image store, as `docker buildx` asks of its "docker"
+// driver.
 func resolveMode(opt SolveOptions, conn *Connection) string {
 	switch {
 	case opt.Pull:
