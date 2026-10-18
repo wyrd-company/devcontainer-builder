@@ -236,19 +236,32 @@ func TestExecOperationError(t *testing.T) {
 	t.Chdir(t.TempDir())
 	t.Setenv("DOCKER_HOST", "unix://"+filepath.Join(t.TempDir(), "missing.sock"))
 	for _, format := range []string{"text", "json"} {
-		for _, level := range []string{"info", "off"} {
-			var out, logs bytes.Buffer
-			missing := filepath.Join(t.TempDir(), "missing")
-			code := Run(context.Background(), []string{"exec", "echo", "--config", missing, "--log-format", format, "--log-level", level}, "test", nil, &out, &logs)
-			if code != 1 || out.Len() != 0 || !strings.Contains(logs.String(), missing) {
-				t.Fatalf("code=%d out=%q logs=%q", code, out.String(), logs.String())
-			}
-			if format == "json" {
-				var record map[string]string
-				if err := json.Unmarshal(logs.Bytes(), &record); err != nil || record["type"] != "diagnostic" || record["level"] != "error" {
-					t.Fatalf("error diagnostic=%q (%v)", logs.String(), err)
+		for _, level := range []string{"default", "off"} {
+			t.Run(format+"/"+level, func(t *testing.T) {
+				var out, logs bytes.Buffer
+				missing := filepath.Join(t.TempDir(), "missing")
+				args := []string{"exec", "echo", "--config", missing, "--log-format", format}
+				if level != "default" {
+					args = append(args, "--log-level", level)
 				}
-			}
+				code := Run(context.Background(), args, "test", nil, &out, &logs)
+				if code != 1 || out.Len() != 0 || !strings.Contains(logs.String(), missing) {
+					t.Fatalf("code=%d out=%q logs=%q", code, out.String(), logs.String())
+				}
+				if format == "text" {
+					if !strings.HasPrefix(logs.String(), "dcb: error: ") {
+						t.Fatalf("unmarked error diagnostic=%q", logs.String())
+					}
+				} else {
+					var record map[string]string
+					if err := json.Unmarshal(logs.Bytes(), &record); err != nil || record["type"] != "diagnostic" || record["level"] != "error" {
+						t.Fatalf("error diagnostic=%q (%v)", logs.String(), err)
+					}
+					if !strings.Contains(record["text"], missing) || strings.Contains(record["text"], "dcb: error: ") {
+						t.Fatalf("error message=%q", record["text"])
+					}
+				}
+			})
 		}
 	}
 }

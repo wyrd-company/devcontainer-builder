@@ -24,7 +24,10 @@ log modes, emits no result line, and returns the child's exit code. Capture
 stdout to capture command output. With `--tty`, the terminal combines child
 streams on stdout. If dcb fails before or outside the child, stdout is empty,
 stderr carries a dcb error, and dcb exits 1. A child exit code of 1 is ambiguous;
-a dcb error diagnostic on stderr identifies a dcb failure.
+dcb marks its text-mode error diagnostic on stderr with `dcb: error: `.
+In JSON mode, the error record has `type: diagnostic`, `level: error`, and the
+message in `text` without the text-mode prefix. These identify dcb diagnostics;
+a child can also print the same marker or record.
 
 Diagnostics and other build/lifecycle output go to stderr. `--log-format json`
 encodes dcb diagnostics as `type: diagnostic` with `level` and `text` fields.

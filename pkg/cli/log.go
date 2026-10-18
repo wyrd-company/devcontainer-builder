@@ -62,6 +62,9 @@ func (w *logWriter) diagnostic(level, text string) error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	if !w.json {
+		if level == "error" {
+			text = "dcb: error: " + text
+		}
 		_, err := io.WriteString(w.dst, text+"\n")
 		return err
 	}
