@@ -14,21 +14,25 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/wyrd-company/devcontainer-builder/pkg/host/dockercompose"
 	"github.com/wyrd-company/devcontainer-builder/pkg/metadata"
 	"github.com/wyrd-company/devcontainer-builder/pkg/spec"
 	"github.com/wyrd-company/devcontainer-builder/pkg/substitute"
 )
 
 func TestReadMergedConfiguration(t *testing.T) {
-	for _, source := range []string{"image", "container", "discovered", "invalid-label", "lookup-error"} {
+	for _, source := range []string{"image", "container", "compose-container", "discovered", "invalid-label", "lookup-error"} {
 		t.Run(source, func(t *testing.T) {
 			workspace := t.TempDir()
 			config := filepath.Join(workspace, ".devcontainer.json")
 			body := `{"image":"alpine:3.20","features":{"./sample-feature":{}},"remoteUser":"sample","remoteEnv":{"CONFIG":"${localEnv:SAMPLE_VALUE}"},"postCreateCommand":"echo config","extension":{"enabled":true}}`
+			if source == "compose-container" {
+				body = strings.Replace(body, `"image":"alpine:3.20",`, `"dockerComposeFile":"compose.yml","service":"app",`, 1)
+			}
 			if err := os.WriteFile(config, []byte(body), 0644); err != nil {
 				t.Fatal(err)
 			}
-			if source != "container" && source != "discovered" {
+			if source != "container" && source != "compose-container" && source != "discovered" {
 				if err := os.Mkdir(filepath.Join(workspace, "sample-feature"), 0755); err != nil {
 					t.Fatal(err)
 				}
@@ -40,6 +44,9 @@ func TestReadMergedConfiguration(t *testing.T) {
 			entries := []metadata.Entry{{ID: "base", RemoteUser: "inherited", PostCreate: spec.Command{Shell: "echo base"}}}
 			if source == "container" || source == "discovered" {
 				entries = append(entries, metadata.Entry{ID: "./sample-feature", CapAdd: []string{"SYS_PTRACE"}, PostCreate: spec.Command{Shell: "echo feature"}}, metadata.Entry{PostCreate: spec.Command{Shell: "echo config"}})
+			}
+			if source == "compose-container" {
+				entries = append(entries, metadata.Entry{ID: "./sample-feature", CapAdd: []string{"SYS_PTRACE"}, PostCreate: spec.Command{Shell: "echo feature"}})
 			}
 			value, err := metadata.Encode(entries)
 			if err != nil {
@@ -61,7 +68,11 @@ func TestReadMergedConfiguration(t *testing.T) {
 						_, _ = w.Write([]byte(`[]`))
 					}
 				case strings.Contains(r.URL.Path, "/images/") || strings.Contains(r.URL.Path, "/containers/sample-container/json"):
-					_ = json.NewEncoder(w).Encode(map[string]any{"Id": "sample-container", "Config": map[string]any{"User": "root", "Labels": map[string]string{metadata.Label: value}}, "State": map[string]any{"Running": true}})
+					labels := map[string]string{metadata.Label: value}
+					if source == "compose-container" {
+						labels[dockercompose.LabelPrimary] = "true"
+					}
+					_ = json.NewEncoder(w).Encode(map[string]any{"Id": "sample-container", "Config": map[string]any{"User": "root", "Labels": labels}, "State": map[string]any{"Running": true}})
 				default:
 					t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
 					http.Error(w, "unexpected", 500)
@@ -71,7 +82,7 @@ func TestReadMergedConfiguration(t *testing.T) {
 			t.Setenv("DOCKER_HOST", "tcp://"+strings.TrimPrefix(srv.URL, "http://"))
 			t.Setenv("DOCKER_API_VERSION", "1.47")
 			args := []string{"read-configuration", "--workspace-folder", workspace, "--include-merged-configuration"}
-			if source == "container" {
+			if source == "container" || source == "compose-container" {
 				args = append(args, "--container-id", "sample-container")
 			}
 			code := 0
@@ -167,5 +178,44 @@ func TestMetadataDoesNotChangeDevcontainerID(t *testing.T) {
 	after := substitutionContext(dc, "/workspace", map[string]string{"devcontainer.local_folder": "/workspace", "devcontainer.config_file": dc.Path, metadata.Label: `[{"postCreateCommand":"echo ${devcontainerId}"}]`, "com.docker.compose.project": "sample"})
 	if a, b := substitute.Substitute(before, "${devcontainerId}"), substitute.Substitute(after, "${devcontainerId}"); a == "" || a != b {
 		t.Fatalf("identity changed: %q != %q", a, b)
+	}
+}
+
+func TestComposeImageMetadataRetainsCurrentHooks(t *testing.T) {
+	dc := &spec.DevContainer{DockerComposeFile: spec.StringOrSlice{"compose.yml"}, Service: "app", ContainerUser: "current", ContainerEnv: map[string]any{"CURRENT": "config"}, PostCreate: spec.Command{Shell: "echo config"}, PostAttach: spec.Command{Shell: "echo attach"}}
+	value, err := metadata.Encode([]metadata.Entry{{ID: "./sample", ContainerUser: "base", PostCreate: spec.Command{Shell: "echo feature"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	labels := map[string]string{metadata.Label: value, dockercompose.LabelPrimary: "true"}
+	app := &application{}
+	entries, err := app.containerMetadata(dc, labels)
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan := metadata.Plan(entries)
+	if len(plan) != 3 || plan[0].Command.Shell != "echo feature" || plan[1].Command.Shell != "echo config" || plan[2].Command.Shell != "echo attach" {
+		t.Fatalf("current Compose hooks dropped: %+v", plan)
+	}
+	effective := effectiveContainerConfig(dc, labels)
+	if effective.ContainerUser != "current" || effective.ContainerEnv["CURRENT"] != "config" {
+		t.Fatalf("current Compose properties dropped: %+v", effective)
+	}
+}
+
+func TestComposeCapturedContainerMetadataKeepsUpstreamPolicy(t *testing.T) {
+	dc := &spec.DevContainer{DockerComposeFile: spec.StringOrSlice{"compose.yml"}, Service: "app", PostCreate: spec.Command{Shell: "echo current"}}
+	value, err := metadata.Encode([]metadata.Entry{{ID: "./sample", PostCreate: spec.Command{Shell: "echo captured"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	app := &application{}
+	entries, err := app.containerMetadata(dc, map[string]string{metadata.Label: value})
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan := metadata.Plan(entries)
+	if len(plan) != 1 || plan[0].Command.Shell != "echo captured" {
+		t.Fatalf("captured container hooks changed: %+v", plan)
 	}
 }

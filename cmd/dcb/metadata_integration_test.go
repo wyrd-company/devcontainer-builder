@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -134,4 +135,38 @@ func TestMetadataPrebuiltCLIIntegration(t *testing.T) {
 	if got := string(hostRunCommand(t, os.Environ(), bin, "exec", "--workspace-folder", workspace, "--", "sh", "-c", "cat /tmp/sample-hooks; cat /tmp/sample-attach")); got != "feature\nconfig\nattach\n" {
 		t.Fatalf("standalone persisted hooks=%q", got)
 	}
+	// Compose keeps image metadata separate from the current config. Preserve
+	// the current hooks when standalone lifecycle reads that image label.
+	hostRunCommand(t, os.Environ(), bin, "down", "--workspace-folder", workspace)
+	composePath := filepath.Join(workspace, ".devcontainer", "compose.yml")
+	compose := fmt.Sprintf("services:\n  app:\n    image: %s\n    user: root\n    command: [sleep, infinity]\n", tag)
+	if err := os.WriteFile(composePath, []byte(compose), 0644); err != nil {
+		t.Fatal(err)
+	}
+	composeConfig := `{"dockerComposeFile":"compose.yml","service":"app","remoteUser":"sample-user","workspaceFolder":"/workspace","workspaceMount":"type=volume,target=/workspace","postAttachCommand":"echo current >> /tmp/compose-current-attach"}`
+	if err := os.WriteFile(path, []byte(composeConfig), 0644); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		cmd := exec.Command(bin, "down", "--workspace-folder", workspace)
+		cmd.Env = os.Environ()
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Logf("cleanup Compose: %v %s", err, out)
+		}
+	})
+	hostRunCommand(t, os.Environ(), bin, "up", "--workspace-folder", workspace, "--update-remote-user-uid-default", "never")
+	hostRunCommand(t, os.Environ(), bin, "exec", "--workspace-folder", workspace, "--", "rm", "/tmp/compose-current-attach")
+	hostRunCommand(t, os.Environ(), bin, "run-user-commands", "--workspace-folder", workspace)
+	if got := string(hostRunCommand(t, os.Environ(), bin, "exec", "--workspace-folder", workspace, "--", "cat", "/tmp/compose-current-attach")); got != "current\n" {
+		t.Fatalf("current Compose hook=%q", got)
+	}
+	output := hostRunCommand(t, os.Environ(), bin, "read-configuration", "--workspace-folder", workspace, "--include-merged-configuration")
+	var read map[string]any
+	if err := json.Unmarshal(output, &read); err != nil {
+		t.Fatal(err)
+	}
+	if hooks := read["mergedConfiguration"].(map[string]any)["postAttachCommands"].([]any); len(hooks) != 2 {
+		t.Fatalf("Compose merged hooks=%v", hooks)
+	}
+
 }
