@@ -1,3 +1,6 @@
+// relationships:
+//
+//	references: [taskfile]
 package compat_test
 
 import (
@@ -18,7 +21,7 @@ import (
 )
 
 func TestSupportedFieldsRemainInReferenceSchema(t *testing.T) {
-	root := repoRoot(t)
+	root := referenceRoot(t, "spec")
 	body, err := os.ReadFile(filepath.Join(root, "reference", "spec", "schemas", "devContainer.base.schema.json"))
 	if err != nil {
 		t.Fatalf("read schema: %v", err)
@@ -77,7 +80,7 @@ func TestSupportedFieldsRemainInReferenceSchema(t *testing.T) {
 }
 
 func TestCuratedCLIConfigFixtures(t *testing.T) {
-	root := repoRoot(t)
+	root := referenceRoot(t, "cli")
 
 	t.Run("image spec maps runtime fields", func(t *testing.T) {
 		path := filepath.Join(root, "reference", "cli", "src", "test", "configs", "image", ".devcontainer.json")
@@ -183,7 +186,7 @@ func TestCuratedCLIConfigFixtures(t *testing.T) {
 }
 
 func TestCuratedCLIFixtureGeneratesWrapperDockerfile(t *testing.T) {
-	root := repoRoot(t)
+	root := referenceRoot(t, "cli")
 	workspace := filepath.Join(root, "reference", "cli", "src", "test", "configs", "dockerfile-without-features")
 
 	result, err := builder.New().Generate(context.Background(), builder.Options{
@@ -216,7 +219,7 @@ func TestCuratedCLIFixtureGeneratesWrapperDockerfile(t *testing.T) {
 }
 
 func TestCuratedCLILocalFeaturesGenerateInstallSteps(t *testing.T) {
-	root := repoRoot(t)
+	root := referenceRoot(t, "cli")
 	workspace := filepath.Join(root, "reference", "cli", "src", "test", "container-features", "configs", "dockerfile-with-v2-local-features-config-inside-dev-container-folder")
 
 	result, err := builder.New().Generate(context.Background(), builder.Options{
@@ -254,7 +257,7 @@ func TestCuratedCLILocalFeaturesGenerateInstallSteps(t *testing.T) {
 }
 
 func TestCuratedCLILocalFeatureInstallOrder(t *testing.T) {
-	root := repoRoot(t)
+	root := referenceRoot(t, "cli")
 	workspace := filepath.Join(root, "reference", "cli", "src", "test", "container-features", "configs", "feature-dependencies", "installsAfter", "local-simple")
 
 	result, err := builder.New().Generate(context.Background(), builder.Options{
@@ -275,7 +278,7 @@ func TestCuratedCLILocalFeatureInstallOrder(t *testing.T) {
 }
 
 func TestCuratedCLIUnsupportedBuildOptionsError(t *testing.T) {
-	root := repoRoot(t)
+	root := referenceRoot(t, "cli")
 	workspace := filepath.Join(root, "reference", "cli", "src", "test", "configs", "dockerfile-with-target")
 
 	_, err := builder.New().Build(context.Background(), builder.Options{
@@ -312,6 +315,17 @@ func collectSchemaProperties(v any, out map[string]bool) {
 	}
 }
 
+func referenceRoot(t *testing.T, name string) string {
+	t.Helper()
+	root := repoRoot(t)
+	if _, err := os.Stat(filepath.Join(root, "reference", name, ".git")); os.IsNotExist(err) {
+		t.Skipf("reference/%s is not initialized; run task reference:init", name)
+	} else if err != nil {
+		t.Fatalf("inspect reference/%s: %v", name, err)
+	}
+	return root
+}
+
 func repoRoot(t *testing.T) string {
 	t.Helper()
 	dir, err := os.Getwd()
@@ -321,9 +335,7 @@ func repoRoot(t *testing.T) string {
 	for {
 		if body, err := os.ReadFile(filepath.Join(dir, "go.mod")); err == nil &&
 			strings.Contains(string(body), "module github.com/wyrd-company/devcontainer-builder") {
-			if _, err := os.Stat(filepath.Join(dir, "reference")); err == nil {
-				return dir
-			}
+			return dir
 		}
 		next := filepath.Dir(dir)
 		if next == dir {

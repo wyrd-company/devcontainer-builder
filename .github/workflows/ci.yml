@@ -1,236 +1,182 @@
+# relationships:
+#   references: [taskfile]
 name: CI
-
 on:
-  push:
   pull_request:
-  workflow_dispatch:
+    types: [opened, synchronize, reopened, edited]
+  push:
+    branches: [main]
   schedule:
     - cron: "17 7 * * *"
-
+  workflow_dispatch: {}
+permissions: {}
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
-  static-unit:
-    name: Static and unit
+  lint:
     runs-on: ubuntu-latest
-
+    permissions:
+      contents: read
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
+          persist-credentials: false
+          fetch-depth: 0
           submodules: true
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
           go-version-file: go.mod
-          cache: true
-
-      - name: Run checks
-        run: ./scripts/ci.sh
-
-  docker-build-integration:
-    name: Docker build integration
+      - uses: go-task/setup-task@01a4adf9db2d14c1de7a560f09170b6e0df736aa # v2
+      - run: task tools:install
+      - run: task lint
+  test:
     runs-on: ubuntu-latest
-
-    env:
-      BUILDKIT_HOST: tcp://127.0.0.1:1234
-
+    permissions:
+      contents: read
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+          submodules: true
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
           go-version-file: go.mod
-          cache: true
-
-      - name: Start BuildKit
-        run: |
-          docker run --rm --privileged -d \
-            --name dcb-buildkitd \
-            -p 1234:1234 \
-            moby/buildkit:buildx-stable-1 \
-            --addr tcp://0.0.0.0:1234
-
-          for i in {1..30}; do
-            if docker logs dcb-buildkitd 2>&1 | grep -q "running server"; then
-              exit 0
-            fi
-            sleep 1
-          done
-
-          docker logs dcb-buildkitd
-          exit 1
-
-      - name: Run Docker build integration
-        run: |
-          mkdir -p artifacts
-          export DCB_ARTIFACT_DIR="$PWD/artifacts/docker-build-integration"
-          ./scripts/docker-build-integration.sh 2>&1 | tee artifacts/docker-build-integration.log
-
-      - name: Upload Docker build log
+      - uses: go-task/setup-task@01a4adf9db2d14c1de7a560f09170b6e0df736aa # v2
+      - run: task test
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+          submodules: true
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: go.mod
+      - uses: go-task/setup-task@01a4adf9db2d14c1de7a560f09170b6e0df736aa # v2
+      - run: task build
+  docker-build-integration:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+          submodules: true
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: go.mod
+      - uses: go-task/setup-task@01a4adf9db2d14c1de7a560f09170b6e0df736aa # v2
+      - run: task integration:build
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: failure()
-        uses: actions/upload-artifact@v4
         with:
           name: docker-build-integration-artifacts
-          path: |
-            artifacts/docker-build-integration.log
-            artifacts/docker-build-integration/**
+          path: artifacts/
           if-no-files-found: ignore
-
-      - name: Stop BuildKit
-        if: always()
-        run: docker rm -f dcb-buildkitd || true
-
   docker-host-integration:
-    name: Docker host integration
     runs-on: ubuntu-latest
-
+    permissions:
+      contents: read
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+          submodules: true
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
           go-version-file: go.mod
-          cache: true
-
-      - name: Run Docker host integration
-        run: |
-          mkdir -p artifacts
-          export DCB_ARTIFACT_DIR="$PWD/artifacts/docker-host-integration"
-          ./scripts/docker-host-integration.sh 2>&1 | tee artifacts/docker-host-integration.log
-
-      - name: Upload Docker host log
+      - uses: go-task/setup-task@01a4adf9db2d14c1de7a560f09170b6e0df736aa # v2
+      - run: task integration:host
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: failure()
-        uses: actions/upload-artifact@v4
         with:
           name: docker-host-integration-artifacts
-          path: |
-            artifacts/docker-host-integration.log
-            artifacts/docker-host-integration/**
+          path: artifacts/
           if-no-files-found: ignore
-
   docker-compose-integration:
-    name: Docker compose integration
     runs-on: ubuntu-latest
-
+    permissions:
+      contents: read
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+          submodules: true
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
           go-version-file: go.mod
-          cache: true
-
-      - name: Run Docker compose integration
-        run: |
-          mkdir -p artifacts
-          export DCB_ARTIFACT_DIR="$PWD/artifacts/docker-compose-integration"
-          ./scripts/docker-compose-integration.sh 2>&1 | tee artifacts/docker-compose-integration.log
-
-      - name: Upload Docker compose log
+      - uses: go-task/setup-task@01a4adf9db2d14c1de7a560f09170b6e0df736aa # v2
+      - run: task integration:compose
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: failure()
-        uses: actions/upload-artifact@v4
         with:
           name: docker-compose-integration-artifacts
-          path: |
-            artifacts/docker-compose-integration.log
-            artifacts/docker-compose-integration/**
+          path: artifacts/
           if-no-files-found: ignore
-
   kubernetes-manifest:
-    name: Kubernetes manifest validation
     runs-on: ubuntu-latest
-
+    permissions:
+      contents: read
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+          submodules: true
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
           go-version-file: go.mod
-          cache: true
-
-      - name: Install kubeconform
-        run: go install github.com/yannh/kubeconform/cmd/kubeconform@v0.6.7
-
-      - name: Validate Kubernetes manifests
-        run: |
-          mkdir -p artifacts/kubernetes
-          go run ./cmd/internal/render-k8s-testdata > artifacts/kubernetes/devcontainer-kubernetes.yaml
-          kubeconform -strict -kubernetes-version 1.30.0 artifacts/kubernetes/devcontainer-kubernetes.yaml
-          go test ./pkg/projection/kubernetes ./pkg/host/kubernetes
-          go test -tags=k8svalidate ./test/integration/kubernetes -v
-
-      - name: Upload Kubernetes manifests
+      - uses: go-task/setup-task@01a4adf9db2d14c1de7a560f09170b6e0df736aa # v2
+      - run: task tools:install
+      - run: task integration:kubernetes
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: failure()
-        uses: actions/upload-artifact@v4
         with:
           name: kubernetes-manifest-artifacts
-          path: artifacts/kubernetes/**
+          path: artifacts/
           if-no-files-found: ignore
-
   nightly-heavy:
-    name: Nightly/manual heavy checks
     runs-on: ubuntu-latest
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
-
-    env:
-      BUILDKIT_HOST: tcp://127.0.0.1:1234
-
+    permissions:
+      contents: read
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
+          persist-credentials: false
+          fetch-depth: 0
           submodules: true
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
           go-version-file: go.mod
-          cache: true
-
-      - name: Start BuildKit
-        run: |
-          docker run --rm --privileged -d \
-            --name dcb-buildkitd-heavy \
-            -p 1234:1234 \
-            moby/buildkit:buildx-stable-1 \
-            --addr tcp://0.0.0.0:1234
-
-          for i in {1..30}; do
-            if docker logs dcb-buildkitd-heavy 2>&1 | grep -q "running server"; then
-              exit 0
-            fi
-            sleep 1
-          done
-
-          docker logs dcb-buildkitd-heavy
-          exit 1
-
-      - name: Run heavier validation
-        run: |
-          mkdir -p artifacts/nightly-heavy
-          go test ./test/compat -v
-          go test ./pkg/buildkit ./pkg/builder -run 'TestBuild_PlatformConstraint|TestParseTargetPlatforms|TestValidateBuildSupport' -v
-          export DCB_ARTIFACT_DIR="$PWD/artifacts/nightly-heavy/docker-build"
-          ./scripts/docker-build-integration.sh 2>&1 | tee artifacts/nightly-heavy/docker-build-integration.log
-          export DCB_ARTIFACT_DIR="$PWD/artifacts/nightly-heavy/docker-compose"
-          ./scripts/docker-compose-integration.sh 2>&1 | tee artifacts/nightly-heavy/docker-compose-integration.log
-
-      - name: Upload nightly artifacts
+      - uses: go-task/setup-task@01a4adf9db2d14c1de7a560f09170b6e0df736aa # v2
+      - run: task test:heavy
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: failure()
-        uses: actions/upload-artifact@v4
         with:
           name: nightly-heavy-artifacts
-          path: artifacts/nightly-heavy/**
+          path: artifacts/
           if-no-files-found: ignore
-
-      - name: Stop BuildKit
-        if: always()
-        run: docker rm -f dcb-buildkitd-heavy || true
+  pr-title:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: go-task/setup-task@01a4adf9db2d14c1de7a560f09170b6e0df736aa # v2
+      - env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: task lint:commit-msg -- "$PR_TITLE"

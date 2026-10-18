@@ -1,0 +1,113 @@
+# relationships:
+#   references: [CONTRIBUTING, AGENTS]
+version: "3"
+
+# build applies: this repository ships dcb. dev does not: this is a batch CLI.
+# Integration verbs are separate so CI can report each concern independently.
+tasks:
+  default:
+    desc: List available tasks
+    cmds: [task --list]
+    silent: true
+  build:
+    desc: Build dcb
+    cmds:
+      - mkdir -p bin
+      - go build -o bin/dcb ./cmd/dcb
+  test:
+    desc: Run unit, compatibility, and race tests
+    cmds:
+      - go test ./...
+      - go test -race ./pkg/host/runner ./pkg/substitute ./pkg/features ./pkg/lifecycle
+  lint:
+    desc: Check Go, workflow syntax, and release intents without changing files
+    cmds:
+      - bash scripts/go-format.sh check
+      - go vet ./...
+      - actionlint .github/workflows/*.yml
+      - task: intentional:check
+  intentional:check:
+    desc: Validate release metadata, including the pre-release inventory
+    cmds:
+      # Before the first tag, status validates config, discovery, and intents.
+      # Adopted from the trowel Go reference; no baseline tag is manufactured.
+      - |
+        if [ -n "$(git tag --list '[0-9]*.[0-9]*.[0-9]*')" ]; then
+          intentional check
+        else
+          intentional status
+        fi
+  format:
+    desc: Format Go files (optional file arguments)
+    cmds:
+      - bash scripts/go-format.sh write {{.CLI_ARGS}}
+  lint:staged:
+    desc: Check formatting of staged Go files
+    cmds:
+      - bash scripts/go-format.sh check {{.CLI_ARGS}}
+  lint:commit-msg:
+    desc: Validate a conventional commit subject
+    cmds:
+      - sh scripts/check-commit-subject.sh {{.CLI_ARGS}}
+  lint:commit-file:
+    desc: Validate a Git commit message file
+    cmds:
+      - sh scripts/check-commit-subject.sh --file {{.CLI_ARGS}}
+  check:
+    desc: Run all CI checks (requires Docker and kubeconform)
+    cmds:
+      - task: lint
+      - task: test
+      - task: build
+      - task: integration:build
+      - task: integration:host
+      - task: integration:compose
+      - task: integration:kubernetes
+  # The parity harness owns this task's implementation; keep additions here additive.
+  parity:
+    desc: Upstream parity harness (provided by the parity task)
+    cmds:
+      - echo 'Parity harness is not installed yet.'
+  reference:init:
+    desc: Initialize the pinned upstream reference submodules
+    cmds:
+      - git submodule update --init --depth 1
+  tools:install:
+    desc: Install repository development tools
+    cmds:
+      - go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
+      - go install github.com/yannh/kubeconform/cmd/kubeconform@v0.6.7
+      - go install github.com/evilmartians/lefthook/v2@v2.1.4
+      - npm install --global --allow-scripts=@wyrd-company/intentional --@wyrd-company:registry=https://registry.npmjs.org @wyrd-company/intentional@0.1.6
+  integration:build:
+    desc: Run Docker builds against a temporary BuildKit daemon
+    cmds:
+      - bash scripts/ci-integration.sh build
+  integration:host:
+    desc: Run Docker host integration
+    cmds:
+      - bash scripts/ci-integration.sh host
+  integration:compose:
+    desc: Run Docker Compose integration
+    cmds:
+      - bash scripts/ci-integration.sh compose
+  integration:kubernetes:
+    desc: Validate Kubernetes manifests without a live cluster
+    cmds:
+      - mkdir -p artifacts/kubernetes
+      - go run ./cmd/internal/render-k8s-testdata > artifacts/kubernetes/devcontainer-kubernetes.yaml
+      - kubeconform -strict -kubernetes-version 1.30.0 artifacts/kubernetes/devcontainer-kubernetes.yaml
+      - go test ./pkg/projection/kubernetes ./pkg/host/kubernetes
+      - go test -tags=k8svalidate ./test/integration/kubernetes -v
+  test:heavy:
+    desc: Run the additional nightly checks
+    cmds:
+      - go test ./test/compat -v
+      - go test ./pkg/buildkit ./pkg/builder -run 'TestBuild_PlatformConstraint|TestParseTargetPlatforms|TestValidateBuildSupport' -v
+      - task: integration:build
+      - task: integration:compose
+  audit:summary:
+    desc: Write the Airlock audit outcome to the job summary
+    cmds:
+      - |
+        printf 'Airlock outcome: %s (complete: %s)\n' "$AIRLOCK_OUTCOME" "$AIRLOCK_COMPLETE" >> "$GITHUB_STEP_SUMMARY"

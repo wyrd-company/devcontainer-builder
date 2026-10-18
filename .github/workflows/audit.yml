@@ -1,0 +1,35 @@
+# relationships:
+#   references: [repo-settings, taskfile]
+name: Audit
+on:
+  schedule:
+    - cron: "17 6 * * 1"
+  workflow_dispatch: {}
+permissions: {}
+concurrency:
+  group: audit
+  cancel-in-progress: false
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: go-task/setup-task@01a4adf9db2d14c1de7a560f09170b6e0df736aa # v2
+      - name: Audit repository
+        uses: wyrd-company/airlock@d017112364f31440e22b88d6621bb24d115b6f93 # 0.0.0 (unreleased)
+        env:
+          AIRLOCK_TOKEN: ${{ secrets.AIRLOCK_TOKEN }}
+        with:
+          format: json
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always() && env.AIRLOCK_FINDINGS != ''
+        with:
+          name: airlock-findings
+          path: ${{ env.AIRLOCK_FINDINGS }}
+          if-no-files-found: error
+      - if: always() && env.AIRLOCK_OUTCOME != ''
+        run: task audit:summary

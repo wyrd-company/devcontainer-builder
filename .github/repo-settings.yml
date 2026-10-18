@@ -1,0 +1,16 @@
+# relationships:
+#   references: [README]
+# Applied by an operator through Airlock; workflows only audit settings.
+description: >-
+  A Go toolkit for working with devcontainer-spec images and containers,
+  with no Node toolchain required.
+topics: [cli, go, docker, devcontainers]
+merge:
+  squash: true
+  rebase: true
+  merge_commit: false
+  delete_branch_on_merge: true
+features:
+  wiki: false
+  projects: false
+  discussions: false

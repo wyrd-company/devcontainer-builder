@@ -1,0 +1,18 @@
+# relationships:
+#   references: [taskfile]
+pre-commit:
+  piped: true
+  jobs:
+    - name: format
+      glob: "*.go"
+      exclude: "reference/**"
+      run: task format -- {staged_files}
+      stage_fixed: true
+    - name: lint
+      glob: "*.go"
+      exclude: "reference/**"
+      run: task lint:staged -- {staged_files}
+commit-msg:
+  jobs:
+    - name: conventional-commit
+      run: task lint:commit-file -- "{1}"

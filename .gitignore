@@ -1,0 +1,6 @@
+/bin/
+/dist/
+/artifacts/
+/.task/
+/coverage.out
+/lefthook-local.yml
