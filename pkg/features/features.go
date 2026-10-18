@@ -334,53 +334,18 @@ func readMetadata(dir string) (Metadata, error) {
 	if err != nil {
 		return Metadata{}, fmt.Errorf("read %s: %w", path, err)
 	}
+	data, _, err = spec.MigrateLegacyVSCode(spec.StripJSONC(data), false)
+	if err != nil {
+		return Metadata{}, fmt.Errorf("parse %s: %w", path, err)
+	}
 	var meta Metadata
-	if err := json.Unmarshal(spec.StripJSONC(data), &meta); err != nil {
+	if err := json.Unmarshal(data, &meta); err != nil {
 		return Metadata{}, fmt.Errorf("parse %s: %w", path, err)
 	}
 	if meta.ID == "" {
 		return Metadata{}, fmt.Errorf("%s: missing id", path)
 	}
-	if err := meta.migrateLegacyVSCode(spec.StripJSONC(data)); err != nil {
-		return Metadata{}, fmt.Errorf("parse %s: %w", path, err)
-	}
 	return meta, nil
-}
-
-// migrateLegacyVSCode moves top-level extensions and settings into
-// customizations.vscode, as upstream's updateFromOldProperties does.
-// Extensions append; settings already in customizations win.
-func (m *Metadata) migrateLegacyVSCode(data []byte) error {
-	var legacy struct {
-		Extensions []any          `json:"extensions"`
-		Settings   map[string]any `json:"settings"`
-	}
-	if err := json.Unmarshal(data, &legacy); err != nil {
-		return err
-	}
-	if legacy.Extensions == nil && legacy.Settings == nil {
-		return nil
-	}
-	if m.Customizations == nil {
-		m.Customizations = map[string]any{}
-	}
-	vscode, _ := m.Customizations["vscode"].(map[string]any)
-	if vscode == nil {
-		vscode = map[string]any{}
-		m.Customizations["vscode"] = vscode
-	}
-	if legacy.Extensions != nil {
-		existing, _ := vscode["extensions"].([]any)
-		vscode["extensions"] = append(existing, legacy.Extensions...)
-	}
-	if legacy.Settings != nil {
-		existing, _ := vscode["settings"].(map[string]any)
-		for key, value := range existing {
-			legacy.Settings[key] = value
-		}
-		vscode["settings"] = legacy.Settings
-	}
-	return nil
 }
 
 // isLocalSource returns true for spec sources that should be loaded from

@@ -163,6 +163,7 @@ func TestReadMetadataMigratesLegacyVSCodeProperties(t *testing.T) {
 		{"merged", `{"id":"sample","extensions":["two"],"settings":{"a":1,"b":1},"customizations":{"vscode":{"extensions":["one"],"settings":{"b":2}},"other":true}}`, `{"other":true,"vscode":{"extensions":["one","two"],"settings":{"a":1,"b":2}}}`},
 		{"current only", `{"id":"sample","customizations":{"vscode":{"extensions":["one"]}}}`, `{"vscode":{"extensions":["one"]}}`},
 		{"none", `{"id":"sample"}`, `null`},
+		{"devPort is configuration-only", `{"id":"sample","devPort":8000}`, `null`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			dir := t.TempDir()
