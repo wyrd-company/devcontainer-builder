@@ -61,6 +61,9 @@ type UpRequest struct {
 	// (spec.Service) is always kept; its declared profiles are folded
 	// into the active set so its own dependencies-by-profile come up.
 	Profiles []string
+	// AllowProjectConflict permits Up to reuse/recreate a project containing
+	// another workspace's containers, matching upstream. The default refuses.
+	AllowProjectConflict bool
 }
 
 // UpResult reports what happened.
@@ -141,6 +144,19 @@ func (h *Host) Up(ctx context.Context, req UpRequest) (*UpResult, error) {
 	})
 	if err != nil {
 		return nil, err
+	}
+
+	// Check every project container before metadata, materialized configs, or
+	// engine resources can be changed, even when its service is not selected.
+	containers, err := h.listProjectContainers(ctx, proj.Name)
+	if err != nil {
+		return nil, err
+	}
+	if conflict := projectConflict(proj.Name, req.LocalWorkspace, containers); conflict != nil {
+		if !req.AllowProjectConflict {
+			return nil, conflict
+		}
+		h.logf("warning: --allow-project-conflict permits upstream behavior despite %s", conflict)
 	}
 
 	// Filter the project by active profiles. The primary always

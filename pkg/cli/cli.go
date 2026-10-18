@@ -19,6 +19,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"github.com/wyrd-company/devcontainer-builder/pkg/host/dockercompose"
 )
 
 type application struct {
@@ -69,6 +70,12 @@ func Run(ctx context.Context, args []string, version string, stdin io.Reader, st
 		a.result["outcome"] = "error"
 		a.result["message"] = err.Error()
 		a.result["description"] = "dcb could not complete the requested command"
+		var conflict *dockercompose.ProjectConflictError
+		if errors.As(err, &conflict) {
+			a.result["composeProjectName"] = conflict.Project
+			a.result["projectConflicts"] = conflict.Conflicts
+			a.diagnostic("error", conflict.Error())
+		}
 	} else {
 		a.result["outcome"] = "success"
 	}

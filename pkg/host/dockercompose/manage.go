@@ -145,20 +145,21 @@ func (h *Host) inspectOne(ctx context.Context, id string) (*ContainerInfo, error
 	return out, nil
 }
 
-// Stop stops every container in the project. Idempotent on
-// already-stopped containers.
+// Stop stops every container in the workspace's project. It refuses a project
+// with a container labelled for another workspace before stopping anything.
+// Idempotent on already-stopped containers.
 func (h *Host) Stop(ctx context.Context, localWorkspace string) error {
-	projectName, err := h.projectForWorkspace(ctx, localWorkspace)
-	if err != nil {
-		return err
-	}
-	containers, err := h.listProjectContainers(ctx, projectName)
+	_, containers, err := h.workspaceProjectContainers(ctx, localWorkspace)
 	if err != nil {
 		return err
 	}
 	if len(containers) == 0 {
 		return ErrProjectNotFound
 	}
+	return h.stopContainers(ctx, containers)
+}
+
+func (h *Host) stopContainers(ctx context.Context, containers []container.Summary) error {
 	timeoutSec := int(h.opts.StopTimeout.Seconds())
 	var firstErr error
 	for _, c := range containers {
@@ -172,19 +173,17 @@ func (h *Host) Stop(ctx context.Context, localWorkspace string) error {
 
 // Remove tears the project down: stops + removes every container,
 // then removes project-owned networks and volumes. External
-// resources are left alone.
+// resources are left alone. A project with another workspace's labelled
+// container is refused before any container or resource is changed.
 func (h *Host) Remove(ctx context.Context, localWorkspace string) error {
-	projectName, err := h.projectForWorkspace(ctx, localWorkspace)
+	projectName, containers, err := h.workspaceProjectContainers(ctx, localWorkspace)
 	if err != nil {
 		return err
 	}
-	if err := h.Stop(ctx, localWorkspace); err != nil && err != ErrProjectNotFound {
+	// Stop and removal consume the same validated set of container IDs.
+	if err := h.stopContainers(ctx, containers); err != nil {
 		// best-effort; container removal forces below
 		h.logf("stop before remove: %v", err)
-	}
-	containers, err := h.listProjectContainers(ctx, projectName)
-	if err != nil {
-		return err
 	}
 	for _, c := range containers {
 		if err := h.client.ContainerRemove(ctx, c.ID, container.RemoveOptions{
@@ -222,6 +221,24 @@ func (h *Host) Remove(ctx context.Context, localWorkspace string) error {
 	return nil
 }
 
+// workspaceProjectContainers checks all containers, including stopped primaries,
+// before a destructive operation. Unlabelled sidecars belong to the project;
+// a different explicit workspace label prevents changes to the whole project.
+func (h *Host) workspaceProjectContainers(ctx context.Context, workspace string) (string, []container.Summary, error) {
+	project, err := h.projectForWorkspace(ctx, workspace)
+	if err != nil {
+		return "", nil, err
+	}
+	containers, err := h.listProjectContainers(ctx, project)
+	if err != nil {
+		return "", nil, err
+	}
+	if conflict := projectConflict(project, workspace, containers); conflict != nil {
+		return "", nil, conflict
+	}
+	return project, containers, nil
+}
+
 // projectForWorkspace reads the persisted Compose identity from the primary's
 // workspace label before consulting current configuration. Teardown still works
 // when the config is removed or its name/environment has changed since Up.
@@ -239,21 +256,22 @@ func (h *Host) projectForWorkspace(ctx context.Context, workspace string) (strin
 			return name, nil
 		}
 	}
-	// A partial project can have only sidecars or resources left. Resolve its
-	// current config when available, otherwise use the conventional default.
-	if dc, err := spec.LoadFromWorkspace(workspace); err == nil && dc.Mode() == spec.ModeCompose {
-		env := map[string]string{}
-		for _, entry := range os.Environ() {
-			key, value, _ := strings.Cut(entry, "=")
-			env[key] = value
-		}
-		proj, err := LoadProject(ctx, LoadInputs{Spec: dc, Workspace: workspace, LocalEnv: env})
-		if err != nil {
-			return "", err
-		}
-		return proj.Name, nil
+	// A partial project can have only sidecars or resources left. Without a
+	// labelled container, only a readable Compose config can identify it.
+	dc, err := spec.LoadFromWorkspace(workspace)
+	if err != nil || dc.Mode() != spec.ModeCompose {
+		return "", ErrProjectNotFound
 	}
-	return ProjectName(workspace), nil
+	env := map[string]string{}
+	for _, entry := range os.Environ() {
+		key, value, _ := strings.Cut(entry, "=")
+		env[key] = value
+	}
+	proj, err := LoadProject(ctx, LoadInputs{Spec: dc, Workspace: workspace, LocalEnv: env})
+	if err != nil {
+		return "", ErrProjectNotFound
+	}
+	return proj.Name, nil
 }
 
 func (h *Host) listProjectContainers(ctx context.Context, projectName string) ([]container.Summary, error) {

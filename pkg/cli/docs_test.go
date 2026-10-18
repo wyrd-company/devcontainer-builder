@@ -77,6 +77,7 @@ func TestCheckCommand(t *testing.T) {
 		ok   bool
 	}{
 		{"dcb up --log-level debug --workspace-folder .", true},
+		{"dcb up --allow-project-conflict --workspace-folder .", true},
 		{"dcb exec --workspace-folder . -- ls --all", true},
 		{"dcb skills install --dir .agents/skills", true},
 		{"dcb build --load=false", true},

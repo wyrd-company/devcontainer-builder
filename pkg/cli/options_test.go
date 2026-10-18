@@ -12,6 +12,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/spf13/cobra"
@@ -171,7 +172,7 @@ func TestUpFlagSurface(t *testing.T) {
 		}
 		invoke(t, 2, "up", "--"+name+"=value")
 	}
-	for _, name := range []string{"build-no-cache", "workspace-folder", "image-name", "label"} {
+	for _, name := range []string{"build-no-cache", "workspace-folder", "image-name", "label", "allow-project-conflict"} {
 		if up.Flags().Lookup(name) == nil {
 			t.Errorf("up missing --%s", name)
 		}
@@ -245,5 +246,16 @@ func TestComposeUpRequestMetadataMapping(t *testing.T) {
 				t.Fatal("skip removed raw config hooks")
 			}
 		})
+	}
+}
+
+func TestUpProjectConflictFlagHelp(t *testing.T) {
+	help, logs := invokeHelp(t, "up", "--help")
+	if !strings.Contains(help, "--allow-project-conflict") || !strings.Contains(help, "another workspace's project containers") || logs != "" {
+		t.Fatalf("project conflict help = %q, logs %q", help, logs)
+	}
+	flag := (&application{}).upCommand().Flags().Lookup("allow-project-conflict")
+	if flag == nil || flag.DefValue != "false" {
+		t.Fatalf("project conflict override default = %v", flag)
 	}
 }

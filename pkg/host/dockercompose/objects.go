@@ -1,3 +1,6 @@
+// relationships:
+//
+//	references: [manage, projectname]
 package dockercompose
 
 import (
@@ -18,8 +21,9 @@ import (
 //
 // Materialized files live under
 // $TMPDIR/dcb-compose/<sha256(project)[:8]>/{configs,secrets}/<name>
-// — keyed off the project name so two unrelated workspaces with the
-// same compose project name can't collide. Remove() cleans them up.
+// — shared by all containers using that Compose project name. Workspaces
+// selecting the same name share these paths. Remove cleans them up only after
+// checking that no project container is labelled for another workspace.
 type objectMaterializer struct {
 	projectName string
 	localEnv    map[string]string

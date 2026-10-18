@@ -110,6 +110,34 @@ Names are lowercase and retain `-`, `_`, letters, and digits. Workspace-only
 operations find the running or stopped project's captured name through its
 container labels, including when the configuration file has been removed.
 
+Workspaces with the same basename can select the same Compose project. `up`
+refuses by default when that project contains a container labelled for another
+workspace. The text diagnostic lists every conflicting container's name, full
+ID, and owning `devcontainer.local_folder`. The JSON error result includes
+`composeProjectName` and a `projectConflicts` array with `name`, `id`, and
+`localFolder` for each conflict.
+
+Use `dcb up --allow-project-conflict --workspace-folder .` to allow upstream
+behavior: containers in the project can be reused or recreated for this
+workspace. The override logs a warning naming the conflicting containers. It
+does not override the teardown refusal below.
+
+Set a distinct top-level `name:` in each workspace's Compose file to keep their
+projects separate, for example:
+
+```yaml
+name: sample-alpha
+services:
+  app:
+    image: alpine:3.20
+```
+
+Use another name, such as `sample-beta`, for the other workspace. A
+`COMPOSE_PROJECT_NAME` in the host environment or workspace `.env` takes
+precedence over `name:`. The library's `Stop` and `Remove`, and CLI `down`, refuse
+a project that contains a container labelled for another workspace, so that its
+containers, networks, volumes, and materialized configuration files remain intact.
+
 `phasesRun` lists the lifecycle commands that ran, in order. Each entry has
 `hook`, the upstream name such as `postCreateCommand`, and `origin`, which is
 `devcontainer.json` or the reference of the feature that contributed it.
