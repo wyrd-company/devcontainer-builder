@@ -66,4 +66,3 @@ python3 "$repository_script" stage "$submitted_manifest" "$artifacts" "$stage" "
 python3 "$repository_script" render-aur "$submitted_manifest" "$aur" --artifacts "$artifacts"
 test -s "$stage/.new-rpms"
 test -s "$aur/PKGBUILD"
-

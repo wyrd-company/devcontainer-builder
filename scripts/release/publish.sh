@@ -7,19 +7,14 @@ python3 scripts/release/check-tag.py
 case "$channel" in
   github)
     bash scripts/release/notes.sh "$RELEASE_VERSION" > dist/release-notes.md
-    gh release create "$RELEASE_VERSION" --verify-tag --title "$RELEASE_VERSION" \
-      --notes-file dist/release-notes.md \
-      dist/*.tar.gz dist/*.deb dist/*.rpm dist/checksums.txt dist/release-manifest.json
+    python3 scripts/release/channels.py github
     ;;
   npm)
-    # Optional native dependencies must exist before the launcher is discoverable.
-    for package in linux-x64 linux-arm64 darwin-x64 darwin-arm64; do
-      npm publish "dist/npm/tarballs/wyrd-company-dcb-${package}-${RELEASE_VERSION}.tgz" --access public --provenance
-    done
-    npm publish "dist/npm/tarballs/wyrd-company-dcb-${RELEASE_VERSION}.tgz" --access public --provenance
+    python3 scripts/release/channels.py npm
     ;;
   homebrew)
     tap="${2:?checked-out homebrew tap required}"
+    python3 scripts/release/channels.py homebrew "$tap"
     mkdir -p "$tap/Formula"
     cp dist/dcb.rb "$tap/Formula/dcb.rb"
     git -C "$tap" config user.name 'dcb release bot'

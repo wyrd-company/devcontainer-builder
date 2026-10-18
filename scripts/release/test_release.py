@@ -221,7 +221,8 @@ name = Path(sys.argv[0]).name
 with open(os.environ['COMMAND_LOG'], 'a') as output:
     output.write(json.dumps([name] + sys.argv[1:]) + '\\n')
 if name == 'python3':
-    sys.exit(int(os.environ.get('GUARD_STATUS', '0')))
+    key = 'CHANNEL_STATUS' if 'channels.py' in sys.argv[1] else 'GUARD_STATUS'
+    sys.exit(int(os.environ.get(key, '0')))
 if name == 'git' and 'diff' in sys.argv:
     sys.exit(int(os.environ.get('DIFF_STATUS', '1')))
 """)
@@ -260,23 +261,14 @@ if name == 'git' and 'diff' in sys.argv:
                     self.calls(), [["python3", "scripts/release/check-tag.py"]]
                 )
 
-    def test_npm_publishes_four_native_tarballs_before_launcher(self):
+    def test_shell_dispatches_npm_through_the_idempotent_channel_helper(self):
         self.assertEqual(self.execute("npm").returncode, 0)
-        calls = self.calls()[1:]
         self.assertEqual(
-            [call[2] for call in calls],
+            self.calls(),
             [
-                f"dist/npm/tarballs/wyrd-company-dcb-{target}-{VERSION}.tgz"
-                for target in ["linux-x64", "linux-arm64", "darwin-x64", "darwin-arm64"]
-            ]
-            + [f"dist/npm/tarballs/wyrd-company-dcb-{VERSION}.tgz"],
-        )
-        self.assertTrue(
-            all(
-                call[0:2] == ["npm", "publish"]
-                and call[-3:] == ["--access", "public", "--provenance"]
-                for call in calls
-            )
+                ["python3", "scripts/release/check-tag.py"],
+                ["python3", "scripts/release/channels.py", "npm"],
+            ],
         )
 
     def test_release_build_task_checks_tag_before_nonpublishing_builder_and_stager(
@@ -326,20 +318,15 @@ if name == 'git' and 'diff' in sys.argv:
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("no section", result.stderr)
 
-    def test_github_verifies_tag_and_uploads_handoff_with_packages(self):
+    def test_shell_dispatches_github_through_the_idempotent_channel_helper(self):
         self.assertEqual(self.execute("github").returncode, 0)
-        call = self.calls()[-1]
-        self.assertEqual(call[0:4], ["gh", "release", "create", VERSION])
-        for arg in [
-            "--verify-tag",
-            "--notes-file",
-            "dist/release-manifest.json",
-            "dist/checksums.txt",
-            "dist/*.deb",
-            "dist/*.rpm",
-            "dist/*.tar.gz",
-        ]:
-            self.assertIn(arg, call)
+        self.assertEqual(
+            self.calls(),
+            [
+                ["python3", "scripts/release/check-tag.py"],
+                ["python3", "scripts/release/channels.py", "github"],
+            ],
+        )
 
     def test_homebrew_pushes_even_without_a_new_diff(self):
         self.env["DIFF_STATUS"] = "0"
@@ -347,6 +334,18 @@ if name == 'git' and 'diff' in sys.argv:
         self.assertEqual((self.root / "tap/Formula/dcb.rb").read_text(), "formula")
         self.assertEqual(
             self.calls()[-1], ["git", "-C", "tap", "push", "origin", "HEAD:main"]
+        )
+
+    def test_homebrew_comparison_failure_stops_copy_commit_and_push(self):
+        self.env["CHANNEL_STATUS"] = "1"
+        self.assertNotEqual(self.execute("homebrew", "tap").returncode, 0)
+        self.assertFalse((self.root / "tap").exists())
+        self.assertEqual(
+            self.calls(),
+            [
+                ["python3", "scripts/release/check-tag.py"],
+                ["python3", "scripts/release/channels.py", "homebrew", "tap"],
+            ],
         )
 
     def test_credential_preflight_requires_each_declared_secret(self):
@@ -525,6 +524,7 @@ class IdentityTests(unittest.TestCase):
             for step in steps
             if step.get("uses", "").startswith("actions/upload-artifact@")
         )
+        self.assertIs(producer["with"]["overwrite"], True)
         for filename in ["submit-package", "publish-docs"]:
             workflow = yaml_file(ROOT / f".github/workflows/{filename}.yml")
             self.assertEqual(workflow["permissions"], {})
