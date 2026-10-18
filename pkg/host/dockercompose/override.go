@@ -72,7 +72,6 @@ func OverrideYAML(in OverrideInputs) ([]byte, error) {
 				"target": in.ContainerWorkspace,
 			},
 		}
-		svc["working_dir"] = in.ContainerWorkspace
 	}
 	if len(in.RemoteEnv) > 0 {
 		svc["environment"] = stringMapToSortedSlice(in.RemoteEnv)

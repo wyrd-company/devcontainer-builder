@@ -62,8 +62,9 @@ func TestLoadProject_MergesAndAppliesOverride(t *testing.T) {
 	if app.Image != "registry/derived:tag" {
 		t.Errorf("primary image: got %q want %q", app.Image, "registry/derived:tag")
 	}
-	if app.WorkingDir != "/workspaces/proj" {
-		t.Errorf("working_dir: got %q want %q", app.WorkingDir, "/workspaces/proj")
+	// Upstream's override leaves working_dir to the Compose file and image.
+	if app.WorkingDir != "" {
+		t.Errorf("working_dir: got %q want the service's own (unset)", app.WorkingDir)
 	}
 	if v, ok := app.Environment["FOO"]; !ok || v == nil || *v != "bar" {
 		t.Errorf("env FOO: got %v want bar", app.Environment["FOO"])

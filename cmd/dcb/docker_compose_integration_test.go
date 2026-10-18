@@ -95,6 +95,11 @@ func TestDockerComposeCLI(t *testing.T) {
 	t.Cleanup(func() {
 		_ = cli.ContainerRemove(context.Background(), id, container.RemoveOptions{Force: true, RemoveVolumes: true})
 	})
+	// Like upstream, the service keeps its own working directory (alpine's /);
+	// exec and lifecycle commands still run in the workspace folder.
+	if info, err := cli.ContainerInspect(context.Background(), id); err != nil || info.Config.WorkingDir != "/" {
+		t.Fatalf("Compose working dir = %+v (%v), want alpine's /", info.Config, err)
+	}
 	out := hostRunCommand(t, os.Environ(), bin, "exec", "--workspace-folder", workspace, "--", "sh", "-c", "cat /tmp/cli-created; pwd")
 	if !bytes.Equal(out, []byte("ready\n/workspace\n")) {
 		t.Fatalf("compose exec=%q", out)
