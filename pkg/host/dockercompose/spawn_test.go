@@ -50,18 +50,47 @@ func TestTranslateService_NamedVolumeRenamed(t *testing.T) {
 	if err != nil {
 		t.Fatalf("translateService: %v", err)
 	}
-	if len(tr.HostConfig.Mounts) != 2 {
-		t.Fatalf("mounts: got %d want 2", len(tr.HostConfig.Mounts))
+	// Like docker compose, plain entries use the Bind API (Mode "rw").
+	if want := []string{"proj_abc_data:/var/data:rw", "/host/dir:/in/container:rw"}; !reflect.DeepEqual(tr.HostConfig.Binds, want) || len(tr.HostConfig.Mounts) != 0 {
+		t.Fatalf("binds=%v mounts=%+v, want binds %v", tr.HostConfig.Binds, tr.HostConfig.Mounts, want)
 	}
-	want := map[string]mount.Mount{
-		"/var/data":     {Type: mount.TypeVolume, Source: "proj_abc_data", Target: "/var/data"},
-		"/in/container": {Type: mount.TypeBind, Source: "/host/dir", Target: "/in/container"},
+}
+
+// Mirrors docker compose's bindRequiresMountAPI and volumeRequiresMountAPI.
+func TestTranslateVolumesMountAPIOptions(t *testing.T) {
+	names := map[string]string{"data": "proj_data"}
+	for _, tc := range []struct {
+		name string
+		vol  types.ServiceVolumeConfig
+		bind string
+	}{
+		{"bind read-only", types.ServiceVolumeConfig{Type: types.VolumeTypeBind, Source: "/host", Target: "/in", ReadOnly: true}, "/host:/in:ro"},
+		{"bind selinux", types.ServiceVolumeConfig{Type: types.VolumeTypeBind, Source: "/host", Target: "/in", Bind: &types.ServiceVolumeBind{CreateHostPath: true, SELinux: "z"}}, "/host:/in:rw,z"},
+		{"bind no host path creation", types.ServiceVolumeConfig{Type: types.VolumeTypeBind, Source: "/host", Target: "/in", Bind: &types.ServiceVolumeBind{CreateHostPath: false}}, ""},
+		{"bind propagation", types.ServiceVolumeConfig{Type: types.VolumeTypeBind, Source: "/host", Target: "/in", Bind: &types.ServiceVolumeBind{CreateHostPath: true, Propagation: "rshared"}}, ""},
+		{"bind recursive", types.ServiceVolumeConfig{Type: types.VolumeTypeBind, Source: "/host", Target: "/in", Bind: &types.ServiceVolumeBind{CreateHostPath: true, Recursive: "readonly"}}, ""},
+		{"declared volume", types.ServiceVolumeConfig{Type: types.VolumeTypeVolume, Source: "data", Target: "/in", Volume: &types.ServiceVolumeVolume{}}, "proj_data:/in:rw"},
+		{"volume nocopy", types.ServiceVolumeConfig{Type: types.VolumeTypeVolume, Source: "data", Target: "/in", Volume: &types.ServiceVolumeVolume{NoCopy: true}}, ""},
+		{"volume subpath", types.ServiceVolumeConfig{Type: types.VolumeTypeVolume, Source: "data", Target: "/in", Volume: &types.ServiceVolumeVolume{Subpath: "sub"}}, ""},
+		{"volume labels", types.ServiceVolumeConfig{Type: types.VolumeTypeVolume, Source: "data", Target: "/in", Volume: &types.ServiceVolumeVolume{Labels: types.Mapping{"k": "v"}}}, ""},
+		{"anonymous volume", types.ServiceVolumeConfig{Type: types.VolumeTypeVolume, Target: "/in"}, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			binds, mounts, err := translateVolumes([]types.ServiceVolumeConfig{tc.vol}, names)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tc.bind != "" && (!reflect.DeepEqual(binds, []string{tc.bind}) || len(mounts) != 0) {
+				t.Fatalf("binds=%v mounts=%+v, want %s", binds, mounts, tc.bind)
+			}
+			if tc.bind == "" && (len(binds) != 0 || len(mounts) != 1 || mounts[0].Target != "/in") {
+				t.Fatalf("binds=%v mounts=%+v, want Mount API", binds, mounts)
+			}
+		})
 	}
-	for _, m := range tr.HostConfig.Mounts {
-		w := want[m.Target]
-		if w.Source != m.Source || w.Type != m.Type {
-			t.Errorf("mount %s: got %+v want %+v", m.Target, m, w)
-		}
+	_, mounts, _ := translateVolumes([]types.ServiceVolumeConfig{{Type: types.VolumeTypeBind, Source: "/host", Target: "/in", Bind: &types.ServiceVolumeBind{CreateHostPath: true, Propagation: "rshared"}}}, nil)
+	if want := (mount.Mount{Type: mount.TypeBind, Source: "/host", Target: "/in", BindOptions: &mount.BindOptions{Propagation: "rshared"}}); !reflect.DeepEqual(mounts, []mount.Mount{want}) {
+		t.Fatalf("propagation mount=%+v", mounts)
 	}
 }
 

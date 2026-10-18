@@ -112,8 +112,10 @@ func TestComposeMetadataRuntimeMappings(t *testing.T) {
 			if cfg.User != "sample" || merged.RemoteUser != "root" || !reflect.DeepEqual(got.Command, svc.Command) || !containsAll(cfg.Env, "NATIVE=native", "PRIORITY=metadata", "FROM_META=hello $LITERAL") || containsAll(cfg.Env, "REMOTE=remote") || !reflect.DeepEqual(merged.Entrypoints, []string{"echo hello $LITERAL"}) {
 				t.Fatalf("config=%+v merged=%+v", cfg, merged)
 			}
-			if len(host.Mounts) != 2 || host.Mounts[0].Source != "native-scoped" || host.Mounts[0].Target != "/cache" || !host.Mounts[0].ReadOnly || host.Mounts[1].Source != "/workspace" || host.Mounts[1].Target != "/bind" || !host.Mounts[1].ReadOnly || host.Mounts[1].Consistency != "cached" {
-				t.Fatalf("mounts=%+v", host.Mounts)
+			// As in docker compose, plain binds and declared volumes use the
+			// Bind API, which has no consistency option.
+			if len(host.Mounts) != 0 || !reflect.DeepEqual(host.Binds, []string{"native-scoped:/cache:ro", "/workspace:/bind:ro"}) {
+				t.Fatalf("binds=%v mounts=%+v", host.Binds, host.Mounts)
 			}
 			if len(proj.Volumes) != 1 || proj.Volumes["sample-cache"].Name != "native-scoped" {
 				t.Fatalf("volumes=%+v", proj.Volumes)

@@ -189,7 +189,7 @@ func TestDockerComposeCLIDefaultWorkspaceFolder(t *testing.T) {
 	if err := os.WriteFile(config, []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(filepath.Dir(config), "compose.yml"), []byte("services:\n  app:\n    image: alpine:3.20\n    command: [sleep, infinity]\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(filepath.Dir(config), "compose.yml"), []byte("services:\n  app:\n    image: alpine:3.20\n    command: [sleep, infinity]\n    volumes: [./created:/created]\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	bin := hostBuildBinary(t)
@@ -200,6 +200,19 @@ func TestDockerComposeCLIDefaultWorkspaceFolder(t *testing.T) {
 	}
 	if result["remoteWorkspaceFolder"] != "/" {
 		t.Fatalf("remoteWorkspaceFolder = %v, want /", result["remoteWorkspaceFolder"])
+	}
+	// Like docker compose, plain binds use the Bind API: Docker creates a
+	// missing host path and reports the access mode.
+	info, err := cli.ContainerInspect(context.Background(), result["containerId"].(string))
+	if err != nil {
+		t.Fatal(err)
+	}
+	modes := map[string]string{}
+	for _, m := range info.Mounts {
+		modes[m.Destination] = m.Mode
+	}
+	if modes["/created"] != "rw" || modes["/workspaces/"+filepath.Base(workspace)] != "rw" {
+		t.Fatalf("bind modes = %v", modes)
 	}
 	out := hostRunCommand(t, os.Environ(), bin, "exec", "--workspace-folder", workspace, "--", "sh", "-c", "cat /tmp/lifecycle-dir; pwd; test -d /workspaces/"+filepath.Base(workspace)+"/.devcontainer && echo mounted")
 	if string(out) != "/\n/\nmounted\n" {

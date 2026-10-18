@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/compose-spec/compose-go/v2/types"
@@ -112,10 +113,11 @@ func translateService(
 		host.RestartPolicy = container.RestartPolicy{Name: container.RestartPolicyMode(svc.Restart)}
 	}
 
-	mounts, err := translateVolumes(svc.Volumes, volumeNames)
+	binds, mounts, err := translateVolumes(svc.Volumes, volumeNames)
 	if err != nil {
 		return nil, err
 	}
+	host.Binds = binds
 	objMounts, err := translateConfigsAndSecrets(proj, svc, materializer)
 	if err != nil {
 		return nil, err
@@ -188,14 +190,14 @@ func composeDuration(d *types.Duration) time.Duration {
 	return time.Duration(*d)
 }
 
-// translateVolumes converts compose volume entries into docker mounts.
-// Bind mounts pass through directly; named volumes are renamed to the
-// project-prefixed form. Other types are rejected.
-func translateVolumes(vols []types.ServiceVolumeConfig, volumeNames map[string]string) ([]mount.Mount, error) {
-	if len(vols) == 0 {
-		return nil, nil
-	}
-	out := make([]mount.Mount, 0, len(vols))
+// translateVolumes converts compose volume entries as docker compose does
+// (pkg/compose/create.go buildContainerVolumes): a bind mount or a declared
+// named volume without Mount-API-only options uses the Bind API, which creates
+// a missing host path; other entries use the Mount API. Named volumes are
+// renamed to the project-prefixed form. Other types are rejected.
+func translateVolumes(vols []types.ServiceVolumeConfig, volumeNames map[string]string) ([]string, []mount.Mount, error) {
+	var binds []string
+	var out []mount.Mount
 	for _, v := range vols {
 		m := mount.Mount{
 			Target:      v.Target,
@@ -204,19 +206,25 @@ func translateVolumes(vols []types.ServiceVolumeConfig, volumeNames map[string]s
 		}
 		switch v.Type {
 		case types.VolumeTypeBind, "":
+			if !bindRequiresMountAPI(v.Bind) {
+				binds = append(binds, toBindString(v.Source, v))
+				continue
+			}
 			m.Type = mount.TypeBind
 			m.Source = v.Source
-			if v.Bind != nil {
-				m.BindOptions = &mount.BindOptions{
-					Propagation: mount.Propagation(v.Bind.Propagation),
-				}
+			m.BindOptions = &mount.BindOptions{
+				Propagation: mount.Propagation(v.Bind.Propagation),
 			}
 		case types.VolumeTypeVolume:
+			name := volumeNames[v.Source]
+			if name != "" && !volumeRequiresMountAPI(v.Volume) {
+				binds = append(binds, toBindString(name, v))
+				continue
+			}
 			m.Type = mount.TypeVolume
-			if name := volumeNames[v.Source]; name != "" {
+			m.Source = v.Source
+			if name != "" {
 				m.Source = name
-			} else {
-				m.Source = v.Source
 			}
 			if v.Volume != nil {
 				m.VolumeOptions = &mount.VolumeOptions{
@@ -225,11 +233,40 @@ func translateVolumes(vols []types.ServiceVolumeConfig, volumeNames map[string]s
 				}
 			}
 		default:
-			return nil, fmt.Errorf("volume type %q is not supported in this iteration (target %s)", v.Type, v.Target)
+			return nil, nil, fmt.Errorf("volume type %q is not supported in this iteration (target %s)", v.Type, v.Target)
 		}
 		out = append(out, m)
 	}
-	return out, nil
+	return binds, out, nil
+}
+
+// toBindString matches docker compose: access mode, then SELinux label,
+// propagation and nocopy options. Consistency has no Bind-API form.
+func toBindString(name string, v types.ServiceVolumeConfig) string {
+	options := []string{"rw"}
+	if v.ReadOnly {
+		options[0] = "ro"
+	}
+	if v.Bind != nil && v.Bind.SELinux != "" {
+		options = append(options, v.Bind.SELinux)
+	}
+	if v.Bind != nil && v.Bind.Propagation != "" {
+		options = append(options, v.Bind.Propagation)
+	}
+	if v.Volume != nil && v.Volume.NoCopy {
+		options = append(options, "nocopy")
+	}
+	return name + ":" + v.Target + ":" + strings.Join(options, ",")
+}
+
+// bindRequiresMountAPI reports bind options the Bind API cannot express.
+func bindRequiresMountAPI(bind *types.ServiceVolumeBind) bool {
+	return bind != nil && (!bool(bind.CreateHostPath) || bind.Propagation != "" || bind.Recursive != "")
+}
+
+// volumeRequiresMountAPI reports volume options the Bind API cannot express.
+func volumeRequiresMountAPI(vol *types.ServiceVolumeVolume) bool {
+	return vol != nil && (len(vol.Labels) > 0 || vol.Subpath != "" || vol.NoCopy)
 }
 
 func tmpfsList(t types.StringList) map[string]string {
