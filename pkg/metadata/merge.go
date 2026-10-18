@@ -33,9 +33,25 @@ func (m Merged) MarshalJSON() ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	var out map[string]any
-	if err := json.Unmarshal(data, &out); err != nil {
+	var fields map[string]any
+	if err := json.Unmarshal(data, &fields); err != nil {
 		return nil, err
+	}
+	out := map[string]any{}
+	if len(m.Raw) > 0 {
+		if err := json.Unmarshal(m.Raw, &out); err != nil {
+			return nil, err
+		}
+	}
+	for _, key := range []string{"init", "privileged", "capAdd", "securityOpt", "mounts", "remoteUser", "containerUser", "waitFor", "userEnvProbe", "shutdownAction", "overrideCommand", "updateRemoteUserUID", "remoteEnv", "containerEnv", "portsAttributes", "otherPortsAttributes", "forwardPorts", "hostRequirements"} {
+		delete(out, key)
+	}
+	for k, v := range fields {
+		out[k] = v
+	}
+	delete(out, "features")
+	if m.Features.Len() > 0 {
+		out["features"] = m.Features.Values
 	}
 	for _, key := range []string{"customizations", "entrypoint", "onCreateCommand", "updateContentCommand", "postCreateCommand", "postStartCommand", "postAttachCommand"} {
 		delete(out, key)

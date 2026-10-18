@@ -96,3 +96,47 @@ func TestMetadataSubstitutionEscapesValues(t *testing.T) {
 		t.Fatalf("substitution=%s", data)
 	}
 }
+
+func TestImageMetadataEntriesAvoidDuplicateBuiltHooks(t *testing.T) {
+	truth := true
+	dc := &spec.DevContainer{PostCreate: spec.Command{Shell: "echo config"}, RemoteUser: "sample"}
+	resolved := []features.Resolved{{Source: "./sample", Metadata: features.Metadata{PostCreateCommand: spec.Command{Shell: "echo feature"}, Init: &truth}}}
+	value, err := metadata.Encode(metadata.Collect(nil, resolved, dc))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := UpRequest{Spec: dc, Features: resolved, ImageBuilt: true}
+	entries := imageMetadataEntries(req, map[string]string{metadata.Label: value}, nil)
+	if phases := metadata.Plan(entries); len(phases) != 2 || phases[0].Command.Shell != "echo feature" || phases[1].Command.Shell != "echo config" {
+		t.Fatalf("duplicated built-image hooks=%+v", phases)
+	}
+	req.ImageBuilt = false
+	if got := metadata.Plan(imageMetadataEntries(req, map[string]string{metadata.Label: value}, nil)); len(got) != 4 {
+		t.Fatalf("prebuilt contributions unexpectedly removed: %+v", got)
+	}
+	req.ImageBuilt = true
+	if got := metadata.Plan(imageMetadataEntries(req, nil, nil)); len(got) != 2 {
+		t.Fatalf("missing-label fallback=%+v", got)
+	}
+}
+
+func TestRuntimePlanSkipAndSubstitute(t *testing.T) {
+	entries := []metadata.Entry{{ID: "base", PostCreate: spec.Command{Args: []string{"echo", "${localEnv:GREETING} ${containerEnv:SAMPLE}"}}, PostAttach: spec.Command{Shell: "echo attach"}}}
+	for _, tc := range []struct {
+		name string
+		req  UpRequest
+		want int
+	}{
+		{"all", UpRequest{}, 2}, {"skip-all", UpRequest{SkipLifecycle: true}, 0}, {"skip-attach", UpRequest{SkipPostAttach: true}, 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			plan := runtimePlan(tc.req, entries, substituteCtxForTest(), map[string]string{"SAMPLE": "container"})
+			if len(plan) != tc.want {
+				t.Fatalf("plan=%+v", plan)
+			}
+			if len(plan) > 0 && (plan[0].Command.Args[1] != "hello container" || plan[0].Origin.Source != "base") {
+				t.Fatalf("substitution=%+v", plan)
+			}
+		})
+	}
+}

@@ -229,7 +229,21 @@ func buildOnePlatform(
 	}
 	graph.BaseState = &baseState
 
-	finalState, err := Build(graph)
+	// Feature builtins use the metadata's effective users. Keep graph.Spec
+	// unchanged for label collection so inherited entries are not appended twice.
+	buildGraph := graph
+	var baseImage dockerspec.DockerOCIImage
+	if len(baseConfig) > 0 {
+		if err := json.Unmarshal(baseConfig, &baseImage); err != nil {
+			return nil, nil, err
+		}
+	}
+	effective := metadata.Merge(graph.Spec, metadata.Collect(metadata.Read(baseImage.Config.Labels, nil), nil, graph.Spec))
+	buildGraph.Spec = effective.DevContainer
+	if buildGraph.RemoteUser == "" {
+		buildGraph.RemoteUser = effective.RemoteUser
+	}
+	finalState, err := Build(buildGraph)
 	if err != nil {
 		return nil, nil, fmt.Errorf("author llb: %w", err)
 	}

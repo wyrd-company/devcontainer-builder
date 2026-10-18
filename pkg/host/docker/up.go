@@ -41,6 +41,10 @@ type UpRequest struct {
 	// ImageBuilt means Image was built from this request's spec and features.
 	// Its label already contains those contributions; append only runtime updates.
 	ImageBuilt bool
+	// SkipLifecycle suppresses all lifecycle commands for this invocation.
+	SkipLifecycle bool
+	// SkipPostAttach suppresses postAttachCommand for this invocation.
+	SkipPostAttach bool
 	// metadataEntries carries the complete raw list to container creation.
 	metadataEntries []metadata.Entry
 	entrypoints     []string
@@ -138,12 +142,7 @@ func (h *Host) Up(ctx context.Context, req UpRequest) (*UpResult, error) {
 		if img.Config != nil {
 			labels = img.Config.Labels
 		}
-		entries = metadata.Read(labels, h.logf)
-		if req.ImageBuilt && len(entries) > 0 {
-			entries = metadata.Update(entries, req.Spec)
-		} else {
-			entries = metadata.Collect(entries, req.Features, req.Spec)
-		}
+		entries = imageMetadataEntries(req, labels, h.logf)
 		dc, req.entrypoints, err = runtimeMetadata(req.Spec, entries, subCtx)
 		if err != nil {
 			return nil, err
@@ -235,10 +234,7 @@ func (h *Host) Up(ctx context.Context, req UpRequest) (*UpResult, error) {
 	dc = substituteContainerEnv(dc, containerEnv)
 	mergedEnv := mergeStringMaps(stringMap(dc.UpdateRemoteEnv), nil)
 
-	plan := metadata.Plan(entries)
-	for i := range plan {
-		plan[i].Command = containerSubstituteCommand(substitute.ContainerContext{ContainerEnv: containerEnv}, substituteCommand(subCtx, plan[i].Command))
-	}
+	plan := runtimePlan(req, entries, subCtx, containerEnv)
 	rt := runner.Runtime{
 		User:           dc.RemoteUser,
 		Workdir:        containerWorkspace,

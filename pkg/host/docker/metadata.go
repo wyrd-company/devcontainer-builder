@@ -5,6 +5,7 @@ package docker
 
 import (
 	"github.com/wyrd-company/devcontainer-builder/pkg/features"
+	"github.com/wyrd-company/devcontainer-builder/pkg/lifecycle"
 	"github.com/wyrd-company/devcontainer-builder/pkg/metadata"
 	"github.com/wyrd-company/devcontainer-builder/pkg/spec"
 	"github.com/wyrd-company/devcontainer-builder/pkg/substitute"
@@ -30,4 +31,27 @@ func featureContainerEnv(env map[string]any, resolved []features.Resolved, ctx s
 		out[k] = v
 	}
 	return out
+}
+
+func imageMetadataEntries(req UpRequest, labels map[string]string, logf func(string, ...any)) []metadata.Entry {
+	entries := metadata.Read(labels, logf)
+	if req.ImageBuilt && len(entries) > 0 {
+		return metadata.Update(entries, req.Spec)
+	}
+	return metadata.Collect(entries, req.Features, req.Spec)
+}
+
+func runtimePlan(req UpRequest, entries []metadata.Entry, ctx substitute.Context, containerEnv map[string]string) []lifecycle.Phase {
+	if req.SkipLifecycle {
+		return nil
+	}
+	var plan []lifecycle.Phase
+	for _, phase := range metadata.Plan(entries) {
+		if req.SkipPostAttach && phase.Hook == lifecycle.HookPostAttach {
+			continue
+		}
+		phase.Command = containerSubstituteCommand(substitute.ContainerContext{ContainerEnv: containerEnv}, substituteCommand(ctx, phase.Command))
+		plan = append(plan, phase)
+	}
+	return plan
 }

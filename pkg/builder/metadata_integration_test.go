@@ -21,6 +21,7 @@ import (
 	imagetypes "github.com/docker/docker/api/types/image"
 
 	"github.com/wyrd-company/devcontainer-builder/pkg/buildkit"
+	"github.com/wyrd-company/devcontainer-builder/pkg/features"
 	dockerhost "github.com/wyrd-company/devcontainer-builder/pkg/host/docker"
 	"github.com/wyrd-company/devcontainer-builder/pkg/metadata"
 	"github.com/wyrd-company/devcontainer-builder/pkg/spec"
@@ -76,19 +77,23 @@ func TestMetadataPrebuiltIntegration(t *testing.T) {
 				}
 			})
 			opts := Options{Workspace: workspace, Tags: []string{tag}, Load: true, Docker: cli, SkipImageMetaResolve: mode == "generated-dockerfile", WorkDir: t.TempDir(), KeepWorkDir: true, Logger: t.Logf, Stdout: io.Discard, Stderr: testLogWriter{t}}
+			var resolved []features.Resolved
 			if mode == "generated-dockerfile" {
 				result, err := New().Generate(ctx, opts)
 				if err != nil {
 					t.Fatal(err)
 				}
+				resolved = result.Features
 				// Build the actual generated artifact, including its escaped metadata LABEL.
 				if _, err := buildkit.SolveDockerfile(ctx, buildkit.DockerfileBuild{ContextDir: result.ContextDir, DockerfileDir: filepath.Dir(result.FinalDockerfile), Filename: filepath.Base(result.FinalDockerfile)}, buildkit.SolveOptions{Docker: cli, Tags: []string{tag}, Load: true, Progress: "plain", Stderr: testLogWriter{t}}); err != nil {
 					t.Fatal(err)
 				}
 			} else {
-				if _, err := New().Build(ctx, opts); err != nil {
+				built, err := New().Build(ctx, opts)
+				if err != nil {
 					t.Fatal(err)
 				}
+				resolved = built.Features
 			}
 			img, err := cli.ImageInspect(ctx, tag)
 			if err != nil {
@@ -110,73 +115,87 @@ func TestMetadataPrebuiltIntegration(t *testing.T) {
 				t.Fatalf("label merge=%+v", merged)
 			}
 			h := dockerhost.New(cli, dockerhost.Options{Logger: t.Logf})
-			req := dockerhost.UpRequest{Spec: &spec.DevContainer{Image: tag, WorkspaceMount: "type=volume,target=/workspace", WorkspaceFolder: "/workspace"}, Image: tag, LocalWorkspace: workspace, SpecPath: specPath}
-			result, err := h.Up(ctx, req)
-			if result != nil && result.ContainerID != "" {
-				t.Cleanup(func() {
-					_ = cli.ContainerRemove(context.Background(), result.ContainerID, container.RemoveOptions{Force: true, RemoveVolumes: true})
-				})
-			}
-			if err != nil {
-				t.Fatal(err)
-			}
-			inspect, err := cli.ContainerInspect(ctx, result.ContainerID)
-			if err != nil {
-				t.Fatal(err)
-			}
-			caps := strings.Join(inspect.HostConfig.CapAdd, ",")
-			if !strings.Contains(caps, "SYS_PTRACE") || inspect.HostConfig.Init == nil || !*inspect.HostConfig.Init || !strings.Contains(strings.Join(inspect.HostConfig.SecurityOpt, ","), "no-new-privileges") {
-				t.Fatalf("runtime host config=%+v", inspect.HostConfig)
-			}
-			foundMount := false
-			for _, mount := range inspect.Mounts {
-				if mount.Destination == "/sample-cache" {
-					foundMount = true
-				}
-			}
-			if !foundMount {
-				t.Fatalf("missing feature mount: %v", inspect.Mounts)
-			}
-			execute := func(cmd string) string {
-				t.Helper()
-				out, err := h.Exec(ctx, dockerhost.ExecRequest{ContainerID: result.ContainerID, User: "root", Cmd: []string{"/bin/sh", "-c", cmd}})
-				if err != nil || out.ExitCode != 0 {
-					t.Fatalf("exec %s=%+v %v", cmd, out, err)
-				}
-				return string(out.Stdout)
-			}
-			wantHooks := "feature\nconfig\n"
-			if mode == "upstream-dockerfile" {
-				wantHooks = "base\n" + wantHooks
-			}
-			if hooks := execute("cat /tmp/sample-hooks"); hooks != wantHooks {
-				t.Fatalf("hook order=%q want %q", hooks, wantHooks)
-			}
-			if got := execute("cat /tmp/sample-entrypoint; printf '%s %s' \"$FEATURE_ENV\" \"$CONFIG_ENV\""); got != "entrypoint\nfeature config" {
-				t.Fatalf("entrypoint/env=%q", got)
-			}
-			status := execute("cat /proc/self/status")
-			foundCapEff := false
-			for _, line := range strings.Split(status, "\n") {
-				if strings.HasPrefix(line, "CapEff:") {
-					foundCapEff = true
-					capEff, err := strconv.ParseUint(strings.TrimSpace(strings.TrimPrefix(line, "CapEff:")), 16, 64)
-					if err != nil || capEff&(1<<19) == 0 {
-						t.Fatalf("SYS_PTRACE absent from %q", line)
+			for _, fromCurrentSpec := range []bool{false, true} {
+				t.Run(fmt.Sprintf("built-current-spec-%t", fromCurrentSpec), func(t *testing.T) {
+					req := dockerhost.UpRequest{Spec: &spec.DevContainer{Image: tag, WorkspaceMount: "type=volume,target=/workspace", WorkspaceFolder: "/workspace"}, Image: tag, LocalWorkspace: workspace, SpecPath: specPath}
+					req.LocalWorkspace = fmt.Sprintf("%s-%t", workspace, fromCurrentSpec)
+					if fromCurrentSpec {
+						loaded, err := spec.Load(specPath)
+						if err != nil {
+							t.Fatal(err)
+						}
+						loaded.WorkspaceMount = "type=volume,target=/workspace"
+						loaded.WorkspaceFolder = "/workspace"
+						req.Spec, req.ImageBuilt, req.Features = loaded, true, resolved
 					}
-				}
-			}
-			if !foundCapEff {
-				t.Fatal("CapEff missing from process status")
-			}
-			// Reuse reads the container label and does not append lifecycle hooks again.
-			req.Spec.PostAttach = spec.Command{Shell: "echo should-not-replace-persisted-hooks"}
-			reused, err := h.Up(ctx, req)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if reused.CreatedThisCall || reused.ContainerID != result.ContainerID || execute("cat /tmp/sample-hooks") != wantHooks {
-				t.Fatalf("reuse=%+v", reused)
+					result, err := h.Up(ctx, req)
+					if result != nil && result.ContainerID != "" {
+						t.Cleanup(func() {
+							_ = cli.ContainerRemove(context.Background(), result.ContainerID, container.RemoveOptions{Force: true, RemoveVolumes: true})
+						})
+					}
+					if err != nil {
+						t.Fatal(err)
+					}
+					inspect, err := cli.ContainerInspect(ctx, result.ContainerID)
+					if err != nil {
+						t.Fatal(err)
+					}
+					caps := strings.Join(inspect.HostConfig.CapAdd, ",")
+					if !strings.Contains(caps, "SYS_PTRACE") || inspect.HostConfig.Init == nil || !*inspect.HostConfig.Init || !strings.Contains(strings.Join(inspect.HostConfig.SecurityOpt, ","), "no-new-privileges") {
+						t.Fatalf("runtime host config=%+v", inspect.HostConfig)
+					}
+					foundMount := false
+					for _, mount := range inspect.Mounts {
+						if mount.Destination == "/sample-cache" {
+							foundMount = true
+						}
+					}
+					if !foundMount {
+						t.Fatalf("missing feature mount: %v", inspect.Mounts)
+					}
+					execute := func(cmd string) string {
+						t.Helper()
+						out, err := h.Exec(ctx, dockerhost.ExecRequest{ContainerID: result.ContainerID, User: "root", Cmd: []string{"/bin/sh", "-c", cmd}})
+						if err != nil || out.ExitCode != 0 {
+							t.Fatalf("exec %s=%+v %v", cmd, out, err)
+						}
+						return string(out.Stdout)
+					}
+					wantHooks := "feature\nconfig\n"
+					if mode == "upstream-dockerfile" {
+						wantHooks = "base\n" + wantHooks
+					}
+					if hooks := execute("cat /tmp/sample-hooks"); hooks != wantHooks {
+						t.Fatalf("hook order=%q want %q", hooks, wantHooks)
+					}
+					if got := execute("cat /tmp/sample-entrypoint; printf '%s %s' \"$FEATURE_ENV\" \"$CONFIG_ENV\""); got != "entrypoint\nfeature config" {
+						t.Fatalf("entrypoint/env=%q", got)
+					}
+					status := execute("cat /proc/self/status")
+					foundCapEff := false
+					for _, line := range strings.Split(status, "\n") {
+						if strings.HasPrefix(line, "CapEff:") {
+							foundCapEff = true
+							capEff, err := strconv.ParseUint(strings.TrimSpace(strings.TrimPrefix(line, "CapEff:")), 16, 64)
+							if err != nil || capEff&(1<<19) == 0 {
+								t.Fatalf("SYS_PTRACE absent from %q", line)
+							}
+						}
+					}
+					if !foundCapEff {
+						t.Fatal("CapEff missing from process status")
+					}
+					// Reuse reads the container label and does not append lifecycle hooks again.
+					req.Spec.PostAttach = spec.Command{Shell: "echo should-not-replace-persisted-hooks"}
+					reused, err := h.Up(ctx, req)
+					if err != nil {
+						t.Fatal(err)
+					}
+					if reused.CreatedThisCall || reused.ContainerID != result.ContainerID || execute("cat /tmp/sample-hooks") != wantHooks {
+						t.Fatalf("reuse=%+v", reused)
+					}
+				})
 			}
 		})
 	}

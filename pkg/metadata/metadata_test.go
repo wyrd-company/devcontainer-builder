@@ -172,3 +172,90 @@ func TestUpstreamLabelFixture(t *testing.T) {
 		t.Fatalf("merge=%+v", got)
 	}
 }
+
+func TestMergedJSONPreservesConfigExtensionsAndFeatureShape(t *testing.T) {
+	raw := []byte(`{"image":"alpine","features":{"./sample":{"value":true}},"extension":{"enabled":true},"remoteUser":"stale","onCreateCommand":"stale"}`)
+	var dc spec.DevContainer
+	if err := json.Unmarshal(raw, &dc); err != nil {
+		t.Fatal(err)
+	}
+	dc.Raw = raw
+	m := Merge(&dc, parse(t, `[{"remoteUser":"sample"}]`))
+	encoded, err := json.Marshal(m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got map[string]any
+	if err := json.Unmarshal(encoded, &got); err != nil {
+		t.Fatal(err)
+	}
+	if got["remoteUser"] != "sample" || !reflect.DeepEqual(got["features"], map[string]any{"./sample": map[string]any{"value": true}}) || !reflect.DeepEqual(got["extension"], map[string]any{"enabled": true}) {
+		t.Fatalf("merged=%s", encoded)
+	}
+	if _, ok := got["onCreateCommand"]; ok {
+		t.Fatalf("stale command=%s", encoded)
+	}
+	empty, err := json.Marshal(Merge(&spec.DevContainer{}, nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(empty), "features") {
+		t.Fatalf("empty features=%s", empty)
+	}
+}
+
+func TestCollectUpstreamPropertyAllowlists(t *testing.T) {
+	config := `{"init":true,"privileged":true,"capAdd":["A"],"securityOpt":["B"],"mounts":["type=volume,target=/sample"],"customizations":{"editor":{"sample":true}},"onCreateCommand":"one","updateContentCommand":["echo","two"],"postCreateCommand":{"parallel":"three"},"postStartCommand":"four","postAttachCommand":"five","waitFor":"postCreateCommand","remoteUser":"sample","containerUser":"root","userEnvProbe":"none","remoteEnv":{"A":null},"containerEnv":{"B":"value"},"overrideCommand":false,"portsAttributes":{"80":{"label":"sample"}},"otherPortsAttributes":{"onAutoForward":"ignore"},"forwardPorts":[80],"shutdownAction":"none","updateRemoteUserUID":false,"hostRequirements":{"cpus":2}}`
+	var dc spec.DevContainer
+	if err := json.Unmarshal([]byte(config), &dc); err != nil {
+		t.Fatal(err)
+	}
+	entries := Collect(nil, nil, &dc)
+	if len(entries) != 1 {
+		t.Fatalf("entries=%+v", entries)
+	}
+	encoded, err := json.Marshal(entries[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	var want, got map[string]any
+	if err := json.Unmarshal([]byte(config), &want); err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(encoded, &got); err != nil {
+		t.Fatal(err)
+	}
+	for key, value := range want {
+		t.Run("config/"+key, func(t *testing.T) {
+			if !reflect.DeepEqual(got[key], value) {
+				t.Fatalf("%s=%#v want %#v", key, got[key], value)
+			}
+		})
+	}
+	feature := `{"id":"sample","init":true,"privileged":true,"capAdd":["A"],"securityOpt":["B"],"entrypoint":"sample","mounts":["type=volume,target=/sample"],"customizations":{"editor":{"sample":true}},"onCreateCommand":"one","updateContentCommand":["echo","two"],"postCreateCommand":{"parallel":"three"},"postStartCommand":"four","postAttachCommand":"five"}`
+	var m features.Metadata
+	if err := json.Unmarshal([]byte(feature), &m); err != nil {
+		t.Fatal(err)
+	}
+	entries = Collect(nil, []features.Resolved{{Source: "./sample", Metadata: m}}, nil)
+	encoded, err = json.Marshal(entries[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	got = map[string]any{}
+	if err := json.Unmarshal(encoded, &got); err != nil {
+		t.Fatal(err)
+	}
+	want = map[string]any{}
+	if err := json.Unmarshal([]byte(feature), &want); err != nil {
+		t.Fatal(err)
+	}
+	want["id"] = "./sample"
+	for key, value := range want {
+		t.Run("feature/"+key, func(t *testing.T) {
+			if !reflect.DeepEqual(got[key], value) {
+				t.Fatalf("%s=%#v want %#v", key, got[key], value)
+			}
+		})
+	}
+}

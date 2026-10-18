@@ -65,3 +65,28 @@ func TestMergeImageConfig_SpecContainerEnvWinsOverFeature(t *testing.T) {
 		t.Fatalf("config env = %s", out)
 	}
 }
+
+func TestBuildOnePlatform_FeaturesSeeMetadataUsers(t *testing.T) {
+	for _, upstream := range []bool{false, true} {
+		gc := &fakeGateway{baseConfig: []byte(`{"config":{"User":"root","Labels":{"devcontainer.metadata":"[{\"remoteUser\":\"remote-sample\",\"containerUser\":\"container-sample\"}]"}}}`)}
+		in := featureGraphInputs(testFeature)
+		in.Spec.RemoteUser = ""
+		in.RemoteUser = ""
+		in.ResolveImageConfig = true
+		bs := BuildSpec{Graph: in}
+		if upstream {
+			bs.Upstream = &DockerfileBuild{ContextDir: "."}
+		}
+		_, cfg, err := buildOnePlatform(context.Background(), gc, bs, ocispecs.Platform{OS: "linux", Architecture: "amd64"}, buildSettings{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := features.BuiltinEnvContent("container-sample", "remote-sample")
+		if got := solvedGraph(t, gc).allMkfiles()["/"+features.BuiltinEnvFile]; got != want {
+			t.Fatalf("upstream=%v builtin=%q want %q", upstream, got, want)
+		}
+		if strings.Count(string(cfg), `remote-sample`) != 1 || strings.Count(string(cfg), `container-sample`) != 1 {
+			t.Fatalf("inherited properties duplicated in config: %s", cfg)
+		}
+	}
+}
