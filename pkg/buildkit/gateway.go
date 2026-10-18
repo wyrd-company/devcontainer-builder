@@ -1,3 +1,6 @@
+// relationships:
+//   references: [llb, metadata]
+
 package buildkit
 
 import (

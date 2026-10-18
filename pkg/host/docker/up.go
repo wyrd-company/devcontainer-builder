@@ -1,3 +1,6 @@
+// relationships:
+//   references: [metadata, spawn, lifecycle]
+
 package docker
 
 import (

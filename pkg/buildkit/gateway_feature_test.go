@@ -1,3 +1,6 @@
+// relationships:
+//   references: [gateway, metadata]
+
 package buildkit
 
 import (

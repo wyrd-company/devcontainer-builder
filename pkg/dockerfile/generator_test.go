@@ -1,3 +1,6 @@
+// relationships:
+//   references: [generator, metadata]
+
 package dockerfile
 
 import (

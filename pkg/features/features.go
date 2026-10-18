@@ -1,3 +1,6 @@
+// relationships:
+//   references: [spec, metadata]
+
 // Package features resolves and stages devcontainer features so they can be
 // copied into a build context and executed during image build.
 //

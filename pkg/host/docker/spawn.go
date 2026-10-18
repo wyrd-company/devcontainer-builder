@@ -1,3 +1,6 @@
+// relationships:
+//   references: [spec, metadata]
+
 package docker
 
 import (

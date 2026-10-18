@@ -1,3 +1,6 @@
+// relationships:
+//   references: [metadata]
+
 package spec
 
 import (

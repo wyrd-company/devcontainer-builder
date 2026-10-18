@@ -84,8 +84,10 @@ func TestMetadataPrebuiltIntegration(t *testing.T) {
 					t.Fatal(err)
 				}
 				resolved = result.Features
-				// Build the actual generated artifact, including its escaped metadata LABEL.
-				if _, err := buildkit.SolveDockerfile(ctx, buildkit.DockerfileBuild{ContextDir: result.ContextDir, DockerfileDir: filepath.Dir(result.FinalDockerfile), Filename: filepath.Base(result.FinalDockerfile)}, buildkit.SolveOptions{Docker: cli, Tags: []string{tag}, Load: true, Progress: "plain", Stderr: testLogWriter{t}}); err != nil {
+				// Build the unchanged generated artifact with the daemon's bundled
+				// Dockerfile frontend. cmdline prevents syntax-image forwarding, so
+				// this metadata test needs no external frontend image/cache.
+				if _, err := buildkit.SolveDockerfile(ctx, buildkit.DockerfileBuild{ContextDir: result.ContextDir, DockerfileDir: filepath.Dir(result.FinalDockerfile), Filename: filepath.Base(result.FinalDockerfile)}, buildkit.SolveOptions{Docker: cli, Tags: []string{tag}, Load: true, FrontendAttrs: map[string]string{"cmdline": ""}, Progress: "plain", Stderr: testLogWriter{t}}); err != nil {
 					t.Fatal(err)
 				}
 			} else {

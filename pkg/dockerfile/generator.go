@@ -1,3 +1,6 @@
+// relationships:
+//   references: [features, metadata, spec]
+
 // Package dockerfile generates a Dockerfile that wraps a devcontainer
 // base image (or upstream Dockerfile) with feature install scripts and a
 // pre-staged VS Code server.
