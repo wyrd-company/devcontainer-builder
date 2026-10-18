@@ -10,10 +10,11 @@ import (
 	"github.com/wyrd-company/devcontainer-builder/pkg/spec"
 )
 
-// runPhase executes one Phase, observing markers. The marker payload
-// is the createdAt timestamp for WhenOnce, the startedAt timestamp
-// for WhenStart, and unused for WhenAttach (no marker, always re-run).
-func runPhase(ctx context.Context, execer Execer, p lifecycle.Phase, rt Runtime, opts Options) (bool, error) {
+// shouldRunPhase checks and updates the phase's hook marker. The marker
+// payload is the createdAt timestamp for WhenOnce, the startedAt
+// timestamp for WhenStart, and unused for WhenAttach (no marker, always
+// re-run).
+func shouldRunPhase(ctx context.Context, execer Execer, p lifecycle.Phase, rt Runtime) (bool, error) {
 	expected := ""
 	switch p.When {
 	case lifecycle.WhenOnce:
@@ -21,11 +22,15 @@ func runPhase(ctx context.Context, execer Execer, p lifecycle.Phase, rt Runtime,
 	case lifecycle.WhenStart:
 		expected = rt.StartedAt
 	}
-	markerPath := p.MarkerPath(rt.UserDataFolder)
-	doRun, err := shouldRunMarker(ctx, execer, rt.User, markerPath, expected)
+	doRun, err := shouldRunMarker(ctx, execer, rt.User, p.MarkerPath(rt.UserDataFolder), expected)
 	if err != nil {
 		return false, fmt.Errorf("marker check (%s): %w", p.Hook, err)
 	}
+	return doRun, nil
+}
+
+// runPhase executes one Phase when its hook's marker check said to run.
+func runPhase(ctx context.Context, execer Execer, p lifecycle.Phase, rt Runtime, opts Options, doRun bool) (bool, error) {
 	if !doRun {
 		logf(opts, "skipping %s (marker up to date) [%s]", p.Hook, p.Origin.Source)
 		return false, nil

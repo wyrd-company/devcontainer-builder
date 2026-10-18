@@ -143,8 +143,20 @@ func RunWithResult(ctx context.Context, execer Execer, plan []lifecycle.Phase, r
 		return nil, fmt.Errorf("runner: Execer is required")
 	}
 	result := &RunResult{Phases: make([]PhaseResult, 0, len(plan))}
+	// Like upstream, a hook's marker is checked once; the decision covers
+	// every command of that hook.
+	decided := map[lifecycle.Hook]bool{}
 	for _, p := range plan {
-		ran, err := runPhase(ctx, execer, p, rt, opts)
+		doRun, ok := decided[p.Hook]
+		if !ok {
+			var err error
+			doRun, err = shouldRunPhase(ctx, execer, p, rt)
+			if err != nil {
+				return result, fmt.Errorf("%s [%s]: %w", p.Hook, p.Origin.Source, err)
+			}
+			decided[p.Hook] = doRun
+		}
+		ran, err := runPhase(ctx, execer, p, rt, opts, doRun)
 		if err != nil {
 			return result, fmt.Errorf("%s [%s]: %w", p.Hook, p.Origin.Source, err)
 		}

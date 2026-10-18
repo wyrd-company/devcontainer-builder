@@ -395,3 +395,60 @@ func TestDetectContainerEnv(t *testing.T) {
 		t.Errorf("env = %+v, want FOO=bar BAZ=qux", env)
 	}
 }
+
+// markerFileExecer emulates the marker script against an in-memory
+// marker store, so a marker written by one check is seen by the next.
+func markerFileExecer() *fakeExecer {
+	var mu sync.Mutex
+	written := map[string]bool{}
+	return &fakeExecer{handler: func(req ExecRequest) (*ExecResult, error) {
+		if len(req.Cmd) == 3 && strings.Contains(req.Cmd[2], "ENOENT") {
+			mu.Lock()
+			defer mu.Unlock()
+			if written[req.Cmd[2]] {
+				return &ExecResult{ExitCode: 1}, nil
+			}
+			written[req.Cmd[2]] = true
+		}
+		return &ExecResult{ExitCode: 0}, nil
+	}}
+}
+
+// Upstream checks a hook's marker once and then runs every command of
+// that hook (features in install order, then devcontainer.json).
+func TestRun_HookMarkerCoversAllCommandsOfTheHook(t *testing.T) {
+	plan := []lifecycle.Phase{
+		{Hook: lifecycle.HookPostCreate, When: lifecycle.WhenOnce, Origin: lifecycle.Origin{Source: "./feature"}, Command: spec.Command{Shell: "echo feature"}},
+		{Hook: lifecycle.HookPostCreate, When: lifecycle.WhenOnce, Origin: lifecycle.Origin{Source: "devcontainer.json"}, Command: spec.Command{Shell: "echo spec"}},
+		{Hook: lifecycle.HookPostStart, When: lifecycle.WhenStart, Origin: lifecycle.Origin{Source: "devcontainer.json"}, Command: spec.Command{Shell: "echo start"}},
+	}
+	rt := Runtime{UserDataFolder: "/home/user/.devcontainer", CreatedAt: "c1", StartedAt: "s1"}
+	f := markerFileExecer()
+	res, err := RunWithResult(context.Background(), f, plan, rt, Options{})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	markers, cmds := classifyCalls(f.callsCopy())
+	if len(markers) != 2 {
+		t.Errorf("marker checks = %d, want one per hook (2)", len(markers))
+	}
+	var shells []string
+	for _, c := range cmds {
+		shells = append(shells, c.Cmd[2])
+	}
+	if got := strings.Join(shells, ","); got != "echo feature,echo spec,echo start" {
+		t.Fatalf("ran %s, want every command of each hook", got)
+	}
+	if len(res.RanPhases()) != 3 {
+		t.Fatalf("ran phases = %d, want 3", len(res.RanPhases()))
+	}
+
+	// A second run in the same container lifetime skips the whole hook.
+	res, err = RunWithResult(context.Background(), f, plan, rt, Options{})
+	if err != nil {
+		t.Fatalf("second Run: %v", err)
+	}
+	if len(res.RanPhases()) != 0 {
+		t.Fatalf("second run ran %d phases, want 0", len(res.RanPhases()))
+	}
+}
