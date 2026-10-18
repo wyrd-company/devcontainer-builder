@@ -17,3 +17,4 @@ find "${generate_dir}" -maxdepth 5 -type f | sort > "${artifact_dir}/generated-c
 
 export DCB_ARTIFACT_DIR="${artifact_dir}"
 go test -v -tags docker_integration ./cmd/dcb ./pkg/builder ./pkg/buildkit -count=1
+go test -v -tags docker_integration ./cmd/devcontainer-docker -run TestFeatureInstallIntegration -count=1

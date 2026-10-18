@@ -1,0 +1,16 @@
+{
+  "id": "marker",
+  "version": "1.0.0",
+  "name": "Smoke marker",
+  "options": {
+    "greeting": {
+      "type": "string",
+      "default": "hi"
+    }
+  },
+  "installsAfter": [
+    "ghcr.io/devcontainers/features/common-utils"
+  ],
+  "entrypoint": "/usr/local/share/dcb-smoke-entrypoint.sh",
+  "postCreateCommand": "echo marker >> /tmp/dcb-smoke-hooks.log"
+}

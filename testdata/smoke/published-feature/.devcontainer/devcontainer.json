@@ -1,0 +1,19 @@
+{
+  "name": "smoke-published-feature",
+  "image": "debian:bookworm-slim",
+  "workspaceFolder": "/workspaces/smoke-published-feature",
+  "remoteUser": "devuser",
+  "updateRemoteUserUID": false,
+  "features": {
+    "./features/marker": {
+      "greeting": "hello world"
+    },
+    "ghcr.io/devcontainers/features/common-utils:2": {
+      "userUid": "1234",
+      "installZsh": false,
+      "installOhMyZsh": false,
+      "upgradePackages": false
+    }
+  },
+  "postCreateCommand": "echo devcontainer.json >> /tmp/dcb-smoke-hooks.log"
+}
