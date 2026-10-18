@@ -15,6 +15,7 @@ a working Docker daemon; Kubernetes validation uses kubeconform without a cluste
 Optional upstream fixture tests run when the reference submodules are initialized.
 `task parity` compares `dcb` with the upstream CLI; see the
 [parity harness](test/parity/README.md). Report a parity change in the pull request.
+`task docs:check` checks public Markdown and the documentation publishing manifest.
 Task lists the individual checks, tool installation, and reference setup verbs.
 
 Add a regression test for behavior changes. Keep reference submodules unchanged.
