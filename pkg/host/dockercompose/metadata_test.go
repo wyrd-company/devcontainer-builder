@@ -64,6 +64,9 @@ func TestComposeImageMetadataProvenance(t *testing.T) {
 			if !reflect.DeepEqual(commands, tc.want) {
 				t.Fatalf("hooks=%v", commands)
 			}
+			if got, _ := metadata.Encode(entries); tc.name == "derived" && got != complete {
+				t.Fatalf("derived container metadata=%s, want the image label %s", got, complete)
+			}
 		})
 	}
 }

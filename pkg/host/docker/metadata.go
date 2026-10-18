@@ -35,8 +35,10 @@ func featureContainerEnv(env map[string]any, resolved []features.Resolved, ctx s
 
 func imageMetadataEntries(req UpRequest, labels map[string]string, logf func(string, ...any)) []metadata.Entry {
 	entries := metadata.Read(labels, logf)
+	// A derived image already records the current config. Upstream labels the
+	// new container with that metadata unchanged.
 	if req.ImageBuilt && len(entries) > 0 {
-		return metadata.Update(entries, req.Spec)
+		return entries
 	}
 	return metadata.Collect(entries, req.Features, req.Spec)
 }

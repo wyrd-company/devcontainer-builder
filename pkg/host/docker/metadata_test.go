@@ -110,6 +110,9 @@ func TestImageMetadataEntriesAvoidDuplicateBuiltHooks(t *testing.T) {
 	if phases := metadata.Plan(entries); len(phases) != 2 || phases[0].Command.Shell != "echo feature" || phases[1].Command.Shell != "echo config" {
 		t.Fatalf("duplicated built-image hooks=%+v", phases)
 	}
+	if got, _ := metadata.Encode(entries); got != value {
+		t.Fatalf("derived container metadata=%s, want the image label %s", got, value)
+	}
 	req.ImageBuilt = false
 	if got := metadata.Plan(imageMetadataEntries(req, map[string]string{metadata.Label: value}, nil)); len(got) != 4 {
 		t.Fatalf("prebuilt contributions unexpectedly removed: %+v", got)
