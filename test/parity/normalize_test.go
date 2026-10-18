@@ -241,3 +241,25 @@ func TestPreparePreservesFixtureAndAddsOwnership(t *testing.T) {
 		t.Fatal("upstream fixture changed")
 	}
 }
+
+func TestPrerequisiteSkips(t *testing.T) {
+	for _, missing := range []string{"node", "npx", "docker", "submodule"} {
+		t.Run(missing, func(t *testing.T) {
+			bin := t.TempDir()
+			for _, name := range []string{"node", "npx", "docker"} {
+				if name != missing {
+					os.WriteFile(filepath.Join(bin, name), []byte("#!/bin/sh\nexit 0\n"), 0755)
+				}
+			}
+			t.Setenv("PATH", bin)
+			_, reason := prerequisites(t.TempDir())
+			expected := missing
+			if missing == "submodule" {
+				expected = "submodule update"
+			}
+			if !strings.Contains(reason, expected) {
+				t.Fatalf("skip reason %q lacks %q", reason, expected)
+			}
+		})
+	}
+}
