@@ -6,6 +6,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"io/fs"
@@ -41,6 +42,14 @@ type Runner struct {
 	root, temp, runID string
 	env               []string
 	log               *os.File
+	derived           map[string]bool // image names derived from this run's workspaces
+}
+
+// dcbImage is the image name dcb up gives a derived image without
+// --image-name (defaultImage in pkg/cli). The workspace path is unique to the run.
+func dcbImage(workspace string) string {
+	id := sha256.Sum256([]byte(workspace))
+	return fmt.Sprintf("dcb-%x:latest", id[:8])
 }
 
 func (r *Runner) label() string { return ownershipLabel + "=" + r.runID }
@@ -157,6 +166,10 @@ func (r *Runner) prepare(f Fixture, side string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	if r.derived == nil {
+		r.derived = map[string]bool{}
+	}
+	r.derived[dcbImage(workspace)] = true
 	return workspace, os.WriteFile(path, body, 0644)
 }
 
@@ -203,8 +216,7 @@ func (r *Runner) observe(ctx context.Context, a Adapter, f Fixture, side string)
 	if err != nil {
 		return failedObservations(err)
 	}
-	tag := "parity-" + r.runID + "-" + f.Name + "-" + side + ":latest"
-	body, upErr := a.Up(ctx, r, workspace, tag)
+	body, upErr := a.Up(ctx, r, workspace)
 	out := failedObservations(fmt.Errorf("container observation unavailable"))
 	v, jsonErr := resultJSON(body)
 	if upErr != nil {
@@ -249,7 +261,7 @@ func (r *Runner) observe(ctx context.Context, a Adapter, f Fixture, side string)
 	if c.ID != id || c.Config.Labels[ownershipLabel] != r.runID || c.Config.Labels[discoveryLabel] != fixtureSide(f, side) {
 		return out
 	}
-	n := Normalizer{map[string]string{workspace: "<workspace>", filepath.Base(workspace): "<workspace-name>", r.temp: "<temp>", id: "<container>", id[:12]: "<container>", c.Image: "<image>", c.Config.Hostname: "<hostname>", tag: "<image-tag>"}}
+	n := Normalizer{map[string]string{workspace: "<workspace>", filepath.Base(workspace): "<workspace-name>", r.temp: "<temp>", id: "<container>", id[:12]: "<container>", c.Image: "<image>", c.Config.Hostname: "<hostname>"}}
 	if out["result"].Error == "" {
 		out["result"] = Observation{Value: n.Result(out["result"].Value)}
 	}
@@ -397,7 +409,7 @@ func (r *Runner) cleanupNamed(ctx context.Context) []string {
 		errors = append(errors, err.Error())
 	}
 	for _, ref := range strings.Fields(string(body)) {
-		if r.ownsName(ref) {
+		if r.ownsName(ref) || r.derived[ref] {
 			if _, err := r.command(ctx, "docker", "image", "rm", ref); err != nil {
 				errors = append(errors, err.Error())
 			}

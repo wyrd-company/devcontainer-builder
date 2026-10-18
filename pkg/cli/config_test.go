@@ -122,3 +122,10 @@ func TestRemoteWorkspaceFolder(t *testing.T) {
 		})
 	}
 }
+
+// The parity harness removes derived images by this name (test/parity dcbImage).
+func TestDefaultImageName(t *testing.T) {
+	if got := defaultImage("/workspace"); got != "dcb-c52ddf65534b7b46:latest" {
+		t.Fatalf("default image name changed: %s; update test/parity dcbImage", got)
+	}
+}

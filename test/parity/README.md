@@ -35,9 +35,8 @@ labels and exactly one full container ID, then verifies that ID and both labels
 in inspection. It does not filter on compared labels such as
 `devcontainer.local_folder`; missing or different values remain observable.
 Both harness labels are excluded from scoring. Upstream Dockerfile build
-options carry the run ownership label; the Go adapter labels its output image
-through the build command, without adding Docker CLI options to its
-configuration.
+options carry the run ownership label. The Go side gets no Docker CLI build
+options; its derived images are owned by name (see teardown).
 The fixture bodies and feature scripts otherwise stay intact. No credentials or
 host Docker configuration are copied. Every subprocess receives a private
 `DOCKER_CONFIG` containing only `{}` and no inherited `DOCKER_AUTH_CONFIG`.
@@ -60,18 +59,20 @@ stdout lines, invalid JSON, and error outcomes. It does not manufacture a result
 from inspection.
 
 `Adapter` in `adapter.go` owns CLI arguments. `DCBAdapter` builds only `./cmd/dcb`
-and runs `dcb up --workspace-folder ... --image-name ... --label ...`.
-The image name and label keep the derived image owned by the run. VS Code server
-injection remains omitted. BuildKit uses the Docker daemon unless
-`BUILDKIT_HOST` selects a separate existing daemon. Fixture preparation,
-observation, normalization, and scoring are shared with the upstream adapter.
+and runs `dcb up --workspace-folder ...`. It passes no option that upstream
+`up` lacks: `--image-name` or `--label` would make dcb build a derived image
+for an image-only configuration. VS Code server injection remains omitted.
+BuildKit uses the Docker daemon unless `BUILDKIT_HOST` selects a separate
+existing daemon. Fixture preparation, observation, normalization, and scoring
+are shared with the upstream adapter.
 
 Teardown selects only this run's labels, rechecks full Docker IDs and ownership,
 then removes containers and labelled images, including after normal errors or
 interrupts. Each workspace folder is named `<run>-<fixture>-<side>`, so Compose
 project names and upstream derived image names are unique to the run and side.
 Cleanup also removes image tags, Compose networks and Compose volumes whose
-name or project contains that run prefix; image tags are removed without force.
+name or project contains that run prefix, and the `dcb-<hash>:latest` tag dcb
+derives from each workspace path; image tags are removed without force.
 Pulled base images and BuildKit cache remain available. Hard kills cannot run
 cleanup; use the unique label recorded in `run.log` to identify
 residue. Discovery regressions create stopped `alpine:3.20` containers through

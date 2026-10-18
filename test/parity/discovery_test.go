@@ -25,7 +25,7 @@ type discoveryAdapter struct {
 }
 
 func (*discoveryAdapter) Name() string { return "discovery regression" }
-func (a *discoveryAdapter) Up(ctx context.Context, r *Runner, workspace, _ string) ([]byte, error) {
+func (a *discoveryAdapter) Up(ctx context.Context, r *Runner, workspace string) ([]byte, error) {
 	if a.id == "" {
 		body, err := os.ReadFile(filepath.Join(workspace, ".devcontainer.json"))
 		if err != nil {
@@ -312,6 +312,22 @@ func TestCleanupRemovesOnlyRunNamedResources(t *testing.T) {
 			r.command(context.Background(), "docker", args...)
 		}
 	})
+	// dcb names a derived image from the workspace path, not the folder name.
+	r2, f := discoveryRunner(t)
+	workspace, err := r.prepare(f, "go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	foreignWorkspace, err := r2.prepare(f, "go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{dcbImage(workspace), dcbImage(foreignWorkspace)} {
+		if _, err := r.command(ctx, "docker", "image", "tag", "alpine:3.20", name); err != nil {
+			t.Fatal(err)
+		}
+		created = append(created, resource{"image", name})
+	}
 	kinds := []string{"image", "network", "volume"}
 	for _, kind := range kinds {
 		create(kind, owned)
@@ -324,7 +340,7 @@ func TestCleanupRemovesOnlyRunNamedResources(t *testing.T) {
 	}
 	for _, c := range created {
 		_, err := r.command(ctx, "docker", c.kind, "inspect", c.name)
-		if strings.Contains(c.name, owned) && !strings.Contains(c.name, "x"+owned) {
+		if strings.Contains(c.name, owned) && !strings.Contains(c.name, "x"+owned) || c.name == dcbImage(workspace) {
 			if err == nil {
 				t.Errorf("owned %s not removed: %s", c.kind, c.name)
 			}

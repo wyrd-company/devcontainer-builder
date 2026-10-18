@@ -162,7 +162,7 @@ func TestUpstreamInvocationBindsVersion(t *testing.T) {
 	}
 	defer log.Close()
 	r := &Runner{root: t.TempDir(), runID: "sample", env: os.Environ(), log: log}
-	body, err := (UpstreamAdapter{Version: "0.87.0"}).Up(context.Background(), r, "/workspace", "tag")
+	body, err := (UpstreamAdapter{Version: "0.87.0"}).Up(context.Background(), r, "/workspace")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -324,6 +324,14 @@ func TestPrepareWorkspaceNamesAreRunUnique(t *testing.T) {
 	}
 }
 
+// Pinned with TestDefaultImageName in pkg/cli, so that a renamed dcb default
+// image fails a test instead of leaking from parity runs.
+func TestDCBImageMatchesDefaultImage(t *testing.T) {
+	if got := dcbImage("/workspace"); got != "dcb-c52ddf65534b7b46:latest" {
+		t.Fatal(got)
+	}
+}
+
 func TestPrerequisiteSkips(t *testing.T) {
 	for _, missing := range []string{"node", "npx", "docker", "submodule"} {
 		t.Run(missing, func(t *testing.T) {
@@ -412,7 +420,7 @@ func TestDCBAdapterNativeInvocation(t *testing.T) {
 	}
 	defer log.Close()
 	r := &Runner{root: t.TempDir(), runID: "sample", env: append(os.Environ(), "PARITY_ADAPTER_CALLS="+calls), log: log}
-	if _, err := (DCBAdapter{Binary: script}).Up(context.Background(), r, "/workspace", "sample:latest"); err != nil {
+	if _, err := (DCBAdapter{Binary: script}).Up(context.Background(), r, "/workspace"); err != nil {
 		t.Fatal(err)
 	}
 	body, err := os.ReadFile(calls)
@@ -423,11 +431,10 @@ func TestDCBAdapterNativeInvocation(t *testing.T) {
 	if strings.Contains(args, "--engine\n") || strings.Contains(args, "--skip-vscode-server\n") || strings.Contains(args, "--vscode-server\n") {
 		t.Fatal("obsolete flag or opt-in server flag sent to native CLI")
 	}
-	if !strings.Contains(args, "--label\n"+r.label()+"\n") {
-		t.Fatal("native output image ownership label omitted")
-	}
-	if !strings.Contains(args, "up\n--workspace-folder\n/workspace\n--image-name\nsample:latest\n") {
-		t.Fatalf("dcb did not request the labelled native image: %s", args)
+	// Upstream up has no --image-name or --label; either makes dcb build a
+	// derived image that an image-only configuration does not need.
+	if args != "up\n--workspace-folder\n/workspace\n" {
+		t.Fatalf("dcb up received options upstream up does not: %q", args)
 	}
 }
 
@@ -456,7 +463,7 @@ func TestDCBAdapterResultBoundary(t *testing.T) {
 			}
 			defer log.Close()
 			r := &Runner{root: dir, runID: "sample", env: append(os.Environ(), "PARITY_RESULT="+tc.body, "PARITY_EXIT="+tc.exit), log: log}
-			body, err := (DCBAdapter{Binary: script}).Up(context.Background(), r, "/workspace", "sample:latest")
+			body, err := (DCBAdapter{Binary: script}).Up(context.Background(), r, "/workspace")
 			if (err != nil) != tc.fail {
 				t.Fatalf("adapter error=%v, want failure=%v", err, tc.fail)
 			}

@@ -15,14 +15,17 @@ import (
 // scoring, fixture preparation and teardown are shared.
 type Adapter interface {
 	Name() string
-	Up(context.Context, *Runner, string, string) ([]byte, error)
+	Up(context.Context, *Runner, string) ([]byte, error)
 }
 
 type DCBAdapter struct{ Binary string }
 
 func (DCBAdapter) Name() string { return "dcb (native BuildKit, JSON result)" }
-func (a DCBAdapter) Up(ctx context.Context, r *Runner, workspace, tag string) ([]byte, error) {
-	body, err := r.command(ctx, a.Binary, "up", "--workspace-folder", workspace, "--image-name", tag, "--label", r.label())
+
+// Up passes only the options upstream up receives. dcb up builds a derived
+// image for --image-name or --label even when the configuration needs none.
+func (a DCBAdapter) Up(ctx context.Context, r *Runner, workspace string) ([]byte, error) {
+	body, err := r.command(ctx, a.Binary, "up", "--workspace-folder", workspace)
 	if err != nil {
 		return body, err
 	}
@@ -42,7 +45,7 @@ func (a DCBAdapter) Up(ctx context.Context, r *Runner, workspace, tag string) ([
 type UpstreamAdapter struct{ Version string }
 
 func (a UpstreamAdapter) Name() string { return "@devcontainers/cli@" + a.Version }
-func (a UpstreamAdapter) Up(ctx context.Context, r *Runner, workspace, tag string) ([]byte, error) {
+func (a UpstreamAdapter) Up(ctx context.Context, r *Runner, workspace string) ([]byte, error) {
 	return r.command(ctx, "npx", "--yes", "@devcontainers/cli@"+a.Version, "up", "--workspace-folder", workspace, "--mount-workspace-git-root", "false")
 }
 
