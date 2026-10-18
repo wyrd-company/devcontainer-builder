@@ -25,16 +25,60 @@ func (b *Builder) BaseMetadata(ctx context.Context, dc *spec.DevContainer, opts 
 	if dc == nil {
 		return nil, fmt.Errorf("base metadata: config is required")
 	}
+	imageConfig, closeEngine, err := b.imageConfigResolver(ctx, opts)
+	if err != nil {
+		return nil, fmt.Errorf("base metadata %w", err)
+	}
+	defer closeEngine()
+	p := primaryPlatform(opts.Platforms)
+	var cfg *oci.ImageConfig
+	if df := dc.DockerfilePath(); df != "" {
+		contextDir, contextErr := dc.BuildContextDir()
+		if contextErr != nil {
+			return nil, contextErr
+		}
+		if !filepath.IsAbs(df) {
+			df = filepath.Join(contextDir, df)
+		}
+		target := ""
+		if dc.Build != nil {
+			target = dc.Build.Target
+		}
+		st, stateErr := dockerfileState(df, target, mergeArgs(buildArgsFromSpec(dc), opts.BuildArgs), p, imageConfig)
+		if stateErr != nil {
+			return nil, stateErr
+		}
+		cfg, err = st.root.config()
+	} else if dc.Image != "" {
+		cfg, err = imageConfig(dc.Image)
+	} else {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("base metadata: %w", err)
+	}
+	return metadata.Read(cfg.Config.Labels, opts.Logger), nil
+}
+
+// imageConfigResolver returns the lookup of base image configs for the
+// build's primary platform. An image present in the Docker daemon for that
+// platform is read through the Engine API (opts.Docker, or a default
+// client), so that locally built images resolve. Any other image is read
+// from its registry by the resolver's OCI client, with the Docker client
+// configuration's credentials, unless SkipImageMetaResolve is set. The
+// returned close releases a default Engine client.
+func (b *Builder) imageConfigResolver(ctx context.Context, opts Options) (func(string) (*oci.ImageConfig, error), func(), error) {
+	closeEngine := func() {}
 	if opts.Docker == nil && !opts.SkipImageMetaResolve {
 		cli, err := dockerclient.NewClientWithOpts(dockerclient.FromEnv, dockerclient.WithAPIVersionNegotiation())
 		if err != nil {
-			return nil, fmt.Errorf("base metadata docker client: %w", err)
+			return nil, nil, fmt.Errorf("docker client: %w", err)
 		}
-		defer cli.Close()
+		closeEngine = func() { _ = cli.Close() }
 		opts.Docker = cli
 	}
 	p := primaryPlatform(opts.Platforms)
-	imageConfig := func(ref string) (*oci.ImageConfig, error) {
+	resolve := func(ref string) (*oci.ImageConfig, error) {
 		if ref == "scratch" {
 			return &oci.ImageConfig{}, nil
 		}
@@ -63,32 +107,5 @@ func (b *Builder) BaseMetadata(ctx context.Context, dc *spec.DevContainer, opts 
 		}
 		return b.Resolver.OCI.FetchImageConfig(parsed, oci.Platform{OS: p.OS, Architecture: p.Arch, Variant: p.Variant})
 	}
-	var cfg *oci.ImageConfig
-	var err error
-	if df := dc.DockerfilePath(); df != "" {
-		contextDir, contextErr := dc.BuildContextDir()
-		if contextErr != nil {
-			return nil, contextErr
-		}
-		if !filepath.IsAbs(df) {
-			df = filepath.Join(contextDir, df)
-		}
-		target := ""
-		if dc.Build != nil {
-			target = dc.Build.Target
-		}
-		st, stateErr := dockerfileState(df, target, mergeArgs(buildArgsFromSpec(dc), opts.BuildArgs), p, imageConfig)
-		if stateErr != nil {
-			return nil, stateErr
-		}
-		cfg, err = st.root.config()
-	} else if dc.Image != "" {
-		cfg, err = imageConfig(dc.Image)
-	} else {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, fmt.Errorf("base metadata: %w", err)
-	}
-	return metadata.Read(cfg.Config.Labels, opts.Logger), nil
+	return resolve, closeEngine, nil
 }

@@ -1,6 +1,7 @@
 package builder
 
 import (
+	"context"
 	"fmt"
 	"path/filepath"
 
@@ -11,13 +12,13 @@ import (
 // baseImageUser returns the base image's user for the generated
 // Dockerfile's final USER and feature builtins, or "" (root) when
 // the lookup is skipped (SkipImageMetaResolve). When the lookup fails
-// (for example, a registry that needs credentials) it logs a warning and
-// features see root, so the build still runs.
-func (b *Builder) baseImageUser(dc *spec.DevContainer, opts Options, logf func(string, ...any)) string {
+// (for example, a registry whose credentials are missing) it logs a
+// warning and features see root, so the build still runs.
+func (b *Builder) baseImageUser(ctx context.Context, dc *spec.DevContainer, opts Options, logf func(string, ...any)) string {
 	if opts.SkipImageMetaResolve {
 		return ""
 	}
-	user, err := b.imageUser(dc, opts)
+	user, err := b.imageUser(ctx, dc, opts)
 	if err != nil {
 		logf("warning: base image user unknown, features see root: %v", err)
 		return ""
@@ -30,16 +31,17 @@ func (b *Builder) baseImageUser(dc *spec.DevContainer, opts Options, logf func(s
 // containerUser. An image-based spec uses that image's user. Like
 // upstream (findUserStatement with the base image's env), a
 // Dockerfile-based spec evaluates the target stage: see dockerfileUser.
-// Image configs are read from their registry for the build's primary
-// platform.
-func (b *Builder) imageUser(dc *spec.DevContainer, opts Options) (string, error) {
+// Image configs for the build's primary platform come from the Docker
+// daemon or the registry, as for BaseMetadata.
+func (b *Builder) imageUser(ctx context.Context, dc *spec.DevContainer, opts Options) (string, error) {
 	p := primaryPlatform(opts.Platforms)
+	resolve, closeEngine, err := b.imageConfigResolver(ctx, opts)
+	if err != nil {
+		return "", err
+	}
+	defer closeEngine()
 	imageConfig := func(image string) (*oci.ImageConfig, error) {
-		ref, err := oci.ParseReference(image)
-		if err != nil {
-			return nil, fmt.Errorf("base image %s: %w", image, err)
-		}
-		cfg, err := b.Resolver.OCI.FetchImageConfig(ref, oci.Platform{OS: p.OS, Architecture: p.Arch, Variant: p.Variant})
+		cfg, err := resolve(image)
 		if err != nil {
 			return nil, fmt.Errorf("base image %s config: %w", image, err)
 		}

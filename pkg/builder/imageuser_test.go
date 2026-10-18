@@ -6,7 +6,9 @@ package builder
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -15,6 +17,8 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
+	dockerclient "github.com/docker/docker/client"
 
 	"github.com/wyrd-company/devcontainer-builder/pkg/features"
 	"github.com/wyrd-company/devcontainer-builder/pkg/oci"
@@ -36,6 +40,9 @@ type imageRegistry struct {
 	srv      *httptest.Server
 	mu       sync.Mutex
 	requests int
+	// basic, when set, is the Authorization header every request must
+	// carry; other requests get a Basic challenge.
+	basic string
 }
 
 func sha(b []byte) string {
@@ -72,7 +79,13 @@ func newImageRegistry(t *testing.T, repo, tag string, users ...string) *imageReg
 	r.srv = httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		r.mu.Lock()
 		r.requests++
+		basic := r.basic
 		r.mu.Unlock()
+		if basic != "" && req.Header.Get("Authorization") != basic {
+			w.Header().Set("WWW-Authenticate", `Basic realm="test"`)
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
 		body, ok := paths[req.URL.Path]
 		if !ok {
 			http.NotFound(w, req)
@@ -175,10 +188,73 @@ func TestGenerate_FeaturesSeeDockerfileUser(t *testing.T) {
 	}
 }
 
+// userEngine serves Engine API image inspects. The first inspects
+// report an image whose config sets user; the ones after the first ok
+// fail with a daemon error. ok < 0 serves every inspect; user "" answers
+// not found.
+func userEngine(t *testing.T, user string, ok int) *dockerclient.Client {
+	t.Helper()
+	var mu sync.Mutex
+	served := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.Contains(r.URL.Path, "/images/") || !strings.HasSuffix(r.URL.Path, "/json") {
+			t.Errorf("unexpected engine request %s", r.URL.Path)
+			http.Error(w, "unexpected", http.StatusInternalServerError)
+			return
+		}
+		mu.Lock()
+		served++
+		n := served
+		mu.Unlock()
+		switch {
+		case ok >= 0 && n > ok:
+			http.Error(w, `{"message":"daemon error"}`, http.StatusInternalServerError)
+		case user == "":
+			http.Error(w, `{"message":"no such image"}`, http.StatusNotFound)
+		default:
+			_ = json.NewEncoder(w).Encode(map[string]any{"Id": "sha256:sample", "Config": map[string]any{"User": user}})
+		}
+	}))
+	t.Cleanup(srv.Close)
+	cli, err := dockerclient.NewClientWithOpts(dockerclient.WithHost("tcp://"+strings.TrimPrefix(srv.URL, "http://")), dockerclient.WithVersion("1.47"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = cli.Close() })
+	return cli
+}
+
+func TestGenerate_FeaturesSeeLocalImageUser(t *testing.T) {
+	reg := newImageRegistry(t, "library/base", "1", "registry-user")
+	ws := writeWorkspace(t, `"image":"`+reg.host()+`/library/base:1"`, nil)
+	df, _ := generate(t, reg.builder(), ws, func(o *Options) { o.Docker = userEngine(t, "local-user", -1) })
+	wantBuiltinUser(t, df, "local-user")
+	if n := reg.count(); n != 0 {
+		t.Fatalf("registry requests = %d, want none for a local image", n)
+	}
+}
+
+func TestGenerate_FeaturesSeePrivateRegistryImageUser(t *testing.T) {
+	reg := newImageRegistry(t, "library/base", "1", "image-user")
+	reg.basic = "Basic " + base64.StdEncoding.EncodeToString([]byte("testuser:testpassword"))
+	config := t.TempDir()
+	writeFile(t, filepath.Join(config, "config.json"), `{"auths":{"`+reg.host()+`":{"auth":"`+
+		base64.StdEncoding.EncodeToString([]byte("testuser:testpassword"))+`"}}}`)
+	t.Setenv("DOCKER_CONFIG", config)
+	t.Setenv("DOCKER_AUTH_CONFIG", "")
+	ws := writeWorkspace(t, `"image":"`+reg.host()+`/library/base:1"`, nil)
+	df, logs := generate(t, reg.builder(), ws, func(o *Options) { o.Docker = userEngine(t, "", -1) })
+	wantBuiltinUser(t, df, "image-user")
+	if strings.Contains(strings.Join(logs, "\n"), "base image user unknown") {
+		t.Fatalf("base image user lookup failed: %v", logs)
+	}
+}
+
 func TestGenerate_BaseUserLookupFailureFallsBackToRoot(t *testing.T) {
 	reg := newImageRegistry(t, "library/base", "1", "image-user")
-	ws := writeWorkspace(t, `"image":"`+reg.host()+`/library/missing:1"`, nil)
-	df, logs := generate(t, reg.builder(), ws, func(o *Options) { o.Docker = metadataEngine(t, nil) })
+	ws := writeWorkspace(t, `"image":"`+reg.host()+`/library/base:1"`, nil)
+	// The metadata read succeeds; the user lookup after it fails.
+	df, logs := generate(t, reg.builder(), ws, func(o *Options) { o.Docker = userEngine(t, "local-user", 1) })
 	wantBuiltinUser(t, df, "root")
 	if !strings.Contains(strings.Join(logs, "\n"), "base image user unknown") {
 		t.Fatalf("missing warning in logs: %v", logs)
