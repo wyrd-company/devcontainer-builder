@@ -31,7 +31,7 @@ func TestProjectName(t *testing.T) {
 }
 
 func TestToProjectName(t *testing.T) {
-	if got := toProjectName("_123-My.Project! "); got != "_123-myproject" {
+	if got := toProjectName("_01239-My.Project! "); got != "_01239-myproject" {
 		t.Fatalf("toProjectName = %q", got)
 	}
 }

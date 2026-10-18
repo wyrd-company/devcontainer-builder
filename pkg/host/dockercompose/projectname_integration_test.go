@@ -27,6 +27,7 @@ import (
 // The literal devcontainer is covered by unit tests; live names are run-unique
 // so this suite cannot join an operator's Compose project.
 func TestComposeProjectIdentityIntegration(t *testing.T) {
+	t.Setenv("COMPOSE_PROJECT_NAME", "")
 	ctx := context.Background()
 	cli := requireComposeDocker(t, ctx)
 	t.Cleanup(func() { _ = cli.Close() })
