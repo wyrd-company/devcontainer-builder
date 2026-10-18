@@ -1,6 +1,9 @@
 package dockerfile
 
 import (
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -89,38 +92,126 @@ func TestGenerate_VSCodeServer_AsUser_ChownsHome(t *testing.T) {
 	}
 }
 
-func TestGenerate_FeatureInstallScript(t *testing.T) {
+// runFeatureSteps executes the feature-install steps of a generated
+// Dockerfile on the host: ENV, COPY from the build context, COPY heredocs
+// and RUN. Paths under features.InstallDir are redirected into root.
+func runFeatureSteps(t *testing.T, dockerfile, contextDir, root string) {
+	t.Helper()
+	redirect := func(s string) string { return strings.ReplaceAll(s, features.InstallDir, root+features.InstallDir) }
+	var exports []string
+	lines := strings.Split(dockerfile, "\n")
+	for i := 0; i < len(lines); i++ {
+		line := lines[i]
+		switch {
+		case strings.HasPrefix(line, "ENV "):
+			exports = append(exports, "export "+strings.TrimPrefix(line, "ENV "))
+		case strings.HasPrefix(line, "COPY ") && strings.Contains(line, "<<"):
+			fields := strings.Fields(line)
+			delim := strings.Trim(strings.TrimPrefix(fields[len(fields)-2], "<<"), `"`)
+			dest := redirect(fields[len(fields)-1])
+			var body []string
+			for i++; lines[i] != delim; i++ {
+				body = append(body, lines[i])
+			}
+			mode := os.FileMode(0o644)
+			if strings.Contains(line, "--chmod=755") {
+				mode = 0o755
+			}
+			if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(dest, []byte(strings.Join(body, "\n")+"\n"), mode); err != nil {
+				t.Fatal(err)
+			}
+		case strings.HasPrefix(line, "COPY "):
+			fields := strings.Fields(line)
+			src, dest := filepath.Join(contextDir, fields[len(fields)-2]), redirect(fields[len(fields)-1])
+			if out, err := exec.Command("cp", "-r", src, dest).CombinedOutput(); err != nil {
+				t.Fatalf("cp %s %s: %v\n%s", src, dest, err, out)
+			}
+		case strings.HasPrefix(line, "RUN "):
+			script := strings.Join(append(exports, redirect(strings.TrimPrefix(line, "RUN "))), "\n")
+			cmd := exec.Command("/bin/sh", "-c", script)
+			cmd.Env = []string{"PATH=" + os.Getenv("PATH")}
+			if out, err := cmd.CombinedOutput(); err != nil {
+				t.Fatalf("RUN %s: %v\n%s", line, err, out)
+			}
+		}
+	}
+}
+
+func TestGenerate_FeatureInstallSeesOptionsAndBuiltins(t *testing.T) {
+	contextDir, root := t.TempDir(), t.TempDir()
+	envOut := filepath.Join(root, "install-env.txt")
+	featDir := filepath.Join(contextDir, "_features", "abc-alpha")
+	if err := os.MkdirAll(featDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for name, content := range map[string]string{
+		"install.sh":    "#!/bin/sh\nenv > '" + envOut + "'\n",
+		"entrypoint.sh": "#!/bin/sh\ntouch '" + filepath.Join(root, "entrypoint-ran") + "'\n",
+	} {
+		if err := os.WriteFile(filepath.Join(featDir, name), []byte(content), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
 	feat := features.Resolved{
-		Source: "ghcr.io/devcontainers/features/node:1",
-		SafeID: "abc-node",
-		Options: map[string]any{
-			"version": "20",
-		},
+		Source:  "registry.example.test/collection/alpha:1",
+		SafeID:  "abc-alpha",
+		Options: map[string]any{"my-option.1": "two words"},
 		Metadata: features.Metadata{
-			ID:      "node",
-			Version: "1.0.0",
+			ID:           "alpha",
+			Entrypoint:   "./entrypoint.sh",
+			ContainerEnv: map[string]string{"ALPHA_HOME": "/opt/alpha"},
 			Options: map[string]features.Option{
-				"version": {Type: "string", Default: "lts"},
+				"my-option.1": {Type: "string", Default: "one"},
+				"level":       {Type: "string", Default: "high"},
 			},
 		},
 	}
 	out, err := Generate(Inputs{
-		Spec:               &spec.DevContainer{Image: "alpine"},
+		Spec:               &spec.DevContainer{Image: "alpine", RemoteUser: "nobody-such-user", ContainerEnv: map[string]any{"SPEC_ONLY": "late"}},
 		BaseImage:          "alpine",
+		ImageUser:          "root",
 		Features:           []features.Resolved{feat},
 		FeaturesContextDir: "_features",
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	got := string(out)
+	runFeatureSteps(t, string(out), contextDir, root)
+
+	data, err := os.ReadFile(envOut)
+	if err != nil {
+		t.Fatalf("install.sh did not run: %v\n%s", err, out)
+	}
+	env := string(data)
 	for _, want := range []string{
-		"COPY _features/abc-node /tmp/build-features/abc-node",
-		"VERSION=20",
-		"./install.sh",
+		"MY_OPTION_1=two words\n",
+		"LEVEL=high\n",
+		"ALPHA_HOME=/opt/alpha\n",
+		"_CONTAINER_USER=root\n",
+		"_REMOTE_USER=nobody-such-user\n",
+		"_CONTAINER_USER_HOME=/root\n",
+		"_REMOTE_USER_HOME=\n",
 	} {
-		if !strings.Contains(got, want) {
-			t.Errorf("missing %q in:\n%s", want, got)
+		if !strings.Contains(env, want) {
+			t.Errorf("install.sh env missing %q:\n%s", want, env)
 		}
+	}
+	if strings.Contains(env, "SPEC_ONLY") {
+		t.Errorf("spec containerEnv must follow feature installs:\n%s", out)
+	}
+	if _, err := os.Stat(filepath.Join(root, "entrypoint-ran")); err == nil {
+		t.Errorf("feature entrypoint ran at install time:\n%s", out)
+	}
+}
+
+func TestGenerate_HeredocDelimiterAvoidsContent(t *testing.T) {
+	var b strings.Builder
+	emitHeredocCopy(&b, "", "/dest", "DEVCONTAINER_EOF\nDEVCONTAINER_EOF_1\n")
+	got := b.String()
+	if !strings.HasPrefix(got, `COPY <<"DEVCONTAINER_EOF_2" /dest`) || !strings.HasSuffix(got, "\nDEVCONTAINER_EOF_2\n") {
+		t.Fatalf("heredoc = %q", got)
 	}
 }

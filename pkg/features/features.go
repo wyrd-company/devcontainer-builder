@@ -162,13 +162,18 @@ func (r *Resolver) Resolve(specFeatures spec.OrderedMap, override []string, stag
 			link(item.parent, existing)
 			continue
 		}
-		opts, err := parseOptions(item.raw)
+		opts, scalar, err := parseOptions(item.raw)
 		if err != nil {
 			return nil, fmt.Errorf("feature %s: %w", item.source, err)
 		}
 		resolved, err := r.resolveOne(item.source, opts, options, stagingDir, localBaseDir)
 		if err != nil {
 			return nil, fmt.Errorf("feature %s: %w", item.source, err)
+		}
+		if _, ok := resolved.Metadata.Options["version"]; scalar && !ok {
+			// Like upstream, a scalar sets "version" only when the
+			// feature declares that option.
+			resolved.Options = nil
 		}
 		n := &node{res: *resolved, options: options, optionsValue: optionsValue}
 		if existing := findNode(nodes, n.equals); existing != nil {
@@ -200,20 +205,19 @@ func findNode(nodes []*node, match func(*node) bool) *node {
 }
 
 // parseOptions decodes a feature's options value. A scalar is shorthand
-// for the "version" option.
-func parseOptions(raw json.RawMessage) (map[string]any, error) {
+// for the "version" option; scalar reports that form.
+func parseOptions(raw json.RawMessage) (opts map[string]any, scalar bool, err error) {
 	if len(raw) == 0 || string(raw) == "null" {
-		return nil, nil
+		return nil, false, nil
 	}
-	var opts map[string]any
 	if err := json.Unmarshal(raw, &opts); err != nil {
-		var scalar any
-		if err2 := json.Unmarshal(raw, &scalar); err2 != nil {
-			return nil, fmt.Errorf("parse options: %w", err)
+		var v any
+		if err2 := json.Unmarshal(raw, &v); err2 != nil {
+			return nil, false, fmt.Errorf("parse options: %w", err)
 		}
-		opts = map[string]any{"version": scalar}
+		return map[string]any{"version": v}, true, nil
 	}
-	return opts, nil
+	return opts, false, nil
 }
 
 func (r *Resolver) resolveOne(source string, opts map[string]any, options, stagingDir, localBaseDir string) (*Resolved, error) {

@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	"github.com/moby/buildkit/client/llb"
+	"github.com/moby/buildkit/solver/pb"
+	"github.com/opencontainers/go-digest"
 
 	"github.com/wyrd-company/devcontainer-builder/pkg/features"
 	"github.com/wyrd-company/devcontainer-builder/pkg/platform"
@@ -56,29 +58,174 @@ func TestNormalizeImageRef(t *testing.T) {
 	}
 }
 
-func TestBuild_FeatureRunsAsRoot(t *testing.T) {
-	got := marshalGraph(t, GraphInputs{
-		Spec:                  &spec.DevContainer{Image: "alpine"},
+// graphOps decodes a marshaled LLB definition into its ops, keyed by
+// digest.
+type graphOps map[digest.Digest]*pb.Op
+
+func decodeGraph(t *testing.T, in GraphInputs) graphOps {
+	t.Helper()
+	state, err := Build(in)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	def, err := state.Marshal(context.Background())
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	ops := graphOps{}
+	for _, dt := range def.Def {
+		var op pb.Op
+		if err := op.UnmarshalVT(dt); err != nil {
+			t.Fatalf("decode op: %v", err)
+		}
+		ops[digest.FromBytes(dt)] = &op
+	}
+	return ops
+}
+
+// execWithArg returns the exec op whose shell script equals script.
+func (g graphOps) execWithArg(t *testing.T, script string) *pb.Op {
+	t.Helper()
+	for _, op := range g {
+		if e := op.GetExec(); e != nil && len(e.Meta.Args) == 3 && e.Meta.Args[2] == script {
+			return op
+		}
+	}
+	t.Fatalf("no exec runs %q", script)
+	return nil
+}
+
+// mkfiles returns the Mkfile actions (path -> data) of the op feeding
+// the exec mount at dest.
+func (g graphOps) mkfiles(t *testing.T, exec *pb.Op, dest string) map[string]string {
+	t.Helper()
+	for _, m := range exec.GetExec().Mounts {
+		if m.Dest != dest {
+			continue
+		}
+		src := g[digest.Digest(exec.Inputs[m.Input].Digest)]
+		out := map[string]string{}
+		for _, a := range src.GetFile().GetActions() {
+			if mk := a.GetMkfile(); mk != nil {
+				out[mk.Path] = string(mk.Data)
+			}
+		}
+		return out
+	}
+	t.Fatalf("exec has no mount at %s", dest)
+	return nil
+}
+
+func (g graphOps) allMkfiles() map[string]string {
+	out := map[string]string{}
+	for _, op := range g {
+		for _, a := range op.GetFile().GetActions() {
+			if mk := a.GetMkfile(); mk != nil {
+				out[mk.Path] = string(mk.Data)
+			}
+		}
+	}
+	return out
+}
+
+func featureGraphInputs(f features.Resolved) GraphInputs {
+	return GraphInputs{
+		Spec: &spec.DevContainer{
+			Image:        "alpine",
+			RemoteUser:   "remote-user",
+			ContainerEnv: map[string]any{"SPEC_ONLY": "late"},
+		},
 		BaseImage:             "alpine",
+		ImageUser:             "image-user",
 		LocalContextName:      "context",
 		FeaturesContextSubdir: "_features",
-		Features: []features.Resolved{{
-			Source: "ghcr.io/devcontainers/features/node:1",
-			SafeID: "abc-node",
-			Metadata: features.Metadata{
-				ID:      "node",
-				Version: "1.0.0",
-			},
-		}},
-		ResolveImageConfig: false,
-	})
-	for _, want := range []string{
-		"/tmp/build-features/abc-node",
-		"install.sh",
-	} {
-		if !strings.Contains(got, want) {
-			t.Errorf("missing %q in graph", want)
+		Features:              []features.Resolved{f},
+	}
+}
+
+var testFeature = features.Resolved{
+	Source:  "registry.example.test/collection/alpha:1",
+	SafeID:  "abc-alpha",
+	Options: map[string]any{"my-option.1": "two words"},
+	Metadata: features.Metadata{
+		ID:           "alpha",
+		Version:      "1.0.0",
+		Entrypoint:   "./entrypoint.sh",
+		ContainerEnv: map[string]string{"ALPHA_HOME": "/opt/alpha"},
+		Options:      map[string]features.Option{"level": {Type: "string", Default: "high"}},
+	},
+}
+
+func TestBuild_FeatureInstallRunsWrapperWithEnvFiles(t *testing.T) {
+	g := decodeGraph(t, featureGraphInputs(testFeature))
+	dest := features.InstallDir + "/abc-alpha"
+	exec := g.execWithArg(t, features.InstallCommand(dest))
+
+	if user := exec.GetExec().Meta.User; user != "root" {
+		t.Errorf("install user = %q, want root", user)
+	}
+	files := g.mkfiles(t, exec, dest)
+	if got, want := files["/"+features.EnvFile], testFeature.EnvFileContent(); got != want {
+		t.Errorf("env file = %q, want %q", got, want)
+	}
+	if !strings.Contains(files["/"+features.EnvFile], `MY_OPTION_1="two words"`) {
+		t.Errorf("env file missing sanitized option: %q", files["/"+features.EnvFile])
+	}
+	if got, want := files["/"+features.InstallWrapperFile], testFeature.InstallWrapperContent(); got != want {
+		t.Errorf("install wrapper = %q, want %q", got, want)
+	}
+	for _, arg := range exec.GetExec().Meta.Args {
+		if strings.Contains(arg, "entrypoint.sh") {
+			t.Errorf("feature entrypoint run at install time: %q", arg)
 		}
+	}
+}
+
+func TestBuild_FeatureContainerEnvPrecedesInstallAndSpecEnvFollows(t *testing.T) {
+	g := decodeGraph(t, featureGraphInputs(testFeature))
+	exec := g.execWithArg(t, features.InstallCommand(features.InstallDir+"/abc-alpha"))
+	env := strings.Join(exec.GetExec().Meta.Env, "\n")
+	if !strings.Contains(env, "ALPHA_HOME=/opt/alpha") {
+		t.Errorf("feature containerEnv not visible to install: %v", exec.GetExec().Meta.Env)
+	}
+	if strings.Contains(env, "SPEC_ONLY") {
+		t.Errorf("spec containerEnv must follow feature installs: %v", exec.GetExec().Meta.Env)
+	}
+}
+
+func TestBuild_BuiltinEnvUsesConfiguredAndImageUsers(t *testing.T) {
+	cases := []struct {
+		name          string
+		containerUser string
+		imageUser     string
+		wantContainer string
+	}{
+		{"image user", "", "image-user", "image-user"},
+		{"spec containerUser wins", "spec-user", "image-user", "spec-user"},
+		{"unknown image user is root", "", "", "root"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			in := featureGraphInputs(testFeature)
+			in.Spec.ContainerUser = c.containerUser
+			in.ImageUser = c.imageUser
+			g := decodeGraph(t, in)
+			want := features.BuiltinEnvContent(c.wantContainer, "remote-user")
+			if got := g.allMkfiles()["/"+features.BuiltinEnvFile]; got != want {
+				t.Fatalf("builtin env = %q, want %q", got, want)
+			}
+			path := features.InstallDir + "/" + features.BuiltinEnvFile
+			g.execWithArg(t, features.BuiltinHomesCommand(path, c.wantContainer, "remote-user"))
+		})
+	}
+}
+
+func TestImageUser(t *testing.T) {
+	if got := imageUser([]byte(`{"config":{"User":"image-user"}}`)); got != "image-user" {
+		t.Errorf("imageUser = %q", got)
+	}
+	if got := imageUser(nil); got != "" {
+		t.Errorf("imageUser(nil) = %q", got)
 	}
 }
 

@@ -223,6 +223,9 @@ func buildOnePlatform(
 
 	graph := spec.Graph
 	graph.Platform = dcplatform.Platform{OS: p.OS, Arch: p.Architecture, Variant: p.Variant}
+	if graph.ImageUser == "" {
+		graph.ImageUser = imageUser(baseConfig)
+	}
 	graph.BaseState = &baseState
 
 	finalState, err := Build(graph)

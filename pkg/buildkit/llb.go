@@ -10,6 +10,7 @@
 package buildkit
 
 import (
+	"encoding/json"
 	"fmt"
 	"path"
 	"sort"
@@ -50,6 +51,10 @@ type GraphInputs struct {
 	// RemoteUser overrides the spec's remoteUser (empty falls back to
 	// the spec, then root).
 	RemoteUser string
+	// ImageUser is the user configured in the base image. Features see
+	// it as the container user when the spec sets no containerUser.
+	// Empty means root.
+	ImageUser string
 	// ResolveImageConfig, when true, performs a registry roundtrip at
 	// LLB marshal time to inherit ENV/USER/WORKDIR from the base image.
 	// Recommended; can be disabled for offline builds. Ignored when
@@ -129,11 +134,6 @@ func Build(in GraphInputs) (llb.State, error) {
 		state = llb.Image(imageRef, imageOpts...)
 	}
 
-	// containerEnv from spec.
-	for _, k := range sortedKeys(toStringMap(in.Spec.ContainerEnv)) {
-		state = state.AddEnv(k, toStringMap(in.Spec.ContainerEnv)[k])
-	}
-
 	// Local context that holds the staged feature directories. The
 	// caller (builder package) is responsible for setting up an
 	// fsutil.FS that exposes those directories under
@@ -148,12 +148,21 @@ func Build(in GraphInputs) (llb.State, error) {
 		localCtx = llb.Local(in.LocalContextName, localOpts...)
 	}
 
+	if len(in.Features) > 0 {
+		containerUser, remoteUser := features.ContainerUsers(in.Spec.ContainerUser, remoteUser(in), in.ImageUser)
+		state = applyBuiltinEnv(state, containerUser, remoteUser, cOpts)
+	}
 	for _, f := range in.Features {
-		state = applyFeature(state, localCtx, in.FeaturesContextSubdir, f, cOpts)
-		// containerEnv contributed by the feature itself
+		// A feature's containerEnv is visible to its own install script.
 		for _, k := range sortedKeys(f.Metadata.ContainerEnv) {
 			state = state.AddEnv(k, f.Metadata.ContainerEnv[k])
 		}
+		state = applyFeature(state, localCtx, in.FeaturesContextSubdir, f, cOpts)
+	}
+
+	// The spec's containerEnv follows the features, as upstream orders it.
+	for _, k := range sortedKeys(toStringMap(in.Spec.ContainerEnv)) {
+		state = state.AddEnv(k, toStringMap(in.Spec.ContainerEnv)[k])
 	}
 
 	if in.VSCodeServer != nil {
@@ -172,6 +181,19 @@ func Build(in GraphInputs) (llb.State, error) {
 		state = state.User(u)
 	}
 	return state, nil
+}
+
+// imageUser returns the USER of a serialized image config, or "" when
+// the config is absent or unreadable.
+func imageUser(config []byte) string {
+	if len(config) == 0 {
+		return ""
+	}
+	var img ocispecs.Image
+	if err := json.Unmarshal(config, &img); err != nil {
+		return ""
+	}
+	return img.Config.User
 }
 
 func normalizeImageRef(raw string) (string, error) {
@@ -206,34 +228,60 @@ func ensureDir(base llb.State, dir string, cOpts []llb.ConstraintsOpt) llb.State
 	return base.Run(runOpts...).Root()
 }
 
-// applyFeature mounts the feature directory from the local context into
-// /tmp/build-features/<SafeID>/ and runs its install.sh as root.
-func applyFeature(base, localCtx llb.State, subdir string, f features.Resolved, cOpts []llb.ConstraintsOpt) llb.State {
-	mountTarget := "/tmp/build-features/" + f.SafeID
-	srcSub := path.Join(subdir, f.SafeID)
-
-	entry := f.Metadata.Entrypoint
-	if entry == "" {
-		entry = "./install.sh"
-	}
-	cmd := fmt.Sprintf("set -e; cd %s; chmod +x %s; %s",
-		shellQuote(mountTarget), shellQuote(entry), shellQuote(entry))
-
+// applyBuiltinEnv writes devcontainer-features.builtin.env with the
+// container and remote users, then appends their home directories from
+// the image's passwd database.
+func applyBuiltinEnv(base llb.State, containerUser, remoteUser string, cOpts []llb.ConstraintsOpt) llb.State {
+	path := features.InstallDir + "/" + features.BuiltinEnvFile
+	content := llb.Scratch().File(
+		llb.Mkfile("/"+features.BuiltinEnvFile, 0o644, []byte(features.BuiltinEnvContent(containerUser, remoteUser))),
+		constraints(cOpts, llb.WithCustomName("feature builtin env"))...,
+	)
+	state := base.File(
+		llb.Copy(content, "/"+features.BuiltinEnvFile, path, &llb.CopyInfo{CreateDestPath: true}),
+		constraints(cOpts)...,
+	)
 	runOpts := []llb.RunOption{
-		llb.WithCustomNamef("install feature %s", f.Metadata.ID),
+		llb.WithCustomName("resolve feature user homes"),
 		llb.User("root"),
-		llb.Args([]string{"/bin/sh", "-c", cmd}),
-		llb.AddMount(mountTarget, localCtx,
-			llb.SourcePath(srcSub),
-		),
+		llb.Args([]string{"/bin/sh", "-c", features.BuiltinHomesCommand(path, containerUser, remoteUser)}),
 	}
 	for _, c := range cOpts {
 		runOpts = append(runOpts, c)
 	}
-	for _, kv := range buildFeatureEnv(f) {
-		runOpts = append(runOpts, llb.AddEnv(kv.k, kv.v))
+	return state.Run(runOpts...).Root()
+}
+
+// applyFeature stages the feature directory from the local context
+// together with its devcontainer-features.env and install wrapper, mounts
+// it at /tmp/dev-container-features/<SafeID>/ and runs the wrapper as
+// root. The wrapper runs install.sh; the feature's entrypoint is a
+// container entrypoint and never runs at install time.
+func applyFeature(base, localCtx llb.State, subdir string, f features.Resolved, cOpts []llb.ConstraintsOpt) llb.State {
+	mountTarget := features.InstallDir + "/" + f.SafeID
+	srcSub := path.Join(subdir, f.SafeID)
+
+	content := llb.Scratch().File(
+		llb.Copy(localCtx, srcSub, "/", &llb.CopyInfo{CopyDirContentsOnly: true}).
+			Mkfile("/"+features.EnvFile, 0o644, []byte(f.EnvFileContent())).
+			Mkfile("/"+features.InstallWrapperFile, 0o755, []byte(f.InstallWrapperContent())),
+		constraints(cOpts, llb.WithCustomNamef("stage feature %s", f.Metadata.ID))...,
+	)
+
+	runOpts := []llb.RunOption{
+		llb.WithCustomNamef("install feature %s", f.Metadata.ID),
+		llb.User("root"),
+		llb.Args([]string{"/bin/sh", "-c", features.InstallCommand(mountTarget)}),
+		llb.AddMount(mountTarget, content),
+	}
+	for _, c := range cOpts {
+		runOpts = append(runOpts, c)
 	}
 	return base.Run(runOpts...).Root()
+}
+
+func constraints(cOpts []llb.ConstraintsOpt, extra ...llb.ConstraintsOpt) []llb.ConstraintsOpt {
+	return append(append([]llb.ConstraintsOpt{}, cOpts...), extra...)
 }
 
 // applyVSCodeServer fetches the VS Code server tarball via llb.HTTP and
@@ -281,63 +329,6 @@ func applyVSCodeServer(base llb.State, sr *vscode.Result, user string, cOpts []l
 		out = out.Run(chownOpts...).Root()
 	}
 	return out, nil
-}
-
-type kv struct{ k, v string }
-
-func buildFeatureEnv(f features.Resolved) []kv {
-	if len(f.Metadata.Options) == 0 && len(f.Options) == 0 {
-		return nil
-	}
-	out := make([]kv, 0, len(f.Metadata.Options)+len(f.Options))
-	emitted := map[string]bool{}
-
-	keys := sortedKeys(f.Metadata.Options)
-	for _, k := range keys {
-		opt := f.Metadata.Options[k]
-		val, ok := f.Options[k]
-		if !ok {
-			val = opt.Default
-		}
-		up := strings.ToUpper(k)
-		out = append(out, kv{up, formatOpt(val)})
-		emitted[up] = true
-	}
-	keys2 := make([]string, 0, len(f.Options))
-	for k := range f.Options {
-		keys2 = append(keys2, k)
-	}
-	sort.Strings(keys2)
-	for _, k := range keys2 {
-		up := strings.ToUpper(k)
-		if emitted[up] {
-			continue
-		}
-		out = append(out, kv{up, formatOpt(f.Options[k])})
-	}
-	return out
-}
-
-func formatOpt(v any) string {
-	switch t := v.(type) {
-	case nil:
-		return ""
-	case string:
-		return t
-	case bool:
-		if t {
-			return "true"
-		}
-		return "false"
-	case []any:
-		parts := make([]string, 0, len(t))
-		for _, e := range t {
-			parts = append(parts, formatOpt(e))
-		}
-		return strings.Join(parts, ",")
-	default:
-		return fmt.Sprintf("%v", v)
-	}
 }
 
 func sortedKeys[V any](m map[string]V) []string {

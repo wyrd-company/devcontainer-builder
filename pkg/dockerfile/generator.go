@@ -6,10 +6,13 @@
 //
 //  1. FROM the base image (or an intermediate stage produced by an
 //     upstream Dockerfile build).
-//  2. COPY feature contents into /tmp/build-features/<safe-id>/.
-//  3. RUN each feature's install script in dependency order, with the
-//     options exported as _BUILD_ARG_<FEATURE>_<OPTION> environment
-//     variables (per the devcontainer features spec).
+//  2. Writes devcontainer-features.builtin.env (_CONTAINER_USER,
+//     _REMOTE_USER and their homes) into /tmp/dev-container-features/.
+//  3. For each feature in install order: sets the feature's containerEnv,
+//     COPYs its contents into /tmp/dev-container-features/<safe-id>/
+//     next to its devcontainer-features.env (option values) and install
+//     wrapper, and RUNs the wrapper, which exports both env files and
+//     runs install.sh (as upstream devcontainers/cli does).
 //  4. COPY the VS Code server tarball into the canonical
 //     ~/.vscode-server/bin/<commit>/ location and unpack it.
 //  5. Set ENV / USER / WORKDIR according to the spec.
@@ -51,6 +54,10 @@ type Inputs struct {
 	// RemoteUser overrides the spec's remoteUser. Empty means use the
 	// spec's value, falling back to root.
 	RemoteUser string
+	// ImageUser is the user configured in the base image. Features see
+	// it as the container user when the spec sets no containerUser.
+	// Empty means root.
+	ImageUser string
 }
 
 // Generate emits the Dockerfile contents.
@@ -75,16 +82,18 @@ func Generate(in Inputs) ([]byte, error) {
 	fmt.Fprintln(&b, "SHELL [\"/bin/sh\", \"-c\"]")
 	fmt.Fprintln(&b)
 
-	if env := mapToEnv(toStringMap(in.Spec.ContainerEnv)); env != "" {
-		fmt.Fprintln(&b, env)
-		fmt.Fprintln(&b)
-	}
-
 	if len(in.Features) > 0 {
 		fmt.Fprintln(&b, "# --- devcontainer features -------------------------------------------")
+		containerUser, remoteUser := features.ContainerUsers(in.Spec.ContainerUser, user, in.ImageUser)
+		emitBuiltinEnv(&b, containerUser, remoteUser)
 		for _, f := range in.Features {
 			emitFeature(&b, f, in.FeaturesContextDir)
 		}
+	}
+
+	// The spec's containerEnv follows the features, as upstream orders it.
+	if env := mapToEnv(toStringMap(in.Spec.ContainerEnv)); env != "" {
+		fmt.Fprintln(&b, env)
 		fmt.Fprintln(&b)
 	}
 
@@ -103,39 +112,48 @@ func Generate(in Inputs) ([]byte, error) {
 	return []byte(b.String()), nil
 }
 
+func emitBuiltinEnv(b *strings.Builder, containerUser, remoteUser string) {
+	path := features.InstallDir + "/" + features.BuiltinEnvFile
+	fmt.Fprintf(b, "RUN mkdir -p %s\n", features.InstallDir)
+	emitHeredocCopy(b, "", path, features.BuiltinEnvContent(containerUser, remoteUser))
+	fmt.Fprintf(b, "RUN %s\n\n", features.BuiltinHomesCommand(path, containerUser, remoteUser))
+}
+
 func emitFeature(b *strings.Builder, f features.Resolved, contextDir string) {
-	id := strings.ReplaceAll(strings.ToUpper(f.Metadata.ID), "-", "_")
-	if id == "" {
-		id = strings.ToUpper(f.SafeID)
-	}
 	src := contextDir + "/" + f.SafeID
+	dest := features.InstallDir + "/" + f.SafeID
 	fmt.Fprintf(b, "# Feature: %s (%s)\n", f.Metadata.ID, f.Source)
-	fmt.Fprintf(b, "COPY %s /tmp/build-features/%s\n", src, f.SafeID)
-
-	envs := buildFeatureOptionEnv(id, f)
-	runline := fmt.Sprintf("cd /tmp/build-features/%s && chmod +x ./install.sh && ./install.sh", f.SafeID)
-	if entry := f.Metadata.Entrypoint; entry != "" {
-		runline = fmt.Sprintf("cd /tmp/build-features/%s && chmod +x %s && %s",
-			f.SafeID, shellQuote(entry), shellQuote(entry))
+	// A feature's containerEnv is visible to its own install script.
+	if env := mapToEnv(f.Metadata.ContainerEnv); env != "" {
+		fmt.Fprintln(b, env)
 	}
+	fmt.Fprintf(b, "COPY --chown=root:root %s %s\n", src, dest)
+	emitHeredocCopy(b, "", dest+"/"+features.EnvFile, f.EnvFileContent())
+	emitHeredocCopy(b, "--chmod=755 ", dest+"/"+features.InstallWrapperFile, f.InstallWrapperContent())
+	fmt.Fprintf(b, "RUN %s && rm -rf %s\n\n", features.InstallCommand(dest), shellQuote(dest))
+}
 
-	if len(envs) > 0 {
-		fmt.Fprint(b, "RUN ")
-		for _, e := range envs {
-			fmt.Fprintf(b, "%s ", e)
+// emitHeredocCopy writes content to dest with a COPY heredoc. The quoted
+// delimiter disables variable expansion, and is chosen so that no content
+// line ends the heredoc early.
+func emitHeredocCopy(b *strings.Builder, flags, dest, content string) {
+	delim := "DEVCONTAINER_EOF"
+	for n := 1; containsLine(content, delim); n++ {
+		delim = fmt.Sprintf("DEVCONTAINER_EOF_%d", n)
+	}
+	if !strings.HasSuffix(content, "\n") {
+		content += "\n"
+	}
+	fmt.Fprintf(b, "COPY %s<<\"%s\" %s\n%s%s\n", flags, delim, dest, content, delim)
+}
+
+func containsLine(content, line string) bool {
+	for _, l := range strings.Split(content, "\n") {
+		if l == line {
+			return true
 		}
-		fmt.Fprintln(b, runline)
-	} else {
-		fmt.Fprintf(b, "RUN %s\n", runline)
 	}
-
-	if len(f.Metadata.ContainerEnv) > 0 {
-		keys := sortedKeys(f.Metadata.ContainerEnv)
-		for _, k := range keys {
-			fmt.Fprintf(b, "ENV %s=%s\n", k, shellQuote(f.Metadata.ContainerEnv[k]))
-		}
-	}
-	fmt.Fprintln(b)
+	return false
 }
 
 func emitVSCodeServer(b *strings.Builder, r vscode.Result, ctxPath, user string) {
@@ -166,61 +184,6 @@ func homeOf(user string) string {
 	return "/home/" + user
 }
 
-// buildFeatureOptionEnv produces the per-feature environment variables
-// that install.sh expects. The convention used by the spec is to set each
-// option as an upper-cased env var, with arrays joined by a comma.
-func buildFeatureOptionEnv(id string, f features.Resolved) []string {
-	if len(f.Options) == 0 && len(f.Metadata.Options) == 0 {
-		return nil
-	}
-	out := make([]string, 0, len(f.Metadata.Options)+len(f.Options))
-	emitted := map[string]bool{}
-
-	keys := sortedKeys(f.Metadata.Options)
-	for _, k := range keys {
-		opt := f.Metadata.Options[k]
-		val, ok := f.Options[k]
-		if !ok {
-			val = opt.Default
-		}
-		out = append(out, fmt.Sprintf("%s=%s", strings.ToUpper(k), shellQuote(formatOpt(val))))
-		emitted[strings.ToUpper(k)] = true
-	}
-	// Allow callers to set options that weren't declared in metadata
-	// (e.g., `version` for features that accept scalar shorthand).
-	scalarKeys := sortedAnyKeys(f.Options)
-	for _, k := range scalarKeys {
-		up := strings.ToUpper(k)
-		if emitted[up] {
-			continue
-		}
-		out = append(out, fmt.Sprintf("%s=%s", up, shellQuote(formatOpt(f.Options[k]))))
-	}
-	return out
-}
-
-func formatOpt(v any) string {
-	switch t := v.(type) {
-	case nil:
-		return ""
-	case string:
-		return t
-	case bool:
-		if t {
-			return "true"
-		}
-		return "false"
-	case []any:
-		parts := make([]string, 0, len(t))
-		for _, e := range t {
-			parts = append(parts, formatOpt(e))
-		}
-		return strings.Join(parts, ",")
-	default:
-		return fmt.Sprintf("%v", v)
-	}
-}
-
 func mapToEnv(m map[string]string) string {
 	if len(m) == 0 {
 		return ""
@@ -249,15 +212,6 @@ func toStringMap(m map[string]any) map[string]string {
 }
 
 func sortedKeys[V any](m map[string]V) []string {
-	keys := make([]string, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	return keys
-}
-
-func sortedAnyKeys(m map[string]any) []string {
 	keys := make([]string, 0, len(m))
 	for k := range m {
 		keys = append(keys, k)

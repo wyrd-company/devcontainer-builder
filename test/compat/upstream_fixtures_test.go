@@ -243,10 +243,10 @@ func TestCuratedCLILocalFeaturesGenerateInstallSteps(t *testing.T) {
 	got := string(body)
 	for _, want := range []string{
 		"# Feature: localFeatureA (./localFeatureA)",
-		"GREETING='Hello there'",
-		"PUNCTUATION='!!!!'",
+		`GREETING="Hello there"`,
+		`PUNCTUATION="!!!!"`,
 		"# Feature: localFeatureB (./localFeatureB)",
-		"FAVORITE=gold",
+		`FAVORITE="gold"`,
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("generated Dockerfile missing %q:\n%s", want, got)
