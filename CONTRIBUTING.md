@@ -2,6 +2,7 @@
 relationships:
   references: [taskfile, AGENTS]
 ---
+
 # Contributing
 
 Propose a focused change through a pull request. Discuss changes to supported
@@ -12,6 +13,8 @@ Use the repository devcontainer for Go, Docker, Task, Intentional, Actionlint,
 and Lefthook. Run `task check` before review. Docker integration checks require
 a working Docker daemon; Kubernetes validation uses kubeconform without a cluster.
 Optional upstream fixture tests run when the reference submodules are initialized.
+`task parity` compares `dcb` with the upstream CLI; see the
+[parity harness](test/parity/README.md). Report a parity change in the pull request.
 Task lists the individual checks, tool installation, and reference setup verbs.
 
 Add a regression test for behavior changes. Keep reference submodules unchanged.

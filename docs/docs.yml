@@ -1,0 +1,28 @@
+# ---
+# relationships:
+#   publishes-to: wyrd-foo
+#   references: [ README, manifest ]
+# ---
+name: dcb
+tagline: Build and run development containers from devcontainer.json.
+blurb: >-
+  A single Go binary that builds devcontainer images on Docker's built-in
+  BuildKit and creates, starts, and runs lifecycle commands in development
+  containers through the Docker Engine API. Commands write one JSON result
+  line, so scripts and agents can read the outcome.
+category: Developer Tools
+language: Go
+status: preview
+repo: https://github.com/wyrd-company/devcontainer-builder
+order: 9
+install:
+  - label: Homebrew
+    command: brew install wyrd-company/tools/dcb
+  - label: npm
+    command: npm install --global @wyrd-company/dcb
+  - label: APT
+    command: sudo apt install dcb
+  - label: RPM
+    command: sudo dnf install dcb
+  - label: AUR
+    command: paru -S dcb-bin
