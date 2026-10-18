@@ -20,6 +20,9 @@ import (
 	imagetypes "github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/api/types/mount"
 	dockerclient "github.com/docker/docker/client"
+	"github.com/docker/docker/pkg/jsonmessage"
+
+	"github.com/wyrd-company/devcontainer-builder/internal/dockertest"
 )
 
 func TestDockerHostIntegration(t *testing.T) {
@@ -126,6 +129,8 @@ func TestDockerHostIntegration(t *testing.T) {
 
 // TestDockerHostUpPullsMissingImage covers up with --skip-build on an
 // image the daemon does not have: up pulls it through the Engine API.
+// The image is a test-owned tag in a test-owned registry; the test only
+// removes what it created.
 func TestDockerHostUpPullsMissingImage(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping Docker integration test in short mode")
@@ -137,12 +142,10 @@ func TestDockerHostUpPullsMissingImage(t *testing.T) {
 	cli := requireDocker(t, ctx)
 	defer cli.Close()
 
-	// A tag no other integration test uses, so removing it is safe.
-	imageRef := os.Getenv("DCB_PULL_TEST_IMAGE")
-	if imageRef == "" {
-		imageRef = "alpine:3.19"
-	}
-	removeImageForPull(t, ctx, cli, imageRef)
+	registry := dockertest.StartRegistry(t, ctx, cli)
+	dockertest.EnsureImage(t, ctx, cli, "alpine:3.20")
+	imageRef := fmt.Sprintf("%s/dcb-test/pull:%d", registry, time.Now().UnixNano())
+	publishTestImage(t, ctx, cli, "alpine:3.20", imageRef)
 
 	bin := buildBinary(t)
 	workspace := prepareWorkspace(t, imageRef)
@@ -170,15 +173,35 @@ func TestDockerHostUpPullsMissingImage(t *testing.T) {
 	}
 }
 
-// removeImageForPull removes ref so a later step must pull it. It skips
-// when a container still uses the image.
-func removeImageForPull(t *testing.T, ctx context.Context, cli *dockerclient.Client, ref string) {
+// publishTestImage tags source as the test-owned ref, pushes it to its
+// registry, and removes the local tag so the daemon must pull ref. The
+// source image is untouched; ref is removed again when the test ends.
+func publishTestImage(t *testing.T, ctx context.Context, cli *dockerclient.Client, source, ref string) {
 	t.Helper()
-	if _, err := cli.ImageRemove(ctx, ref, imagetypes.RemoveOptions{}); err != nil && !dockerclient.IsErrNotFound(err) {
-		skipOrFail(t, "cannot remove %s to test pulling it: %v", ref, err)
+	if err := cli.ImageTag(ctx, source, ref); err != nil {
+		t.Fatalf("tag %s as %s: %v", source, ref, err)
+	}
+	t.Cleanup(func() {
+		if _, err := cli.ImageRemove(context.Background(), ref, imagetypes.RemoveOptions{}); err != nil && !dockerclient.IsErrNotFound(err) {
+			t.Logf("remove %s: %v", ref, err)
+		}
+	})
+	rc, err := cli.ImagePush(ctx, ref, imagetypes.PushOptions{})
+	if err != nil {
+		t.Fatalf("push %s: %v", ref, err)
+	}
+	defer rc.Close()
+	if err := jsonmessage.DisplayJSONMessagesStream(rc, io.Discard, 0, false, nil); err != nil {
+		t.Fatalf("push %s: %v", ref, err)
+	}
+	if _, err := cli.ImageRemove(ctx, ref, imagetypes.RemoveOptions{}); err != nil {
+		t.Fatalf("remove local tag %s: %v", ref, err)
 	}
 	if _, err := cli.ImageInspect(ctx, ref); !dockerclient.IsErrNotFound(err) {
-		t.Fatalf("image %s still present after remove (err = %v)", ref, err)
+		t.Fatalf("tag %s still present after remove (err = %v)", ref, err)
+	}
+	if _, err := cli.ImageInspect(ctx, source); err != nil {
+		t.Fatalf("source %s lost while untagging %s: %v", source, ref, err)
 	}
 }
 
