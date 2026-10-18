@@ -190,10 +190,9 @@ func TestCuratedCLIFixtureGeneratesWrapperDockerfile(t *testing.T) {
 	workspace := filepath.Join(root, "reference", "cli", "src", "test", "configs", "dockerfile-without-features")
 
 	result, err := builder.New().Generate(context.Background(), builder.Options{
-		Workspace:        workspace,
-		WorkDir:          t.TempDir(),
-		SkipFeatures:     true,
-		SkipVSCodeServer: true,
+		Workspace:    workspace,
+		WorkDir:      t.TempDir(),
+		SkipFeatures: true,
 	})
 	if err != nil {
 		t.Fatalf("Generate: %v", err)
@@ -223,9 +222,8 @@ func TestCuratedCLILocalFeaturesGenerateInstallSteps(t *testing.T) {
 	workspace := filepath.Join(root, "reference", "cli", "src", "test", "container-features", "configs", "dockerfile-with-v2-local-features-config-inside-dev-container-folder")
 
 	result, err := builder.New().Generate(context.Background(), builder.Options{
-		Workspace:        workspace,
-		WorkDir:          t.TempDir(),
-		SkipVSCodeServer: true,
+		Workspace: workspace,
+		WorkDir:   t.TempDir(),
 	})
 	if err != nil {
 		t.Fatalf("Generate: %v", err)
@@ -261,9 +259,8 @@ func TestCuratedCLILocalFeatureInstallOrder(t *testing.T) {
 	workspace := filepath.Join(root, "reference", "cli", "src", "test", "container-features", "configs", "feature-dependencies", "installsAfter", "local-simple")
 
 	result, err := builder.New().Generate(context.Background(), builder.Options{
-		Workspace:        workspace,
-		WorkDir:          t.TempDir(),
-		SkipVSCodeServer: true,
+		Workspace: workspace,
+		WorkDir:   t.TempDir(),
 	})
 	if err != nil {
 		t.Fatalf("Generate: %v", err)
@@ -282,10 +279,9 @@ func TestCuratedCLIUnsupportedBuildOptionsError(t *testing.T) {
 	workspace := filepath.Join(root, "reference", "cli", "src", "test", "configs", "dockerfile-with-target")
 
 	_, err := builder.New().Build(context.Background(), builder.Options{
-		Workspace:        workspace,
-		WorkDir:          t.TempDir(),
-		SkipFeatures:     true,
-		SkipVSCodeServer: true,
+		Workspace:    workspace,
+		WorkDir:      t.TempDir(),
+		SkipFeatures: true,
 	})
 	if err == nil {
 		t.Fatal("expected unsupported build options error")

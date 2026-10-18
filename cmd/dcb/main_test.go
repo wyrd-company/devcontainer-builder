@@ -68,7 +68,6 @@ func TestCLI_GenerateSmokeFixtures(t *testing.T) {
 				"run", ".", "generate",
 				"--workspace", filepath.Join(root, "testdata", "smoke", tc.fixture),
 				"--work-dir", workDir,
-				"--skip-vscode-server",
 			}
 			if tc.skipFeatures {
 				args = append(args, "--skip-features")

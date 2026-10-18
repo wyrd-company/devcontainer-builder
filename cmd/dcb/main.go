@@ -126,7 +126,7 @@ func cmdBuild(ctx context.Context, args []string) error {
 		pull      = fs.Bool("pull", false, "always pull referenced images")
 
 		skipFeatures = fs.Bool("skip-features", false, "do not resolve or install devcontainer features")
-		skipServer   = fs.Bool("skip-vscode-server", false, "do not inject the VS Code server")
+		withServer   = fs.Bool("vscode-server", false, "install the VS Code server into the image")
 
 		serverQuality = fs.String("vscode-quality", "stable", "VS Code server channel: stable|insider")
 		serverCommit  = fs.String("vscode-commit", "", "pin VS Code server to a specific commit (default: latest)")
@@ -159,28 +159,28 @@ func cmdBuild(ctx context.Context, args []string) error {
 	logger := stderrLogger("build")
 
 	opts := builder.Options{
-		SpecPath:         *specPath,
-		Workspace:        *workspace,
-		Tags:             tags,
-		Platforms:        platforms,
-		BuildKitAddress:  *bkAddr,
-		BuildArgs:        buildArgs,
-		Labels:           labels,
-		CacheFrom:        cacheFrom,
-		CacheTo:          cacheTo,
-		Push:             *push,
-		Load:             *load,
-		NoCache:          *noCache,
-		Pull:             *pull,
-		Progress:         *progress,
-		OutputDir:        *outputDir,
-		SkipFeatures:     *skipFeatures,
-		SkipVSCodeServer: *skipServer,
-		WorkDir:          *workDir,
-		KeepWorkDir:      *keepWork,
-		Logger:           logger,
-		Stdout:           os.Stdout,
-		Stderr:           os.Stderr,
+		SpecPath:            *specPath,
+		Workspace:           *workspace,
+		Tags:                tags,
+		Platforms:           platforms,
+		BuildKitAddress:     *bkAddr,
+		BuildArgs:           buildArgs,
+		Labels:              labels,
+		CacheFrom:           cacheFrom,
+		CacheTo:             cacheTo,
+		Push:                *push,
+		Load:                *load,
+		NoCache:             *noCache,
+		Pull:                *pull,
+		Progress:            *progress,
+		OutputDir:           *outputDir,
+		SkipFeatures:        *skipFeatures,
+		InstallVSCodeServer: *withServer,
+		WorkDir:             *workDir,
+		KeepWorkDir:         *keepWork,
+		Logger:              logger,
+		Stdout:              os.Stdout,
+		Stderr:              os.Stderr,
 		VSCode: vscode.Spec{
 			Quality:    vscode.Quality(*serverQuality),
 			Commit:     *serverCommit,
@@ -225,7 +225,7 @@ func cmdGenerate(ctx context.Context, args []string) error {
 		platStr   = fs.String("platform", "", "platform for VS Code server (e.g., linux/amd64)")
 		quality   = fs.String("vscode-quality", "stable", "stable|insider")
 		commit    = fs.String("vscode-commit", "", "pin VS Code server commit")
-		skipSrv   = fs.Bool("skip-vscode-server", false, "do not download the server")
+		withSrv   = fs.Bool("vscode-server", false, "download the VS Code server into the context")
 		skipFeat  = fs.Bool("skip-features", false, "do not resolve features")
 	)
 	if err := fs.Parse(args); err != nil {
@@ -233,14 +233,14 @@ func cmdGenerate(ctx context.Context, args []string) error {
 	}
 	logger := stderrLogger("generate")
 	opts := builder.Options{
-		SpecPath:         *specPath,
-		Workspace:        *workspace,
-		WorkDir:          *workDir,
-		KeepWorkDir:      true,
-		Logger:           logger,
-		SkipFeatures:     *skipFeat,
-		SkipVSCodeServer: *skipSrv,
-		Progress:         "plain",
+		SpecPath:            *specPath,
+		Workspace:           *workspace,
+		WorkDir:             *workDir,
+		KeepWorkDir:         true,
+		Logger:              logger,
+		SkipFeatures:        *skipFeat,
+		InstallVSCodeServer: *withSrv,
+		Progress:            "plain",
 		VSCode: vscode.Spec{
 			Quality: vscode.Quality(*quality),
 			Commit:  *commit,

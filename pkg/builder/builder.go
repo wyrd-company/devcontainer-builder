@@ -1,6 +1,6 @@
 // Package builder is the top-level orchestrator. It loads a
-// devcontainer.json, resolves devcontainer features, optionally
-// downloads the VS Code server, and builds the image with BuildKit: an
+// devcontainer.json, resolves devcontainer features, downloads the VS
+// Code server when asked, and builds the image with BuildKit: an
 // upstream Dockerfile through the dockerfile.v0 frontend, with the
 // devcontainer overlays authored directly in LLB on top.
 //
@@ -76,8 +76,9 @@ type Options struct {
 
 	// SkipFeatures disables feature resolution and installation.
 	SkipFeatures bool
-	// SkipVSCodeServer disables VS Code server staging.
-	SkipVSCodeServer bool
+	// InstallVSCodeServer stages the VS Code server into the image.
+	// Off by default: editors that attach install their own server.
+	InstallVSCodeServer bool
 	// SkipImageMetaResolve disables the registry roundtrip that
 	// inherits ENV/USER/WORKDIR from the base image.
 	SkipImageMetaResolve bool
@@ -226,7 +227,7 @@ func (b *Builder) prepareBuildContext(ctx context.Context, opts Options, logf fu
 		logf("resolved %d feature(s)", len(resolved))
 	}
 
-	if !opts.SkipVSCodeServer {
+	if opts.InstallVSCodeServer {
 		vs := opts.VSCode
 		if vs.Platform.OS == "" {
 			vs.Platform = primaryPlatform(opts.Platforms)

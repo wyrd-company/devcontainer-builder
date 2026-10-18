@@ -99,6 +99,7 @@ func cmdUp(ctx context.Context, args []string) error {
 		image     = fs.String("image", "", "use this image instead of building (skips builder)")
 		tag       = fs.String("tag", "", "tag for the built image (default: devcontainer-<basename>:latest)")
 		skipBuild = fs.Bool("skip-build", false, "do not build the image; --image must be supplied or already present")
+		withSrv   = fs.Bool("vscode-server", false, "install the VS Code server into the built image")
 		updateUID = fs.String("update-remote-user-uid", "auto", "remap the remoteUser to the host UID/GID: auto|on|off (auto = on for linux/darwin, off elsewhere; spec's updateRemoteUserUID:false always wins)")
 	)
 	if err := fs.Parse(args); err != nil {
@@ -132,6 +133,8 @@ func cmdUp(ctx context.Context, args []string) error {
 			Stdout:    os.Stdout,
 			Stderr:    os.Stderr,
 			Progress:  "auto",
+
+			InstallVSCodeServer: *withSrv,
 		}
 		if _, err := builder.New().Build(ctx, buildOpts); err != nil {
 			return fmt.Errorf("build: %w", err)

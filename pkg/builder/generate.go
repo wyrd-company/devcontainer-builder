@@ -70,7 +70,7 @@ func (b *Builder) Generate(ctx context.Context, opts Options) (*Result, error) {
 	}
 
 	var sr *vscode.Result
-	if !opts.SkipVSCodeServer {
+	if opts.InstallVSCodeServer {
 		spec := opts.VSCode
 		if spec.Platform.OS == "" {
 			spec.Platform = primaryPlatform(opts.Platforms)

@@ -71,7 +71,6 @@ func TestDockerBuildIntegration(t *testing.T) {
 				"--workspace", filepath.Join(root, "testdata", "smoke", tc.fixture),
 				"--tag", tag,
 				"--load",
-				"--skip-vscode-server",
 				"--progress", "plain",
 			}
 			runCommand(t, bin, args...)

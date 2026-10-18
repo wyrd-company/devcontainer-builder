@@ -87,7 +87,7 @@ dcb build \
 Generate the wrapper Dockerfile for inspection without running a build:
 
 ```sh
-dcb generate --workspace . --skip-vscode-server
+dcb generate --workspace .
 ```
 
 ## Architecture
@@ -154,7 +154,8 @@ re-executed.
 
 ### How the VS Code server is injected
 
-The server tarball is fetched as a content-addressable HTTP source:
+The server is installed only on request (`dcb build --vscode-server`,
+`builder.Options.InstallVSCodeServer`). The server tarball is fetched as a content-addressable HTTP source:
 
 ```go
 tarball := llb.HTTP(serverURL,
@@ -615,8 +616,8 @@ Compose-mode scope cuts that remain:
 
 Both the primary service and any sidecar may declare a compose-side
 `build:` block. `BuildPrimaryImage` runs the primary's `build:`
-through `pkg/buildx` first to produce a base image, then layers
-features (and the VS Code server) on top with the regular builder
+through BuildKit first to produce a base image, then layers
+features (and the VS Code server, when requested) on top with the regular builder
 pipeline. `Up` walks the project for non-primary services with a
 `build:` block and builds them through the same path before
 bringing them up — the resulting tag is folded into the project

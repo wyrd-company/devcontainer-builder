@@ -52,7 +52,7 @@ type BuildPrimaryResult struct {
 //     the build's output tag is returned directly.
 //   - When features are present, a derived image is built FROM the
 //     base (compose `image:` or compose `build:` output) with the
-//     features (and the VS Code server, by default) layered on, and
+//     features (and the VS Code server, when requested) layered on, and
 //     the derived tag is returned.
 func BuildPrimaryImage(ctx context.Context, in BuildPrimaryInputs) (*BuildPrimaryResult, error) {
 	if in.Spec == nil {

@@ -11,7 +11,6 @@ rm -rf "${generate_dir}"
 go run ./cmd/dcb generate \
 	--workspace testdata/smoke/features \
 	--work-dir "${generate_dir}" \
-	--skip-vscode-server \
 	> "${artifact_dir}/generated-dockerfile-path.txt" \
 	2> "${artifact_dir}/generate.log"
 find "${generate_dir}" -maxdepth 5 -type f | sort > "${artifact_dir}/generated-context-files.txt"
