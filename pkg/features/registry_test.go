@@ -61,10 +61,9 @@ func (r *fakeRegistry) serve(w http.ResponseWriter, req *http.Request) {
 	http.NotFound(w, req)
 }
 
-// publish adds repo:tag with the given feature metadata. When annotate
-// is set the metadata is also carried in the dev.containers.metadata
-// manifest annotation.
-func (r *fakeRegistry) publish(repo, tag, metadata string, annotate bool) {
+// publish adds repo:tag whose layer carries metadata. A non-empty
+// annotation is set as the dev.containers.metadata manifest annotation.
+func (r *fakeRegistry) publish(repo, tag, metadata, annotation string) {
 	r.t.Helper()
 	layer := tarGz(r.t, []tar.Header{
 		{Name: "./", Typeflag: tar.TypeDir, Mode: 0o755},
@@ -80,8 +79,8 @@ func (r *fakeRegistry) publish(repo, tag, metadata string, annotate bool) {
 		"config":        map[string]any{"mediaType": "application/vnd.devcontainers", "digest": "sha256:" + strings.Repeat("0", 64), "size": 0},
 		"layers":        []any{map[string]any{"mediaType": "application/vnd.devcontainers.layer.v1+tar", "digest": digest, "size": len(layer)}},
 	}
-	if annotate {
-		manifest["annotations"] = map[string]string{"dev.containers.metadata": metadata}
+	if annotation != "" {
+		manifest["annotations"] = map[string]string{"dev.containers.metadata": annotation}
 	}
 	body, err := json.Marshal(manifest)
 	if err != nil {
@@ -106,9 +105,16 @@ func TestResolve_InstallsAfterRenamedReferenceUsesReferencedMetadata(t *testing.
 		t.Run(fmt.Sprintf("annotation=%v", annotate), func(t *testing.T) {
 			reg := newFakeRegistry(t)
 			ns := reg.host() + "/collection"
-			reg.publish("collection/alpha", "1", `{"id":"alpha","version":"1.0.0","installsAfter":["`+ns+`/beta"]}`, annotate)
-			reg.publish("collection/old-beta", "1", `{"id":"old-beta","version":"1.0.0"}`, annotate)
-			reg.publish("collection/beta", "latest", `{"id":"beta","version":"2.0.0","legacyIds":["old-beta"]}`, annotate)
+			reg.publish("collection/alpha", "1", `{"id":"alpha","version":"1.0.0","installsAfter":["`+ns+`/beta"]}`, "")
+			reg.publish("collection/old-beta", "1", `{"id":"old-beta","version":"1.0.0"}`, "")
+			renamed := `{"id":"beta","version":"2.0.0","legacyIds":["old-beta"]}`
+			if annotate {
+				// The annotation wins over the layer, which here lacks
+				// the legacy id.
+				reg.publish("collection/beta", "latest", `{"id":"beta","version":"2.0.0"}`, renamed)
+			} else {
+				reg.publish("collection/beta", "latest", renamed, "")
+			}
 
 			got, err := reg.resolver().Resolve(userFeatures(ns+"/alpha:1", `{}`, ns+"/old-beta:1", `{}`), nil,
 				filepath.Join(t.TempDir(), "stage"), t.TempDir())
@@ -131,7 +137,7 @@ func TestResolve_InstallsAfterRenamedReferenceUsesReferencedMetadata(t *testing.
 func TestResolve_InstallsAfterOtherNamespaceIsNotFetched(t *testing.T) {
 	reg := newFakeRegistry(t)
 	ns := reg.host() + "/collection"
-	reg.publish("collection/alpha", "1", `{"id":"alpha","version":"1.0.0","installsAfter":["`+reg.host()+`/elsewhere/beta"]}`, true)
+	reg.publish("collection/alpha", "1", `{"id":"alpha","version":"1.0.0","installsAfter":["`+reg.host()+`/elsewhere/beta"]}`, "")
 
 	got, err := reg.resolver().Resolve(userFeatures(ns+"/alpha:1", `{}`), nil, filepath.Join(t.TempDir(), "stage"), t.TempDir())
 	if err != nil {
