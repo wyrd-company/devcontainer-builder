@@ -1,0 +1,71 @@
+# relationships:
+#   references: [ taskfile, config ]
+name: Release
+on:
+  push:
+    tags: [ '*.*.*' ]
+permissions: {}
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+    env:
+      RELEASE_VERSION: ${{ github.ref_name }}
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: go.mod
+      - uses: go-task/setup-task@01a4adf9db2d14c1de7a560f09170b6e0df736aa # v2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+          registry-url: https://registry.npmjs.org
+      # ryl disable-line rule:line-length
+      - uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7
+        with:
+          version: v2.17.0
+          install-only: true
+      - run: task release:preflight
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          FORMULAE_PUBLISH_KEY: ${{ secrets.FORMULAE_PUBLISH_KEY }}
+          REPO_WYRD_FOO_PUBLISHER_APP_ID: ${{ secrets.REPO_WYRD_FOO_PUBLISHER_APP_ID }}
+          REPO_WYRD_FOO_PUBLISHER_PRIVATE_KEY: ${{ secrets.REPO_WYRD_FOO_PUBLISHER_PRIVATE_KEY }}
+          WYRD_TOOLS_DOCS_PUBLISHER_APP_ID: ${{ secrets.WYRD_TOOLS_DOCS_PUBLISHER_APP_ID }}
+          # ryl disable-line rule:line-length
+          WYRD_TOOLS_DOCS_PUBLISHER_PRIVATE_KEY: ${{ secrets.WYRD_TOOLS_DOCS_PUBLISHER_PRIVATE_KEY }}
+      - run: task release:yaml-tool
+      - run: task release:check
+      - run: task release:inspectors
+      - run: task release:build
+      - run: task release:verify
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: package-release-manifest
+          path: dist/release-manifest.json
+          if-no-files-found: error
+          retention-days: 90
+      - run: task release:github
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - run: task release:npm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: wyrd-company/homebrew-tools
+          ref: main
+          path: homebrew-tools
+          ssh-key: ${{ secrets.FORMULAE_PUBLISH_KEY }}
+          persist-credentials: true
+      - run: task release:homebrew

@@ -1,0 +1,33 @@
+{
+  "name": "@wyrd-company/dcb",
+  "version": "0.0.0",
+  "description": "Build and run development containers",
+  "homepage": "https://github.com/wyrd-company/devcontainer-builder",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wyrd-company/devcontainer-builder.git"
+  },
+  "license": "MIT AND Apache-2.0",
+  "bin": {
+    "dcb": "bin/dcb.js"
+  },
+  "files": [
+    "bin/dcb.js",
+    "LICENSE",
+    "README.md",
+    "LICENSE-APACHE-2.0",
+    "NOTICE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  },
+  "relationships": {
+    "references": [
+      "manifest"
+    ]
+  }
+}

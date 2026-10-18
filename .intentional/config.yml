@@ -10,6 +10,9 @@ discovery:
     - detector: go-module
       path: go.mod
       release-unit: dcb
+    - detector: npm-package
+      path: npm/package.json
+      release-unit: dcb
 release-units:
   dcb:
     path: .
@@ -17,6 +20,9 @@ release-units:
       - adapter: go
         file: go.mod
         mode: none
+      - adapter: npm
+        file: npm/package.json
+        mode: committed
     tags:
       primary:
         role: primary

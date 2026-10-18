@@ -1,0 +1,6 @@
+The dcb npm launcher and its launcher tests are adapted from
+wyrd-company/intentional, npm/bin/intentional.js and npm/test/launcher.test.js.
+The changelog extraction helper scripts/release/notes.sh is adapted from
+wyrd-company/trowel, scripts/release-notes.sh.
+These source files are licensed under Apache-2.0; see LICENSE-APACHE-2.0.
+The native dcb binaries and other dcb source files use the repository MIT license.

@@ -1,0 +1,65 @@
+# relationships:
+#   references: [ release, taskfile ]
+name: Publish docs
+# workflow_run also fires for releases created with GITHUB_TOKEN.
+# Recovery requires the original retained handoff, never rebuilt release assets.
+on:
+  workflow_run:
+    workflows: [ Release ]
+    types: [ completed ]
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: Successful Release workflow run retaining the original handoff
+        required: true
+        type: string
+      tag:
+        description: Bare stable SemVer tag from that Release run
+        required: true
+        type: string
+permissions: {}
+concurrency:
+  group: publish-docs-${{ github.event.workflow_run.id || inputs.run_id }}
+  cancel-in-progress: false
+jobs:
+  publish:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_repository.full_name == github.repository)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          # The read token is needed by the exact release-tag fetch.
+          persist-credentials: true
+      - uses: go-task/setup-task@01a4adf9db2d14c1de7a560f09170b6e0df736aa # v2
+      - id: release_run
+        run: task release:run
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_RUN_ID: ${{ github.event.workflow_run.id || inputs.run_id }}
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          name: package-release-manifest
+          path: handoff
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ steps.release_run.outputs.run_id }}
+      - run: task release:handoff
+        env:
+          EXPECTED_TAG: ${{ inputs.tag }}
+          RELEASE_COMMIT: ${{ steps.release_run.outputs.head_sha }}
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ steps.release_run.outputs.head_sha }}
+          path: released-docs
+          persist-credentials: false
+      # ryl disable-line rule:line-length
+      - uses: wyrd-company/wyrd.foo/.github/actions/publish-docs@fdb54b12e88eaf51a2b22714db63c80aba2ed88a # v1
+        with:
+          app-id: ${{ secrets.WYRD_TOOLS_DOCS_PUBLISHER_APP_ID }}
+          private-key: ${{ secrets.WYRD_TOOLS_DOCS_PUBLISHER_PRIVATE_KEY }}
+          docs-dir: released-docs/docs

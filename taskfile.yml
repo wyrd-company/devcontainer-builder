@@ -121,3 +121,77 @@ tasks:
     cmds:
       - |
         printf 'Airlock outcome: %s (complete: %s)\n' "$AIRLOCK_OUTCOME" "$AIRLOCK_COMPLETE" >> "$GITHUB_STEP_SUMMARY"
+  release:tools:
+    desc: Install the release builder
+    cmds:
+      - go install github.com/goreleaser/goreleaser/v2@v2.17.0
+      - task: release:yaml-tool
+  release:check:
+    desc: Validate release configuration and packaging contracts without publishing
+    env:
+      RELEASE_VERSION: '{{.RELEASE_VERSION | default "0.0.0"}}'
+      PYTHONDONTWRITEBYTECODE: '1'
+    cmds:
+      - goreleaser check
+      - python3 -m unittest discover -s scripts/release -p 'test_*.py' -v
+      - node --test npm/test/*.test.js
+  release:snapshot:
+    desc: Build all release assets locally without publishing or creating tags
+    env:
+      RELEASE_VERSION: '{{.RELEASE_VERSION | default "0.0.0"}}'
+    cmds:
+      - goreleaser release --snapshot --clean
+      - task: release:stage
+  release:stage:
+    desc: Pack all five npm tarballs and render the Linux handoff and Homebrew formula
+    env:
+      RELEASE_VERSION: '{{.RELEASE_VERSION | default "0.0.0"}}'
+      PYTHONDONTWRITEBYTECODE: '1'
+    cmds:
+      - python3 scripts/release/stage.py --version "$RELEASE_VERSION" --commit "$(git rev-parse HEAD)"
+  release:build:
+    desc: Build an Intentional-tagged release without publishing
+    cmds:
+      - python3 scripts/release/check-tag.py
+      - goreleaser release --clean --skip=publish
+      - task: release:stage
+  release:github:
+    desc: Publish prepared assets to GitHub (Bob's release only)
+    cmds:
+      - bash scripts/release/publish.sh github
+  release:npm:
+    desc: Publish prepared native npm packages then the launcher (Bob's release only)
+    cmds:
+      - bash scripts/release/publish.sh npm
+  release:homebrew:
+    desc: Publish the prepared Homebrew formula (Bob's release only)
+    cmds:
+      - bash scripts/release/publish.sh homebrew homebrew-tools
+  release:run:
+    desc: Resolve a successful original Release run for downstream publication
+    cmds:
+      - python3 scripts/release/run.py resolve
+  release:handoff:
+    desc: Verify the retained release manifest against its workflow run and tag
+    cmds:
+      - python3 scripts/release/run.py verify
+  release:preflight:
+    desc: Check Intentional tag identity and credential presence before publication
+    cmds:
+      - bash scripts/release/preflight.sh
+  release:verify:
+    desc: Inspect snapshot artifacts and test an offline npm installation
+    env:
+      RELEASE_VERSION: '{{.RELEASE_VERSION | default "0.0.0"}}'
+      PYTHONDONTWRITEBYTECODE: '1'
+    cmds:
+      - python3 scripts/release/verify.py --version "$RELEASE_VERSION"
+  release:inspectors:
+    desc: Install Linux package inspection tools for release validation
+    cmds:
+      - sudo apt-get update
+      - sudo apt-get install -y --no-install-recommends rpm
+  release:yaml-tool:
+    desc: Install the YAML reader used by release agreement tests
+    cmds:
+      - go install github.com/mikefarah/yq/v4@v4.54.1
