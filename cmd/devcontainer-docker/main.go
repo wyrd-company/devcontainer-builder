@@ -28,6 +28,7 @@ import (
 	dockerclient "github.com/docker/docker/client"
 
 	"github.com/wyrd-company/devcontainer-builder/pkg/builder"
+	"github.com/wyrd-company/devcontainer-builder/pkg/features"
 	hostdocker "github.com/wyrd-company/devcontainer-builder/pkg/host/docker"
 	"github.com/wyrd-company/devcontainer-builder/pkg/host/runner"
 	"github.com/wyrd-company/devcontainer-builder/pkg/spec"
@@ -118,6 +119,7 @@ func cmdUp(ctx context.Context, args []string) error {
 	resolvedSpecPath := dc.Path
 
 	resolvedImage := *image
+	var resolvedFeatures []features.Resolved
 	if !*skipBuild && resolvedImage == "" {
 		t := *tag
 		if t == "" {
@@ -136,10 +138,12 @@ func cmdUp(ctx context.Context, args []string) error {
 
 			InstallVSCodeServer: *withSrv,
 		}
-		if _, err := builder.New().Build(ctx, buildOpts); err != nil {
+		built, err := builder.New().Build(ctx, buildOpts)
+		if err != nil {
 			return fmt.Errorf("build: %w", err)
 		}
 		resolvedImage = t
+		resolvedFeatures = built.Features
 	}
 	if resolvedImage == "" {
 		return fmt.Errorf("no image: pass --image or remove --skip-build")
@@ -167,6 +171,7 @@ func cmdUp(ctx context.Context, args []string) error {
 		SpecPath:            resolvedSpecPath,
 		LocalWorkspace:      absWorkspace,
 		Image:               resolvedImage,
+		Features:            resolvedFeatures,
 		LocalEnv:            envMap(),
 		RemoteUserUIDUpdate: uidUpdate,
 	})
