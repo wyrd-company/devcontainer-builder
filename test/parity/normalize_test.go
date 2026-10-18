@@ -271,3 +271,16 @@ func TestPrerequisiteSkips(t *testing.T) {
 		})
 	}
 }
+
+func TestFixtureVerdict(t *testing.T) {
+	all := map[string]Observation{}
+	for _, name := range dimensions {
+		all[name] = Observation{Value: "equal"}
+	}
+	if result := compare("equal", all, all); !result.Pass || result.Passed != len(dimensions) {
+		t.Fatalf("fixture verdict: %+v", result)
+	}
+	if result := compare("missing", all, map[string]Observation{}); result.Pass {
+		t.Fatal("missing fixture passed")
+	}
+}

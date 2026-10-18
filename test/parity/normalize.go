@@ -56,6 +56,7 @@ type Dimension struct {
 }
 type FixtureResult struct {
 	Name       string               `json:"name"`
+	Pass       bool                 `json:"pass"`
 	Dimensions map[string]Dimension `json:"dimensions"`
 	Passed     int                  `json:"passed"`
 	Total      int                  `json:"total"`
@@ -85,6 +86,7 @@ func compare(name string, a, b map[string]Observation) FixtureResult {
 			out.Passed++
 		}
 	}
+	out.Pass = out.Passed == out.Total
 	return out
 }
 
