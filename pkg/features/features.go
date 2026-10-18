@@ -35,6 +35,7 @@ import (
 // Metadata is the parsed devcontainer-feature.json bundled inside each
 // feature artifact.
 type Metadata struct {
+	Customizations    map[string]any    `json:"customizations,omitempty"`
 	ID                string            `json:"id"`
 	Version           string            `json:"version"`
 	Name              string            `json:"name,omitempty"`

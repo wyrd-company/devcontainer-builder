@@ -15,38 +15,43 @@ import (
 // The full spec is much larger; unknown fields are preserved through Raw so
 // callers can pass data through to downstream tooling untouched.
 type DevContainer struct {
-	Name                string         `json:"name,omitempty"`
-	Image               string         `json:"image,omitempty"`
-	Dockerfile          string         `json:"dockerFile,omitempty"`
-	Build               *Build         `json:"build,omitempty"`
-	DockerComposeFile   StringOrSlice  `json:"dockerComposeFile,omitempty"`
-	Service             string         `json:"service,omitempty"`
-	RunServices         []string       `json:"runServices,omitempty"`
-	ShutdownAction      string         `json:"shutdownAction,omitempty"`
-	OverrideCommand     *bool          `json:"overrideCommand,omitempty"`
-	Features            OrderedMap     `json:"features,omitempty"`
-	OverrideFeature     []string       `json:"overrideFeatureInstallOrder,omitempty"`
-	RemoteUser          string         `json:"remoteUser,omitempty"`
-	ContainerUser       string         `json:"containerUser,omitempty"`
-	UpdateRemoteEnv     map[string]any `json:"remoteEnv,omitempty"`
-	ContainerEnv        map[string]any `json:"containerEnv,omitempty"`
-	WorkspaceFolder     string         `json:"workspaceFolder,omitempty"`
-	WorkspaceMount      string         `json:"workspaceMount,omitempty"`
-	Mounts              []any          `json:"mounts,omitempty"`
-	ForwardPorts        []any          `json:"forwardPorts,omitempty"`
-	AppPort             any            `json:"appPort,omitempty"`
-	UpdateRemoteUserUID *bool          `json:"updateRemoteUserUID,omitempty"`
-	OnCreate            Command        `json:"onCreateCommand,omitempty"`
-	UpdateContent       Command        `json:"updateContentCommand,omitempty"`
-	PostCreate          Command        `json:"postCreateCommand,omitempty"`
-	PostStart           Command        `json:"postStartCommand,omitempty"`
-	PostAttach          Command        `json:"postAttachCommand,omitempty"`
-	Init                *bool          `json:"init,omitempty"`
-	Privileged          *bool          `json:"privileged,omitempty"`
-	CapAdd              []string       `json:"capAdd,omitempty"`
-	SecurityOpt         []string       `json:"securityOpt,omitempty"`
-	RunArgs             []string       `json:"runArgs,omitempty"`
-	Customizations      map[string]any `json:"customizations,omitempty"`
+	WaitFor              string         `json:"waitFor,omitempty"`
+	UserEnvProbe         string         `json:"userEnvProbe,omitempty"`
+	PortsAttributes      map[string]any `json:"portsAttributes,omitempty"`
+	OtherPortsAttributes map[string]any `json:"otherPortsAttributes,omitempty"`
+	HostRequirements     map[string]any `json:"hostRequirements,omitempty"`
+	Name                 string         `json:"name,omitempty"`
+	Image                string         `json:"image,omitempty"`
+	Dockerfile           string         `json:"dockerFile,omitempty"`
+	Build                *Build         `json:"build,omitempty"`
+	DockerComposeFile    StringOrSlice  `json:"dockerComposeFile,omitempty"`
+	Service              string         `json:"service,omitempty"`
+	RunServices          []string       `json:"runServices,omitempty"`
+	ShutdownAction       string         `json:"shutdownAction,omitempty"`
+	OverrideCommand      *bool          `json:"overrideCommand,omitempty"`
+	Features             OrderedMap     `json:"features,omitempty"`
+	OverrideFeature      []string       `json:"overrideFeatureInstallOrder,omitempty"`
+	RemoteUser           string         `json:"remoteUser,omitempty"`
+	ContainerUser        string         `json:"containerUser,omitempty"`
+	UpdateRemoteEnv      map[string]any `json:"remoteEnv,omitempty"`
+	ContainerEnv         map[string]any `json:"containerEnv,omitempty"`
+	WorkspaceFolder      string         `json:"workspaceFolder,omitempty"`
+	WorkspaceMount       string         `json:"workspaceMount,omitempty"`
+	Mounts               []any          `json:"mounts,omitempty"`
+	ForwardPorts         []any          `json:"forwardPorts,omitempty"`
+	AppPort              any            `json:"appPort,omitempty"`
+	UpdateRemoteUserUID  *bool          `json:"updateRemoteUserUID,omitempty"`
+	OnCreate             Command        `json:"onCreateCommand,omitempty"`
+	UpdateContent        Command        `json:"updateContentCommand,omitempty"`
+	PostCreate           Command        `json:"postCreateCommand,omitempty"`
+	PostStart            Command        `json:"postStartCommand,omitempty"`
+	PostAttach           Command        `json:"postAttachCommand,omitempty"`
+	Init                 *bool          `json:"init,omitempty"`
+	Privileged           *bool          `json:"privileged,omitempty"`
+	CapAdd               []string       `json:"capAdd,omitempty"`
+	SecurityOpt          []string       `json:"securityOpt,omitempty"`
+	RunArgs              []string       `json:"runArgs,omitempty"`
+	Customizations       map[string]any `json:"customizations,omitempty"`
 
 	// Path is the on-disk location the spec was loaded from. Not part of
 	// the JSON document itself.
@@ -85,6 +90,20 @@ type Command struct {
 // IsZero reports whether c carries no command at all.
 func (c Command) IsZero() bool {
 	return c.Shell == "" && len(c.Args) == 0 && len(c.Parallel) == 0
+}
+
+// MarshalJSON preserves the string, argv, or parallel-object command form.
+func (c Command) MarshalJSON() ([]byte, error) {
+	if c.Shell != "" {
+		return json.Marshal(c.Shell)
+	}
+	if c.Args != nil {
+		return json.Marshal(c.Args)
+	}
+	if c.Parallel != nil {
+		return json.Marshal(c.Parallel)
+	}
+	return []byte("null"), nil
 }
 
 // UnmarshalJSON accepts string / []string / object-of-(string|[]string).
