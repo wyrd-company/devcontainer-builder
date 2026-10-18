@@ -224,6 +224,8 @@ func TestCuratedCLILocalFeaturesGenerateInstallSteps(t *testing.T) {
 	result, err := builder.New().Generate(context.Background(), builder.Options{
 		Workspace: workspace,
 		WorkDir:   t.TempDir(),
+		// Hermetic: the base image user is not read from a registry.
+		SkipImageMetaResolve: true,
 	})
 	if err != nil {
 		t.Fatalf("Generate: %v", err)
@@ -261,6 +263,8 @@ func TestCuratedCLILocalFeatureInstallOrder(t *testing.T) {
 	result, err := builder.New().Generate(context.Background(), builder.Options{
 		Workspace: workspace,
 		WorkDir:   t.TempDir(),
+		// Hermetic: the base image user is not read from a registry.
+		SkipImageMetaResolve: true,
 	})
 	if err != nil {
 		t.Fatalf("Generate: %v", err)

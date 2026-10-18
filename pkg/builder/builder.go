@@ -256,6 +256,7 @@ func (b *Builder) prepareBuildContext(ctx context.Context, opts Options, logf fu
 		VSCodeServer:            sr,
 		VSCodeServerContextPath: serverCtxPath,
 		RemoteUser:              dc.RemoteUser,
+		ImageUser:               b.baseImageUser(dc, opts, resolved, logf),
 	})
 	if err != nil {
 		err = fmt.Errorf("dockerfile: %w", err)

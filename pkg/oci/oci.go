@@ -136,10 +136,63 @@ type ManifestAnnot map[string]string
 // needed by selecting the first child manifest. (For features, indexes are
 // rare; when present we just take whatever is first.)
 func (c *Client) FetchManifest(ref Reference) (*Manifest, []byte, error) {
-	return c.fetchManifest(ref, 0)
+	return c.fetchManifest(ref, 0, firstManifest)
 }
 
-func (c *Client) fetchManifest(ref Reference, depth int) (*Manifest, []byte, error) {
+// childSelector picks the manifest to follow from an index.
+type childSelector func([]Descriptor) (Descriptor, error)
+
+func firstManifest(ds []Descriptor) (Descriptor, error) {
+	return ds[0], nil
+}
+
+// platformManifest selects the manifest for p. An empty variant matches
+// any variant.
+func platformManifest(p Platform) childSelector {
+	return func(ds []Descriptor) (Descriptor, error) {
+		for _, d := range ds {
+			if d.Platform == nil || d.Platform.OS != p.OS || d.Platform.Architecture != p.Architecture {
+				continue
+			}
+			if p.Variant == "" || d.Platform.Variant == p.Variant {
+				return d, nil
+			}
+		}
+		return Descriptor{}, fmt.Errorf("manifest index has no %s/%s manifest", p.OS, p.Architecture)
+	}
+}
+
+// ImageConfig is the subset of an OCI image configuration this package
+// reads.
+type ImageConfig struct {
+	Config struct {
+		User string   `json:"User,omitempty"`
+		Env  []string `json:"Env,omitempty"`
+	} `json:"config"`
+}
+
+// FetchImageConfig returns the configuration of the image ref for
+// platform p, following a multi-platform index to p's manifest.
+func (c *Client) FetchImageConfig(ref Reference, p Platform) (*ImageConfig, error) {
+	m, _, err := c.fetchManifest(ref, 0, platformManifest(p))
+	if err != nil {
+		return nil, err
+	}
+	if m.Config.Digest == "" {
+		return nil, fmt.Errorf("manifest %s has no config", ref)
+	}
+	var buf strings.Builder
+	if err := c.FetchBlob(ref, m.Config.Digest, &buf); err != nil {
+		return nil, err
+	}
+	var cfg ImageConfig
+	if err := json.Unmarshal([]byte(buf.String()), &cfg); err != nil {
+		return nil, fmt.Errorf("decode image config: %w", err)
+	}
+	return &cfg, nil
+}
+
+func (c *Client) fetchManifest(ref Reference, depth int, choose childSelector) (*Manifest, []byte, error) {
 	if depth > 4 {
 		return nil, nil, fmt.Errorf("manifest index nesting too deep")
 	}
@@ -186,14 +239,17 @@ func (c *Client) fetchManifest(ref Reference, depth int) (*Manifest, []byte, err
 		if len(idx.Manifests) == 0 {
 			return nil, nil, fmt.Errorf("manifest index has no manifests")
 		}
-		child := idx.Manifests[0]
+		child, err := choose(idx.Manifests)
+		if err != nil {
+			return nil, nil, err
+		}
 		if child.Digest == "" {
 			return nil, nil, fmt.Errorf("manifest index child has no digest")
 		}
 		childRef := ref
 		childRef.Tag = ""
 		childRef.Digest = child.Digest
-		m, childBody, err := c.fetchManifest(childRef, depth+1)
+		m, childBody, err := c.fetchManifest(childRef, depth+1, choose)
 		if err != nil {
 			return nil, nil, err
 		}

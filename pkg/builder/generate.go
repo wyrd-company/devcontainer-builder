@@ -97,6 +97,7 @@ func (b *Builder) Generate(ctx context.Context, opts Options) (*Result, error) {
 		VSCodeServer:            sr,
 		VSCodeServerContextPath: serverCtx,
 		RemoteUser:              dc.RemoteUser,
+		ImageUser:               b.baseImageUser(dc, opts, resolved, logf),
 	})
 	if err != nil {
 		return nil, err

@@ -45,3 +45,55 @@ func TestFetchManifest_FollowsIndexAndVerifiesChildDigest(t *testing.T) {
 		t.Fatalf("FetchManifest returned wrong child manifest: manifest=%+v body=%s", m, string(body))
 	}
 }
+
+func digestOf(b []byte) string {
+	sum := sha256.Sum256(b)
+	return "sha256:" + hex.EncodeToString(sum[:])
+}
+
+func TestFetchImageConfig_SelectsPlatformManifest(t *testing.T) {
+	blobs := map[string][]byte{}
+	manifests := map[string][]byte{}
+	var children []string
+	for _, p := range []struct{ arch, user string }{{"amd64", "amd-user"}, {"arm64", "arm-user"}} {
+		cfg := []byte(fmt.Sprintf(`{"architecture":%q,"os":"linux","config":{"User":%q}}`, p.arch, p.user))
+		blobs[digestOf(cfg)] = cfg
+		m := []byte(fmt.Sprintf(`{"schemaVersion":2,"mediaType":%q,"config":{"mediaType":"application/vnd.oci.image.config.v1+json","digest":%q,"size":%d},"layers":[]}`,
+			mediaTypeOCIManifest, digestOf(cfg), len(cfg)))
+		manifests[digestOf(m)] = m
+		children = append(children, fmt.Sprintf(`{"mediaType":%q,"digest":%q,"size":%d,"platform":{"os":"linux","architecture":%q}}`,
+			mediaTypeOCIManifest, digestOf(m), len(m), p.arch))
+	}
+	index := []byte(fmt.Sprintf(`{"schemaVersion":2,"mediaType":%q,"manifests":[%s]}`, mediaTypeOCIIndex, strings.Join(children, ",")))
+
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/manifests/1"):
+			w.Header().Set("Content-Type", mediaTypeOCIIndex)
+			_, _ = w.Write(index)
+		case strings.Contains(r.URL.Path, "/manifests/"):
+			_, _ = w.Write(manifests[r.URL.Path[strings.LastIndex(r.URL.Path, "/")+1:]])
+		case strings.Contains(r.URL.Path, "/blobs/"):
+			_, _ = w.Write(blobs[r.URL.Path[strings.LastIndex(r.URL.Path, "/")+1:]])
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+	ref := Reference{Registry: strings.TrimPrefix(srv.URL, "https://"), Repository: "library/base", Tag: "1"}
+	c := NewClient()
+	c.HTTP = srv.Client()
+
+	for arch, want := range map[string]string{"amd64": "amd-user", "arm64": "arm-user"} {
+		cfg, err := c.FetchImageConfig(ref, Platform{OS: "linux", Architecture: arch})
+		if err != nil {
+			t.Fatalf("%s: %v", arch, err)
+		}
+		if cfg.Config.User != want {
+			t.Errorf("%s user = %q, want %q", arch, cfg.Config.User, want)
+		}
+	}
+	if _, err := c.FetchImageConfig(ref, Platform{OS: "linux", Architecture: "s390x"}); err == nil {
+		t.Fatal("expected error for a platform the index lacks")
+	}
+}
