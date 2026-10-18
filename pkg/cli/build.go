@@ -96,8 +96,12 @@ func (a *application) buildCommand(generate bool) *cobra.Command {
 			a.result["contextDir"] = res.ContextDir
 			return nil
 		}
-		_, err = a.buildImage(cmd.Context(), dc, workspace, bo)
-		return err
+		_, images, err := a.buildImage(cmd.Context(), dc, workspace, bo)
+		if err != nil {
+			return err
+		}
+		a.buildResult(bo, images)
+		return nil
 	}
 	return cmd
 }
@@ -131,7 +135,7 @@ func (o *buildOptions) prepare(a *application, dc *spec.DevContainer, workspace 
 
 // buildImage keeps the Engine API builder and Compose primary-image path in one
 // place. Up passes resolved feature metadata from the result to the host.
-func (a *application) buildImage(ctx context.Context, dc *spec.DevContainer, workspace string, bo builder.Options) (*builder.Result, error) {
+func (a *application) buildImage(ctx context.Context, dc *spec.DevContainer, workspace string, bo builder.Options) (*builder.Result, []string, error) {
 	var result *builder.Result
 	var err error
 	images := bo.Tags
@@ -151,9 +155,13 @@ func (a *application) buildImage(ctx context.Context, dc *spec.DevContainer, wor
 		if result != nil {
 			a.result["contextDir"] = result.ContextDir
 		}
-		return result, err
+		return result, images, err
 	}
 
+	return result, images, nil
+}
+
+func (a *application) buildResult(bo builder.Options, images []string) {
 	switch {
 	case bo.OutputDir != "":
 		a.result["outputDir"] = bo.OutputDir
@@ -162,7 +170,6 @@ func (a *application) buildImage(ctx context.Context, dc *spec.DevContainer, wor
 	default:
 		a.result["imageName"] = images
 	}
-	return result, nil
 }
 
 func firstImage(images []string) string {

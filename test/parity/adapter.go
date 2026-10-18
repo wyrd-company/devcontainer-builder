@@ -4,30 +4,39 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"path/filepath"
 )
 
-// Adapter owns CLI-specific build/up arguments and JSON extraction. Observation,
-// scoring, fixture preparation and teardown are shared. A single-dcb adapter can
-// replace LegacyAdapter without changing those parts.
+// Adapter owns CLI-specific arguments and JSON extraction. Observation,
+// scoring, fixture preparation and teardown are shared.
 type Adapter interface {
 	Name() string
 	Up(context.Context, *Runner, string, string) ([]byte, error)
 }
 
-type LegacyAdapter struct{ Build, Runtime string }
+type DCBAdapter struct{ Binary string }
 
-func (LegacyAdapter) Name() string {
-	return "dcb + devcontainer-docker (native BuildKit, no VS Code server)"
-}
-func (a LegacyAdapter) Up(ctx context.Context, r *Runner, workspace, tag string) ([]byte, error) {
-	_, err := r.command(ctx, a.Build, "build", "--workspace", workspace, "--load", "--tag", tag, "--label", r.label())
+func (DCBAdapter) Name() string { return "dcb (native BuildKit, JSON result)" }
+func (a DCBAdapter) Up(ctx context.Context, r *Runner, workspace, tag string) ([]byte, error) {
+	body, err := r.command(ctx, a.Binary, "up", "--workspace-folder", workspace, "--image-name", tag, "--label", r.label())
 	if err != nil {
-		return nil, fmt.Errorf("build: %w", err)
+		return body, err
 	}
-	return r.command(ctx, a.Runtime, "up", "--workspace", workspace, "--image", tag, "--skip-build")
+	var result struct {
+		Outcome string `json:"outcome"`
+	}
+	err = json.Unmarshal(body, &result)
+	if bytes.Count(body, []byte("\n")) != 1 || err != nil {
+		return body, fmt.Errorf("dcb up must emit exactly one JSON result line")
+	}
+	if result.Outcome != "success" {
+		return body, fmt.Errorf("dcb up reported outcome %q", result.Outcome)
+	}
+	return body, nil
 }
 
 type UpstreamAdapter struct{ Version string }
@@ -38,11 +47,9 @@ func (a UpstreamAdapter) Up(ctx context.Context, r *Runner, workspace, tag strin
 }
 
 func buildAdapter(ctx context.Context, r *Runner) (Adapter, error) {
-	a := LegacyAdapter{filepath.Join(r.temp, "dcb"), filepath.Join(r.temp, "devcontainer-docker")}
-	for _, binary := range []struct{ path, pkg string }{{a.Build, "./cmd/dcb"}, {a.Runtime, "./cmd/devcontainer-docker"}} {
-		if _, err := r.command(ctx, "go", "build", "-o", binary.path, binary.pkg); err != nil {
-			return nil, err
-		}
+	a := DCBAdapter{Binary: filepath.Join(r.temp, "dcb")}
+	if _, err := r.command(ctx, "go", "build", "-o", a.Binary, "./cmd/dcb"); err != nil {
+		return nil, err
 	}
 	return a, nil
 }

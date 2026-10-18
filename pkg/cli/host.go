@@ -79,11 +79,12 @@ func (a *application) upCommand() *cobra.Command {
 		// An image-only config needs no derived build. Features, image overlays,
 		// Dockerfiles and server staging use the shared builder path.
 		if dc.Mode() == spec.ModeCompose || needsBuild(dc, bo) || len(opts.options.Tags) > 0 {
-			built, err = a.buildImage(cmd.Context(), dc, workspace, bo)
+			var images []string
+			built, images, err = a.buildImage(cmd.Context(), dc, workspace, bo)
 			if err != nil {
 				return err
 			}
-			image = a.result["imageName"].([]string)[0]
+			image = images[0]
 		}
 		var resolved []features.Resolved
 		if built != nil {

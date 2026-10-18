@@ -42,15 +42,16 @@ Normalization replaces observed container/image IDs, hostnames and temporary
 workspace paths. Result timestamps are ignored. Environment and label maps and
 mount sets are unordered; metadata and command arrays retain their order.
 Unexpected environment values, metadata differences and missing results remain
-visible. The current runtime has no JSON success result and will fail that
-dimension. Do not manufacture one from inspect output.
+visible. The dcb adapter reads the real JSON success result; it rejects extra
+stdout lines, invalid JSON, and error outcomes. It does not manufacture a result
+from inspection.
 
-`Adapter` in `adapter.go` owns CLI arguments. `LegacyAdapter` builds the current
-`dcb` and `devcontainer-docker` binaries, uses the default native BuildKit engine
-with VS Code server injection omitted, then starts the built image. BuildKit uses
-the Docker daemon unless `BUILDKIT_HOST` selects a separate existing daemon.
-Replace it with a new adapter for the
-single `dcb` CLI; fixture preparation, observation and scoring need no changes.
+`Adapter` in `adapter.go` owns CLI arguments. `DCBAdapter` builds only `./cmd/dcb`
+and runs `dcb up --workspace-folder ... --image-name ... --label ...`.
+The image name and label keep the derived image owned by the run. VS Code server
+injection remains omitted. BuildKit uses the Docker daemon unless
+`BUILDKIT_HOST` selects a separate existing daemon. Fixture preparation,
+observation, normalization, and scoring are shared with the upstream adapter.
 
 Teardown selects only this run's labels, rechecks full Docker IDs and ownership,
 then removes containers and labelled images, including after normal errors or

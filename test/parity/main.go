@@ -81,7 +81,7 @@ func run(ctx context.Context, root, output string) error {
 		return err
 	}
 	version, skip := prerequisites(root)
-	report := Report{Version: version, Skipped: skip, Adapter: LegacyAdapter{}.Name()}
+	report := Report{Version: version, Skipped: skip, Adapter: DCBAdapter{}.Name()}
 	if skip != "" {
 		fmt.Println("SKIP parity:", skip)
 		return writeReport(output, report)

@@ -130,7 +130,7 @@ func TestMissingToolsSkipWithReport(t *testing.T) {
 	if err := json.Unmarshal(body, &r); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(r.Skipped, "node") || r.Total != 0 {
+	if !strings.Contains(r.Skipped, "node") || r.Total != 0 || r.Adapter != (DCBAdapter{}).Name() {
 		t.Fatalf("skip report: %+v", r)
 	}
 }
@@ -325,11 +325,11 @@ func TestPrepareGoPreservesNativeBuildOptions(t *testing.T) {
 	}
 }
 
-func TestLegacyAdapterNativeBuildInvocation(t *testing.T) {
+func TestDCBAdapterNativeInvocation(t *testing.T) {
 	bin := t.TempDir()
 	calls := filepath.Join(bin, "calls")
 	script := filepath.Join(bin, "cli")
-	if err := os.WriteFile(script, []byte("#!/bin/sh\nprintf '%s\\n' \"$@\" >> \"$PARITY_ADAPTER_CALLS\"\n"), 0755); err != nil {
+	if err := os.WriteFile(script, []byte("#!/bin/sh\nprintf '%s\\n' \"$@\" >> \"$PARITY_ADAPTER_CALLS\"\nprintf '{\"outcome\":\"success\",\"containerId\":\"example\"}\\n'\n"), 0755); err != nil {
 		t.Fatal(err)
 	}
 	log, err := os.CreateTemp(t.TempDir(), "log")
@@ -338,7 +338,7 @@ func TestLegacyAdapterNativeBuildInvocation(t *testing.T) {
 	}
 	defer log.Close()
 	r := &Runner{root: t.TempDir(), runID: "sample", env: append(os.Environ(), "PARITY_ADAPTER_CALLS="+calls), log: log}
-	if _, err := (LegacyAdapter{Build: script, Runtime: script}).Up(context.Background(), r, "/workspace", "sample:latest"); err != nil {
+	if _, err := (DCBAdapter{Binary: script}).Up(context.Background(), r, "/workspace", "sample:latest"); err != nil {
 		t.Fatal(err)
 	}
 	body, err := os.ReadFile(calls)
@@ -352,7 +352,74 @@ func TestLegacyAdapterNativeBuildInvocation(t *testing.T) {
 	if !strings.Contains(args, "--label\n"+r.label()+"\n") {
 		t.Fatal("native output image ownership label omitted")
 	}
-	if !strings.Contains(args, "up\n--workspace\n/workspace\n--image\nsample:latest\n--skip-build\n") {
-		t.Fatalf("runtime did not use the labelled native image: %s", args)
+	if !strings.Contains(args, "up\n--workspace-folder\n/workspace\n--image-name\nsample:latest\n") {
+		t.Fatalf("dcb did not request the labelled native image: %s", args)
+	}
+}
+
+func TestDCBAdapterResultBoundary(t *testing.T) {
+	for _, tc := range []struct {
+		name, body, exit string
+		fail             bool
+	}{
+		{"success", "{\"outcome\":\"success\",\"containerId\":\"example\"}\n", "0", false},
+		{"invalid-json", "not-json\n", "0", true},
+		{"extra-stdout", "diagnostic\n{\"outcome\":\"success\"}\n", "0", true},
+		{"blank-stdout-line", "{\"outcome\":\"success\"}\n\n", "0", true},
+		{"missing-outcome", "{}\n", "0", true},
+		{"error-outcome", "{\"outcome\":\"error\"}\n", "0", true},
+		{"process-exit", "{\"outcome\":\"success\"}\n", "7", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			script := filepath.Join(dir, "dcb")
+			if err := os.WriteFile(script, []byte("#!/bin/sh\nprintf '%s' \"$PARITY_RESULT\"\nexit \"$PARITY_EXIT\"\n"), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			log, err := os.CreateTemp(t.TempDir(), "log")
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer log.Close()
+			r := &Runner{root: dir, runID: "sample", env: append(os.Environ(), "PARITY_RESULT="+tc.body, "PARITY_EXIT="+tc.exit), log: log}
+			body, err := (DCBAdapter{Binary: script}).Up(context.Background(), r, "/workspace", "sample:latest")
+			if (err != nil) != tc.fail {
+				t.Fatalf("adapter error=%v, want failure=%v", err, tc.fail)
+			}
+			if string(body) != tc.body {
+				t.Fatalf("adapter changed real CLI output: %q", body)
+			}
+		})
+	}
+}
+
+func TestBuildAdapterUsesOnlyDCB(t *testing.T) {
+	dir := t.TempDir()
+	calls := filepath.Join(dir, "calls")
+	if err := os.WriteFile(filepath.Join(dir, "go"), []byte("#!/bin/sh\nprintf '%s\\n' \"$@\" >> \"$PARITY_ADAPTER_CALLS\"\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	log, err := os.CreateTemp(t.TempDir(), "log")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer log.Close()
+	r := &Runner{root: t.TempDir(), temp: t.TempDir(), env: append(os.Environ(), "PARITY_ADAPTER_CALLS="+calls), log: log}
+	adapter, err := buildAdapter(context.Background(), r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, ok := adapter.(DCBAdapter)
+	if !ok || got.Binary != filepath.Join(r.temp, "dcb") {
+		t.Fatalf("adapter=%+v", adapter)
+	}
+	body, err := os.ReadFile(calls)
+	if err != nil {
+		t.Fatal(err)
+	}
+	expected := "build\n-o\n" + got.Binary + "\n./cmd/dcb\n"
+	if string(body) != expected {
+		t.Fatalf("binary build calls=%q, want %q", body, expected)
 	}
 }

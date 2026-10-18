@@ -85,6 +85,12 @@ func TestDockerComposeCLI(t *testing.T) {
 			t.Fatalf("missing %s: %v", field, result)
 		}
 	}
+
+	for _, field := range []string{"imageName", "cacheOnly", "outputDir"} {
+		if _, exists := result[field]; exists {
+			t.Fatalf("up leaked build result field %s: %v", field, result)
+		}
+	}
 	id := result["containerId"].(string)
 	t.Cleanup(func() {
 		_ = cli.ContainerRemove(context.Background(), id, container.RemoveOptions{Force: true, RemoveVolumes: true})
