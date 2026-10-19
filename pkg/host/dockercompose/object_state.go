@@ -10,7 +10,9 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/filters"
+	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/api/types/volume"
 	"github.com/wyrd-company/devcontainer-builder/internal/datafolder"
 )
@@ -80,4 +82,56 @@ func (h *Host) removeObjectRecords(ctx context.Context, records []*volume.Volume
 		}
 	}
 	return nil
+}
+
+// previousObjectRecords snapshots roots already consumed by this project before
+// Up writes anything. Unmounted records can belong to an in-flight producer and
+// remain for explicit teardown, rather than being swept during recreation.
+func (h *Host) previousObjectRecords(ctx context.Context, workspace, project string, containers []container.Summary) ([]*volume.Volume, error) {
+	if len(containers) == 0 {
+		return nil, nil
+	}
+	records, err := h.objectRecords(ctx, workspace)
+	if err != nil {
+		return nil, err
+	}
+	var previous []*volume.Volume
+	for _, record := range records {
+		if record.Labels[LabelProject] == project && objectRootMounted(record.Labels[labelObjectRoot], containers) {
+			previous = append(previous, record)
+		}
+	}
+	return previous, nil
+}
+
+// removeRetiredObjects deletes only prior roots with no remaining consumer. Check
+// all containers, including stopped and unrelated containers, before deleting any
+// root; a reused service can still mount a root shared with a recreated service.
+func (h *Host) removeRetiredObjects(ctx context.Context, previous []*volume.Volume) error {
+	if len(previous) == 0 {
+		return nil
+	}
+	containers, err := h.client.ContainerList(ctx, container.ListOptions{All: true})
+	if err != nil {
+		return errorf("find materialized object consumers: %w", err)
+	}
+	var retired []*volume.Volume
+	for _, record := range previous {
+		if !objectRootMounted(record.Labels[labelObjectRoot], containers) {
+			retired = append(retired, record)
+		}
+	}
+	return h.removeObjectRecords(ctx, retired)
+}
+
+func objectRootMounted(root string, containers []container.Summary) bool {
+	for _, c := range containers {
+		for _, m := range c.Mounts {
+			source := filepath.Clean(m.Source)
+			if m.Type == mount.TypeBind && (source == root || strings.HasPrefix(source, root+string(filepath.Separator))) {
+				return true
+			}
+		}
+	}
+	return false
 }

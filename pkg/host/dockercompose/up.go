@@ -188,6 +188,11 @@ func (h *Host) Up(ctx context.Context, req UpRequest) (*UpResult, error) {
 		h.logf("warning: --allow-project-conflict permits upstream behavior despite %s", conflict)
 	}
 
+	previousObjects, err := h.previousObjectRecords(ctx, req.LocalWorkspace, proj.Name, containers)
+	if err != nil {
+		return nil, err
+	}
+
 	// Filter the project by active profiles. The primary always
 	// stays enabled — without it there's no devcontainer — and any
 	// service named in spec.RunServices does too, matching `docker
@@ -339,6 +344,9 @@ func (h *Host) Up(ctx context.Context, req UpRequest) (*UpResult, error) {
 	sort.Strings(res.RecreatedThisCall)
 
 	if err := h.runLifecycle(ctx, req, subCtx, res.PrimaryContainerID, containerWorkspace, res); err != nil {
+		return res, err
+	}
+	if err := h.removeRetiredObjects(ctx, previousObjects); err != nil {
 		return res, err
 	}
 	return res, nil

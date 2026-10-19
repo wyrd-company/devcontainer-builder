@@ -543,7 +543,9 @@ An unmounted Docker volume records each private directory's ownership, without
 secret values. `down` discovers these records without the creation-time folder
 option or source configuration, removes the containers and their materialized
 files, then removes the records. Cleanup failures return an error and retain
-the record for a later `down` retry. An interrupted or failed `up` can leave
+the record for a later `down` retry. Successful recreation removes previous
+materialized roots once no container mounts them; a reused service or another
+container can keep an older root. An interrupted or failed `up` can leave
 materialized files; run `down` for that workspace to remove them.
 
 `--container-data-folder` selects lifecycle and dotfiles marker storage on

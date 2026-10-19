@@ -165,7 +165,9 @@ intact. Compose up also stores inline configs and environment-backed configs/sec
 (default: `$TMPDIR/dcb-compose`). Down discovers their private directories from
 Docker ownership records without repeating the folder option or supplying the
 source configuration. It removes materialized copies, preserves file-backed
-sources, and reports cleanup errors for retry. Run down after a failed or
+sources, and reports cleanup errors for retry. Successful recreation removes old
+roots once no container mounts them; reused services can keep a shared root.
+Run down after a failed or
 interrupted up to remove retained materialized copies.
 Use `--container-data-folder` on up, set-up, run-user-commands, and exec
 for lifecycle/dotfiles markers (default: `.devcontainer` under the container

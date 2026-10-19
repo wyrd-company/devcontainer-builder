@@ -41,7 +41,19 @@ container ownership before destructive operations. Successful container removal
 precedes backing-file deletion. File cleanup precedes ownership-record deletion.
 A failed cleanup returns an error and retains the record for retry. Other
 workspaces' records and private directories remain outside that snapshot. CLI
-`down` consults this runtime ownership before loading mutable configuration.
+`down` consults this runtime ownership without falling back to the default config,
+then continues the selected configuration's removal path. Explicit ID-label
+selection stays on its normal removal path.
+
+Before `Up` changes containers, it snapshots this workspace/project's ownership
+records that existing project containers mount. After successful bring-up and
+lifecycle commands, it removes only snapshot roots that no container mounts.
+The consumer check includes stopped containers and containers outside the project.
+A reused service can keep an older shared root. Unmounted records are excluded
+from this retirement snapshot so an in-flight producer's files are preserved.
+File cleanup and record deletion use the same validation and retry path as
+`Remove`; an error is returned. Failed or interrupted runs remain discoverable
+for explicit workspace teardown.
 
 Behavioral evidence is separate from option-registration coverage:
 
@@ -50,6 +62,11 @@ Behavioral evidence is separate from option-registration coverage:
 - `TestDockerComposeObjectCleanupCLI` proves real process-boundary folder routing,
   container-visible values, down without the creation flag, malformed and absent
   configuration, cleanup failure/retry, idempotence, and parent sentinels.
+- `TestDockerComposeObjectSelectedConfigCLI` proves default Compose config cannot
+  swallow non-Compose or label-selected teardown, including after runtime cleanup.
+- `TestComposeObjectRecreateCleanupIntegration` proves retired-root absence,
+  shared and external consumer preservation, workspace/project isolation,
+  in-flight producer preservation and cleanup/consumer lookup failures.
 - `TestComposeObjectRemoveIntegration` proves host Remove for default and selected
   parents, lost containers, changed configuration, file-source preservation and
   independent workspace isolation.
