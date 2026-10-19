@@ -3,7 +3,6 @@ package runner
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -55,30 +54,42 @@ func TestDotfilesTargetPathForms(t *testing.T) {
 	}
 }
 
-// A target that resolves to "/" or to the home folder is refused before any
-// clone: a failed install with a message, no marker, and nothing changed.
-func TestDotfilesTargetPathRejections(t *testing.T) {
-	for _, target := range []string{"~", "~/", "~/dotfiles/..", "$HOME", "/", "/..", "../../../../../../../../.."} {
-		t.Run(strings.ReplaceAll(target, "$", "var-"), func(t *testing.T) {
+// As upstream, an existing target is used as it is: no clone, no staging,
+// and its own installer runs once. The first case is the home folder with an
+// explicit install command (zone-pond's regression). Real git and shell.
+func TestDotfilesExistingTargetUsedAsIs(t *testing.T) {
+	for _, tc := range []struct{ target, folder string }{
+		{"$HOME", ""},
+		{"~", ""},
+		{"~/", ""},
+		{"~/mine/", "mine"},
+		{"./mine/./", "mine"},
+	} {
+		t.Run(strings.ReplaceAll(tc.target, "$", "var-"), func(t *testing.T) {
 			f := newGitFixture(t, "serve")
+			dir := filepath.Join(f.home, tc.folder)
+			if err := os.MkdirAll(dir, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			script := filepath.Join(dir, "install.sh")
+			if err := os.WriteFile(script, []byte("#!/bin/sh\necho ran >> \"$HOME/installer-runs\"\n"), 0o700); err != nil {
+				t.Fatal(err)
+			}
 			rt := f.runtime()
-			rt.Dotfiles.TargetPath = target
+			rt.Dotfiles.TargetPath, rt.Dotfiles.InstallCommand = tc.target, "install.sh"
 			var out bytes.Buffer
-			var logs []string
-			opts := Options{Stdout: &out, Stderr: &out, Logger: func(format string, args ...any) { logs = append(logs, fmt.Sprintf(format, args...)) }}
-			result, err := RunWithResult(context.Background(), f.execer(), nil, rt, opts)
-			if err != nil || result.Dotfiles != DotfilesFailed || f.installerRuns() != 0 {
+			result, err := RunWithResult(context.Background(), f.execer(), nil, rt, Options{Stdout: &out, Stderr: &out})
+			if err != nil || result.Dotfiles != DotfilesInstalled || f.installerRuns() != 1 {
 				t.Fatalf("result=%+v err=%v runs=%d output:\n%s", result, err, f.installerRuns(), out.String())
 			}
-			if !strings.Contains(out.String(), "is / or the home folder; use a folder inside it.") || !hasLog(logs, "warning: dotfiles install from ") {
-				t.Fatalf("no refusal message:\n%s\nlogs=%q", out.String(), logs)
-			}
-			entries, err := os.ReadDir(f.home)
-			if err != nil || len(entries) != 0 {
-				t.Fatalf("home changed: %v %v", entries, err)
+			if _, err := os.Stat(script); err != nil {
+				t.Fatalf("existing script damaged: %v", err)
 			}
 			if count, _ := os.ReadFile(filepath.Join(filepath.Dir(f.home), "plan-count")); len(count) != 0 {
 				t.Fatalf("git transport ran %s time(s)", count)
+			}
+			if staged, _ := filepath.Glob(filepath.Join(f.home, "*.clone.*")); len(staged) != 0 {
+				t.Fatalf("staging folders: %v", staged)
 			}
 		})
 	}

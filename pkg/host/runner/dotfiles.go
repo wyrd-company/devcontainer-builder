@@ -84,9 +84,9 @@ const dotfilesPathFunction = `dotfiles_path() {
 
 // script is upstream's install script without its marker line, with a staged
 // clone. The target is assigned unquoted, so that the shell expands it as
-// upstream does ("~", variables), and is then made a clean absolute path.
-// The script refuses "/" and the home folder, which a clone would replace.
-// A missing git is a failure here; upstream reports it and exits 0.
+// upstream does ("~", variables). A target that does not exist is made a
+// clean absolute path for the clone. A missing git is a failure here;
+// upstream reports it and exits 0.
 func (d Dotfiles) script() string {
 	target := d.TargetPath
 	if target == "" {
@@ -99,19 +99,15 @@ func (d Dotfiles) script() string {
 	}
 	fmt.Fprintf(&b, "%s\ncommand -v git >/dev/null 2>&1 || { echo git not found; exit 127; }\n", header)
 	b.WriteString(dotfilesPathFunction)
+	// As upstream, an existing target is used as it is. Only a clone needs
+	// the clean path: the clone goes to a sibling folder unique to this run
+	// and is renamed into place when complete, so no run reads another run's
+	// partial clone. mv -T does not replace a published clone; this run then
+	// uses it.
 	fmt.Fprintf(&b, `target=%s
-target=$(dotfiles_path "$target")
-if [ "$target" = / ] || [ "$target" = "$(dotfiles_path "${HOME:-/}")" ]
+if [ ! -e "$target" ]
 then
-	echo "The dotfiles target path $target is / or the home folder; use a folder inside it." >&2
-	exit 2
-fi
-`, target)
-	// The clone goes to a sibling folder unique to this run and is renamed
-	// into place only when complete, so no run reads another run's partial
-	// clone. mv -T does not replace a published clone; this run then uses it.
-	fmt.Fprintf(&b, `if [ ! -e "$target" ]
-then
+	target=$(dotfiles_path "$target")
 	stage="${target%%/*}/.${target##*/}.clone.$$"
 	rm -rf "$stage"
 	git clone --depth 1 %s "$stage" || { code=$?; rm -rf "$stage"; exit $code; }
@@ -122,7 +118,7 @@ then
 		echo Using the dotfiles clone that another run published
 	fi
 fi
-`, d.repositoryURL())
+`, target, d.repositoryURL())
 	if d.InstallCommand != "" {
 		cmd := d.InstallCommand
 		b.WriteString("echo Setting current directory to \"'$target'\"\ncd \"$target\" || exit $?\n\n")
