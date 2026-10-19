@@ -35,11 +35,14 @@ func TestBuilderFeatureMappingControls(t *testing.T) {
 					_, _, _, _, _, _, _, _, _, err = b.prepareBuildContext(context.Background(), opts, t.Logf)
 				}
 				if err == nil {
-					t.Fatal("feature transport was not reached")
+					t.Fatal("feature resolution unexpectedly succeeded")
 				}
 				want := "https://ghcr.io/v2/devcontainers/features/common-utils/manifests/1"
 				if skip {
-					want = "https://registry-1.docker.io/v2/library/common/manifests/latest"
+					want = ""
+					if !strings.Contains(err.Error(), "legacy feature") {
+						t.Fatalf("expected upstream legacy rejection: %v", err)
+					}
 				}
 				if tr.url != want {
 					t.Fatalf("request=%s want=%s", tr.url, want)

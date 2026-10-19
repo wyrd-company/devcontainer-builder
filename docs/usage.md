@@ -644,6 +644,7 @@ Legacy identifiers such as `node`, `golang`, and `common` map to upstream's
 version 1 feature references by default. Explicit OCI references and local
 feature paths stay unchanged. The skip flag disables this mapping wherever
 features must be resolved; it does not change an existing container's features.
+Unmapped bare legacy identifiers fail as unsupported, matching upstream.
 
 Configuration remoteEnv is persisted in metadata by default, matching upstream.
 The omit flag affects only the current configuration's metadata contribution.

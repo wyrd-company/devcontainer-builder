@@ -9,7 +9,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"reflect"
 	"strings"
 	"testing"
 )
@@ -86,18 +85,36 @@ func TestResolveFeatureAutoMapping(t *testing.T) {
 			r.OCI.Auth = nil
 			r.OCI.HTTP.Transport = mappingTransport{target: reg.host(), next: r.OCI.HTTP.Transport}
 			got, err := r.Resolve(userFeatures("common", `{}`), nil, filepath.Join(t.TempDir(), "stage"), t.TempDir())
+			if skip {
+				if err == nil || !strings.Contains(err.Error(), "legacy feature") || len(reg.requested()) != 0 {
+					t.Fatalf("unmapped legacy feature err=%v requests=%v", err, reg.requested())
+				}
+				return
+			}
 			if err != nil {
 				t.Fatal(err)
 			}
 			want := "ghcr.io/devcontainers/features/common-utils:1"
-			if skip {
-				want = "registry-1.docker.io/library/common:latest"
-			}
 			if len(got) != 1 || got[0].Source != "common" || got[0].Reference.String() != want {
 				t.Fatalf("resolved=%+v, want reference %s and original source", got, want)
 			}
-			if reflect.DeepEqual(reg.requested(), []string{}) {
+			if len(reg.requested()) == 0 {
 				t.Fatal("registry was not reached")
+			}
+		})
+	}
+}
+
+func TestResolveRejectsBareLegacyIdentifiers(t *testing.T) {
+	for _, id := range []string{"sample", "node:1", "gradle", "maven", "jupyterlab"} {
+		t.Run(id, func(t *testing.T) {
+			reg := newFakeRegistry(t)
+			r := reg.resolver()
+			r.OCI.Auth = nil
+			r.OCI.HTTP.Transport = mappingTransport{target: reg.host(), next: r.OCI.HTTP.Transport}
+			_, err := r.Resolve(userFeatures(id, `{}`), nil, t.TempDir(), t.TempDir())
+			if err == nil || !strings.Contains(err.Error(), "legacy feature") || len(reg.requested()) != 0 {
+				t.Fatalf("legacy reference err=%v requests=%v", err, reg.requested())
 			}
 		})
 	}

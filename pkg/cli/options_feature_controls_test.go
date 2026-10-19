@@ -7,6 +7,7 @@ import (
 	"errors"
 	"net/http"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/spf13/cobra"
@@ -97,11 +98,14 @@ func TestNonBuildFeatureMappingBinding(t *testing.T) {
 				}
 				_, _, err = a.resolveFeatures(&spec.DevContainer{Features: features, Path: filepath.Join(t.TempDir(), "devcontainer.json")})
 				if err == nil {
-					t.Fatal("test transport was not reached")
+					t.Fatal("feature resolution unexpectedly succeeded")
 				}
 				wantHost, wantPath := "ghcr.io", "/v2/devcontainers/features/common-utils/manifests/1"
 				if skip {
-					wantHost, wantPath = "registry-1.docker.io", "/v2/library/common/manifests/latest"
+					wantHost, wantPath = "", ""
+					if !strings.Contains(err.Error(), "legacy feature") {
+						t.Fatalf("expected upstream legacy rejection: %v", err)
+					}
 				}
 				if capture.host != wantHost || capture.path != wantPath {
 					t.Fatalf("request=%s%s want=%s%s", capture.host, capture.path, wantHost, wantPath)

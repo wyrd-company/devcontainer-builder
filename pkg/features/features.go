@@ -267,7 +267,12 @@ func (r *Resolver) resolveOne(ctx context.Context, source string, opts map[strin
 		return r.resolveTarball(ctx, source, opts, dir, safeID, integrity)
 	}
 
-	ref, err := oci.ParseReference(r.featureIdentifier(source))
+	identifier := r.featureIdentifier(source)
+	// Upstream rejects unmapped legacy shorthand before registry acquisition.
+	if !strings.ContainsAny(identifier, `/\`) {
+		return nil, fmt.Errorf("legacy feature %q is not supported; use a fully qualified reference or prepend ./ for a local feature", identifier)
+	}
+	ref, err := oci.ParseReference(identifier)
 	if err != nil {
 		return nil, fmt.Errorf("not a local path and not a valid OCI ref: %w", err)
 	}
