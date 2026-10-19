@@ -1,11 +1,12 @@
 package workspace
 
 import (
-	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/wyrd-company/devcontainer-builder/internal/testgit"
 )
 
 // TestGitRootMatchesGit compares GitRoot with upstream's own probe,
@@ -19,7 +20,7 @@ func TestGitRootMatchesGit(t *testing.T) {
 	git := func(dir string, args ...string) (string, error) {
 		cmd := exec.Command(gitBin, args...)
 		cmd.Dir = dir
-		cmd.Env = append(os.Environ(), "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_NOSYSTEM=1", "GIT_CEILING_DIRECTORIES="+base)
+		cmd.Env = append(testgit.Env(), "GIT_CEILING_DIRECTORIES="+base)
 		out, err := cmd.Output()
 		return strings.TrimSpace(string(out)), err
 	}
@@ -31,7 +32,7 @@ func TestGitRootMatchesGit(t *testing.T) {
 	}
 	repo := mkdir(t, filepath.Join(base, "repo"))
 	must(repo, "init", "-q", "-b", "main")
-	must(repo, "-c", "user.name=example", "-c", "user.email=example@example.invalid", "commit", "-q", "--allow-empty", "-m", "initial")
+	must(repo, "commit", "-q", "--allow-empty", "-m", "initial")
 	nested := mkdir(t, filepath.Join(repo, "vendor", "nested"))
 	must(nested, "init", "-q")
 	must(repo, "worktree", "add", "-q", "--relative-paths", filepath.Join(base, "trees", "topic"), "-b", "topic")
