@@ -41,6 +41,7 @@ func (a *application) upCommand() *cobra.Command {
 	var controls lifecycleOptions
 	var dotfiles dotfilesOptions
 	var configuration configurationOptions
+	var environment environmentOptions
 	var remove, allowProjectConflict bool
 	cmd := &cobra.Command{Use: "up", Short: "Build, create, start, and run lifecycle commands", Args: cobra.NoArgs}
 	opts.flags(cmd, false)
@@ -49,11 +50,16 @@ func (a *application) upCommand() *cobra.Command {
 	gpuAvailabilityFlag(cmd)
 	dotfiles.flags(cmd)
 	configuration.flags(cmd)
+	environment.flags(cmd, true)
 	cmd.Flags().BoolVar(&remove, "remove-existing-container", false, "Remove the workspace container before creating it")
 	cmd.Flags().BoolVar(&allowProjectConflict, "allow-project-conflict", false, "Allow Compose up to reuse or recreate another workspace's project containers")
 	cmd.Flags().BoolVar(&opts.options.NoCache, "build-no-cache", false, "Disable build cache (upstream up flag)")
 	cmd.Flags().String("update-remote-user-uid-default", "on", "Remote user UID update default: on, off, or never (Linux default on; macOS requires explicit on; single-container mode)")
 	cmd.RunE = func(cmd *cobra.Command, _ []string) error {
+		remoteEnv, secrets, err := environment.load(a)
+		if err != nil {
+			return err
+		}
 		gpu, err := resolveGPUAvailability(cmd)
 		if err != nil {
 			return err
@@ -113,6 +119,7 @@ func (a *application) upCommand() *cobra.Command {
 			req.ContainerDataFolder = folderOption(cmd, "container-data-folder")
 			req.Dotfiles = dotfiles.Dotfiles
 			req.Lifecycle = controls.LifecycleControls
+			req.RemoteEnv, req.Secrets = remoteEnv, secrets
 			host := dockercompose.New(cli, dockercompose.Options{TerminalSize: a.terminalSize, Logger: a.logf, Stdout: a.logs, Stderr: a.logs, NoRecreate: controls.expectExisting})
 			res, err := host.Up(cmd.Context(), req)
 			if err != nil {
@@ -121,7 +128,7 @@ func (a *application) upCommand() *cobra.Command {
 			id = res.PrimaryContainerID
 			a.result["composeProjectName"] = res.ProjectName
 		} else {
-			res, err := a.dockerHost(cli).Up(cmd.Context(), hostdocker.UpRequest{Spec: dc, SpecPath: dc.Path, LocalWorkspace: workspace, Image: image, ImageBuilt: built != nil, SkipLifecycle: skip.postCreate, SkipPostAttach: skip.postAttach, Features: resolved, LocalEnv: envMap(), RemoteUserUIDUpdate: uid, GPUAvailability: gpu, ContainerDataFolder: folderOption(cmd, "container-data-folder"), Dotfiles: dotfiles.Dotfiles, Lifecycle: controls.LifecycleControls})
+			res, err := a.dockerHost(cli).Up(cmd.Context(), hostdocker.UpRequest{Spec: dc, SpecPath: dc.Path, LocalWorkspace: workspace, Image: image, ImageBuilt: built != nil, SkipLifecycle: skip.postCreate, SkipPostAttach: skip.postAttach, Features: resolved, LocalEnv: envMap(), RemoteUserUIDUpdate: uid, GPUAvailability: gpu, ContainerDataFolder: folderOption(cmd, "container-data-folder"), Dotfiles: dotfiles.Dotfiles, Lifecycle: controls.LifecycleControls, RemoteEnv: remoteEnv, Secrets: secrets})
 			if err != nil {
 				return err
 			}

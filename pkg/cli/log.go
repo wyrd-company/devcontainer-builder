@@ -15,18 +15,43 @@ import (
 
 // logWriter serializes concurrent lifecycle and build streams. JSON mode wraps
 // each complete output line; Flush retains a final line without a newline.
+// With a mask, secret values are masked before any record is formed, and a
+// tail that could still become a secret waits for the next write or Flush.
 type logWriter struct {
 	mu      sync.Mutex
 	dst     io.Writer
 	json    bool
 	pending []byte
+	mask    *secretMask
+	held    []byte
+}
+
+func (w *logWriter) setMask(m *secretMask) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.mask = m
 }
 
 func (w *logWriter) Write(p []byte) (int, error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
+	data := p
+	if w.mask != nil {
+		data, w.held = w.mask.scan(append(w.held, p...), false)
+	}
+	if err := w.write(data); err != nil {
+		return 0, err
+	}
+	return len(p), nil
+}
+
+func (w *logWriter) write(p []byte) error {
 	if !w.json {
-		return w.dst.Write(p)
+		if len(p) == 0 {
+			return nil
+		}
+		_, err := w.dst.Write(p)
+		return err
 	}
 	w.pending = append(w.pending, p...)
 	for {
@@ -35,11 +60,11 @@ func (w *logWriter) Write(p []byte) (int, error) {
 			break
 		}
 		if err := w.emit(string(w.pending[:i])); err != nil {
-			return 0, err
+			return err
 		}
 		w.pending = w.pending[i+1:]
 	}
-	return len(p), nil
+	return nil
 }
 
 func (w *logWriter) emit(s string) error {
@@ -49,6 +74,13 @@ func (w *logWriter) emit(s string) error {
 func (w *logWriter) Flush() error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
+	if len(w.held) > 0 {
+		data, _ := w.mask.scan(w.held, true)
+		w.held = nil
+		if err := w.write(data); err != nil {
+			return err
+		}
+	}
 	if len(w.pending) == 0 {
 		return nil
 	}
@@ -61,6 +93,7 @@ func (w *logWriter) Flush() error {
 func (w *logWriter) diagnostic(level, text string) error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
+	text = w.mask.String(text)
 	if !w.json {
 		if level == "error" {
 			text = "dcb: error: " + text

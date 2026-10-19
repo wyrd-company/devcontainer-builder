@@ -36,6 +36,7 @@ type application struct {
 	result                 map[string]any
 	running                bool
 	logs                   *logWriter
+	mask                   *secretMask
 }
 
 type exitError struct {
@@ -98,6 +99,7 @@ func Run(ctx context.Context, args []string, version string, stdin io.Reader, st
 		}
 		return code
 	}
+	a.result = a.mask.result(a.result)
 	if a.helpShown || a.execStarted {
 		return code
 	}

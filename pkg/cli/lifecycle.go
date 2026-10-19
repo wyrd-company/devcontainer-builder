@@ -47,6 +47,7 @@ func (a *application) lifecycleCommand(name string) *cobra.Command {
 	var controls lifecycleOptions
 	var dotfiles dotfilesOptions
 	var configuration configurationOptions
+	var environment environmentOptions
 	short := "Run lifecycle commands in an existing devcontainer"
 	if name == "set-up" {
 		short = "Set up an existing container with devcontainer lifecycle commands"
@@ -59,6 +60,7 @@ func (a *application) lifecycleCommand(name string) *cobra.Command {
 	if name == "set-up" {
 		configuration.flags(cmd)
 	}
+	environment.flags(cmd, name == "run-user-commands")
 	cmd.Flags().StringVar(&id, "container-id", "", "Target an existing container by ID")
 	if name == "set-up" {
 		_ = cmd.MarkFlagRequired("container-id")
@@ -66,6 +68,10 @@ func (a *application) lifecycleCommand(name string) *cobra.Command {
 	cmd.RunE = func(cmd *cobra.Command, _ []string) error {
 		if cmd.Flags().Changed("container-id") && id == "" {
 			return usageError("--container-id must not be empty")
+		}
+		remoteEnv, secrets, err := environment.load(a)
+		if err != nil {
+			return err
 		}
 		dc, workspace, err := cfg.load()
 		if err != nil {
@@ -119,7 +125,7 @@ func (a *application) lifecycleCommand(name string) *cobra.Command {
 		for i := range plan {
 			plan[i].Command = resolveCommand(plan[i].Command, sub, env)
 		}
-		rt := runner.Runtime{User: dc.RemoteUser, Workdir: containerWorkspace(dc, workspace), Env: resolveRemoteEnv(dc.UpdateRemoteEnv, sub, env), CreatedAt: info.Created, StartedAt: info.State.StartedAt, UserDataFolder: lifecycle.UserDataFolder(home, folderOption(cmd, "container-data-folder")), Dotfiles: dotfiles.forRun(skip)}
+		rt := runner.Runtime{User: dc.RemoteUser, Workdir: containerWorkspace(dc, workspace), Env: runner.LifecycleEnv(remoteEnv, resolveRemoteEnv(dc.UpdateRemoteEnv, sub, env), secrets), CreatedAt: info.Created, StartedAt: info.State.StartedAt, UserDataFolder: lifecycle.UserDataFolder(home, folderOption(cmd, "container-data-folder")), Dotfiles: dotfiles.forRun(skip)}
 		rt.Lifecycle = controls.LifecycleControls
 		rt.Lifecycle.WaitFor = dc.WaitFor
 		result, err := runner.RunWithResult(cmd.Context(), execer, plan, rt, runner.Options{TerminalSize: a.terminalSize, Logger: a.logf, Stdout: a.logs, Stderr: a.logs})
