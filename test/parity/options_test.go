@@ -6,8 +6,10 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -222,6 +224,34 @@ func TestPinnedOptionInventoryAndRegisteredBoundary(t *testing.T) {
 		}
 	}
 	t.Fatal("up workspace-folder missing from source inventory")
+}
+
+func TestOptionAuditCoverageMatchesMeasuredOptions(t *testing.T) {
+	const root = "../.."
+	if _, err := os.Stat(filepath.Join(root, "reference/cli/src/spec-node/devContainersSpecCLI.ts")); os.IsNotExist(err) {
+		t.Skip("reference/cli not initialized")
+	}
+	upstream, err := readUpstreamOptions(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	coverage := measureOptions(upstream, cli.RegisteredOptions())
+	if !coverage.Complete {
+		t.Fatalf("incomplete option coverage: %s", coverage.Error)
+	}
+	body, err := os.ReadFile(filepath.Join(root, "docs/audits/upstream-options.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	pattern := regexp.MustCompile(`(?m)^Registered option coverage is \*\*([0-9]+/[0-9]+ \([0-9]+\.[0-9]{2}%\))\*\*;?$`)
+	matches := pattern.FindAllStringSubmatch(string(body), -1)
+	if len(matches) != 1 {
+		t.Fatalf("expected exactly one well-formed registered option coverage sentence, found %d", len(matches))
+	}
+	want := fmt.Sprintf("%d/%d (%.2f%%)", coverage.Covered, coverage.Total, coverage.Score*100)
+	if got := matches[0][1]; got != want {
+		t.Fatalf("audit registered option coverage is %s; measured %s; update docs/audits/upstream-options.md", got, want)
+	}
 }
 
 func TestOptionAuditCoversEverySourceOption(t *testing.T) {
