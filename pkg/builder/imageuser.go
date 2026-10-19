@@ -6,7 +6,6 @@ package builder
 import (
 	"context"
 	"fmt"
-	"path/filepath"
 
 	"github.com/wyrd-company/devcontainer-builder/pkg/oci"
 	"github.com/wyrd-company/devcontainer-builder/pkg/spec"
@@ -51,7 +50,7 @@ func (b *Builder) imageUser(ctx context.Context, dc *spec.DevContainer, opts Opt
 		}
 		return cfg, nil
 	}
-	dfPath := dc.DockerfilePath()
+	dfPath := dc.DockerfileFile()
 	if dfPath == "" {
 		if dc.Image == "" {
 			return "", nil
@@ -61,13 +60,6 @@ func (b *Builder) imageUser(ctx context.Context, dc *spec.DevContainer, opts Opt
 			return "", err
 		}
 		return cfg.Config.User, nil
-	}
-	ctxDir, err := dc.BuildContextDir()
-	if err != nil {
-		return "", err
-	}
-	if !filepath.IsAbs(dfPath) {
-		dfPath = filepath.Join(ctxDir, dfPath)
 	}
 	target := ""
 	if dc.Build != nil {

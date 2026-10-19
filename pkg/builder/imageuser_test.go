@@ -188,6 +188,22 @@ func TestGenerate_FeaturesSeeDockerfileUser(t *testing.T) {
 	}
 }
 
+// The Dockerfile path is relative to devcontainer.json, not to the build
+// context, so the user is read from it whichever directory is the context.
+func TestGenerate_DockerfileUserOutsideContext(t *testing.T) {
+	for _, context := range []string{"..", "payload"} {
+		t.Run(context, func(t *testing.T) {
+			reg := newImageRegistry(t, "library/base", "1", "image-user")
+			ws := writeWorkspace(t, `"build":{"dockerfile":"Dockerfile","context":"`+context+`"}`, map[string]string{
+				"Dockerfile":    "FROM " + reg.host() + "/library/base:1\nUSER outside-user\n",
+				"payload/.keep": "",
+			})
+			df, _ := generate(t, reg.builder(), ws)
+			wantBuiltinUser(t, df, "outside-user")
+		})
+	}
+}
+
 // userEngine serves Engine API image inspects. The first inspects
 // report an image whose config sets user; the ones after the first ok
 // fail with a daemon error. ok < 0 serves every inspect; user "" answers

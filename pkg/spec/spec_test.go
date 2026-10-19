@@ -277,3 +277,35 @@ func TestLoadMigratesLegacyVSCodeProperties(t *testing.T) {
 		})
 	}
 }
+
+func TestBuildContextDirAndDockerfileFile(t *testing.T) {
+	root := filepath.Join(string(filepath.Separator), "work")
+	configDir := filepath.Join(root, ".devcontainer")
+	absDockerfile := filepath.Join(string(filepath.Separator), "elsewhere", "Dockerfile")
+	cases := []struct {
+		name           string
+		dc             DevContainer
+		wantContext    string
+		wantDockerfile string
+	}{
+		{"context is the config dir", DevContainer{Build: &Build{Dockerfile: "Dockerfile", Context: "."}}, configDir, filepath.Join(configDir, "Dockerfile")},
+		{"context is the parent dir", DevContainer{Build: &Build{Dockerfile: "Dockerfile", Context: ".."}}, root, filepath.Join(configDir, "Dockerfile")},
+		{"context is a subdir", DevContainer{Build: &Build{Dockerfile: "Dockerfile", Context: "payload"}}, filepath.Join(configDir, "payload"), filepath.Join(configDir, "Dockerfile")},
+		{"default context is the Dockerfile dir", DevContainer{Build: &Build{Dockerfile: "docker/Dockerfile"}}, filepath.Join(configDir, "docker"), filepath.Join(configDir, "docker", "Dockerfile")},
+		{"legacy dockerFile", DevContainer{Dockerfile: "../Dockerfile"}, root, filepath.Join(root, "Dockerfile")},
+		{"absolute Dockerfile", DevContainer{Build: &Build{Dockerfile: absDockerfile, Context: "."}}, configDir, absDockerfile},
+		{"image", DevContainer{Image: "example/base"}, "", ""},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			c.dc.Path = filepath.Join(configDir, "devcontainer.json")
+			got, err := c.dc.BuildContextDir()
+			if err != nil || got != c.wantContext {
+				t.Errorf("BuildContextDir = %q, %v; want %q", got, err, c.wantContext)
+			}
+			if got := c.dc.DockerfileFile(); got != c.wantDockerfile {
+				t.Errorf("DockerfileFile = %q, want %q", got, c.wantDockerfile)
+			}
+		})
+	}
+}

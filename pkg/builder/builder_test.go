@@ -84,3 +84,24 @@ func TestVSCodeServerIsOptIn(t *testing.T) {
 		}
 	}
 }
+
+func TestPrepareBaseImage_DockerfileRelativeToConfig(t *testing.T) {
+	configDir := filepath.Join(string(filepath.Separator), "work", ".devcontainer")
+	cases := []struct{ context, wantContext string }{
+		{".", configDir},
+		{"..", filepath.Dir(configDir)},
+		{"payload", filepath.Join(configDir, "payload")},
+	}
+	for _, c := range cases {
+		t.Run(c.context, func(t *testing.T) {
+			dc := &spec.DevContainer{Path: filepath.Join(configDir, "devcontainer.json"), Build: &spec.Build{Dockerfile: "Dockerfile", Context: c.context}}
+			_, upstream, err := prepareBaseImage(dc, Options{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if upstream.ContextDir != c.wantContext || upstream.DockerfileDir != configDir || upstream.Filename != "Dockerfile" {
+				t.Fatalf("upstream = %+v, want context %s and Dockerfile in %s", upstream, c.wantContext, configDir)
+			}
+		})
+	}
+}

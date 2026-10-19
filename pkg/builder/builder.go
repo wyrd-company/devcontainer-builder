@@ -350,7 +350,7 @@ func prepareBaseImage(dc *spec.DevContainer, opts Options) (string, *buildkit.Do
 	if dc.Image != "" && dc.DockerfilePath() == "" {
 		return dc.Image, nil, nil
 	}
-	dfPath := dc.DockerfilePath()
+	dfPath := dc.DockerfileFile()
 	if dfPath == "" {
 		return "", nil, fmt.Errorf("spec must specify either image or dockerFile")
 	}
@@ -360,15 +360,9 @@ func prepareBaseImage(dc *spec.DevContainer, opts Options) (string, *buildkit.Do
 		return "", nil, err
 	}
 
-	dfDir := upstreamCtx
-	if filepath.IsAbs(dfPath) {
-		dfDir = filepath.Dir(dfPath)
-	} else if rel := filepath.Dir(dfPath); rel != "." && rel != "" {
-		dfDir = filepath.Join(upstreamCtx, rel)
-	}
 	upstream := &buildkit.DockerfileBuild{
 		ContextDir:    upstreamCtx,
-		DockerfileDir: dfDir,
+		DockerfileDir: filepath.Dir(dfPath),
 		Filename:      filepath.Base(dfPath),
 		BuildArgs:     mergeArgs(buildArgsFromSpec(dc), opts.BuildArgs),
 	}

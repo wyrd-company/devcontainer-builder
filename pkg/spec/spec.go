@@ -365,20 +365,15 @@ func LoadFromWorkspace(workspace string) (*DevContainer, error) {
 }
 
 // BuildContextDir resolves the build context directory relative to the
-// devcontainer.json location. If the spec uses an `image`, the empty string
+// devcontainer.json location. Without a context it is the Dockerfile's
+// directory, as in upstream. If the spec uses an `image`, the empty string
 // is returned with no error.
 func (d *DevContainer) BuildContextDir() (string, error) {
-	specDir := filepath.Dir(d.Path)
 	switch {
 	case d.Build != nil && d.Build.Context != "":
-		if filepath.IsAbs(d.Build.Context) {
-			return filepath.Clean(d.Build.Context), nil
-		}
-		return filepath.Clean(filepath.Join(specDir, d.Build.Context)), nil
-	case d.Build != nil && d.Build.Dockerfile != "":
-		return specDir, nil
-	case d.Dockerfile != "":
-		return specDir, nil
+		return resolveFromSpecDir(d.Path, d.Build.Context), nil
+	case d.DockerfilePath() != "":
+		return filepath.Dir(d.DockerfileFile()), nil
 	case d.Image != "":
 		return "", nil
 	}
@@ -391,6 +386,23 @@ func (d *DevContainer) DockerfilePath() string {
 		return d.Build.Dockerfile
 	}
 	return d.Dockerfile
+}
+
+// DockerfileFile resolves DockerfilePath relative to the devcontainer.json
+// location, independent of the build context. It is empty when the spec
+// names no Dockerfile.
+func (d *DevContainer) DockerfileFile() string {
+	if df := d.DockerfilePath(); df != "" {
+		return resolveFromSpecDir(d.Path, df)
+	}
+	return ""
+}
+
+func resolveFromSpecDir(specPath, p string) string {
+	if filepath.IsAbs(p) {
+		return filepath.Clean(p)
+	}
+	return filepath.Join(filepath.Dir(specPath), p)
 }
 
 // BaseImage returns the directly-specified image, if any.

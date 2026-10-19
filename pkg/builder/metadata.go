@@ -6,7 +6,6 @@ package builder
 import (
 	"context"
 	"fmt"
-	"path/filepath"
 
 	dockerclient "github.com/docker/docker/client"
 
@@ -32,14 +31,7 @@ func (b *Builder) BaseMetadata(ctx context.Context, dc *spec.DevContainer, opts 
 	defer closeEngine()
 	p := primaryPlatform(opts.Platforms)
 	var cfg *oci.ImageConfig
-	if df := dc.DockerfilePath(); df != "" {
-		contextDir, contextErr := dc.BuildContextDir()
-		if contextErr != nil {
-			return nil, contextErr
-		}
-		if !filepath.IsAbs(df) {
-			df = filepath.Join(contextDir, df)
-		}
+	if df := dc.DockerfileFile(); df != "" {
 		target := ""
 		if dc.Build != nil {
 			target = dc.Build.Target
