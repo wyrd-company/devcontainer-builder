@@ -56,10 +56,11 @@ dcb down --workspace-folder .
 `dcb --help` lists the commands with examples. `dcb <command> --help` lists
 the flags of one command. Help is plain text.
 
-Boolean flags accept `--flag`, `--flag=true`, `--flag=false`, `--flag true`,
-and `--flag false`. Separated values must be lowercase `true` or `false`;
-other tokens remain positional arguments. As upstream, `--no-<flag>` does
-not negate a flag. Arguments after `--` pass through unchanged.
+Boolean flags accept a bare flag, an equals value, or a separated value:
+`--prebuild`, `--prebuild=true`, `--prebuild=false`, `--prebuild true`, and
+`--prebuild false`. Separated values must be lowercase `true` or `false`;
+other values remain positional arguments. The no- prefix does not negate
+boolean flags, as upstream. Arguments after `--` pass through unchanged.
 
 ### Not yet supported
 
