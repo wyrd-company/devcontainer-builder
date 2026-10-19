@@ -56,12 +56,16 @@ func TestMountOptionsDockerIntegration(t *testing.T) {
 	sum := sha256.Sum256([]byte(repo))
 	unique := fmt.Sprintf("%x", sum[:6])
 	volumeName := "dcb-mounts-" + unique
-	// Remove only what this test created: containers with its unique label and
+	// Remove only what this test created: containers with its unique label or
+	// a workspace label below its folder (a defect may drop the id labels), and
 	// its named volume. down does not select id-labelled containers.
 	t.Cleanup(func() {
-		list, _ := cli.ContainerList(ctx, container.ListOptions{All: true, Filters: filters.NewArgs(filters.Arg("label", mountsIDKey+"="+unique))})
-		for _, c := range list {
-			_ = cli.ContainerRemove(ctx, c.ID, container.RemoveOptions{Force: true, RemoveVolumes: true})
+		list, _ := cli.ContainerList(ctx, container.ListOptions{All: true, Filters: filters.NewArgs(filters.Arg("label", mountsIDKey))})
+		owned, _ := cli.ContainerList(ctx, container.ListOptions{All: true, Filters: filters.NewArgs(filters.Arg("label", hostdocker.LabelLocalFolder))})
+		for _, c := range append(list, owned...) {
+			if c.Labels[mountsIDKey] == unique || strings.HasPrefix(c.Labels[hostdocker.LabelLocalFolder], filepath.Dir(repo)+string(filepath.Separator)) {
+				_ = cli.ContainerRemove(ctx, c.ID, container.RemoveOptions{Force: true, RemoveVolumes: true})
+			}
 		}
 		_ = cli.VolumeRemove(ctx, volumeName, true)
 	})
