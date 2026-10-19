@@ -71,6 +71,13 @@ res, err := host.Up(ctx, docker.UpRequest{
 `ImageBuilt` tells `Up` that the image was built from this configuration, so
 its metadata label already holds the feature and configuration entries.
 
+`RemoteEnv` and `Secrets` add variables to the lifecycle commands and the
+dotfiles install of one `Up`. The configuration's `remoteEnv` wins over
+`RemoteEnv`, and `Secrets` win over both. `Up` does not store them, and it
+does not mask them: lifecycle output reaches `Options.Stdout` and
+`Options.Stderr` as the commands print it. Mask secret values in those
+writers if the output is shown or kept.
+
 `Up` pulls a missing image anonymously. To send registry credentials, set
 `docker.Options.RegistryAuth`, for example to `registryauth.FromEnvironment()`
 from `pkg/registryauth`, which reads the Docker client configuration.

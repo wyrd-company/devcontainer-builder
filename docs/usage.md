@@ -271,6 +271,50 @@ after a failed or interrupted install. A missing `git` is a failure. If
 `dcb` cannot write the marker, it gives a warning and the next `up` installs
 again.
 
+### Remote environment and secrets
+
+`up`, `run-user-commands`, and `set-up` take `--remote-env KEY=VALUE`.
+Repeat it for more variables. `up` and `run-user-commands` also take
+`--secrets-file`, the path of a JSON file of secret variables:
+
+```json
+{"SAMPLE_TOKEN": "example-value"}
+```
+
+```bash
+dcb up --workspace-folder . \
+  --remote-env SAMPLE_MODE=test \
+  --secrets-file ./secrets.json
+```
+
+The variables apply to the lifecycle commands and the dotfiles install of
+this command only. `dcb` does not keep them: they are not in the container
+configuration, in a label, or in a file, and a later `exec` does not get
+them. The `configuration` and `mergedConfiguration` result fields do not
+contain them. For these three commands, as in the upstream CLI, a configuration
+`remoteEnv` value replaces a `--remote-env` value with the same name, and a
+secret replaces both.
+
+A `--remote-env` value with no `=`, or with no name before it, is an invalid
+invocation. The secrets file can have comments. Each value is a string, a
+number, or a boolean. As in the upstream CLI, a number or a boolean becomes
+its JavaScript text, for example `1.0` becomes `1` and `true` stays
+`true`. An object, an array, or `null` is not a valid value. If `dcb` cannot
+read or parse the file, the command fails with exit code `1`, and the error
+gives the path and the reason but not the content. `dcb` reads the file
+once, so a pipe such as `/dev/stdin` works. An empty `--secrets-file` value
+means no secrets, as in the upstream CLI.
+
+`dcb` replaces each secret value with `********` in stderr and in the result,
+as the upstream CLI does in its log. This includes the output of lifecycle
+commands, Docker errors, and errors about other flags. `dcb` also replaces
+the value's quoted, JSON-escaped, base64 (standard and URL, with and without
+padding), and URL-escaped forms. A value that is changed in another way, or
+that is part of a longer encoded text, is not replaced. A short value, such
+as `1`, is replaced wherever that text appears. An invalid `--remote-env`,
+`--build-arg`, or `--label` value is reported by its flag and position, not
+by its text.
+
 ## Build an image
 
 `dcb build` loads the image into Docker by default:

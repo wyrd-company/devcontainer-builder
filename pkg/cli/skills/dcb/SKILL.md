@@ -122,6 +122,16 @@ All four controls default to false.
 as the remote user; the container needs `git`. A failed install still gives a
 `success` result, with a `warn` diagnostic on stderr; the next `up` retries.
 
+`up`, `run-user-commands`, and `set-up` take `--remote-env KEY=VALUE`
+(repeatable); `up` and `run-user-commands` take `--secrets-file <path>`, a
+JSON object of string, number or boolean values (numbers and booleans become
+their JavaScript text). Both apply only to that command's lifecycle
+commands and dotfiles install; `exec` does not get them. For these commands,
+configuration `remoteEnv` wins over `--remote-env`; secrets win over both. Secret values,
+and their quoted, JSON, base64 and URL-escaped forms, show as `********` in stderr
+and the result. An unreadable or malformed
+secrets file exits `1` and names the path, not the content.
+
 `dcb version` and `dcb --version` return the version. `dcb skills --list`
 lists bundled skills; `dcb skills dcb` prints this skill in the result's `skills[].content`.
 `dcb skills install --dir .agents/skills` writes `dcb/SKILL.md` below the

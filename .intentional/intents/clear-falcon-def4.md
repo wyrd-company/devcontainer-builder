@@ -15,3 +15,5 @@ GPU availability controls honor single-container and Compose host GPU requiremen
 Data-folder options select host feature/build staging and container lifecycle/dotfiles marker locations.
 
 Paired terminal dimension flags size lifecycle and exec pseudo-terminals in single-container and Compose mode.
+
+Lifecycle commands take a remote environment and a secrets file; dcb masks secret values in its output and does not store them.

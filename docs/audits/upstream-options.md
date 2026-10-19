@@ -30,8 +30,8 @@ registration includes the three session-folder pairs awaiting probe-cache behavi
 
 ## Dispositions
 
-- implemented: **115**.
-- implement: **122**.
+- implemented: **120**.
+- implement: **117**.
 - not applicable by design: **15**.
 - needs Bob's decision: **1**.
 
@@ -314,14 +314,14 @@ features, dotfiles, environment probing and version support.
 | --skip-non-blocking-commands | --skip-non-blocking-commands | implemented | covered | Stops after merged waitFor (default updateContentCommand), without background continuation. Docker and Compose behavior tests. Source: devContainersSpecCLI.ts:770. |
 | --prebuild | --prebuild | implemented | covered | Stops after updateContentCommand and reruns that hook with a current marker. Docker and Compose behavior tests. Source: devContainersSpecCLI.ts:771. |
 | --stop-for-personalization | --stop-for-personalization | implemented | covered | Stops after dotfiles and before postStartCommand. Docker and Compose behavior tests. Source: devContainersSpecCLI.ts:772. |
-| --remote-env | none | implement | environment | Add this upstream control to the corresponding handler. Source: devContainersSpecCLI.ts:773. |
+| --remote-env | --remote-env | implemented | environment | Registered; adds variables to lifecycle commands and the dotfiles install, below configuration remoteEnv, as upstream. Not stored. Source: devContainersSpecCLI.ts:773. |
 | --skip-feature-auto-mapping [hidden] | none | implement | feature-controls | Implement upstream feature identifier mapping plus its opt-out; current resolver is not evidence of mapping parity. Source: devContainersSpecCLI.ts:774. |
 | --skip-post-attach | --skip-post-attach | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: devContainersSpecCLI.ts:775. |
 | --dotfiles-repository | --dotfiles-repository | implemented | sibling-unit | Registered; installs after postCreateCommand once per container. A failed install warns and the next run retries. Source: devContainersSpecCLI.ts:776. |
 | --dotfiles-install-command | --dotfiles-install-command | implemented | sibling-unit | Registered; runs in the clone in place of the default install-script search. Source: devContainersSpecCLI.ts:777. |
 | --dotfiles-target-path | --dotfiles-target-path | implemented | sibling-unit | Registered; default ~/dotfiles. Source: devContainersSpecCLI.ts:778. |
 | --container-session-data-folder | --container-session-data-folder | implement | data-folders | Registered; probe-cache behavior depends on the user environment probe backlog work and its timeout decision. Source: devContainersSpecCLI.ts:779. |
-| --secrets-file | none | implement | environment | Optional JSON secret inputs for lifecycle command environments; do not add these inputs to image metadata. Source: devContainersSpecCLI.ts:780. |
+| --secrets-file | --secrets-file | implemented | environment | Registered; secret variables for lifecycle commands and the dotfiles install, above remoteEnv. Not stored; masked in stderr and the result. Source: devContainersSpecCLI.ts:780. |
 | --help | --help | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: yargs built-in help. |
 | --version | --version | implemented | sibling-unit | Registered on every command; prints the version result in place of the command, as upstream. Source: devContainersSpecCLI.ts (.version). |
 
@@ -342,7 +342,7 @@ features, dotfiles, environment probing and version support.
 | --skip-post-create | --skip-post-create | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: devContainersSpecCLI.ts:350. |
 | --skip-non-blocking-commands | --skip-non-blocking-commands | implemented | covered | Stops after merged waitFor (default updateContentCommand), without background continuation. Docker and Compose behavior tests. Source: devContainersSpecCLI.ts:351. |
 | --user-data-folder | --user-data-folder | implemented | data-folders | Private host feature/build staging honors this folder; existing contents are preserved. Source: devContainersSpecCLI.ts:352. |
-| --remote-env | none | implement | environment | Add this upstream control to the corresponding handler. Source: devContainersSpecCLI.ts:353. |
+| --remote-env | --remote-env | implemented | environment | Registered; adds variables to lifecycle commands and the dotfiles install, below configuration remoteEnv, as upstream. Not stored. Source: devContainersSpecCLI.ts:353. |
 | --dotfiles-repository | --dotfiles-repository | implemented | sibling-unit | Registered; installs after postCreateCommand once per container. A failed install warns and the next run retries. Source: devContainersSpecCLI.ts:354. |
 | --dotfiles-install-command | --dotfiles-install-command | implemented | sibling-unit | Registered; runs in the clone in place of the default install-script search. Source: devContainersSpecCLI.ts:355. |
 | --dotfiles-target-path | --dotfiles-target-path | implemented | sibling-unit | Registered; default ~/dotfiles. Source: devContainersSpecCLI.ts:356. |
@@ -432,7 +432,7 @@ features, dotfiles, environment probing and version support.
 | --prebuild | --prebuild | implemented | covered | Stops after updateContentCommand and reruns that hook with a current marker. Docker and Compose behavior tests. Source: devContainersSpecCLI.ts:125. |
 | --user-data-folder | --user-data-folder | implemented | data-folders | Private host feature/build staging honors this folder; existing contents are preserved. Source: devContainersSpecCLI.ts:126. |
 | --mount | none | implement | mounts | Add bind/volume mounts through the Engine API; no additional CLI mounts are supplied by default. Source: devContainersSpecCLI.ts:127. |
-| --remote-env | none | implement | environment | Add this upstream control to the corresponding handler. Source: devContainersSpecCLI.ts:128. |
+| --remote-env | --remote-env | implemented | environment | Registered; adds variables to lifecycle commands and the dotfiles install, below configuration remoteEnv, as upstream. Not stored. Source: devContainersSpecCLI.ts:128. |
 | --cache-from | --cache-from | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: devContainersSpecCLI.ts:129. |
 | --cache-to | --cache-to | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: devContainersSpecCLI.ts:130. |
 | --buildkit | BuildKit through Engine API | not applicable by design | native-api | Approved native BuildKit requirement: the build contract requires native BuildKit; switching to the legacy Docker CLI builder is outside that contract. Source: devContainersSpecCLI.ts:131. |
@@ -444,7 +444,7 @@ features, dotfiles, environment probing and version support.
 | --dotfiles-target-path | --dotfiles-target-path | implemented | sibling-unit | Registered; default ~/dotfiles. Source: devContainersSpecCLI.ts:137. |
 | --container-session-data-folder | --container-session-data-folder | implement | data-folders | Registered; probe-cache behavior depends on the user environment probe backlog work and its timeout decision. Source: devContainersSpecCLI.ts:138. |
 | --omit-config-remote-env-from-metadata [hidden] | none | implement | feature-controls | Default false, matching upstream: persist configuration remoteEnv in image metadata; enabling this option omits it. Source: devContainersSpecCLI.ts:139. |
-| --secrets-file | none | implement | environment | Optional JSON secret inputs for lifecycle command environments; do not add these inputs to image metadata. Source: devContainersSpecCLI.ts:140. |
+| --secrets-file | --secrets-file | implemented | environment | Registered; secret variables for lifecycle commands and the dotfiles install, above remoteEnv. Not stored; masked in stderr and the result. Source: devContainersSpecCLI.ts:140. |
 | --experimental-lockfile [hidden] | none | implement | lockfile | Add this upstream control to the corresponding handler. Source: devContainersSpecCLI.ts:141. |
 | --experimental-frozen-lockfile [hidden] | none | implement | lockfile | Add this upstream control to the corresponding handler. Source: devContainersSpecCLI.ts:142. |
 | --omit-syntax-directive [hidden] | none | implement | feature-controls | Add this upstream control to the corresponding handler. Source: devContainersSpecCLI.ts:143. |
