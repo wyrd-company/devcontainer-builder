@@ -18,7 +18,7 @@ from [`docs/`](docs).
 | APT | `sudo apt install dcb` |
 | RPM | `sudo dnf install dcb` |
 | AUR | `paru -S dcb-bin` |
-| Go | `go install github.com/wyrd-company/devcontainer-builder/cmd/dcb@latest` |
+| Go 1.26+ | `go install github.com/wyrd-company/devcontainer-builder/cmd/dcb@latest` |
 
 APT and RPM need the [repo.wyrd.foo](https://repo.wyrd.foo) package
 repository. [Installation](https://wyrd.foo/docs/dcb/install) gives the setup

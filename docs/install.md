@@ -80,7 +80,7 @@ sudo install -m 0755 dcb /usr/local/bin/dcb
 
 ## From source
 
-With Go installed:
+With Go 1.26 or later installed:
 
 ```bash
 go install github.com/wyrd-company/devcontainer-builder/cmd/dcb@latest

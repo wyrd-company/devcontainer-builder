@@ -1,6 +1,6 @@
 module github.com/wyrd-company/devcontainer-builder
 
-go 1.24
+go 1.26
 
 require (
 	github.com/compose-spec/compose-go/v2 v2.10.2
