@@ -15,6 +15,7 @@
 //     ghcr.io/devcontainers/features/node:1.
 //   - Resolve features from local filesystem paths (./local-feature) or
 //     git tarballs delivered as direct file paths.
+//   - Resolve features from direct HTTPS archives.
 //   - Extract them into a staging directory.
 //   - Determine installation order, honoring `installsAfter` and
 //     `overrideFeatureInstallOrder`.
