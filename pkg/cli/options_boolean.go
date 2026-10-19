@@ -23,15 +23,13 @@ func booleanOptionArgs(root *cobra.Command, args []string) []string {
 			out = append(out, args[i:]...)
 			break
 		}
+		// Cobra also merges inherited persistent flags here.
 		cmd.InitDefaultHelpFlag()
 		var flag *pflag.Flag
 		name, _, equals := strings.Cut(arg, "=")
 		if strings.HasPrefix(name, "--") {
 			name = strings.TrimPrefix(name, "--")
 			flag = cmd.Flags().Lookup(name)
-			if flag == nil {
-				flag = cmd.InheritedFlags().Lookup(name)
-			}
 		} else if arg == "-h" {
 			flag = cmd.Flags().ShorthandLookup("h")
 		}
