@@ -28,7 +28,7 @@ func TestDockerfileSyntaxOmission(t *testing.T) {
 			}
 			for _, omit := range []bool{false, true, false} {
 				mounts := map[string]fsutil.FS{}
-				if err := addDockerfileMounts(mounts, &DockerfileBuild{ContextDir: dir, Filename: "Customfile", OmitSyntaxDirective: omit}, "context", "dockerfile"); err != nil {
+				if err := addDockerfileMounts(mounts, &DockerfileBuild{ContextDir: dir, Filename: "Customfile", OmitSyntaxDirective: omit}); err != nil {
 					t.Fatal(err)
 				}
 				read := func(mount, name string) string {
@@ -43,7 +43,7 @@ func TestDockerfileSyntaxOmission(t *testing.T) {
 					}
 					return string(data)
 				}
-				got := read("dockerfile", "Customfile")
+				got := read(dockerfileDockerfileLocal, "Customfile")
 				if !omit {
 					if got != input {
 						t.Fatalf("default=%q", got)
@@ -69,7 +69,7 @@ func TestDockerfileSyntaxOmission(t *testing.T) {
 					}
 				}
 				count := 0
-				err := mounts["dockerfile"].Walk(context.Background(), "", func(name string, d fs.DirEntry, err error) error {
+				err := mounts[dockerfileDockerfileLocal].Walk(context.Background(), "", func(name string, d fs.DirEntry, err error) error {
 					if err != nil {
 						return err
 					}
@@ -92,7 +92,7 @@ func TestDockerfileSyntaxOmission(t *testing.T) {
 				if count != 1 {
 					t.Fatalf("walk entries=%d", count)
 				}
-				if read("dockerfile", "Customfile.dockerignore") != files["Customfile.dockerignore"] || read("context", "Customfile") != input || read("context", "payload") != "context-content" {
+				if read(dockerfileDockerfileLocal, "Customfile.dockerignore") != files["Customfile.dockerignore"] || read(dockerfileContextLocal, "Customfile") != input || read(dockerfileContextLocal, "payload") != "context-content" {
 					t.Fatal("context or ignore file changed")
 				}
 			}
@@ -113,10 +113,10 @@ func TestDockerfileSyntaxOmissionLowercaseDefault(t *testing.T) {
 		t.Fatal(err)
 	}
 	mounts := map[string]fsutil.FS{}
-	if err := addDockerfileMounts(mounts, &DockerfileBuild{ContextDir: dir, OmitSyntaxDirective: true}, "context", "dockerfile"); err != nil {
+	if err := addDockerfileMounts(mounts, &DockerfileBuild{ContextDir: dir, OmitSyntaxDirective: true}); err != nil {
 		t.Fatal(err)
 	}
-	file, err := mounts["dockerfile"].Open("dockerfile")
+	file, err := mounts[dockerfileDockerfileLocal].Open("dockerfile")
 	if err != nil {
 		t.Fatal(err)
 	}
