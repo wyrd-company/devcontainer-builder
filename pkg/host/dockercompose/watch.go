@@ -102,7 +102,7 @@ func (h *Host) Watch(ctx context.Context, req WatchRequest) error {
 				return errorf("service %q: develop.watch action %q is not honored by this host", name, tr.Action)
 			}
 		}
-		cid, err := h.findExisting(ctx, proj.Name, name)
+		cid, err := FindExisting(ctx, h.client, proj.Name, name)
 		if err != nil {
 			return err
 		}

@@ -7,8 +7,6 @@ import (
 	"context"
 	"errors"
 
-	"github.com/docker/docker/api/types/container"
-	"github.com/docker/docker/api/types/filters"
 	dockerclient "github.com/docker/docker/client"
 	"github.com/spf13/cobra"
 	hostdocker "github.com/wyrd-company/devcontainer-builder/pkg/host/docker"
@@ -52,14 +50,11 @@ func (o lifecycleOptions) requireExisting(ctx context.Context, cli *dockerclient
 		if err != nil {
 			return err
 		}
-		list, err := cli.ContainerList(ctx, container.ListOptions{All: true, Filters: filters.NewArgs(
-			filters.Arg("label", dockercompose.LabelProject+"="+proj.Name),
-			filters.Arg("label", dockercompose.LabelService+"="+dc.Service),
-		)})
+		id, err := dockercompose.FindExisting(ctx, cli, proj.Name, dc.Service)
 		if err != nil {
 			return err
 		}
-		if len(list) > 0 {
+		if id != "" {
 			return nil
 		}
 	} else {

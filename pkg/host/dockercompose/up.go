@@ -10,7 +10,6 @@ import (
 
 	"github.com/compose-spec/compose-go/v2/types"
 	"github.com/docker/docker/api/types/container"
-	"github.com/docker/docker/api/types/filters"
 
 	"github.com/wyrd-company/devcontainer-builder/pkg/features"
 	"github.com/wyrd-company/devcontainer-builder/pkg/host/runner"
@@ -203,7 +202,7 @@ func (h *Host) Up(ctx context.Context, req UpRequest) (*UpResult, error) {
 	// Avoid inspecting its replacement image or allocating current metadata mounts.
 	existingPrimary := ""
 	if h.opts.NoRecreate {
-		existingPrimary, err = h.findExisting(ctx, proj.Name, req.Spec.Service)
+		existingPrimary, err = FindExisting(ctx, h.client, proj.Name, req.Spec.Service)
 		if err != nil {
 			return nil, err
 		}
@@ -362,7 +361,7 @@ func (h *Host) bringUp(
 	materializer *objectMaterializer,
 ) (string, bool, bool, bool, error) {
 	containerName := composeContainerName(proj.Name, svc.Name)
-	id, err := h.findExisting(ctx, proj.Name, svc.Name)
+	id, err := FindExisting(ctx, h.client, proj.Name, svc.Name)
 	if err != nil {
 		return "", false, false, false, err
 	}
@@ -442,24 +441,6 @@ func (h *Host) removeContainer(ctx context.Context, id string) error {
 		}
 	}
 	return h.client.ContainerRemove(ctx, id, container.RemoveOptions{Force: true})
-}
-
-// findExisting returns the container ID for a (project, service) pair,
-// or "" if none. Uses compose's own labels so a container created by
-// `docker compose` is reused.
-func (h *Host) findExisting(ctx context.Context, projectName, serviceName string) (string, error) {
-	args := filters.NewArgs(
-		filters.Arg("label", LabelProject+"="+projectName),
-		filters.Arg("label", LabelService+"="+serviceName),
-	)
-	list, err := h.client.ContainerList(ctx, container.ListOptions{All: true, Filters: args})
-	if err != nil {
-		return "", errorf("list containers: %w", err)
-	}
-	if len(list) == 0 {
-		return "", nil
-	}
-	return list[0].ID, nil
 }
 
 // applyBuiltImages updates the service entries in proj.Services with
