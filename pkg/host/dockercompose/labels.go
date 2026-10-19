@@ -24,12 +24,13 @@ func projectLabels(projectName, workingDir string) map[string]string {
 }
 
 // labelScope identifies the project a container belongs to. WorkingDir and
-// ComposeFiles are the Compose project's; LocalWorkspace and SpecPath are the
-// devcontainer's.
+// ComposeFiles are the Compose project's; LocalWorkspace, SpecPath and
+// IDLabels are the devcontainer's.
 type labelScope struct {
 	Project, WorkingDir      string
 	ComposeFiles             []string
 	LocalWorkspace, SpecPath string
+	IDLabels                 map[string]string
 }
 
 // containerLabels extends projectLabels with the per-service keys
@@ -68,6 +69,12 @@ func containerLabels(scope labelScope, serviceName, configHash string, deps []de
 		out[LabelLocalFolder] = scope.LocalWorkspace
 		if scope.SpecPath != "" {
 			out[LabelConfigFile] = scope.SpecPath
+		}
+		// Id labels add to the ownership labels; they never replace one.
+		for key, value := range scope.IDLabels {
+			if _, managed := out[key]; !managed {
+				out[key] = value
+			}
 		}
 	}
 	return out

@@ -83,7 +83,12 @@ func applyPrimaryMetadata(proj *types.Project, dc *spec.DevContainer, req UpRequ
 	for key, value := range env {
 		svc.Environment[key] = &value
 	}
-	for _, raw := range dc.Mounts {
+	// Additional mounts follow the metadata mounts, as in upstream's override file.
+	mounts := slices.Clone(dc.Mounts)
+	for _, m := range req.Mounts {
+		mounts = append(mounts, m)
+	}
+	for _, raw := range mounts {
 		vol, external := metadataVolume(raw)
 		if vol.Target == "" {
 			continue

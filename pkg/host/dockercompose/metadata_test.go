@@ -271,3 +271,34 @@ func TestComposeMetadataVolumeDeclarations(t *testing.T) {
 		t.Fatalf("declarations=%+v", proj.Volumes)
 	}
 }
+
+// Request mounts follow the metadata mounts and declare their named volumes.
+func TestComposeRequestMounts(t *testing.T) {
+	proj := &types.Project{Name: "sample-project", Services: types.Services{"app": {Image: "alpine"}}}
+	dc := &spec.DevContainer{Service: "app", Mounts: []any{"type=bind,source=/host/data,target=/data"}}
+	req := UpRequest{Mounts: []string{
+		"type=volume,source=cache,target=/cache",
+		"type=volume,source=shared,target=/shared,external=true",
+		"type=bind,source=/host/extra,target=/data",
+	}}
+	applyPrimaryMetadata(proj, dc, req, substitute.Context{})
+	got := proj.Services["app"].Volumes
+	want := []types.ServiceVolumeConfig{
+		{Type: "volume", Source: "cache", Target: "/cache"},
+		{Type: "volume", Source: "shared", Target: "/shared"},
+		{Type: "bind", Source: "/host/extra", Target: "/data"},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("volumes=%+v", got)
+	}
+	declared := types.Volumes{"cache": {Name: "sample-project_cache"}, "shared": {Name: "shared", External: true}}
+	if !reflect.DeepEqual(proj.Volumes, declared) {
+		t.Fatalf("declarations=%+v", proj.Volumes)
+	}
+	// Without request mounts the service keeps only its configured mounts.
+	plain := &types.Project{Name: "sample-project", Services: types.Services{"app": {Image: "alpine"}}}
+	applyPrimaryMetadata(plain, dc, UpRequest{}, substitute.Context{})
+	if v := plain.Services["app"].Volumes; len(v) != 1 || v[0].Source != "/host/data" || plain.Volumes != nil {
+		t.Fatalf("plain volumes=%+v declarations=%+v", v, plain.Volumes)
+	}
+}

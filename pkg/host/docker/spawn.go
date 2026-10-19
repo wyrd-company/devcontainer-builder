@@ -64,7 +64,29 @@ func appendImageCommand(cfg *container.Config, entrypoint, cmd []string) {
 // container created by the upstream CLI is reusable here and vice
 // versa.
 func (h *Host) findExisting(ctx context.Context, localFolder string) (string, error) {
-	args := filters.NewArgs(filters.Arg("label", LabelLocalFolder+"="+localFolder))
+	return h.findLabeled(ctx, map[string]string{LabelLocalFolder: localFolder})
+}
+
+// FindByLabels returns the ID of the newest container that carries every
+// label, as upstream selects a container by its --id-label set. It returns
+// ErrContainerNotFound when none does.
+func (h *Host) FindByLabels(ctx context.Context, labels map[string]string) (string, error) {
+	if len(labels) == 0 {
+		return "", errorf("FindByLabels needs at least one label")
+	}
+	id, err := h.findLabeled(ctx, labels)
+	if err == nil && id == "" {
+		err = ErrContainerNotFound
+	}
+	return id, err
+}
+
+// findLabeled returns the newest container carrying every label, or "".
+func (h *Host) findLabeled(ctx context.Context, labels map[string]string) (string, error) {
+	args := filters.NewArgs()
+	for key, value := range labels {
+		args.Add("label", key+"="+value)
+	}
 	list, err := h.client.ContainerList(ctx, container.ListOptions{All: true, Filters: args})
 	if err != nil {
 		return "", errorf("list containers: %w", err)

@@ -62,6 +62,20 @@ func TestContainerLabels_NonPrimaryOmitsDevcontainerLabels(t *testing.T) {
 	}
 }
 
+// Id labels add to the primary's ownership labels and never replace one, so
+// project conflict checks and workspace-scoped removal keep working.
+func TestContainerLabels_IDLabelsKeepOwnership(t *testing.T) {
+	scope := labelScope{Project: "proj_abc", WorkingDir: "/work", LocalWorkspace: "/work", SpecPath: "/work/.devcontainer/devcontainer.json",
+		IDLabels: map[string]string{"example.id": "one", LabelLocalFolder: "/elsewhere", LabelProject: "other"}}
+	got := containerLabels(scope, "app", "", nil, true)
+	if got["example.id"] != "one" || got[LabelLocalFolder] != "/work" || got[LabelProject] != "proj_abc" || got[LabelConfigFile] == "" {
+		t.Fatalf("primary labels=%v", got)
+	}
+	if other := containerLabels(scope, "db", "", nil, false); other["example.id"] != "" {
+		t.Fatalf("non-primary labels=%v", other)
+	}
+}
+
 func TestResourceName_DefaultsToProjectPrefix(t *testing.T) {
 	if got := resourceName("proj_abc", "default", ""); got != "proj_abc_default" {
 		t.Errorf("got %q want proj_abc_default", got)

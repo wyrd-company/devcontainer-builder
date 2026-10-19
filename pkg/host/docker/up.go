@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/mount"
 
 	"github.com/wyrd-company/devcontainer-builder/pkg/features"
 	"github.com/wyrd-company/devcontainer-builder/pkg/host/runner"
@@ -75,11 +76,21 @@ type UpRequest struct {
 	// LocalEnv is the host environment used for ${localEnv:VAR}
 	// substitution. Pass an empty map (not nil) for no host env.
 	LocalEnv map[string]string
-	// IDLabels seeds ${devcontainerId} substitution. The
-	// devcontainer.local_folder + devcontainer.config_file labels are
-	// always included; supply additional labels here if you want them
-	// folded into the id hash.
+	// IDLabels, when non-empty, replace the workspace labels
+	// (devcontainer.local_folder, devcontainer.config_file) as the
+	// container's identity, as upstream --id-label does: Up reuses only a
+	// container that carries all of them, sets exactly them on a new
+	// container, and derives ${devcontainerId} from them.
 	IDLabels map[string]string
+	// WorkspaceMount, when non-nil, replaces the default workspace bind
+	// mount (LocalWorkspace at the container workspace folder), for
+	// example to mount the workspace's Git root. A spec workspaceMount
+	// still wins.
+	WorkspaceMount *mount.Mount
+	// Mounts are added after the spec's and features' mounts, for example
+	// a CLI --mount or a Git worktree's common folder. Up adds no host
+	// path that is not in the spec or here.
+	Mounts []mount.Mount
 	// RemoteUserUIDUpdate, when non-nil, asks the host to remap the
 	// container's remoteUser to HostUID/HostGID after the container
 	// starts so bind-mounted files land with host-side ownership. The
@@ -126,14 +137,12 @@ func (h *Host) Up(ctx context.Context, req UpRequest) (*UpResult, error) {
 	}
 	containerWorkspace = ensurePosixPath(containerWorkspace)
 
-	idLabels := map[string]string{
-		LabelLocalFolder: req.LocalWorkspace,
-	}
-	if req.SpecPath != "" {
-		idLabels[LabelConfigFile] = req.SpecPath
-	}
-	for k, v := range req.IDLabels {
-		idLabels[k] = v
+	idLabels := req.IDLabels
+	if len(idLabels) == 0 {
+		idLabels = map[string]string{LabelLocalFolder: req.LocalWorkspace}
+		if req.SpecPath != "" {
+			idLabels[LabelConfigFile] = req.SpecPath
+		}
 	}
 
 	subCtx := substitute.Context{
@@ -146,7 +155,13 @@ func (h *Host) Up(ctx context.Context, req UpRequest) (*UpResult, error) {
 	var entries []metadata.Entry
 
 	// 1. Discover or create.
-	id, err := h.findExisting(ctx, req.LocalWorkspace)
+	var id string
+	var err error
+	if len(req.IDLabels) > 0 {
+		id, err = h.findLabeled(ctx, req.IDLabels)
+	} else {
+		id, err = h.findExisting(ctx, req.LocalWorkspace)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -305,6 +320,7 @@ func (h *Host) create(
 	if err != nil {
 		return "", errorf("build container config: %w", err)
 	}
+	applyRequestIdentity(cfg, host, dc, req)
 	if err := h.applyGPUAvailability(ctx, dc, req.GPUAvailability, host); err != nil {
 		return "", err
 	}
@@ -322,6 +338,23 @@ func (h *Host) create(
 		return "", errorf("create: %w", err)
 	}
 	return resp.ID, nil
+}
+
+// applyRequestIdentity applies the request's id labels, workspace mount and
+// additional mounts to a configuration built from the spec.
+func applyRequestIdentity(cfg *container.Config, host *container.HostConfig, dc *spec.DevContainer, req UpRequest) {
+	if len(req.IDLabels) > 0 {
+		delete(cfg.Labels, LabelLocalFolder)
+		delete(cfg.Labels, LabelConfigFile)
+		for key, value := range req.IDLabels {
+			cfg.Labels[key] = value
+		}
+	}
+	if req.WorkspaceMount != nil && dc.WorkspaceMount == "" && len(host.Mounts) > 0 {
+		// Without a spec workspaceMount the default workspace mount is first.
+		host.Mounts[0] = *req.WorkspaceMount
+	}
+	host.Mounts = append(host.Mounts, req.Mounts...)
 }
 
 // substituteContainerEnv resolves ${containerEnv:VAR} inside a few

@@ -79,6 +79,16 @@ type UpRequest struct {
 	// (spec.Service) is always kept; its declared profiles are folded
 	// into the active set so its own dependencies-by-profile come up.
 	Profiles []string
+	// Mounts are added to the primary service after the metadata mounts, in
+	// devcontainer mount syntax (a CLI --mount). A named volume is a project
+	// volume unless marked external=true. Up adds no host path that is not in
+	// the configuration or here.
+	Mounts []string
+	// IDLabels, when non-empty, are set on the primary container and seed
+	// ${devcontainerId} in place of the workspace labels, as upstream
+	// --id-label does. The workspace labels stay on the primary so project
+	// ownership checks and workspace-scoped Stop/Remove still apply.
+	IDLabels map[string]string
 	// AllowProjectConflict permits Up to reuse/recreate a project containing
 	// another workspace's containers, matching upstream. The default refuses.
 	AllowProjectConflict bool
@@ -132,9 +142,12 @@ func (h *Host) Up(ctx context.Context, req UpRequest) (*UpResult, error) {
 	}
 	containerWorkspace = ensurePosixPath(containerWorkspace)
 
-	idLabels := map[string]string{LabelLocalFolder: req.LocalWorkspace}
-	if req.SpecPath != "" {
-		idLabels[LabelConfigFile] = req.SpecPath
+	idLabels := req.IDLabels
+	if len(idLabels) == 0 {
+		idLabels = map[string]string{LabelLocalFolder: req.LocalWorkspace}
+		if req.SpecPath != "" {
+			idLabels[LabelConfigFile] = req.SpecPath
+		}
 	}
 
 	subCtx := substitute.Context{
@@ -276,7 +289,7 @@ func (h *Host) Up(ctx context.Context, req UpRequest) (*UpResult, error) {
 		return nil, err
 	}
 
-	scope := labelScope{Project: proj.Name, WorkingDir: proj.WorkingDir, ComposeFiles: req.Spec.ComposeFiles(), LocalWorkspace: req.LocalWorkspace, SpecPath: req.SpecPath}
+	scope := labelScope{Project: proj.Name, WorkingDir: proj.WorkingDir, ComposeFiles: req.Spec.ComposeFiles(), LocalWorkspace: req.LocalWorkspace, SpecPath: req.SpecPath, IDLabels: req.IDLabels}
 	if err := proj.ForEachService(startNames, func(name string, svc *types.ServiceConfig) error {
 		isPrimary := name == req.Spec.Service
 		// Wait for any service_healthy / service_completed_successfully
