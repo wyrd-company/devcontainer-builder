@@ -24,6 +24,7 @@ a service or an operator can embed them.
 | `pkg/spec` | Reads `devcontainer.json`. |
 | `pkg/features` | Resolves features and their install order. |
 | `pkg/substitute` | Substitutes configuration variables. |
+| `pkg/workspace` | Places a workspace folder in a container: its Git root, a worktree's common Git folder, and the workspace folder. |
 | `pkg/registryauth` | Reads registry credentials from the Docker client configuration. |
 
 Package documentation is on
