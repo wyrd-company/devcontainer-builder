@@ -94,8 +94,10 @@ func TestEnvironmentFlagSurface(t *testing.T) {
 			t.Errorf("%s --secrets-file = %+v, want a visible string without a default", name, secrets)
 		}
 	}
-	if a.execCommand().Flags().Lookup("secrets-file") != nil {
-		t.Error("exec registers --secrets-file; upstream exec has none")
+	for name, cmd := range map[string]*cobra.Command{"exec": a.execCommand(), "read-configuration": a.readCommand()} {
+		if cmd.Flags().Lookup("secrets-file") != nil {
+			t.Errorf("%s registers --secrets-file; upstream %s has none", name, name)
+		}
 	}
 }
 

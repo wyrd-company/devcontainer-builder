@@ -158,7 +158,9 @@ func TestEnvironmentOptions(t *testing.T) {
 
 			// --remote-env loses to remoteEnv for the same name; secrets win over both.
 			result, stderr := f.run(t, "up", "up", "--workspace-folder", f.workspace, "--image-name", f.tag,
-				"--remote-env", "SAMPLE_REMOTE=up", "--remote-env", "SAMPLE_SHARED=up", "--secrets-file", f.secrets)
+				"--remote-env", "SAMPLE_REMOTE=up", "--remote-env", "SAMPLE_SHARED=up", "--secrets-file", f.secrets,
+				"--include-configuration", "--include-merged-configuration")
+			assertConfigurationWithoutSecret(t, result)
 			if got, want := f.recordedEnv(t), "up|config|config|"+secret+"|"+secret; got != want {
 				t.Fatalf("up lifecycle env = %q, want %q", got, want)
 			}
@@ -195,6 +197,29 @@ func TestEnvironmentOptions(t *testing.T) {
 			f.scanContainer(t, ctx, cli, id)
 			f.scanWorkspace(t)
 		})
+	}
+}
+
+// assertConfigurationWithoutSecret checks the configuration snapshots of a
+// result. dcb masks every result string that equals a secret, so the mask
+// must be absent too: a masked value would mean the secret reached them.
+func assertConfigurationWithoutSecret(t *testing.T, result map[string]any) {
+	t.Helper()
+	for _, key := range []string{"configuration", "mergedConfiguration"} {
+		value, ok := result[key].(map[string]any)
+		if !ok || len(value) == 0 {
+			t.Fatalf("result %s = %#v, want a configuration object", key, result[key])
+		}
+		data, err := json.Marshal(value)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !bytes.Contains(data, []byte("SAMPLE_OVERRIDDEN")) {
+			t.Fatalf("result %s lacks the configuration remoteEnv: %s", key, data)
+		}
+		if found := leaks(data); len(found) > 0 || bytes.Contains(data, []byte("********")) {
+			t.Errorf("result %s holds the secret (spellings %q) or its mask: %s", key, found, data)
+		}
 	}
 }
 
