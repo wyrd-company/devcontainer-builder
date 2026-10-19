@@ -152,6 +152,7 @@ func TestComposeObjectRecreateCleanupIntegration(t *testing.T) {
 			if scenario == "reused-service" {
 				workerVersion = "one"
 			}
+			extraMounts = "" // foreign roots lose their consumers but remain outside retirement ownership
 			writeCompose("two", workerVersion)
 			next, err := h.Up(ctx, req)
 			if scenario == "cleanup-error" {
