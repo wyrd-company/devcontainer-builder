@@ -45,8 +45,11 @@ func digest(s string) string {
 func environmentLeakSpellings() []string {
 	quoted := strconv.Quote(environmentSecret)
 	encoded, _ := json.Marshal(environmentSecret)
+	b := []byte(environmentSecret)
 	return []string{environmentSecret, quoted[1 : len(quoted)-1], string(encoded[1 : len(encoded)-1]),
-		base64.StdEncoding.EncodeToString([]byte(environmentSecret)), url.QueryEscape(environmentSecret)}
+		base64.StdEncoding.EncodeToString(b), base64.RawStdEncoding.EncodeToString(b),
+		base64.URLEncoding.EncodeToString(b), base64.RawURLEncoding.EncodeToString(b),
+		url.QueryEscape(environmentSecret), url.PathEscape(environmentSecret)}
 }
 
 // leaks returns the spellings of the secret that data contains.
