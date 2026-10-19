@@ -125,6 +125,22 @@ func TestReadConfigurationWorkspaceGitRoot(t *testing.T) {
 		t.Fatalf("workspace-only=%v", ws)
 	}
 
+	// A configured workspaceFolder or workspaceMount is kept, as upstream.
+	writeTestFile(t, filepath.Join(app, ".devcontainer.json"), `{"image":"alpine:3.20","workspaceFolder":"/src","workspaceMount":"type=bind,source=/host/custom,target=/src"}`)
+	if ws, _ = workspace(); ws["workspaceFolder"] != "/src" || ws["workspaceMount"] != "type=bind,source=/host/custom,target=/src" {
+		t.Fatalf("configured workspace=%v", ws)
+	}
+	writeTestFile(t, filepath.Join(app, ".devcontainer.json"), `{"image":"alpine:3.20","workspaceMount":"type=bind,source=/host/custom,target=/src"}`)
+	if ws, _ = workspace(); ws["workspaceFolder"] != "/workspaces/repo/app" || ws["workspaceMount"] != "type=bind,source=/host/custom,target=/src" {
+		t.Fatalf("configured mount=%v", ws)
+	}
+	// Compose files own the mounts; there is no derived workspace mount.
+	writeTestFile(t, filepath.Join(app, "compose.yml"), "services:\n  app:\n    image: alpine:3.20\n")
+	writeTestFile(t, filepath.Join(app, ".devcontainer.json"), `{"dockerComposeFile":"compose.yml","service":"app"}`)
+	if ws, _ = workspace(); ws["workspaceFolder"] != "/" || ws["workspaceMount"] != nil {
+		t.Fatalf("compose workspace=%v", ws)
+	}
+
 	// A linked worktree beside the repository mounts the common Git folder.
 	admin := filepath.Join(repo, ".git", "worktrees", "topic")
 	writeTestFile(t, filepath.Join(admin, "HEAD"), "ref: refs/heads/topic\n")
