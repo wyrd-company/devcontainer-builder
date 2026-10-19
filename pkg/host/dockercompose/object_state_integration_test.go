@@ -370,6 +370,11 @@ func TestComposeObjectOwnershipValidationIntegration(t *testing.T) {
 	for _, shape := range []string{"relative", "unclean", "not-private", "name-mismatch"} {
 		t.Run(shape, func(t *testing.T) {
 			parent, workspace := t.TempDir(), t.TempDir()
+			uniqueParent, err := os.MkdirTemp(parent, "sample-")
+			if err != nil {
+				t.Fatal(err)
+			}
+			parent = uniqueParent
 			root, err := os.MkdirTemp(parent, "objects-")
 			if err != nil {
 				t.Fatal(err)
