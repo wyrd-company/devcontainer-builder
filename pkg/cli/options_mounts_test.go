@@ -130,6 +130,14 @@ func TestReadConfigurationWorkspaceGitRoot(t *testing.T) {
 	if ws, _ = workspace(); ws["workspaceFolder"] != "/src" || ws["workspaceMount"] != "type=bind,source=/host/custom,target=/src" {
 		t.Fatalf("configured workspace=%v", ws)
 	}
+	// A workspaceFolder without workspaceMount gets the workspace folder
+	// mounted there, as dcb did before Git-root mounting.
+	writeTestFile(t, filepath.Join(app, ".devcontainer.json"), `{"image":"alpine:3.20","workspaceFolder":"/src/${localWorkspaceFolderBasename}"}`)
+	for _, args := range [][]string{nil, {"--mount-git-worktree-common-dir"}} {
+		if ws, _ = workspace(args...); ws["workspaceFolder"] != "/src/app" || ws["workspaceMount"] != "type=bind,source="+app+",target=/src/app" || ws["additionalMountString"] != nil {
+			t.Fatalf("configured folder %v=%v", args, ws)
+		}
+	}
 	writeTestFile(t, filepath.Join(app, ".devcontainer.json"), `{"image":"alpine:3.20","workspaceMount":"type=bind,source=/host/custom,target=/src"}`)
 	if ws, _ = workspace(); ws["workspaceFolder"] != "/workspaces/repo/app" || ws["workspaceMount"] != "type=bind,source=/host/custom,target=/src" {
 		t.Fatalf("configured mount=%v", ws)

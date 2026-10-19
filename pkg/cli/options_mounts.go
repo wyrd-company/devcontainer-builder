@@ -117,7 +117,16 @@ func (a *application) placeWorkspace(dc *spec.DevContainer, local string) error 
 		opts.MountGitWorktreeCommonDir = a.mounts.worktreeCommonDir
 		opts.Consistency = a.mounts.consistency
 	}
-	placement, err := workspace.Resolve(local, dc.WorkspaceFolder != "", declaresWorkspaceMount(dc), opts)
+	hasMount := declaresWorkspaceMount(dc)
+	if dc.WorkspaceFolder != "" && !hasMount {
+		// dcb mounts the workspace folder at a configured workspaceFolder
+		// that has no workspaceMount. Upstream mounts it, or its Git root, at
+		// /workspaces/<name> instead, where that folder is often absent.
+		target := a.containerWorkspace(dc, local)
+		a.placement = &workspace.Configuration{WorkspaceMount: &workspace.Mount{Source: local, Target: target, Consistency: opts.BindConsistency()}}
+		return nil
+	}
+	placement, err := workspace.Resolve(local, dc.WorkspaceFolder != "", hasMount, opts)
 	if err != nil {
 		return err
 	}

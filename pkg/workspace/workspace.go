@@ -38,6 +38,18 @@ type Options struct {
 	Platform string
 }
 
+// BindConsistency is the consistency option for these options' bind mounts:
+// none on Linux, otherwise Consistency or consistent.
+func (o Options) BindConsistency() string {
+	if o.Platform == "linux" {
+		return ""
+	}
+	if o.Consistency == "" {
+		return ConsistencyConsistent
+	}
+	return o.Consistency
+}
+
 // Mount is a bind mount from a host folder to a container folder.
 type Mount struct {
 	Source, Target, Consistency string
@@ -89,13 +101,7 @@ func Resolve(localWorkspace string, hasWorkspaceFolder, hasWorkspaceMount bool, 
 			hostMountFolder = root
 		}
 	}
-	consistency := ""
-	if opts.Platform != "linux" {
-		consistency = opts.Consistency
-		if consistency == "" {
-			consistency = ConsistencyConsistent
-		}
-	}
+	consistency := opts.BindConsistency()
 
 	containerMountFolder := path.Join("/workspaces", filepath.Base(hostMountFolder))
 	if opts.MountGitRoot && opts.MountGitWorktreeCommonDir {
