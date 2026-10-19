@@ -53,7 +53,7 @@ The fixture and option scores remain separate so their denominators are visible.
 
 ## Fixture comparison
 
-The five curated upstream fixtures cover an image, a Dockerfile, two local v2
+The curated upstream fixtures cover an image, a Dockerfile, two local v2
 features, a Compose service from an image
 (`compose-image-without-features-minimal`), and an image with a published
 feature and `remoteUser` (`image-with-git-feature`). Each run copies them into
@@ -73,6 +73,14 @@ The fixture bodies and feature scripts otherwise stay intact. No credentials or
 host Docker configuration are copied. Every subprocess receives a private
 `DOCKER_CONFIG` containing only `{}` and no inherited `DOCKER_AUTH_CONFIG`.
 Daemon connection variables remain available.
+
+Three repository fixtures under `fixtures/dockerfile-context/` build a
+Dockerfile that copies its whole build context. The context is the folder that
+holds `devcontainer.json`, its parent, or a subfolder, and each context has a
+`.dockerignore` that excludes one file. The Dockerfile writes the list of
+copied files to `/context-files.txt`; the lifecycle probe reads that list and
+`/context/kept.txt`. A fixture's `Source` names the repository folder of a
+fixture that is not in `reference/cli`.
 
 The `additional-features` fixture runs the image fixture again and passes
 `--additional-features` with the published common-utils feature to both

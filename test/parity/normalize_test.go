@@ -544,3 +544,32 @@ func TestBuildAdapterUsesOnlyDCB(t *testing.T) {
 		t.Fatalf("binary build calls=%q, want %q", body, expected)
 	}
 }
+
+// Repository fixtures are read from their own directory, not reference/cli,
+// and each build-context fixture holds the files its markers report.
+func TestRepositoryFixturesExist(t *testing.T) {
+	root, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := (Fixture{Path: "src/test/configs/image"}).sourceDir(); got != filepath.Join("reference/cli", "src/test/configs/image") {
+		t.Fatalf("upstream fixture source = %s", got)
+	}
+	var repository int
+	for _, f := range fixtures {
+		if f.Source == "" {
+			continue
+		}
+		repository++
+		dir := filepath.Join(root, f.sourceDir())
+		if _, err := os.Stat(filepath.Join(dir, f.Config)); err != nil {
+			t.Errorf("fixture %s config: %v", f.Name, err)
+		}
+		if !reflect.DeepEqual(f.Markers, contextMarkers) {
+			t.Errorf("fixture %s markers = %q, want %q", f.Name, f.Markers, contextMarkers)
+		}
+	}
+	if repository != 3 {
+		t.Fatalf("repository fixtures = %d, want the three build-context layouts", repository)
+	}
+}

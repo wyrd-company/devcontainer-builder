@@ -26,15 +26,24 @@ type Fixture struct {
 	Markers, Effects   []string
 	// UpArgs are passed to both sides' up after the workspace.
 	UpArgs []string
+	// Source is the repository directory that holds Path. Empty means
+	// reference/cli.
+	Source string
 }
 
+// contextMarkers read what a Dockerfile copied from its build context.
+var contextMarkers = []string{"/context-files.txt", "/context/kept.txt"}
+
 var fixtures = []Fixture{
-	{"image", "src/test/configs/image", ".devcontainer.json", []string{"/postCreateCommand.txt"}, nil, nil},
-	{"dockerfile", "src/test/configs/dockerfile-without-features", ".devcontainer.json", []string{"/postCreateCommand.txt"}, nil, nil},
-	{"features", "src/test/container-features/configs/dockerfile-with-v2-local-features-config-inside-dev-container-folder", ".devcontainer/devcontainer.json", nil, []string{"/usr/local/bin/hello", "/usr/local/bin/color"}, nil},
-	{"compose", "src/test/configs/compose-image-without-features-minimal", ".devcontainer/devcontainer.json", []string{"/postCreateCommand.txt"}, nil, nil},
-	{"remote-user", "src/test/configs/image-with-git-feature", ".devcontainer.json", nil, nil, nil},
-	{"additional-features", "src/test/configs/image", ".devcontainer.json", []string{"/postCreateCommand.txt"}, nil, []string{"--additional-features", `{"ghcr.io/devcontainers/features/common-utils:2":{}}`}},
+	{"image", "src/test/configs/image", ".devcontainer.json", []string{"/postCreateCommand.txt"}, nil, nil, ""},
+	{"dockerfile", "src/test/configs/dockerfile-without-features", ".devcontainer.json", []string{"/postCreateCommand.txt"}, nil, nil, ""},
+	{"features", "src/test/container-features/configs/dockerfile-with-v2-local-features-config-inside-dev-container-folder", ".devcontainer/devcontainer.json", nil, []string{"/usr/local/bin/hello", "/usr/local/bin/color"}, nil, ""},
+	{"compose", "src/test/configs/compose-image-without-features-minimal", ".devcontainer/devcontainer.json", []string{"/postCreateCommand.txt"}, nil, nil, ""},
+	{"remote-user", "src/test/configs/image-with-git-feature", ".devcontainer.json", nil, nil, nil, ""},
+	{"additional-features", "src/test/configs/image", ".devcontainer.json", []string{"/postCreateCommand.txt"}, nil, []string{"--additional-features", `{"ghcr.io/devcontainers/features/common-utils:2":{}}`}, ""},
+	{"dockerfile-context-config-dir", "dockerfile-context/config-dir", ".devcontainer/devcontainer.json", contextMarkers, nil, nil, "test/parity/fixtures"},
+	{"dockerfile-context-parent-dir", "dockerfile-context/parent-dir", ".devcontainer/devcontainer.json", contextMarkers, nil, nil, "test/parity/fixtures"},
+	{"dockerfile-context-subdir", "dockerfile-context/subdir", ".devcontainer/devcontainer.json", contextMarkers, nil, nil, "test/parity/fixtures"},
 }
 
 // composeLabelsFile is appended to a Compose configuration's files, so that
@@ -56,6 +65,14 @@ func dcbImage(workspace string) string {
 }
 
 func (r *Runner) label() string { return ownershipLabel + "=" + r.runID }
+
+// sourceDir is the fixture directory relative to the repository root.
+func (f Fixture) sourceDir() string {
+	if f.Source == "" {
+		return filepath.Join("reference/cli", f.Path)
+	}
+	return filepath.Join(f.Source, f.Path)
+}
 
 func fixtureSide(f Fixture, side string) string { return f.Name + "/" + side }
 
@@ -115,7 +132,7 @@ func (r *Runner) command(ctx context.Context, name string, args ...string) ([]by
 
 func (r *Runner) prepare(f Fixture, side string) (string, error) {
 	workspace := filepath.Join(r.temp, f.Name, side, r.workspaceName(f, side))
-	source := filepath.Join(r.root, "reference/cli", f.Path)
+	source := filepath.Join(r.root, f.sourceDir())
 	err := filepath.WalkDir(source, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
