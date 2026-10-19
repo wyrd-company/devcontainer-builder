@@ -416,6 +416,15 @@ dcb set-up --workspace-folder . --container-id sample-container --include-config
 dcb read-configuration --workspace-folder . --include-features-configuration
 ```
 
+`read-configuration` applies workspace and host substitutions to `configuration`.
+When an existing container is selected by `--container-id` or workspace discovery,
+its environment is substituted before producing configuration, merged output,
+and resolved feature options, independently of the include flags. Without a
+container, container environment references remain unresolved. Ordinary reads
+without an explicit container ID also work when Docker is unreachable; discovery
+and inspection operation errors are reported. Merged and feature output retain
+their Docker requirements.
+
 `read-configuration --include-features-configuration` resolves declared features,
 additional features and their dependencies in installation order. Its optional
 `featuresConfiguration` result contains `featureSets` with feature metadata,

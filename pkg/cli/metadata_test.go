@@ -245,6 +245,10 @@ func TestGenerateIncludesLocalImageMetadata(t *testing.T) {
 func generateImageFixture(t *testing.T) {
 	t.Helper()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/containers/json") {
+			_, _ = w.Write([]byte(`[]`))
+			return
+		}
 		if !strings.Contains(r.URL.Path, "/images/") || !strings.HasSuffix(r.URL.Path, "/json") {
 			t.Errorf("unexpected configuration request %s", r.URL.Path)
 			http.Error(w, "unexpected", 500)

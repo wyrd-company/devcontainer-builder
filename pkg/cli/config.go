@@ -9,13 +9,17 @@ package cli
 import (
 	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/docker/docker/api/types/container"
+	dockerclient "github.com/docker/docker/client"
 	"github.com/spf13/cobra"
+	hostdocker "github.com/wyrd-company/devcontainer-builder/pkg/host/docker"
+	"github.com/wyrd-company/devcontainer-builder/pkg/host/dockercompose"
 	"github.com/wyrd-company/devcontainer-builder/pkg/spec"
 	"github.com/wyrd-company/devcontainer-builder/pkg/substitute"
 )
@@ -119,11 +123,11 @@ func (a *application) readCommand() *cobra.Command {
 		if err != nil {
 			return err
 		}
+		configuration, err = a.readConfigurationSnapshot(cmd, dc, workspace, containerID, configuration, !includeMerged && !includeFeatures)
+		if err != nil {
+			return err
+		}
 		if includeFeatures {
-			configuration, err = a.featureConfigurationSnapshot(cmd, dc, workspace, containerID, configuration)
-			if err != nil {
-				return err
-			}
 			features, err := a.featuresConfiguration(dc, configuration, extra)
 			if err != nil {
 				return err
@@ -282,4 +286,46 @@ func defaultImage(workspace string) string {
 	// A workspace hash avoids collisions between equal basenames.
 	id := sha256.Sum256([]byte(workspace))
 	return fmt.Sprintf("dcb-%x:latest", id[:8])
+}
+
+// readConfigurationSnapshot applies existing-container substitutions before any
+// read-configuration output is projected (upstream devContainersSpecCLI.ts:1075-1083).
+// Ordinary reads retain their offline behavior when discovery cannot connect.
+func (a *application) readConfigurationSnapshot(cmd *cobra.Command, dc *spec.DevContainer, workspace, id string, configuration map[string]any, allowOffline bool) (map[string]any, error) {
+	cli, err := newDockerClient()
+	if err != nil {
+		return nil, err
+	}
+	defer cli.Close()
+	containerID, err := a.findContainer(cmd.Context(), cli, dc, workspace, id)
+	if id == "" && (errors.Is(err, hostdocker.ErrContainerNotFound) || errors.Is(err, dockercompose.ErrProjectNotFound) || allowOffline && dockerclient.IsErrConnectionFailed(err)) {
+		return configuration, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	info, err := cli.ContainerInspect(cmd.Context(), containerID)
+	if err != nil {
+		return nil, err
+	}
+	labels, env := map[string]string{}, map[string]string{}
+	if info.Config != nil {
+		labels = info.Config.Labels
+		for _, pair := range info.Config.Env {
+			k, v, ok := strings.Cut(pair, "=")
+			if ok {
+				env[k] = v
+			}
+		}
+	}
+	var raw map[string]any
+	if err := json.Unmarshal(dc.Raw, &raw); err != nil {
+		return nil, err
+	}
+	sub := a.substitutionContext(dc, workspace, labels)
+	result := transformConfiguration(raw, func(s string) string {
+		return substitute.ContainerSubstitute(substitute.ContainerContext{ContainerEnv: env}, substitute.Substitute(sub, s))
+	}).(map[string]any)
+	result["configFilePath"] = dc.Path
+	return result, nil
 }

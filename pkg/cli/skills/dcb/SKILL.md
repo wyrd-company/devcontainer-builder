@@ -144,7 +144,11 @@ chosen directory.
 `--include-merged-configuration` to add configuration snapshots to their results.
 Both default to false. `read-configuration --include-features-configuration`
 adds resolved feature metadata, values and sources as `featuresConfiguration`
-when features exist.
+when features exist. `read-configuration` substitutes the existing container's
+environment in configuration, merged output and resolved feature options,
+independently of the include flags. Without a container, container environment
+references remain unresolved. Ordinary reads without an explicit container ID
+also work when Docker is unreachable.
 
 ### Data folders
 
