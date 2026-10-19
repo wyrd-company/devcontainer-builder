@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/mount"
@@ -31,7 +32,7 @@ func TestComposeObjectRecreateCleanupIntegration(t *testing.T) {
 		t.Run(scenario, func(t *testing.T) {
 			workspace := prepareComposeWorkspace(t)
 			parent := t.TempDir()
-			h := New(cli, Options{UserDataFolder: parent})
+			h := New(cli, Options{UserDataFolder: parent, StopTimeout: time.Second})
 			project := objectTestProject(workspace)
 			config := filepath.Join(workspace, ".devcontainer", "devcontainer.json")
 			writeNameFile(t, config, `{"dockerComposeFile":"compose.yml","service":"app"}`)
@@ -129,6 +130,9 @@ func TestComposeObjectRecreateCleanupIntegration(t *testing.T) {
 			}
 			if scenario == "consumer-error" {
 				transport := objectRoundTripper(func(r *http.Request) (*http.Response, error) {
+					if strings.HasSuffix(r.URL.Path, "/volumes") {
+						return nil, errors.New("synthetic ownership lookup failure")
+					}
 					if strings.HasSuffix(r.URL.Path, "/containers/json") && r.URL.Query().Get("filters") == "" {
 						return nil, errors.New("synthetic consumer lookup failure")
 					}
@@ -145,6 +149,13 @@ func TestComposeObjectRecreateCleanupIntegration(t *testing.T) {
 				}
 				if _, err := os.Stat(filepath.Join(oldRoot, "secrets", "token")); err != nil {
 					t.Fatal("consumer lookup failure removed mounted secret")
+				}
+				writeCompose("two", "two")
+				if _, err := failing.Up(ctx, req); err == nil {
+					t.Fatal("ownership lookup failure claimed successful Up")
+				}
+				if _, err := cli.ContainerInspect(ctx, first.PrimaryContainerID); err != nil {
+					t.Fatal("ownership lookup failure changed previous container")
 				}
 				return
 			}
