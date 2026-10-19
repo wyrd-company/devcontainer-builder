@@ -11,8 +11,11 @@ Help is plain text on stdout. Use `dcb <command> --help`
 for command flags. Use `--workspace-folder` for the local workspace and
 `--config` for an explicit devcontainer.json. `--override-config` supplies
 alternate content while relative paths stay based on `--config` (or the
-workspace configuration path). Flags can follow positional
-arguments. Put `--` before the container command's own flags.
+workspace configuration path). For commands other than `exec`, flags can
+follow positional arguments.
+
+`exec` stops reading options at the container command; every later argument
+passes through unchanged. An explicit `--` before the command also works.
 
 Invocations except help and exec normally emit one JSON object on one stdout line.
 Archive exports to stdout emit only archive bytes. An interactive terminal is
@@ -45,6 +48,7 @@ Start and inspect a container:
 ```sh
 dcb read-configuration --workspace-folder .
 dcb up --workspace-folder .
+dcb exec --workspace-folder . sh -c 'id && pwd'
 dcb exec --workspace-folder . -- sh -c 'id && pwd'
 dcb inspect --workspace-folder .
 dcb down --workspace-folder .

@@ -267,10 +267,11 @@ func TestExecOperationError(t *testing.T) {
 			t.Run(format+"/"+level, func(t *testing.T) {
 				var out, logs bytes.Buffer
 				missing := filepath.Join(t.TempDir(), "missing")
-				args := []string{"exec", "echo", "--config", missing, "--log-format", format}
+				args := []string{"exec", "--config", missing, "--log-format", format}
 				if level != "default" {
 					args = append(args, "--log-level", level)
 				}
+				args = append(args, "echo")
 				code := Run(context.Background(), args, "test", nil, &out, &logs)
 				if code != 1 || out.Len() != 0 || !strings.Contains(logs.String(), missing) {
 					t.Fatalf("code=%d out=%q logs=%q", code, out.String(), logs.String())

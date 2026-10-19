@@ -7,7 +7,6 @@
 package cli
 
 import (
-	"context"
 	"encoding/json"
 	"io"
 	"os"
@@ -15,7 +14,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/spf13/cobra"
 	"github.com/wyrd-company/devcontainer-builder/pkg/builder"
 	"github.com/wyrd-company/devcontainer-builder/pkg/features"
 	"github.com/wyrd-company/devcontainer-builder/pkg/lifecycle"
@@ -92,29 +90,6 @@ func TestCommandSubstitution(t *testing.T) {
 	}
 	if command.Parallel["two"].Args[1] != "${containerEnv:VALUE}" {
 		t.Fatal("mutated caller command")
-	}
-}
-
-func TestExecArgumentBoundary(t *testing.T) {
-	// The parser is the real Cobra tree. Replace only the transport action so
-	// this assertion can observe argv without starting Docker.
-	a := &application{result: map[string]any{}, stderr: io.Discard}
-	root := a.command()
-	cmd, _, err := root.Find([]string{"exec"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	var got []string
-	cmd.RunE = func(_cmd *cobra.Command, args []string) error { got = append([]string(nil), args...); return nil }
-	root.SetArgs([]string{"exec", "printf", "--workspace-folder", "/example", "--", "--log-format", "literal"})
-	if err := root.ExecuteContext(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-	if len(got) != 3 || got[0] != "printf" || got[1] != "--log-format" || got[2] != "literal" {
-		t.Fatalf("argv=%q", got)
-	}
-	if value, _ := cmd.Flags().GetString("workspace-folder"); value != "/example" {
-		t.Fatalf("workspace flag=%q", value)
 	}
 }
 

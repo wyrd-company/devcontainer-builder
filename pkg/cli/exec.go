@@ -23,7 +23,9 @@ func (a *application) execCommand() *cobra.Command {
 	var id, user, workdir string
 	var remoteEnv []string
 	var tty bool
-	cmd := &cobra.Command{Use: "exec [flags] -- <command> [args...]", Short: "Run a command in the devcontainer; pass through its stdout and stderr", Args: cobra.MinimumNArgs(1)}
+	cmd := &cobra.Command{Use: "exec [flags] <command> [args...]", Short: "Run a command in the devcontainer; pass through its stdout and stderr", Args: cobra.MinimumNArgs(1)}
+	// Match upstream exec halt-at-non-option (devContainersSpecCLI.ts:58-64).
+	cmd.Flags().SetInterspersed(false)
 	cfg.flags(cmd)
 	mounts.flags(cmd)
 	cmd.Flags().BoolVar(&tty, "tty", false, "Allocate a pseudo-terminal for the container command")

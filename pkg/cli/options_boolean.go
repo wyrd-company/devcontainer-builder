@@ -23,6 +23,12 @@ func booleanOptionArgs(root *cobra.Command, args []string) []string {
 			out = append(out, args[i:]...)
 			break
 		}
+		// The exec command owns every token from its first positional onward,
+		// including boolean-looking values and flags (yargs-parser 21.1.1:358-361).
+		if cmd.Name() == "exec" && (arg == "-" || !strings.HasPrefix(arg, "-")) {
+			out = append(out, args[i:]...)
+			break
+		}
 		// Cobra also merges inherited persistent flags here.
 		cmd.InitDefaultHelpFlag()
 		var flag *pflag.Flag

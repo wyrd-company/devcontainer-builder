@@ -226,10 +226,11 @@ Build output, lifecycle command output, and diagnostics go to stderr.
 
 ## Run a command
 
-Put `--` before the container command so that its flags are not read as
-`dcb` flags:
+`exec` stops reading `dcb` options at the container command. All later
+arguments pass through unchanged. Both forms work:
 
 ```bash
+dcb exec --workspace-folder . ls -la /workspaces
 dcb exec --workspace-folder . -- ls -la /workspaces
 ```
 

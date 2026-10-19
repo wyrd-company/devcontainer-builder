@@ -95,7 +95,8 @@ feature authoring commands. The `templates` group, all its children, `outdated`,
 
 Positional arguments are part of each command unit but do not add flag score units:
 `build [path]` maps to `build --workspace-folder`; `exec <cmd> [args..]` maps to
-`exec -- <cmd> [args..]`. Missing units must also implement `features test [target]`
+`exec <cmd> [args..]` (an explicit `--` also works). Missing units must also
+implement `features test [target]`
 (deprecated target; project-folder preferred), `features package <target>`,
 `features publish <target>`, `features info <mode> <feature>`,
 `templates publish <target>`, and `templates metadata <templateId>`.
