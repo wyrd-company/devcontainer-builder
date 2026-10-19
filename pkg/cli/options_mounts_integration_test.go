@@ -113,7 +113,12 @@ func TestMountOptionsDockerIntegration(t *testing.T) {
 		if got[mountsIDKey] != unique || got[mountsRoleKey] != "one" || got[hostdocker.LabelLocalFolder] != "" || got[hostdocker.LabelConfigFile] != "" {
 			t.Fatalf("labels=%v", got)
 		}
-		// Label-only selection reads no configuration and runs in the home folder.
+		// Label-only selection reads no configuration and runs in the home
+		// folder, even from the workspace that the container mounts.
+		t.Chdir(app)
+		if got := execOutput(t, append(labels, "--", "pwd")...); got != "/root" {
+			t.Fatalf("label-only exec pwd from the workspace=%q", got)
+		}
 		t.Chdir(t.TempDir())
 		if got := execOutput(t, append(labels, "--", "pwd")...); got != "/root" {
 			t.Fatalf("label-only exec pwd=%q", got)
@@ -233,5 +238,79 @@ func TestMountOptionsComposeDockerIntegration(t *testing.T) {
 	conflict, _ := invoke(t, 1, append([]string{"up", "--workspace-folder", other}, labels...)...)
 	if conflict["composeProjectName"] != project {
 		t.Fatalf("conflict=%v", conflict)
+	}
+}
+
+// Commands that attach to an existing container use the workspace folder the
+// container was created with, whatever flags they get. postAttachCommand runs
+// on every attach and records each command's working folder.
+func TestAttachedWorkspaceDockerIntegration(t *testing.T) {
+	cli, err := newDockerClient()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cli.Close()
+	ctx := context.Background()
+	const config = `{"image":"alpine:3.20","updateRemoteUserUID":false,"remoteEnv":{"FOLDER":"${containerWorkspaceFolder}"},"postAttachCommand":"echo $(pwd) ${containerWorkspaceFolder} >> /tmp/attach-pwd"}`
+	for _, tc := range []struct {
+		name   string
+		upArgs []string
+		reuse  bool
+		want   string
+	}{
+		{"git root", nil, false, "/workspaces/repo/app"},
+		{"workspace folder", []string{"--mount-workspace-git-root=false"}, true, "/workspaces/app"},
+		{"worktree common folder", []string{"--mount-git-worktree-common-dir"}, false, "/workspaces/topic/pkg"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			repo, local := gitWorkspace(t, config)
+			if tc.name == "worktree common folder" {
+				admin := filepath.Join(repo, ".git", "worktrees", "topic")
+				writeTestFile(t, filepath.Join(admin, "HEAD"), "ref: refs/heads/topic\n")
+				writeTestFile(t, filepath.Join(admin, "commondir"), "../..\n")
+				tree := filepath.Join(filepath.Dir(repo), "topic")
+				writeTestFile(t, filepath.Join(tree, ".git"), "gitdir: ../repo/.git/worktrees/topic\n")
+				local = filepath.Join(tree, "pkg")
+				writeTestFile(t, filepath.Join(local, ".devcontainer.json"), config)
+			}
+			t.Cleanup(func() {
+				owned, _ := cli.ContainerList(ctx, container.ListOptions{All: true, Filters: filters.NewArgs(filters.Arg("label", hostdocker.LabelLocalFolder))})
+				for _, c := range owned {
+					if strings.HasPrefix(c.Labels[hostdocker.LabelLocalFolder], filepath.Dir(repo)+string(filepath.Separator)) {
+						_ = cli.ContainerRemove(ctx, c.ID, container.RemoveOptions{Force: true, RemoveVolumes: true})
+					}
+				}
+			})
+			ws := []string{"--workspace-folder", local}
+			up, _ := invoke(t, 0, append(append([]string{"up"}, ws...), tc.upArgs...)...)
+			id := up["containerId"].(string)
+			if up["remoteWorkspaceFolder"] != tc.want {
+				t.Fatalf("up result=%v, want folder %s", up, tc.want)
+			}
+			attaches := 1
+			setUp, _ := invoke(t, 0, append([]string{"set-up", "--container-id", id}, ws...)...)
+			runUser, _ := invoke(t, 0, append([]string{"run-user-commands"}, ws...)...)
+			attaches += 2
+			for _, result := range []map[string]any{setUp, runUser} {
+				if result["remoteWorkspaceFolder"] != tc.want {
+					t.Fatalf("attach result=%v, want folder %s", result, tc.want)
+				}
+			}
+			if tc.reuse {
+				// A reused container keeps its placement under other flags.
+				again, _ := invoke(t, 0, append([]string{"up"}, ws...)...)
+				if again["containerId"] != id || again["remoteWorkspaceFolder"] != tc.want {
+					t.Fatalf("reused up=%v", again)
+				}
+				attaches++
+			}
+			if got := execOutput(t, append(ws, "--", "sh", "-c", "echo $(pwd) $FOLDER")...); got != tc.want+" "+tc.want {
+				t.Fatalf("exec folder and substitution=%q, want %s", got, tc.want)
+			}
+			want := strings.TrimSuffix(strings.Repeat(tc.want+" "+tc.want+"\n", attaches), "\n")
+			if got := execOutput(t, append(ws, "--", "cat", "/tmp/attach-pwd")...); got != want {
+				t.Fatalf("lifecycle folders=%q, want %q", got, want)
+			}
+		})
 	}
 }
