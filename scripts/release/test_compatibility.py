@@ -10,18 +10,8 @@ from pathlib import Path
 from unittest.mock import patch
 
 from test_release import ROOT, VERSION, yaml_file
+from git_env import git_env
 
-
-def git_env():
-    return {
-        **{key: value for key, value in os.environ.items() if not key.startswith("GIT_")},
-        "GIT_AUTHOR_NAME": "Example",
-        "GIT_AUTHOR_EMAIL": "example@example.invalid",
-        "GIT_COMMITTER_NAME": "Example",
-        "GIT_COMMITTER_EMAIL": "example@example.invalid",
-        "GIT_CONFIG_GLOBAL": "/dev/null",
-        "GIT_CONFIG_NOSYSTEM": "1",
-    }
 
 
 class CompatibilityTests(unittest.TestCase):
@@ -130,12 +120,12 @@ class CompatibilityTests(unittest.TestCase):
             root = Path(directory)
             sentinel = root / "sentinel"
             subprocess.run(
-                ["git", "init", "--quiet", str(sentinel)], check=True, env=git_env()
+                ["git", "init", "--quiet", str(sentinel)], check=True, env=git_env(fixture=True)
             )
             (sentinel / "example.txt").write_text("sentinel\n")
             for args in [["add", "."], ["commit", "--quiet", "-m", "Sentinel"]]:
                 subprocess.run(
-                    ["git", "-C", str(sentinel), *args], check=True, env=git_env()
+                    ["git", "-C", str(sentinel), *args], check=True, env=git_env(fixture=True)
                 )
 
             def snapshot():
@@ -163,7 +153,7 @@ class CompatibilityTests(unittest.TestCase):
             (publisher / "config/products.json").write_text("{}")
             (publisher / "pubkey.gpg").write_text("example public key")
             subprocess.run(
-                ["git", "init", "--quiet", str(publisher)], check=True, env=git_env()
+                ["git", "init", "--quiet", str(publisher)], check=True, env=git_env(fixture=True)
             )
             subprocess.run(
                 [
@@ -181,11 +171,11 @@ class CompatibilityTests(unittest.TestCase):
                     "Fixture",
                 ],
                 check=True,
-                env=git_env(),
+                env=git_env(fixture=True),
             )
             commit = subprocess.check_output(
                 ["git", "-C", str(publisher), "rev-parse", "HEAD"],
-                text=True, env=git_env(),
+                text=True, env=git_env(fixture=True),
             ).strip()
             (publisher / "scripts/repository.py").write_text("""import json, os, sys
 from pathlib import Path
@@ -226,7 +216,7 @@ elif command == 'validate-queue' and os.environ.get('REJECT_QUEUE'):
             inbox = next((root / "output").glob("contract.*/inbox"))
             subject = subprocess.check_output(
                 ["git", "-C", str(inbox), "log", "-1", "--format=%s"],
-                env=git_env(), text=True,
+                env=git_env(fixture=True), text=True,
             ).strip()
             self.assertEqual(subject, "Add package release manifest")
             calls = [json.loads(line) for line in log.read_text().splitlines()]

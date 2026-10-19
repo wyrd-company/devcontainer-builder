@@ -2,6 +2,7 @@
 # relationships:
 #   references: [stage, check-tag]
 set -euo pipefail
+source "$(dirname "${BASH_SOURCE[0]}")/git-env.sh"
 channel="${1:?publication channel required}"
 python3 scripts/release/check-tag.py
 case "$channel" in

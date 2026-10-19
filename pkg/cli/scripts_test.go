@@ -13,6 +13,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/wyrd-company/devcontainer-builder/internal/testgit"
 )
 
 func TestIntegrationScriptsInvokeUnifiedCLI(t *testing.T) {
@@ -47,7 +49,7 @@ printf '{"outcome":"success"}\n'
 			}
 			cmd := exec.Command("bash", scriptPath)
 			cmd.Dir = root
-			cmd.Env = append(os.Environ(), "PATH="+tools+string(os.PathListSeparator)+os.Getenv("PATH"), "DCB_INVOCATION_LOG="+log, "DCB_ARTIFACT_DIR="+filepath.Join(dir, "artifacts"))
+			cmd.Env = append(testgit.Env(), "PATH="+tools+string(os.PathListSeparator)+os.Getenv("PATH"), "DCB_INVOCATION_LOG="+log, "DCB_ARTIFACT_DIR="+filepath.Join(dir, "artifacts"))
 			if out, err := cmd.CombinedOutput(); err != nil {
 				t.Fatalf("script: %v\n%s", err, out)
 			}

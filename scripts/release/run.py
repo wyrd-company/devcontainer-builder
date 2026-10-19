@@ -11,6 +11,7 @@ import sys
 from pathlib import Path
 
 from manifest import COMMIT, verify_handoff
+from git_env import git_env
 
 
 def run_identity(metadata, repository):
@@ -48,10 +49,11 @@ def verify():
         "handoff/release-manifest.json", commit, os.environ.get("EXPECTED_TAG") or None
     )
     subprocess.run(
-        ["git", "fetch", "--no-tags", "origin", f"refs/tags/{version}"], check=True
+        ["git", "fetch", "--no-tags", "origin", f"refs/tags/{version}"],
+        check=True, env=git_env(),
     )
     tag_commit = subprocess.check_output(
-        ["git", "rev-parse", "FETCH_HEAD^{}"], text=True
+        ["git", "rev-parse", "FETCH_HEAD^{}"], text=True, env=git_env()
     ).strip()
     if tag_commit != commit:
         raise ValueError(

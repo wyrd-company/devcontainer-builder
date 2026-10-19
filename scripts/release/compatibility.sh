@@ -6,18 +6,14 @@
 
 set -euo pipefail
 
-# Git commands below operate on disposable repositories, never the caller's
-# repository selected by a hook or rebase environment. Keep overrides local
-# to Git so the publisher commands retain their normal environment.
-git() (
-  for name in ${!GIT_@}; do
-    unset "$name"
-  done
-  export GIT_AUTHOR_NAME=Example GIT_AUTHOR_EMAIL=example@example.invalid
-  export GIT_COMMITTER_NAME=Example GIT_COMMITTER_EMAIL=example@example.invalid
-  export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1
-  command git "$@"
-)
+source "$(dirname "${BASH_SOURCE[0]}")/git-env.sh"
+
+# Fixed fixture identity and configuration apply only to the temporary inbox.
+git() {
+  git_env env GIT_AUTHOR_NAME=Example GIT_AUTHOR_EMAIL=example@example.invalid \
+    GIT_COMMITTER_NAME=Example GIT_COMMITTER_EMAIL=example@example.invalid \
+    GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 git "$@"
+}
 
 if [[ "$#" -ne 5 ]]; then
   echo "usage: validate-publisher-contract.sh PUBLISHER COMMIT MANIFEST ARTIFACTS OUTPUT" >&2

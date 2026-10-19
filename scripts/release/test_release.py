@@ -13,6 +13,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from git_env import git_env
+
 import manifest
 import stage
 
@@ -490,6 +492,7 @@ class IdentityTests(unittest.TestCase):
                 fetch.assert_called_once_with(
                     ["git", "fetch", "--no-tags", "origin", f"refs/tags/{VERSION}"],
                     check=True,
+                    env=git_env(),
                 )
                 self.assertEqual(output.read_text(), f"version={VERSION}\n")
             with (
