@@ -36,8 +36,11 @@ type DockerfileBuild struct {
 	Labels map[string]string
 }
 
-// dockerfileContextLocal / dockerfileDockerfileLocal are the local mount
-// names SolveDockerfile uses; they are the dockerfile frontend defaults.
+// dockerfileContextLocal / dockerfileDockerfileLocal are the local mounts
+// a Dockerfile build reads. The dockerfile frontend always loads the build
+// context and its .dockerignore from the local named "context"; its
+// "contextkey" option does not rename that mount. No other local of the
+// same session may use these names.
 const (
 	dockerfileContextLocal    = "context"
 	dockerfileDockerfileLocal = "dockerfile"
@@ -51,12 +54,12 @@ func SolveDockerfile(ctx context.Context, b DockerfileBuild, opt SolveOptions) (
 	if err != nil {
 		return nil, err
 	}
-	if err := addDockerfileMounts(localMounts, &b, dockerfileContextLocal, dockerfileDockerfileLocal); err != nil {
+	if err := addDockerfileMounts(localMounts, &b); err != nil {
 		return nil, err
 	}
 	return runSolve(ctx, opt, len(opt.Platforms) > 1, localMounts, func(ctx context.Context, conn *Connection, so client.SolveOpt, ch chan *client.SolveStatus) (*client.SolveResponse, error) {
 		bs := buildSettings{resolveMode: resolveMode(opt, conn), noCache: opt.NoCache}
-		attrs := dockerfileFrontendAttrs(&b, bs, dockerfileContextLocal, dockerfileDockerfileLocal)
+		attrs := dockerfileFrontendAttrs(&b, bs)
 		if len(opt.Platforms) > 0 {
 			attrs["platform"] = strings.Join(opt.Platforms, ",")
 		}
@@ -70,10 +73,15 @@ func SolveDockerfile(ctx context.Context, b DockerfileBuild, opt SolveOptions) (
 }
 
 // addDockerfileMounts registers b's context and Dockerfile directories
-// under the given local mount names.
-func addDockerfileMounts(mounts map[string]fsutil.FS, b *DockerfileBuild, contextName, dockerfileName string) error {
+// under the dockerfile frontend's local mount names.
+func addDockerfileMounts(mounts map[string]fsutil.FS, b *DockerfileBuild) error {
 	if b.ContextDir == "" {
 		return errors.New("dockerfile build: ContextDir is required")
+	}
+	for _, name := range []string{dockerfileContextLocal, dockerfileDockerfileLocal} {
+		if _, taken := mounts[name]; taken {
+			return fmt.Errorf("dockerfile build: local mount %q is already in use", name)
+		}
 	}
 	dfDir := b.DockerfileDir
 	if dfDir == "" {
@@ -87,18 +95,17 @@ func addDockerfileMounts(mounts map[string]fsutil.FS, b *DockerfileBuild, contex
 	if err != nil {
 		return fmt.Errorf("dockerfile dir %s: %w", dfDir, err)
 	}
-	mounts[contextName] = ctxFS
-	mounts[dockerfileName] = dfFS
+	mounts[dockerfileContextLocal] = ctxFS
+	mounts[dockerfileDockerfileLocal] = dfFS
 	return nil
 }
 
 // solveUpstreamDockerfile invokes the builtin dockerfile.v0 frontend.
-// The local mounts named upstreamContextLocal and upstreamDockerfileLocal
-// must be registered on the outer SolveOpt.
+// addDockerfileMounts must have registered b on the outer SolveOpt.
 func solveUpstreamDockerfile(
 	ctx context.Context, gc gateway.Client, b *DockerfileBuild, p ocispecs.Platform, bs buildSettings,
 ) (gateway.Reference, []byte, error) {
-	attrs := dockerfileFrontendAttrs(b, bs, upstreamContextLocal, upstreamDockerfileLocal)
+	attrs := dockerfileFrontendAttrs(b, bs)
 	attrs["platform"] = platforms.Format(p)
 	res, err := gc.Solve(ctx, gateway.SolveRequest{
 		Frontend:    "dockerfile.v0",
@@ -116,16 +123,15 @@ func solveUpstreamDockerfile(
 }
 
 // dockerfileFrontendAttrs renders b as dockerfile.v0 frontend options
-// reading its context and Dockerfile from the named local mounts.
-func dockerfileFrontendAttrs(b *DockerfileBuild, bs buildSettings, contextName, dockerfileName string) map[string]string {
+// reading its Dockerfile from the dockerfileDockerfileLocal mount.
+func dockerfileFrontendAttrs(b *DockerfileBuild, bs buildSettings) map[string]string {
 	filename := b.Filename
 	if filename == "" {
 		filename = "Dockerfile"
 	}
 	attrs := map[string]string{
 		"filename":           filename,
-		"contextkey":         contextName,
-		"dockerfilekey":      dockerfileName,
+		"dockerfilekey":      dockerfileDockerfileLocal,
 		"image-resolve-mode": bs.resolveMode,
 	}
 	if b.Target != "" {

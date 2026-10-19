@@ -284,6 +284,11 @@ func (b *Builder) prepareBuildContext(ctx context.Context, opts Options, logf fu
 	return
 }
 
+// featuresLocalName is the session local that exposes the staging
+// context (features and the VS Code server). It must differ from the
+// "context" local, from which a Dockerfile base reads its build context.
+const featuresLocalName = "devcontainer-features"
+
 func (b *Builder) runBuildKit(ctx context.Context, opts Options, ctxDir string,
 	dc *spec.DevContainer, baseImage string, upstream *buildkit.DockerfileBuild,
 	resolved []features.Resolved, sr *vscode.Result,
@@ -292,7 +297,7 @@ func (b *Builder) runBuildKit(ctx context.Context, opts Options, ctxDir string,
 	solveOpts := buildkit.SolveOptions{
 		Address:          opts.BuildKitAddress,
 		Docker:           opts.Docker,
-		LocalContextName: "context",
+		LocalContextName: featuresLocalName,
 		LocalContextDir:  ctxDir,
 		Tags:             opts.Tags,
 		Push:             opts.Push,
@@ -319,7 +324,7 @@ func (b *Builder) runBuildKit(ctx context.Context, opts Options, ctxDir string,
 			BaseImage:             baseImage,
 			Features:              resolved,
 			VSCodeServer:          sr,
-			LocalContextName:      "context",
+			LocalContextName:      featuresLocalName,
 			FeaturesContextSubdir: "_features",
 			RemoteUser:            dc.RemoteUser,
 			ResolveImageConfig:    !opts.SkipImageMetaResolve,

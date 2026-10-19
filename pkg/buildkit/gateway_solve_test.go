@@ -152,8 +152,11 @@ func TestBuildOnePlatform_UpstreamDockerfileBase(t *testing.T) {
 	}
 	opts := gc.frontends[0].FrontendOpt
 	if opts["image-resolve-mode"] != pb.AttrImageResolveModePreferLocal || opts["platform"] != "linux/amd64" ||
-		opts["contextkey"] != upstreamContextLocal || opts["dockerfilekey"] != upstreamDockerfileLocal {
+		opts["dockerfilekey"] != dockerfileDockerfileLocal {
 		t.Fatalf("frontend opts = %v", opts)
+	}
+	if _, ok := opts["contextkey"]; ok {
+		t.Fatalf("frontend opts = %v; contextkey does not select the context mount", opts)
 	}
 	if len(gc.resolveOpts) != 0 {
 		t.Fatalf("upstream base resolved an image config: %+v", gc.resolveOpts)
@@ -206,11 +209,10 @@ func TestDockerfileFrontendAttrs(t *testing.T) {
 		BuildArgs: map[string]string{"VARIANT": "3"},
 		Labels:    map[string]string{"org.example.role": "app"},
 	}
-	got := dockerfileFrontendAttrs(b, buildSettings{resolveMode: pb.AttrImageResolveModePreferLocal, noCache: true}, "ctx", "df")
+	got := dockerfileFrontendAttrs(b, buildSettings{resolveMode: pb.AttrImageResolveModePreferLocal, noCache: true})
 	want := map[string]string{
 		"filename":               "app.Dockerfile",
-		"contextkey":             "ctx",
-		"dockerfilekey":          "df",
+		"dockerfilekey":          "dockerfile",
 		"image-resolve-mode":     pb.AttrImageResolveModePreferLocal,
 		"target":                 "dev",
 		"no-cache":               "",
@@ -221,7 +223,7 @@ func TestDockerfileFrontendAttrs(t *testing.T) {
 		t.Fatalf("attrs = %v, want %v", got, want)
 	}
 
-	got = dockerfileFrontendAttrs(&DockerfileBuild{}, buildSettings{resolveMode: pb.AttrImageResolveModeDefault}, "ctx", "df")
+	got = dockerfileFrontendAttrs(&DockerfileBuild{}, buildSettings{resolveMode: pb.AttrImageResolveModeDefault})
 	if got["filename"] != "Dockerfile" {
 		t.Errorf("default filename = %q, want Dockerfile", got["filename"])
 	}

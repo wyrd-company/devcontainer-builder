@@ -42,14 +42,6 @@ type BuildSpec struct {
 	Labels map[string]string
 }
 
-// upstreamContextLocal / upstreamDockerfileLocal are local mount names
-// reserved for the upstream Dockerfile build. They're independent of the
-// devcontainer features local mount so the two contexts don't collide.
-const (
-	upstreamContextLocal    = "upstream-context"
-	upstreamDockerfileLocal = "upstream-dockerfile"
-)
-
 // SolveDevcontainer drives a devcontainer build through the BuildKit
 // gateway. Compared to Solve, it can:
 //
@@ -73,7 +65,7 @@ func SolveDevcontainer(ctx context.Context, spec BuildSpec, opt SolveOptions) (*
 		return nil, err
 	}
 	if spec.Upstream != nil {
-		if err := addDockerfileMounts(localMounts, spec.Upstream, upstreamContextLocal, upstreamDockerfileLocal); err != nil {
+		if err := addDockerfileMounts(localMounts, spec.Upstream); err != nil {
 			return nil, fmt.Errorf("upstream dockerfile: %w", err)
 		}
 	}
