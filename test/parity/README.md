@@ -24,6 +24,17 @@ setup, report and cleanup errors do. A skipped fixture run has zero fixture
 dimensions and a `skipped` reason; it is not a fixture baseline score. Its
 independent option coverage can be complete.
 
+## Harness tests
+
+`go test ./test/parity` runs pure and recording-tool tests without a Docker
+daemon. `TestRealDockerConfigIsolation` uses the real Docker CLI for local
+context handling only. Live discovery, cleanup, and effective-user tests use
+the `docker_integration` build tag. Run them with
+`go test -timeout 20m -tags docker_integration ./test/parity -v -count=1`.
+`task integration:docker` and its CI job include these tests with the shared
+20-minute integration budget. `task test` excludes them by build selection;
+no unavailable `DOCKER_HOST` or explicit test skips are needed.
+
 ## Option coverage
 
 `task parity` also prints registered-option coverage. Run

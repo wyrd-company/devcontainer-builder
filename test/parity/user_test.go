@@ -1,3 +1,5 @@
+//go:build docker_integration
+
 // relationships:
 //
 // references: [README, runner, discovery_test]

@@ -58,7 +58,7 @@ esac
 if [ "$1" = list ]; then
   if [ "$LIST_SCENARIO" = list-failure ]; then exit 29; fi
   if [ "$LIST_SCENARIO" = empty-list ]; then exit 0; fi
-  printf '%s\n' github.com/wyrd-company/devcontainer-builder/cmd/dcb github.com/wyrd-company/devcontainer-builder/pkg/builder
+  printf '%s\n' github.com/wyrd-company/devcontainer-builder/cmd/dcb github.com/wyrd-company/devcontainer-builder/pkg/builder github.com/wyrd-company/devcontainer-builder/test/parity
   exit 0
 fi
 printf '%s\n' "$*" >> "$RECORD_DIR/go"
@@ -176,7 +176,7 @@ exit "$GO_EXIT"
 				if suite == "all" || strings.HasPrefix(suite, "cli") {
 					var want []string
 					if suite == "all" {
-						want = append(want, "test -timeout 20m -v -tags docker_integration github.com/wyrd-company/devcontainer-builder/pkg/builder -count=1")
+						want = append(want, "test -timeout 20m -v -tags docker_integration github.com/wyrd-company/devcontainer-builder/pkg/builder github.com/wyrd-company/devcontainer-builder/test/parity -count=1")
 					}
 					// A failed command must stop before the next shard.
 					if !fail || suite != "all" {

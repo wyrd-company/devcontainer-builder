@@ -176,6 +176,12 @@ func TestUpstreamInvocationBindsVersion(t *testing.T) {
 // The harness hands a fixture's up arguments to the adapter; the adapter
 // invocation tests check that each side places them on its command line.
 func TestFixtureUpArgsReachBothSides(t *testing.T) {
+	// The adapter records arguments; discovery needs no live container.
+	bin := t.TempDir()
+	if err := os.WriteFile(filepath.Join(bin, "docker"), []byte("#!/bin/sh\nexit 0\n"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin)
 	var fixture Fixture
 	for _, f := range fixtures {
 		if f.Name == "additional-features" {
