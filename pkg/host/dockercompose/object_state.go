@@ -12,7 +12,6 @@ import (
 
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/filters"
-	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/api/types/volume"
 	"github.com/wyrd-company/devcontainer-builder/internal/datafolder"
 )
@@ -128,7 +127,7 @@ func objectRootMounted(root string, containers []container.Summary) bool {
 	for _, c := range containers {
 		for _, m := range c.Mounts {
 			source := filepath.Clean(m.Source)
-			if m.Type == mount.TypeBind && (source == root || strings.HasPrefix(source, root+string(filepath.Separator))) {
+			if source == root || strings.HasPrefix(source, root+string(filepath.Separator)) || strings.HasPrefix(root, strings.TrimSuffix(source, string(filepath.Separator))+string(filepath.Separator)) {
 				return true
 			}
 		}

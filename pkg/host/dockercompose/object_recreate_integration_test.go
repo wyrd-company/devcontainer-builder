@@ -27,7 +27,7 @@ func TestComposeObjectRecreateCleanupIntegration(t *testing.T) {
 	cli := requireComposeDocker(t, ctx)
 	defer cli.Close()
 	dockertest.EnsureImage(t, ctx, cli, "alpine:3.20")
-	for _, scenario := range []string{"recreated", "reused-service", "external-directory", "external-file-stopped", "prefix-neighbor", "ownership", "unmounted-producer", "cleanup-error", "consumer-error"} {
+	for _, scenario := range []string{"recreated", "reused-service", "external-directory", "external-parent", "external-file-stopped", "prefix-neighbor", "ownership", "unmounted-producer", "cleanup-error", "consumer-error"} {
 		t.Run(scenario, func(t *testing.T) {
 			workspace := prepareComposeWorkspace(t)
 			parent := t.TempDir()
@@ -95,6 +95,9 @@ func TestComposeObjectRecreateCleanupIntegration(t *testing.T) {
 			holder := ""
 			if strings.HasPrefix(scenario, "external-") || scenario == "prefix-neighbor" || scenario == "cleanup-error" {
 				mounts := []mount.Mount{{Type: mount.TypeBind, Source: oldRoot, Target: "/held", ReadOnly: true}}
+				if scenario == "external-parent" {
+					mounts[0].Source = parent
+				}
 				if scenario == "prefix-neighbor" {
 					neighbor := oldRoot + "-other"
 					if err := os.Mkdir(neighbor, 0700); err != nil {
