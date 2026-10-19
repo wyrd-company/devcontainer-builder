@@ -28,8 +28,8 @@ The pinned `up` table has **44 explicit options**, plus inherited help/version.
 
 ## Dispositions
 
-- implemented: **77**.
-- implement: **160**.
+- implemented: **84**.
+- implement: **153**.
 - not applicable by design: **15**.
 - needs Bob's decision: **1**.
 
@@ -309,9 +309,9 @@ features, dotfiles, environment probing and version support.
 | --terminal-columns | none | implement | terminal | Add this upstream control to the corresponding handler. Source: devContainersSpecCLI.ts:767. |
 | --terminal-rows | none | implement | terminal | Add this upstream control to the corresponding handler. Source: devContainersSpecCLI.ts:768. |
 | --default-user-env-probe | none | implement | sibling-unit | Needs the upstream probe and its 10-second timeout, a new timeout mechanic that awaits Bob's decision. Source: devContainersSpecCLI.ts:769. |
-| --skip-non-blocking-commands | none | implement | lifecycle | Add this upstream control to the corresponding handler. Source: devContainersSpecCLI.ts:770. |
-| --prebuild | none | implement | lifecycle | Add this upstream control to the corresponding handler. Source: devContainersSpecCLI.ts:771. |
-| --stop-for-personalization | none | implement | lifecycle | Add this upstream control to the corresponding handler. Source: devContainersSpecCLI.ts:772. |
+| --skip-non-blocking-commands | --skip-non-blocking-commands | implemented | covered | Stops after merged waitFor (default updateContentCommand), without background continuation. Docker and Compose behavior tests. Source: devContainersSpecCLI.ts:770. |
+| --prebuild | --prebuild | implemented | covered | Stops after updateContentCommand and reruns that hook with a current marker. Docker and Compose behavior tests. Source: devContainersSpecCLI.ts:771. |
+| --stop-for-personalization | --stop-for-personalization | implemented | covered | Stops after dotfiles and before postStartCommand. Docker and Compose behavior tests. Source: devContainersSpecCLI.ts:772. |
 | --remote-env | none | implement | environment | Add this upstream control to the corresponding handler. Source: devContainersSpecCLI.ts:773. |
 | --skip-feature-auto-mapping [hidden] | none | implement | feature-controls | Implement upstream feature identifier mapping plus its opt-out; current resolver is not evidence of mapping parity. Source: devContainersSpecCLI.ts:774. |
 | --skip-post-attach | --skip-post-attach | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: devContainersSpecCLI.ts:775. |
@@ -338,7 +338,7 @@ features, dotfiles, environment probing and version support.
 | --terminal-rows | none | implement | terminal | Add this upstream control to the corresponding handler. Source: devContainersSpecCLI.ts:348. |
 | --default-user-env-probe | none | implement | sibling-unit | Needs the upstream probe and its 10-second timeout, a new timeout mechanic that awaits Bob's decision. Source: devContainersSpecCLI.ts:349. |
 | --skip-post-create | --skip-post-create | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: devContainersSpecCLI.ts:350. |
-| --skip-non-blocking-commands | none | implement | lifecycle | Add this upstream control to the corresponding handler. Source: devContainersSpecCLI.ts:351. |
+| --skip-non-blocking-commands | --skip-non-blocking-commands | implemented | covered | Stops after merged waitFor (default updateContentCommand), without background continuation. Docker and Compose behavior tests. Source: devContainersSpecCLI.ts:351. |
 | --user-data-folder | none | implement | data-folders | Add this upstream control to the corresponding handler. Source: devContainersSpecCLI.ts:352. |
 | --remote-env | none | implement | environment | Add this upstream control to the corresponding handler. Source: devContainersSpecCLI.ts:353. |
 | --dotfiles-repository | --dotfiles-repository | implemented | sibling-unit | Registered; installs after postCreateCommand once per container. A failed install warns and the next run retries. Source: devContainersSpecCLI.ts:354. |
@@ -424,10 +424,10 @@ features, dotfiles, environment probing and version support.
 | --update-remote-user-uid-default | --update-remote-user-uid-default | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: devContainersSpecCLI.ts:119. |
 | --remove-existing-container | --remove-existing-container | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: devContainersSpecCLI.ts:120. |
 | --build-no-cache | --build-no-cache | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: devContainersSpecCLI.ts:121. |
-| --expect-existing-container | none | implement | lifecycle | Add this upstream control to the corresponding handler. Source: devContainersSpecCLI.ts:122. |
+| --expect-existing-container | --expect-existing-container | implemented | covered | Checks existence before build or removal; accepts stopped containers and preserves Compose containers on drift. Docker and Compose behavior tests. Source: devContainersSpecCLI.ts:122. |
 | --skip-post-create | --skip-post-create | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: devContainersSpecCLI.ts:123. |
-| --skip-non-blocking-commands | none | implement | lifecycle | Add this upstream control to the corresponding handler. Source: devContainersSpecCLI.ts:124. |
-| --prebuild | none | implement | lifecycle | Add this upstream control to the corresponding handler. Source: devContainersSpecCLI.ts:125. |
+| --skip-non-blocking-commands | --skip-non-blocking-commands | implemented | covered | Stops after merged waitFor (default updateContentCommand), without background continuation. Docker and Compose behavior tests. Source: devContainersSpecCLI.ts:124. |
+| --prebuild | --prebuild | implemented | covered | Stops after updateContentCommand and reruns that hook with a current marker. Docker and Compose behavior tests. Source: devContainersSpecCLI.ts:125. |
 | --user-data-folder | none | implement | data-folders | Add this upstream control to the corresponding handler. Source: devContainersSpecCLI.ts:126. |
 | --mount | none | implement | mounts | Add bind/volume mounts through the Engine API; no additional CLI mounts are supplied by default. Source: devContainersSpecCLI.ts:127. |
 | --remote-env | none | implement | environment | Add this upstream control to the corresponding handler. Source: devContainersSpecCLI.ts:128. |

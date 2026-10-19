@@ -38,11 +38,13 @@ func (a *application) composeHost(cli *dockerclient.Client) *dockercompose.Host 
 func (a *application) upCommand() *cobra.Command {
 	var opts buildOptions
 	var skip skipOptions
+	var controls lifecycleOptions
 	var dotfiles dotfilesOptions
 	var remove, allowProjectConflict bool
 	cmd := &cobra.Command{Use: "up", Short: "Build, create, start, and run lifecycle commands", Args: cobra.NoArgs}
 	opts.flags(cmd, false)
 	skip.flags(cmd)
+	controls.flags(cmd)
 	dotfiles.flags(cmd)
 	cmd.Flags().BoolVar(&remove, "remove-existing-container", false, "Remove the workspace container before creating it")
 	cmd.Flags().BoolVar(&allowProjectConflict, "allow-project-conflict", false, "Allow Compose up to reuse or recreate another workspace's project containers")
@@ -68,6 +70,9 @@ func (a *application) upCommand() *cobra.Command {
 			return err
 		}
 		defer cli.Close()
+		if err := controls.requireExisting(cmd.Context(), cli, dc, workspace); err != nil {
+			return err
+		}
 		bo.Docker = cli
 		if dc.Mode() == spec.ModeCompose && len(opts.options.Tags) == 0 {
 			bo.Tags = nil
@@ -98,14 +103,16 @@ func (a *application) upCommand() *cobra.Command {
 			req := composeUpRequest(dc, workspace, image, built, skip)
 			req.AllowProjectConflict = allowProjectConflict
 			req.Dotfiles = dotfiles.Dotfiles
-			res, err := a.composeHost(cli).Up(cmd.Context(), req)
+			req.Lifecycle = controls.LifecycleControls
+			host := dockercompose.New(cli, dockercompose.Options{Logger: a.logf, Stdout: a.logs, Stderr: a.logs, NoRecreate: controls.expectExisting})
+			res, err := host.Up(cmd.Context(), req)
 			if err != nil {
 				return err
 			}
 			id = res.PrimaryContainerID
 			a.result["composeProjectName"] = res.ProjectName
 		} else {
-			res, err := a.dockerHost(cli).Up(cmd.Context(), hostdocker.UpRequest{Spec: dc, SpecPath: dc.Path, LocalWorkspace: workspace, Image: image, ImageBuilt: built != nil, SkipLifecycle: skip.postCreate, SkipPostAttach: skip.postAttach, Features: resolved, LocalEnv: envMap(), RemoteUserUIDUpdate: uid, Dotfiles: dotfiles.Dotfiles})
+			res, err := a.dockerHost(cli).Up(cmd.Context(), hostdocker.UpRequest{Spec: dc, SpecPath: dc.Path, LocalWorkspace: workspace, Image: image, ImageBuilt: built != nil, SkipLifecycle: skip.postCreate, SkipPostAttach: skip.postAttach, Features: resolved, LocalEnv: envMap(), RemoteUserUIDUpdate: uid, Dotfiles: dotfiles.Dotfiles, Lifecycle: controls.LifecycleControls})
 			if err != nil {
 				return err
 			}

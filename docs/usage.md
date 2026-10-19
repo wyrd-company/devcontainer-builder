@@ -213,6 +213,29 @@ container. The markers skip the creation commands that already ran.
 `dcb set-up --container-id <id>` applies the lifecycle commands of a
 configuration to a container that was started some other way.
 
+### Lifecycle controls
+
+All lifecycle control flags are booleans and default to `false`.
+
+| Flag | Commands | Meaning |
+| --- | --- | --- |
+| `--skip-non-blocking-commands` | `up`, `run-user-commands`, `set-up` | Stop after the merged configuration's `waitFor` hook, or `updateContentCommand` by default. Later hooks do not run in the background. |
+| `--prebuild` | `up`, `run-user-commands` | Stop after `updateContentCommand`. Rerun that hook even when its creation marker is current; `onCreateCommand` still uses its marker. |
+| `--stop-for-personalization` | `run-user-commands` | Run through `postCreateCommand` and the dotfiles install, then stop before `postStartCommand`. |
+| `--expect-existing-container` | `up` | Fail before building or creating resources if the workspace container does not exist. A stopped container qualifies. |
+
+The stop point applies even when that hook has no commands. All feature and
+configuration commands through the stop point use their normal markers.
+With `--prebuild`, all `updateContentCommand` contributions rerun.
+When stop controls are combined, the first stop point wins. A `waitFor` stop
+at `postCreateCommand` precedes dotfiles; personalization follows dotfiles.
+A `waitFor` stop at `initializeCommand` skips all container lifecycle hooks.
+`--skip-post-create` continues to skip all lifecycle commands and dotfiles.
+
+`--expect-existing-container --remove-existing-container` checks that a
+container exists, then replaces it. Without explicit removal, an expected
+Compose container is reused without recreation when its configuration changes.
+
 ### Dotfiles
 
 `up`, `run-user-commands`, and `set-up` can install a dotfiles repository

@@ -51,6 +51,8 @@ type UpRequest struct {
 	// Dotfiles installs the user's dotfiles after postCreateCommand unless
 	// SkipLifecycle is set.
 	Dotfiles runner.Dotfiles
+	// Lifecycle selects lifecycle stop points and prebuild behavior.
+	Lifecycle runner.LifecycleControls
 	// Features as resolved by pkg/features. Their containerEnv and
 	// lifecycle commands are merged into the primary service.
 	Features []features.Resolved
@@ -525,6 +527,8 @@ func (h *Host) runLifecycle(
 	}
 	if !req.SkipLifecycle {
 		rt.Dotfiles = req.Dotfiles
+		rt.Lifecycle = req.Lifecycle
+		rt.Lifecycle.WaitFor = dc.WaitFor
 	}
 	runResult, err := runner.RunWithResult(ctx, execer, plan, rt, runner.Options{
 		Logger: h.opts.Logger,

@@ -44,6 +44,7 @@ func (a *application) lifecycleCommand(name string) *cobra.Command {
 	var cfg configOptions
 	var id string
 	var skip skipOptions
+	var controls lifecycleOptions
 	var dotfiles dotfilesOptions
 	short := "Run lifecycle commands in an existing devcontainer"
 	if name == "set-up" {
@@ -52,6 +53,7 @@ func (a *application) lifecycleCommand(name string) *cobra.Command {
 	cmd := &cobra.Command{Use: name, Short: short, Args: cobra.NoArgs}
 	cfg.flags(cmd)
 	skip.flags(cmd)
+	controls.flags(cmd)
 	dotfiles.flags(cmd)
 	cmd.Flags().StringVar(&id, "container-id", "", "Target an existing container by ID")
 	if name == "set-up" {
@@ -113,6 +115,8 @@ func (a *application) lifecycleCommand(name string) *cobra.Command {
 			plan[i].Command = resolveCommand(plan[i].Command, sub, env)
 		}
 		rt := runner.Runtime{User: dc.RemoteUser, Workdir: containerWorkspace(dc, workspace), Env: resolveRemoteEnv(dc.UpdateRemoteEnv, sub, env), CreatedAt: info.Created, StartedAt: info.State.StartedAt, UserDataFolder: lifecycle.UserDataFolder(home, ""), Dotfiles: dotfiles.forRun(skip)}
+		rt.Lifecycle = controls.LifecycleControls
+		rt.Lifecycle.WaitFor = dc.WaitFor
 		result, err := runner.RunWithResult(cmd.Context(), execer, plan, rt, runner.Options{Logger: a.logf, Stdout: a.logs, Stderr: a.logs})
 		if err != nil {
 			return err

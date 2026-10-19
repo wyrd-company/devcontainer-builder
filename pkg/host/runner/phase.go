@@ -26,7 +26,7 @@ func shouldRunPhase(ctx context.Context, execer Execer, p lifecycle.Phase, rt Ru
 	if err != nil {
 		return false, fmt.Errorf("marker check (%s): %w", p.Hook, err)
 	}
-	return doRun, nil
+	return doRun || (rt.Lifecycle.Prebuild && p.Hook == lifecycle.HookUpdateContent), nil
 }
 
 // runPhase executes one Phase when its hook's marker check said to run.

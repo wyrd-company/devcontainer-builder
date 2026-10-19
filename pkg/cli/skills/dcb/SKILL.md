@@ -94,6 +94,18 @@ Their `phasesRun` result lists executed phases as objects with `hook` (the
 upstream name, such as `postAttachCommand`) and `origin` (such as
 `devcontainer.json` or the feature reference). No executed phases gives `[]`.
 
+`up`, `run-user-commands`, and `set-up` accept
+`--skip-non-blocking-commands` to stop after the merged `waitFor` hook
+(default `updateContentCommand`), without background continuation.
+`up` and `run-user-commands` accept `--prebuild` to stop after
+`updateContentCommand` and rerun that hook despite a current marker.
+`run-user-commands --stop-for-personalization` stops after dotfiles and
+before `postStartCommand`. Combined controls use the first stop point.
+`up --expect-existing-container` requires an existing running or stopped
+container before build or creation. Explicit `--remove-existing-container`
+then replaces it; otherwise Compose reuses it without recreation.
+All four controls default to false.
+
 `up`, `run-user-commands`, and `set-up` take `--dotfiles-repository`,
 `--dotfiles-install-command`, and `--dotfiles-target-path` (default
 `~/dotfiles`). The install runs after postCreateCommand, once per container,

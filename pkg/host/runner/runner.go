@@ -93,6 +93,8 @@ type Runtime struct {
 	// after postCreateCommand, once per container. Leave it zero when
 	// lifecycle commands are skipped, as upstream does.
 	Dotfiles Dotfiles
+	// Lifecycle selects stop points and prebuild marker behavior.
+	Lifecycle LifecycleControls
 }
 
 // Options configure logging and default output streams.
@@ -148,12 +150,13 @@ func RunWithResult(ctx context.Context, execer Execer, plan []lifecycle.Phase, r
 	if execer == nil {
 		return nil, fmt.Errorf("runner: Execer is required")
 	}
+	plan, allowDotfiles := rt.Lifecycle.selectPlan(plan)
 	result := &RunResult{Phases: make([]PhaseResult, 0, len(plan))}
 	// Like upstream, a hook's marker is checked once; the decision covers
 	// every command of that hook.
 	decided := map[lifecycle.Hook]bool{}
 	// Upstream installs dotfiles after postCreateCommand, before postStart.
-	dotfilesPending := rt.Dotfiles.Repository != ""
+	dotfilesPending := allowDotfiles && rt.Dotfiles.Repository != ""
 	for _, p := range plan {
 		if dotfilesPending && (p.Hook == lifecycle.HookPostStart || p.Hook == lifecycle.HookPostAttach) {
 			result.Dotfiles = installDotfiles(ctx, execer, rt, opts)
