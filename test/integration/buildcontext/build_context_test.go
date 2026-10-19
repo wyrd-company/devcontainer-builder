@@ -1,12 +1,16 @@
 //go:build docker_integration
 
-package main
+// Package buildcontext runs dcb build and dcb up on Dockerfile configurations
+// that copy from their build context. It is a separate package so that its
+// Docker work has its own test budget beside cmd/dcb.
+package buildcontext
 
 import (
-	"context"
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -34,10 +38,8 @@ var buildContextLayouts = []buildContextLayout{
 // the layout, so a build from any other directory cannot produce it.
 func writeBuildContextWorkspace(t *testing.T, layout buildContextLayout, dockerfile string, extra map[string]any) string {
 	t.Helper()
-	tmp, err := filepath.Abs(filepath.Join("..", "..", ".tmp"))
-	if err != nil {
-		t.Fatal(err)
-	}
+	// The workspace is under the repository so the Docker daemon can bind-mount it.
+	tmp := filepath.Join(repoRoot(t), ".tmp")
 	if err := os.MkdirAll(tmp, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -85,17 +87,13 @@ func mustJSON(t *testing.T, v any) string {
 // context through dcb build, for each context placement. The kept file must
 // come from the configured context and the ignored file must be absent.
 func TestDockerBuildContextIntegration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping Docker integration test in short mode")
-	}
-	requireDocker(t)
-	bin := buildBinary(t)
+	bin := prepare(t)
 
 	for _, layout := range buildContextLayouts {
 		t.Run(layout.name, func(t *testing.T) {
 			workspace := writeBuildContextWorkspace(t, layout, "FROM scratch\nCOPY . /context/\n", nil)
 			out := t.TempDir()
-			hostRunCommand(t, os.Environ(), bin, "build", "--workspace-folder", workspace, "--skip-features", "--output", out, "--progress", "plain")
+			runDCB(t, bin, "build", "--workspace-folder", workspace, "--skip-features", "--output", out, "--progress", "plain")
 			assertContextCopy(t, out, layout)
 		})
 	}
@@ -119,7 +117,7 @@ func TestDockerBuildContextIntegration(t *testing.T) {
 			}
 		}
 		out := t.TempDir()
-		hostRunCommand(t, os.Environ(), bin, "build", "--workspace-folder", workspace, "--output", out, "--progress", "plain")
+		runDCB(t, bin, "build", "--workspace-folder", workspace, "--output", out, "--progress", "plain")
 		assertContextCopy(t, out, layout)
 		if got, err := os.ReadFile(filepath.Join(out, "usr", "local", "share", "feature-marker")); err != nil || string(got) != "feature-marker\n" {
 			t.Fatalf("feature marker = %q, %v; want feature-marker", got, err)
@@ -141,27 +139,82 @@ func assertContextCopy(t *testing.T, root string, layout buildContextLayout) {
 // TestDockerUpBuildContextIntegration covers the same context placements
 // through dcb up, reading the copied files inside the running container.
 func TestDockerUpBuildContextIntegration(t *testing.T) {
-	cli := hostRequireDocker(t, context.Background())
-	t.Cleanup(func() { _ = cli.Close() })
-	hostEnsureImage(t, context.Background(), cli, "alpine:3.20")
-	bin := hostBuildBinary(t)
+	bin := prepare(t)
 
 	for _, layout := range buildContextLayouts {
 		t.Run(layout.name, func(t *testing.T) {
 			workspace := writeBuildContextWorkspace(t, layout, "FROM alpine:3.20\nCOPY . /context/\n", nil)
 			tag := fmt.Sprintf("dcb-test/build-context-%s:%d", layout.name, time.Now().UnixNano())
 			t.Cleanup(func() {
-				if err := hostRunCommandAllowError(bin, "down", "--workspace-folder", workspace); err != nil {
-					t.Logf("down: %v", err)
+				if out, err := exec.Command(bin, "down", "--workspace-folder", workspace).CombinedOutput(); err != nil {
+					t.Logf("down: %v\n%s", err, out)
 				}
-				removeImage(t, tag)
+				if out, err := exec.Command("docker", "image", "rm", tag).CombinedOutput(); err != nil {
+					t.Logf("remove image %s: %v\n%s", tag, err, out)
+				}
 			})
-			hostRunCommand(t, os.Environ(), bin, "up", "--workspace-folder", workspace, "--image-name", tag, "--update-remote-user-uid-default", "never")
-			out := hostRunCommand(t, os.Environ(), bin, "exec", "--workspace-folder", workspace, "--", "sh", "-c",
+			runDCB(t, bin, "up", "--workspace-folder", workspace, "--image-name", tag, "--update-remote-user-uid-default", "never")
+			out := runDCB(t, bin, "exec", "--workspace-folder", workspace, "--", "sh", "-c",
 				"cat /context/kept.txt; if test -e /context/ignored.txt; then echo ignored-present; else echo ignored-absent; fi")
 			if got, want := strings.TrimSpace(string(out)), "kept-"+layout.name+"\nignored-absent"; got != want {
 				t.Fatalf("container context files = %q, want %q", got, want)
 			}
 		})
 	}
+}
+
+func repoRoot(t *testing.T) string {
+	t.Helper()
+	root, err := filepath.Abs(filepath.Join("..", "..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return root
+}
+
+// prepare checks Docker, makes the base image available and builds dcb.
+func prepare(t *testing.T) string {
+	t.Helper()
+	if testing.Short() {
+		t.Skip("skipping Docker integration test in short mode")
+	}
+	if out, err := exec.Command("docker", "info").CombinedOutput(); err != nil {
+		if os.Getenv("CI") == "true" {
+			t.Fatalf("docker daemon is required: %v\n%s", err, out)
+		}
+		t.Skipf("docker daemon is required: %v\n%s", err, out)
+	}
+	if exec.Command("docker", "image", "inspect", "alpine:3.20").Run() != nil {
+		if out, err := exec.Command("docker", "pull", "alpine:3.20").CombinedOutput(); err != nil {
+			t.Fatalf("pull alpine:3.20: %v\n%s", err, out)
+		}
+	}
+	bin := filepath.Join(t.TempDir(), "dcb")
+	cmd := exec.Command("go", "build", "-o", bin, "./cmd/dcb")
+	cmd.Dir = repoRoot(t)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("build dcb: %v\n%s", err, out)
+	}
+	return bin
+}
+
+// runDCB runs dcb and returns its stdout. Except for exec, stdout must be
+// one JSON success result.
+func runDCB(t *testing.T, bin string, args ...string) []byte {
+	t.Helper()
+	cmd := exec.Command(bin, args...)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	out, err := cmd.Output()
+	t.Logf("dcb %s\n%s", strings.Join(args, " "), out)
+	if err != nil {
+		t.Fatalf("dcb %s: %v\nstdout: %s\nstderr: %s", args[0], err, out, stderr.String())
+	}
+	if args[0] != "exec" {
+		var result map[string]any
+		if json.Unmarshal(out, &result) != nil || result["outcome"] != "success" || bytes.Count(out, []byte("\n")) != 1 {
+			t.Fatalf("dcb %s result: %s\nstderr: %s", args[0], out, stderr.String())
+		}
+	}
+	return out
 }

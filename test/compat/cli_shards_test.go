@@ -193,7 +193,7 @@ printf '%s\n' "$*" >> "$RECORD_DIR/calls"
 			}
 			var want []string
 			if route == "build" {
-				want = append(want, "test -timeout 20m -v -tags docker_integration ./pkg/builder ./pkg/buildkit -count=1")
+				want = append(want, "test -timeout 20m -v -tags docker_integration ./pkg/builder ./pkg/buildkit ./test/integration/buildcontext -count=1")
 			}
 			for _, shard := range readCLIShards(t) {
 				want = append(want, "test -timeout 20m -v -tags docker_integration ./cmd/dcb -run "+shard.pattern.String()+" -count=1")
