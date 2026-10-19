@@ -155,6 +155,7 @@ func (a *application) command() *cobra.Command {
 	root.AddCommand(a.buildCommand(false), a.buildCommand(true), a.upCommand(), a.execCommand(), a.readCommand(), a.lifecycleCommand("run-user-commands"), a.lifecycleCommand("set-up"), a.manageCommand(false), a.manageCommand(true), a.featuresCommand(), a.serverCommand(), a.skillsCommand())
 	root.AddCommand(&cobra.Command{Use: "version", Short: "Print the dcb version", Args: cobra.NoArgs, RunE: printVersion})
 	wrapActions(root, a)
+	versionBeforeArgs(root, &showVersion)
 	return root
 }
 
@@ -172,6 +173,22 @@ func (a *application) diagnostic(level, text string) {
 	ranks := map[string]int{"trace": 0, "debug": 1, "info": 2, "warn": 3, "error": 4, "off": 5}
 	if a.logs != nil && ranks[level] >= ranks[a.logLevel] {
 		_ = a.logs.diagnostic(level, text)
+	}
+}
+
+// versionBeforeArgs lets --version answer before positional argument checks,
+// which Cobra runs ahead of pre-run hooks: upstream exec --version prints the
+// version without a command to run.
+func versionBeforeArgs(cmd *cobra.Command, showVersion *bool) {
+	validate := cmd.Args
+	cmd.Args = func(c *cobra.Command, args []string) error {
+		if *showVersion || validate == nil {
+			return nil
+		}
+		return validate(c, args)
+	}
+	for _, child := range cmd.Commands() {
+		versionBeforeArgs(child, showVersion)
 	}
 }
 
