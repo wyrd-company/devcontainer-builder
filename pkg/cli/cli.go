@@ -44,6 +44,9 @@ func (e *exitError) Error() string                { return e.err.Error() }
 func (e *exitError) Unwrap() error                { return e.err }
 func usageError(format string, args ...any) error { return &exitError{2, fmt.Errorf(format, args...)} }
 
+// errVersionShown stops a command after --version produced the result.
+var errVersionShown = errors.New("version shown")
+
 // Run executes one invocation. Exit codes: 0 success, 1 operation failure,
 // 2 invalid invocation. Exec returns the container command's nonzero exit code.
 // Help is plain text. Exec emits no result after starting the child; operation
@@ -54,6 +57,9 @@ func Run(ctx context.Context, args []string, version string, stdin io.Reader, st
 	root := a.command()
 	root.SetArgs(args)
 	cmd, err := root.ExecuteContextC(ctx)
+	if errors.Is(err, errVersionShown) {
+		err = nil
+	}
 	if a.logs != nil {
 		_ = a.logs.Flush()
 	}
@@ -99,6 +105,8 @@ func Run(ctx context.Context, args []string, version string, stdin io.Reader, st
 }
 
 func (a *application) command() *cobra.Command {
+	var showVersion bool
+	printVersion := func(_ *cobra.Command, _ []string) error { a.result["version"] = a.version; return nil }
 	root := &cobra.Command{
 		Use: "dcb", Short: "Build and manage development containers",
 		Long:         "Build and manage development containers through the Docker Engine API.\n\nInvocations except help and exec write one JSON result line to stdout. Help is plain text.\nExec passes child stdout/stderr through unchanged without a result line; other logs and command output use stderr.\nExit codes: 0 success, 1 operation failure, 2 invalid invocation; exec propagates the command exit code.\nUse -- before a container command's own flags.",
@@ -107,6 +115,8 @@ func (a *application) command() *cobra.Command {
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error { return cmd.Help() },
 	}
+	// Upstream accepts --version on every command, in place of the command.
+	root.PersistentFlags().BoolVar(&showVersion, "version", false, "Print the dcb version in place of the command (same result as dcb version)")
 	root.CompletionOptions.DisableDefaultCmd = true
 	root.SetOut(io.Discard)
 	root.SetErr(io.Discard)
@@ -126,7 +136,11 @@ func (a *application) command() *cobra.Command {
 	})
 	root.PersistentFlags().StringVar(&a.logFormat, "log-format", "text", "Diagnostic format: text or json")
 	root.PersistentFlags().StringVar(&a.logLevel, "log-level", "info", "Diagnostic level: trace, debug, info, warn, error, off")
-	root.PersistentPreRunE = func(cmd *cobra.Command, _ []string) error {
+	root.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
+		if showVersion {
+			_ = printVersion(cmd, args)
+			return errVersionShown
+		}
 		if a.logFormat != "text" && a.logFormat != "json" {
 			return usageError("--log-format must be text or json")
 		}
@@ -139,7 +153,7 @@ func (a *application) command() *cobra.Command {
 		return nil
 	}
 	root.AddCommand(a.buildCommand(false), a.buildCommand(true), a.upCommand(), a.execCommand(), a.readCommand(), a.lifecycleCommand("run-user-commands"), a.lifecycleCommand("set-up"), a.manageCommand(false), a.manageCommand(true), a.featuresCommand(), a.serverCommand(), a.skillsCommand())
-	root.AddCommand(&cobra.Command{Use: "version", Short: "Print the dcb version", Args: cobra.NoArgs, RunE: func(_ *cobra.Command, _ []string) error { a.result["version"] = a.version; return nil }})
+	root.AddCommand(&cobra.Command{Use: "version", Short: "Print the dcb version", Args: cobra.NoArgs, RunE: printVersion})
 	wrapActions(root, a)
 	return root
 }

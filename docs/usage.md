@@ -51,7 +51,7 @@ dcb down --workspace-folder .
 | `dcb features` | Resolves and downloads the configuration's features into a directory. |
 | `dcb server` | Downloads a VS Code server archive. |
 | `dcb skills` | Prints or installs the bundled agent skill. |
-| `dcb version` | Returns the `dcb` version. |
+| `dcb version` | Returns the `dcb` version. `dcb --version`, or `--version` on any command, returns the same result in place of the command. |
 
 `dcb --help` lists the commands with examples. `dcb <command> --help` lists
 the flags of one command. Help is plain text.

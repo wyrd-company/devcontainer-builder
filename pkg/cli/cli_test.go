@@ -164,6 +164,30 @@ func TestVersion(t *testing.T) {
 	}
 }
 
+// Upstream accepts devcontainer --version; dcb gives the same result as dcb version.
+func TestVersionFlagMatchesVersionCommand(t *testing.T) {
+	run := func(args ...string) string {
+		var stdout, stderr bytes.Buffer
+		if code := Run(context.Background(), args, "test-version", nil, &stdout, &stderr); code != 0 {
+			t.Fatalf("%v: exit %d stdout=%s stderr=%s", args, code, stdout.String(), stderr.String())
+		}
+		return stdout.String()
+	}
+	command := run("version")
+	if !strings.Contains(command, `"version":"test-version"`) {
+		t.Fatalf("version=%q", command)
+	}
+	// As upstream, --version on any command prints the version in place of
+	// the command; up would otherwise need Docker, and set-up a container ID.
+	t.Setenv("DOCKER_HOST", "unix://"+filepath.Join(t.TempDir(), "missing.sock"))
+	for _, args := range [][]string{{"--version"}, {"up", "--version", "--workspace-folder", t.TempDir()}, {"set-up", "--version"}, {"skills", "--version"}} {
+		if got := run(args...); got != command {
+			t.Errorf("%v: %q, want %q", args, got, command)
+		}
+	}
+	invoke(t, 2, "--version", "extra")
+}
+
 func TestJSONDiagnosticStream(t *testing.T) {
 	var logs bytes.Buffer
 	writer := &logWriter{dst: &logs, json: true}

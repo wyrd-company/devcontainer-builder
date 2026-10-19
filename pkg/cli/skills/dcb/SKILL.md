@@ -88,7 +88,7 @@ Their `phasesRun` result lists executed phases as objects with `hook` (the
 upstream name, such as `postAttachCommand`) and `origin` (such as
 `devcontainer.json` or the feature reference). No executed phases gives `[]`.
 
-`dcb version` returns the version. `dcb skills --list` lists bundled skills;
-`dcb skills dcb` prints this skill in the result's `skills[].content`.
+`dcb version` and `dcb --version` return the version. `dcb skills --list`
+lists bundled skills; `dcb skills dcb` prints this skill in the result's `skills[].content`.
 `dcb skills install --dir .agents/skills` writes `dcb/SKILL.md` below the
 chosen directory.
