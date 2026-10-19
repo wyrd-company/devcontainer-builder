@@ -6,7 +6,9 @@ package features
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -213,5 +215,126 @@ func TestLockfilePublicationFailureCleansStaging(t *testing.T) {
 	}
 	if len(entries) != 1 {
 		t.Fatalf("failed publication leaked staging: %v", entries)
+	}
+}
+
+func TestLockfileCreationRespectsUmask(t *testing.T) {
+	if os.Getenv("DCB_LOCKFILE_UMASK_HELPER") == "1" {
+		config := filepath.Join(os.Getenv("DCB_LOCKFILE_UMASK_DIR"), "devcontainer.json")
+		state, err := ReadLockfile(config, true, false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := state.Prepare(lockedSample()); err != nil {
+			t.Fatal(err)
+		}
+		if err := state.Publish(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+		info, err := os.Stat(LockfilePath(config))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := fmt.Sprintf("%03o", info.Mode().Perm()); got != os.Getenv("DCB_LOCKFILE_UMASK_EXPECTED") {
+			t.Fatalf("mode=%s", got)
+		}
+		return
+	}
+	sh, err := exec.LookPath("sh")
+	if err != nil {
+		t.Skip("shell is unavailable")
+	}
+	binary, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct{ mask, mode string }{{"077", "600"}, {"002", "664"}} {
+		t.Run(tc.mask, func(t *testing.T) {
+			cmd := exec.Command(sh, "-c", `umask "$1"; exec "$2" -test.run '^TestLockfileCreationRespectsUmask$'`, "sh", tc.mask, binary)
+			cmd.Env = append(os.Environ(), "DCB_LOCKFILE_UMASK_HELPER=1", "DCB_LOCKFILE_UMASK_DIR="+t.TempDir(), "DCB_LOCKFILE_UMASK_EXPECTED="+tc.mode)
+			if output, err := cmd.CombinedOutput(); err != nil {
+				t.Fatalf("umask %s: %v\n%s", tc.mask, err, output)
+			}
+		})
+	}
+}
+
+func TestLockfileDanglingSymlinkPublication(t *testing.T) {
+	root := t.TempDir()
+	config := filepath.Join(root, "devcontainer.json")
+	target := filepath.Join(root, "target.json")
+	if err := os.Symlink("target.json", LockfilePath(config)); err != nil {
+		t.Fatal(err)
+	}
+	state, err := ReadLockfile(config, true, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := state.Prepare(lockedSample()); err != nil {
+		t.Fatal(err)
+	}
+	if err := state.Publish(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if info, err := os.Lstat(LockfilePath(config)); err != nil || info.Mode()&os.ModeSymlink == 0 {
+		t.Fatalf("link replaced: %v %v", info, err)
+	}
+	if data, err := os.ReadFile(target); err != nil || !strings.Contains(string(data), "sample:1") {
+		t.Fatalf("target=%s err=%v", data, err)
+	}
+}
+
+func TestLockfileSiblingCollisionPreservesOtherWriter(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, ".devcontainer-lock-existing")
+	if err := os.WriteFile(path, []byte("other generation"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	calls := 0
+	f, err := createLockfileSibling(dir, func() string {
+		calls++
+		if calls == 1 {
+			return "existing"
+		}
+		return "next"
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	if _, err := f.Write([]byte("our generation")); err != nil {
+		t.Fatal(err)
+	}
+	if f.Name() != filepath.Join(dir, ".devcontainer-lock-next") {
+		t.Fatalf("adopted another writer's sibling: %s", f.Name())
+	}
+	if data, err := os.ReadFile(path); err != nil || string(data) != "other generation" {
+		t.Fatalf("other generation=%q err=%v", data, err)
+	}
+}
+
+func TestLockfileDirectorySymlinkRetainsOrdinaryWriteFailure(t *testing.T) {
+	dir := t.TempDir()
+	config := filepath.Join(dir, "devcontainer.json")
+	path := LockfilePath(config)
+	if err := os.Symlink("missing/", path); err != nil {
+		t.Fatal(err)
+	}
+	if f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE, 0o666); err == nil {
+		f.Close()
+		t.Fatal("ordinary write unexpectedly succeeded")
+	}
+	state, err := ReadLockfile(config, true, false)
+	if err != nil {
+		return
+	}
+	if err := state.Prepare(lockedSample()); err != nil {
+		t.Fatal(err)
+	}
+	if err := state.Publish(context.Background()); err == nil {
+		t.Fatal("publication through a missing directory target succeeded")
+	}
+	if _, err := os.Stat(filepath.Join(dir, "missing")); !os.IsNotExist(err) {
+		t.Fatalf("unexpected target created: %v", err)
 	}
 }

@@ -6,6 +6,7 @@ package features
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"io/fs"
@@ -54,17 +55,15 @@ func ReadLockfile(configPath string, create, frozen bool) (*LockfileState, error
 		return nil, err
 	}
 	s := &LockfileState{path: path, frozen: frozen, write: create, mode: 0o644}
-	s.old, err = os.ReadFile(path)
+	s.path, err = lockfileTarget(path)
+	if err != nil {
+		return nil, fmt.Errorf("read lockfile: %w", err)
+	}
+	s.old, err = os.ReadFile(s.path)
 	if err != nil && !os.IsNotExist(err) {
 		return nil, fmt.Errorf("read lockfile: %w", err)
 	}
 	if err == nil {
-		// Follow an existing link as a normal write would, and stage beside its
-		// target so publication remains atomic across filesystem boundaries.
-		s.path, err = filepath.EvalSymlinks(path)
-		if err != nil {
-			return nil, err
-		}
 		info, err := os.Stat(s.path)
 		if err != nil {
 			return nil, err
@@ -78,6 +77,42 @@ func ReadLockfile(configPath string, create, frozen bool) (*LockfileState, error
 		}
 	}
 	return s, nil
+}
+
+// Follow the final link even when its target does not exist yet. Staging beside
+// that target retains ordinary write behavior and same-filesystem publication.
+func lockfileTarget(path string) (string, error) {
+	for {
+		resolved, err := filepath.EvalSymlinks(path)
+		if err == nil {
+			return resolved, nil
+		}
+		if !os.IsNotExist(err) {
+			return "", err
+		}
+		info, err := os.Lstat(path)
+		if os.IsNotExist(err) {
+			return path, nil
+		}
+		if err != nil {
+			return "", err
+		}
+		if info.Mode()&os.ModeSymlink == 0 {
+			return path, nil
+		}
+		target, err := os.Readlink(path)
+		if err != nil {
+			return "", err
+		}
+		directory := strings.HasSuffix(target, string(filepath.Separator))
+		if !filepath.IsAbs(target) {
+			target = filepath.Join(filepath.Dir(path), target)
+		}
+		if directory {
+			return target + string(filepath.Separator), nil
+		}
+		path = filepath.Clean(target)
+	}
 }
 
 func GenerateLockfile(resolved []Resolved) *Lockfile {
@@ -135,14 +170,16 @@ func (s *LockfileState) Publish(ctx context.Context) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	f, err := os.CreateTemp(filepath.Dir(s.path), ".devcontainer-lock-*")
+	f, err := createLockfileSibling(filepath.Dir(s.path), rand.Text)
 	if err != nil {
 		return err
 	}
 	defer os.Remove(f.Name())
 	defer f.Close()
-	if err := f.Chmod(s.mode); err != nil {
-		return err
+	if s.old != nil {
+		if err := f.Chmod(s.mode); err != nil {
+			return err
+		}
 	}
 	if _, err := f.Write(s.prepared); err != nil {
 		return err
@@ -154,4 +191,17 @@ func (s *LockfileState) Publish(ctx context.Context) error {
 		return err
 	}
 	return os.Rename(f.Name(), s.path)
+}
+
+func createLockfileSibling(dir string, randomName func() string) (*os.File, error) {
+	for {
+		// O_EXCL owns a unique sibling; 0666 lets the caller's umask govern
+		// new files, as an ordinary write does. Existing modes are restored.
+		name := filepath.Join(dir, ".devcontainer-lock-"+randomName())
+		f, err := os.OpenFile(name, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o666)
+		if os.IsExist(err) {
+			continue
+		}
+		return f, err
+	}
 }
