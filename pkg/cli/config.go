@@ -95,7 +95,7 @@ func (a *application) readCommand() *cobra.Command {
 	mounts.flags(cmd)
 	cmd.Flags().BoolVar(&includeFeatures, "include-features-configuration", false, "Include resolved features configuration")
 	cmd.Flags().BoolVar(&includeMerged, "include-merged-configuration", false, "Include configuration merged with image and feature metadata")
-	cmd.Flags().StringVar(&containerID, "container-id", "", "Container metadata source for merged configuration")
+	cmd.Flags().StringVar(&containerID, "container-id", "", "Existing container used for substitution and merged metadata")
 	cmd.Flags().StringVar(&additionalFeatures, "additional-features", "", "Additional features as JSON; they contribute to the merged configuration when no container exists")
 	cmd.RunE = func(cmd *cobra.Command, _ []string) error {
 		if cmd.Flags().Changed("container-id") && containerID == "" {
@@ -326,6 +326,8 @@ func (a *application) readConfigurationSnapshot(cmd *cobra.Command, dc *spec.Dev
 	result := transformConfiguration(raw, func(s string) string {
 		return substitute.ContainerSubstitute(substitute.ContainerContext{ContainerEnv: env}, substitute.Substitute(sub, s))
 	}).(map[string]any)
-	result["configFilePath"] = dc.Path
+	if dc.Path != "" {
+		result["configFilePath"] = dc.Path
+	}
 	return result, nil
 }

@@ -174,3 +174,52 @@ func TestReadConfigurationContainerLookup(t *testing.T) {
 		})
 	}
 }
+
+func TestReadConfigurationLabelOnlySnapshot(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/containers/json"):
+			var filters map[string]map[string]bool
+			if err := json.Unmarshal([]byte(r.URL.Query().Get("filters")), &filters); err != nil {
+				t.Error(err)
+			}
+			if !reflect.DeepEqual(filters["label"], map[string]bool{"sample=1": true}) {
+				t.Errorf("discovery filters=%v", filters)
+			}
+			_, _ = w.Write([]byte(`[{"Id":"sample-container"}]`))
+		case strings.HasSuffix(r.URL.Path, "/containers/sample-container/json"):
+			_ = json.NewEncoder(w).Encode(map[string]any{"Id": "sample-container", "Config": map[string]any{"Labels": map[string]string{"sample": "1", "devcontainer.metadata": `[{"remoteUser":"sample"}]`}}})
+		default:
+			t.Errorf("unexpected request %s", r.URL.Path)
+			http.Error(w, "unexpected", 500)
+		}
+	}))
+	defer server.Close()
+	t.Setenv("DOCKER_HOST", "tcp://"+strings.TrimPrefix(server.URL, "http://"))
+	t.Setenv("DOCKER_API_VERSION", "1.47")
+	for _, mode := range []string{"ordinary", "merged-only", "features-only", "both"} {
+		t.Run(mode, func(t *testing.T) {
+			args := []string{"read-configuration", "--id-label", "sample=1"}
+			merged := mode == "merged-only" || mode == "both"
+			if merged {
+				args = append(args, "--include-merged-configuration")
+			}
+			if mode == "features-only" || mode == "both" {
+				args = append(args, "--include-features-configuration")
+			}
+			result, _ := invoke(t, 0, args...)
+			if !reflect.DeepEqual(result["configuration"], map[string]any{}) {
+				t.Fatalf("configuration without a file must be empty: %v", result)
+			}
+			if _, present := result["workspace"]; present {
+				t.Fatalf("label-only read must omit workspace: %v", result)
+			}
+			if _, present := result["mergedConfiguration"]; present != merged {
+				t.Fatalf("mergedConfiguration present=%v want=%v", present, merged)
+			}
+			if _, present := result["featuresConfiguration"]; present {
+				t.Fatalf("no features were configured: %v", result)
+			}
+		})
+	}
+}
