@@ -468,6 +468,8 @@ environment and marker probes keep their ordinary streams. `read-configuration`
 accepts the same output settings without changing its configuration result.
 For `exec`, dimensions size an allocated terminal; use `--tty` to allocate it.
 Piped exec output retains separate stdout and stderr.
+Initial PTY sizing needs Engine API 1.42 or later; the Docker SDK omits explicit
+sizes when it negotiates an older API.
 
 ```sh
 dcb up --workspace-folder . --terminal-columns 100 --terminal-rows 40
