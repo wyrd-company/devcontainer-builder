@@ -13,6 +13,8 @@ import (
 	"fmt"
 	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/api/types/volume"
+	dockerclient "github.com/docker/docker/client"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -449,3 +451,67 @@ func TestComposeObjectLedgerRemovalRetryIntegration(t *testing.T) {
 		t.Fatal("ledger retry failed")
 	}
 }
+
+// The transport performs a real competing removal immediately before forwarding
+// the captured DELETE to Docker, which then returns a real 404.
+func TestComposeObjectContainerRemovalFailureIntegration(t *testing.T) {
+	ctx := context.Background()
+	cli := requireComposeDocker(t, ctx)
+	defer cli.Close()
+	dockertest.EnsureImage(t, ctx, cli, "alpine:3.20")
+	workspace := prepareComposeWorkspace(t)
+	parent := t.TempDir()
+	h := New(cli, Options{UserDataFolder: parent})
+	config := filepath.Join(workspace, ".devcontainer", "devcontainer.json")
+	writeNameFile(t, config, `{"dockerComposeFile":"compose.yml","service":"app"}`)
+	writeNameFile(t, filepath.Join(filepath.Dir(config), "compose.yml"), "services:\n  app:\n    image: alpine:3.20\n    secrets: [token]\nsecrets:\n  token:\n    content: synthetic-token\n")
+	dc, err := spec.Load(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = h.Remove(ctx, workspace) })
+	up, err := h.Up(ctx, UpRequest{Spec: dc, SpecPath: config, LocalWorkspace: workspace, LocalEnv: map[string]string{}, SkipLifecycle: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	records, err := h.objectRecords(ctx, workspace)
+	if err != nil || len(records) != 1 {
+		t.Fatal("missing ownership")
+	}
+	root := records[0].Labels[labelObjectRoot]
+	competed := false
+	transport := objectRoundTripper(func(req *http.Request) (*http.Response, error) {
+		if req.Method == http.MethodDelete && strings.HasSuffix(req.URL.Path, "/containers/"+up.PrimaryContainerID) {
+			competed = true
+			if err := cli.ContainerRemove(ctx, up.PrimaryContainerID, container.RemoveOptions{Force: true}); err != nil {
+				return nil, err
+			}
+		}
+		return cli.HTTPClient().Transport.RoundTrip(req)
+	})
+	racing, err := dockerclient.NewClientWithOpts(dockerclient.WithHost(cli.DaemonHost()), dockerclient.WithVersion(cli.ClientVersion()), dockerclient.WithHTTPClient(&http.Client{Transport: transport}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer racing.Close()
+	if err := New(racing, Options{}).Remove(ctx, workspace); err == nil {
+		t.Fatal("failed container removal claimed object cleanup")
+	}
+	if !competed {
+		t.Fatal("did not reach competing removal")
+	}
+	if _, err := os.Stat(filepath.Join(root, "secrets", "token")); err != nil {
+		t.Fatal("backing secret deleted after failed container removal")
+	}
+	if err := os.Remove(config); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.Remove(ctx, workspace); err != nil {
+		t.Fatal(err)
+	}
+	assertObjectAbsent(t, root)
+}
+
+type objectRoundTripper func(*http.Request) (*http.Response, error)
+
+func (fn objectRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) { return fn(req) }
