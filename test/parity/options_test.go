@@ -284,7 +284,7 @@ func TestOptionAuditCoversEverySourceOption(t *testing.T) {
 			if flag != "docker-path" && flag != "docker-compose-path" && flag != "buildkit" {
 				t.Errorf("unapproved exclusion: %s", key)
 			}
-			if !strings.Contains(cells[4], "approved epic requirement") || strings.TrimSpace(cells[5]) == "" {
+			if !strings.Contains(cells[5], "Approved native ") || strings.TrimSpace(cells[5]) == "" {
 				t.Errorf("exclusion without authority/reason: %s", key)
 			}
 		case "needs Bob's decision":
@@ -292,8 +292,8 @@ func TestOptionAuditCoversEverySourceOption(t *testing.T) {
 			t.Errorf("invalid disposition: %s", line)
 		}
 		if flag == "additional-features" || strings.HasPrefix(flag, "dotfiles-") || flag == "default-user-env-probe" || flag == "version" {
-			if !strings.Contains(cells[4], "1371") {
-				t.Errorf("missing sibling ownership: %s", key)
+			if strings.TrimSpace(cells[4]) != "sibling-unit" {
+				t.Errorf("missing sibling-unit label: %s", key)
 			}
 		}
 	}
