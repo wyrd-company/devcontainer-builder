@@ -51,7 +51,7 @@ supports outdated reporting and template metadata.
 | lifecycle | M | 7 | Lifecycle controls: skip-non-blocking-commands, prebuild, stop-for-personalization, expect-existing-container. |
 | mounts | L | 14 | Workspace mounts and container selection: mount, workspace-mount-consistency, mount-workspace-git-root, mount-git-worktree-common-dir, id-label; mount-workspace-git-root defaults to true; mount-git-worktree-common-dir defaults to false; additional mounts are explicit. |
 | environment | M | 5 | Remote environment and secrets: remote-env, secrets-file; lifecycle secret inputs are separate from configuration remoteEnv metadata. |
-| data-folders | M | 17 | All folder options registered; existing host staging and container markers are routed. Session probe-cache behavior depends on user environment probe support and its timeout decision. System patch markers have no current writer. |
+| data-folders | M | 17 | Registration: all folder options. Behavior: host staging, Compose object materialization/cleanup, and container markers are routed; see [state publication](state-publication.md). Session probe-cache behavior depends on user environment probe support and its timeout decision. System patch markers have no current writer. |
 | terminal | S | 10 | Terminal dimensions: terminal-columns, terminal-rows. |
 | lockfile | L | 4 | Feature lockfiles: experimental-lockfile, experimental-frozen-lockfile. |
 | feature-controls | M | 9 | Feature mapping and metadata controls: skip-feature-auto-mapping, skip-persisting-customizations-from-features, omit-config-remote-env-from-metadata, omit-syntax-directive; persist remoteEnv in metadata by default; omit-config-remote-env-from-metadata defaults to false and omits it when enabled. |
@@ -121,7 +121,7 @@ features, dotfiles, environment probing and version support.
 
 | Upstream option | dcb equivalent | Disposition | Unit | Reason / source |
 | --- | --- | --- | --- | --- |
-| --user-data-folder | --user-data-folder | implemented | data-folders | Private host feature/build staging honors this folder; existing contents are preserved. Source: devContainersSpecCLI.ts:509. |
+| --user-data-folder | --user-data-folder | implemented | data-folders | Private host feature/build staging and Compose object materialization honor this folder; existing contents are preserved. Source: devContainersSpecCLI.ts:509. |
 | --docker-path | none | not applicable by design | native-api | Approved native API requirement: runtime integrations use Engine/Compose APIs; executable path selection does not apply. Source: devContainersSpecCLI.ts:510. |
 | --docker-compose-path | none | not applicable by design | native-api | Approved native API requirement: runtime integrations use Engine/Compose APIs; executable path selection does not apply. Source: devContainersSpecCLI.ts:511. |
 | --workspace-folder | --workspace-folder | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: devContainersSpecCLI.ts:512. |
@@ -150,7 +150,7 @@ features, dotfiles, environment probing and version support.
 
 | Upstream option | dcb equivalent | Disposition | Unit | Reason / source |
 | --- | --- | --- | --- | --- |
-| --user-data-folder | --user-data-folder | implemented | data-folders | Private host feature/build staging honors this folder; existing contents are preserved. Source: devContainersSpecCLI.ts:1217. |
+| --user-data-folder | --user-data-folder | implemented | data-folders | Private host feature/build staging and Compose object materialization honor this folder; existing contents are preserved. Source: devContainersSpecCLI.ts:1217. |
 | --docker-path | none | not applicable by design | native-api | Approved native API requirement: runtime integrations use Engine/Compose APIs; executable path selection does not apply. Source: devContainersSpecCLI.ts:1218. |
 | --docker-compose-path | none | not applicable by design | native-api | Approved native API requirement: runtime integrations use Engine/Compose APIs; executable path selection does not apply. Source: devContainersSpecCLI.ts:1219. |
 | --container-data-folder | --container-data-folder | implemented | data-folders | Lifecycle and dotfiles markers honor this folder; exec writes no markers. Source: devContainersSpecCLI.ts:1220. |
@@ -269,7 +269,7 @@ features, dotfiles, environment probing and version support.
 
 | Upstream option | dcb equivalent | Disposition | Unit | Reason / source |
 | --- | --- | --- | --- | --- |
-| --user-data-folder | --user-data-folder | implemented | data-folders | Private host feature/build staging honors this folder; existing contents are preserved. Source: devContainersSpecCLI.ts:960. |
+| --user-data-folder | --user-data-folder | implemented | data-folders | Private host feature/build staging and Compose object materialization honor this folder; existing contents are preserved. Source: devContainersSpecCLI.ts:960. |
 | --docker-path | none | not applicable by design | native-api | Approved native API requirement: runtime integrations use Engine/Compose APIs; executable path selection does not apply. Source: devContainersSpecCLI.ts:961. |
 | --docker-compose-path | none | not applicable by design | native-api | Approved native API requirement: runtime integrations use Engine/Compose APIs; executable path selection does not apply. Source: devContainersSpecCLI.ts:962. |
 | --workspace-folder | --workspace-folder | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: devContainersSpecCLI.ts:963. |
@@ -299,7 +299,7 @@ when markers skip commands. Source: `injectHeadless.ts:364-410` and
 
 | Upstream option | dcb equivalent | Disposition | Unit | Reason / source |
 | --- | --- | --- | --- | --- |
-| --user-data-folder | --user-data-folder | implemented | data-folders | Private host feature/build staging honors this folder; existing contents are preserved. Source: devContainersSpecCLI.ts:753. |
+| --user-data-folder | --user-data-folder | implemented | data-folders | Private host feature/build staging and Compose object materialization honor this folder; existing contents are preserved. Source: devContainersSpecCLI.ts:753. |
 | --docker-path | none | not applicable by design | native-api | Approved native API requirement: runtime integrations use Engine/Compose APIs; executable path selection does not apply. Source: devContainersSpecCLI.ts:754. |
 | --docker-compose-path | none | not applicable by design | native-api | Approved native API requirement: runtime integrations use Engine/Compose APIs; executable path selection does not apply. Source: devContainersSpecCLI.ts:755. |
 | --container-data-folder | --container-data-folder | implemented | data-folders | Lifecycle and dotfiles markers honor this folder; exec writes no markers. Source: devContainersSpecCLI.ts:756. |
@@ -346,7 +346,7 @@ when markers skip commands. Source: `injectHeadless.ts:364-410` and
 | --default-user-env-probe | none | implement | sibling-unit | Needs the upstream probe and its 10-second timeout, a new timeout mechanic that awaits Bob's decision. Source: devContainersSpecCLI.ts:349. |
 | --skip-post-create | --skip-post-create | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: devContainersSpecCLI.ts:350. |
 | --skip-non-blocking-commands | --skip-non-blocking-commands | implemented | covered | Stops after merged waitFor (default updateContentCommand), without background continuation. Docker and Compose behavior tests. Source: devContainersSpecCLI.ts:351. |
-| --user-data-folder | --user-data-folder | implemented | data-folders | Private host feature/build staging honors this folder; existing contents are preserved. Source: devContainersSpecCLI.ts:352. |
+| --user-data-folder | --user-data-folder | implemented | data-folders | Private host feature/build staging and Compose object materialization honor this folder; existing contents are preserved. Source: devContainersSpecCLI.ts:352. |
 | --remote-env | --remote-env | implemented | environment | Registered; adds variables to lifecycle commands and the dotfiles install, below configuration remoteEnv, as upstream. Not stored. Source: devContainersSpecCLI.ts:353. |
 | --dotfiles-repository | --dotfiles-repository | implemented | sibling-unit | Registered; installs after postCreateCommand once per container. A failed install warns and the next run retries. Source: devContainersSpecCLI.ts:354. |
 | --dotfiles-install-command | --dotfiles-install-command | implemented | sibling-unit | Registered; runs in the clone in place of the default install-script search. Source: devContainersSpecCLI.ts:355. |
@@ -435,7 +435,7 @@ when markers skip commands. Source: `injectHeadless.ts:364-410` and
 | --skip-post-create | --skip-post-create | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: devContainersSpecCLI.ts:123. |
 | --skip-non-blocking-commands | --skip-non-blocking-commands | implemented | covered | Stops after merged waitFor (default updateContentCommand), without background continuation. Docker and Compose behavior tests. Source: devContainersSpecCLI.ts:124. |
 | --prebuild | --prebuild | implemented | covered | Stops after updateContentCommand and reruns that hook with a current marker. Docker and Compose behavior tests. Source: devContainersSpecCLI.ts:125. |
-| --user-data-folder | --user-data-folder | implemented | data-folders | Private host feature/build staging honors this folder; existing contents are preserved. Source: devContainersSpecCLI.ts:126. |
+| --user-data-folder | --user-data-folder | implemented | data-folders | Private host feature/build staging and Compose object materialization honor this folder; existing contents are preserved. Source: devContainersSpecCLI.ts:126. |
 | --mount | --mount | implemented | mounts | Bind/volume mounts through the Engine API and Compose; no additional mounts unless given. Source: devContainersSpecCLI.ts:127. |
 | --remote-env | --remote-env | implemented | environment | Registered; adds variables to lifecycle commands and the dotfiles install, below configuration remoteEnv, as upstream. Not stored. Source: devContainersSpecCLI.ts:128. |
 | --cache-from | --cache-from | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: devContainersSpecCLI.ts:129. |

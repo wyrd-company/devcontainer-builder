@@ -250,7 +250,7 @@ func (h *Host) Up(ctx context.Context, req UpRequest) (*UpResult, error) {
 		}
 	}
 
-	materializer := newObjectMaterializer(proj.Name, req.LocalEnv)
+	materializer := newObjectMaterializer(func() (string, error) { return h.allocateObjects(ctx, proj.Name, req.LocalWorkspace) }, req.LocalEnv)
 
 	// Build any non-primary services that declare a compose-side
 	// `build:` block. The primary's compose `build:` (if any) is

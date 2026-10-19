@@ -176,15 +176,47 @@ func (h *Host) stopContainers(ctx context.Context, containers []container.Summar
 // resources are left alone. A project with another workspace's labelled
 // container is refused before any container or resource is changed.
 func (h *Host) Remove(ctx context.Context, localWorkspace string) error {
-	projectName, containers, err := h.workspaceProjectContainers(ctx, localWorkspace)
+	records, err := h.objectRecords(ctx, localWorkspace)
 	if err != nil {
 		return err
 	}
-	return h.removeProject(ctx, projectName, containers)
+	projects := map[string][]*volume.Volume{}
+	for _, record := range records {
+		projects[record.Labels[LabelProject]] = append(projects[record.Labels[LabelProject]], record)
+	}
+	project, err := h.projectForWorkspace(ctx, localWorkspace)
+	if err != nil && err != ErrProjectNotFound {
+		return err
+	}
+	if err == nil {
+		if _, ok := projects[project]; !ok {
+			projects[project] = nil
+		}
+	}
+	if len(projects) == 0 {
+		return ErrProjectNotFound
+	}
+	// Validate every captured project before deleting any workspace's state.
+	validated := map[string][]container.Summary{}
+	for name := range projects {
+		containers, err := h.listProjectContainers(ctx, name)
+		if err != nil {
+			return err
+		}
+		if conflict := projectConflict(name, localWorkspace, containers); conflict != nil {
+			return conflict
+		}
+		validated[name] = containers
+	}
+	for name, records := range projects {
+		if err := h.removeProject(ctx, name, validated[name], records); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
-// RemoveProject tears down an explicitly selected project, using its persisted
-// workspace ownership label to keep the same conflict refusal as Remove.
+// RemoveProject tears down a label-selected project without consulting config.
 func (h *Host) RemoveProject(ctx context.Context, projectName, localWorkspace string) error {
 	if projectName == "" || localWorkspace == "" {
 		return errorf("remove selected project requires project and workspace labels")
@@ -196,10 +228,20 @@ func (h *Host) RemoveProject(ctx context.Context, projectName, localWorkspace st
 	if conflict := projectConflict(projectName, localWorkspace, containers); conflict != nil {
 		return conflict
 	}
-	return h.removeProject(ctx, projectName, containers)
+	records, err := h.objectRecords(ctx, localWorkspace)
+	if err != nil {
+		return err
+	}
+	var owned []*volume.Volume
+	for _, record := range records {
+		if record.Labels[LabelProject] == projectName {
+			owned = append(owned, record)
+		}
+	}
+	return h.removeProject(ctx, projectName, containers, owned)
 }
 
-func (h *Host) removeProject(ctx context.Context, projectName string, containers []container.Summary) error {
+func (h *Host) removeProject(ctx context.Context, projectName string, containers []container.Summary, records []*volume.Volume) error {
 	// Stop and removal consume the same validated set of container IDs.
 	if err := h.stopContainers(ctx, containers); err != nil {
 		// best-effort; container removal forces below
@@ -210,10 +252,14 @@ func (h *Host) removeProject(ctx context.Context, projectName string, containers
 			Force:         true,
 			RemoveVolumes: false, // named volumes are removed below by name
 		}); err != nil {
-			h.logf("remove container %s: %v", short(c.ID), err)
+			return errorf("remove container %s: %w", short(c.ID), err)
 		}
 	}
 
+	// Keep records until both the payload cleanup and record deletion succeed.
+	if err := h.removeObjectRecords(ctx, records); err != nil {
+		return err
+	}
 	args := filters.NewArgs(filters.Arg("label", LabelProject+"="+projectName))
 	nets, err := h.client.NetworkList(ctx, network.ListOptions{Filters: args})
 	if err != nil {
@@ -229,15 +275,14 @@ func (h *Host) removeProject(ctx context.Context, projectName string, containers
 		return errorf("list volumes: %w", err)
 	}
 	for _, v := range vols.Volumes {
+		if v.Labels[labelObjectRoot] != "" {
+			continue
+		}
 		if err := h.client.VolumeRemove(ctx, v.Name, true); err != nil {
 			h.logf("remove volume %s: %v", v.Name, err)
 		}
 	}
-	// Drop any materialized configs/secrets on the host: the project
-	// is gone, so the temp files have nothing left to back.
-	if err := removeMaterialized(projectName); err != nil {
-		h.logf("remove materialized objects for %s: %v", projectName, err)
-	}
+
 	return nil
 }
 
@@ -273,6 +318,15 @@ func (h *Host) projectForWorkspace(ctx context.Context, workspace string) (strin
 	}
 	for _, c := range list {
 		if name := c.Labels[LabelProject]; name != "" {
+			return name, nil
+		}
+	}
+	records, err := h.objectRecords(ctx, workspace)
+	if err != nil {
+		return "", err
+	}
+	for _, record := range records {
+		if name := record.Labels[LabelProject]; name != "" {
 			return name, nil
 		}
 	}

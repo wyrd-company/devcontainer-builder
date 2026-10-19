@@ -88,8 +88,21 @@ func TestComposeSameBasenameTeardownIntegration(t *testing.T) {
 					}
 					states[c.ID] = info.State.Running
 				}
-				// Shared project data must survive the refusal too.
-				marker := filepath.Join(objectDir, "preserved")
+				// The second workspace's private materialization must survive refusal.
+				actual, err := cli.ContainerInspect(ctx, other.ID)
+				if err != nil {
+					t.Fatal(err)
+				}
+				ownedRoot := ""
+				for _, m := range actual.Mounts {
+					if m.Destination == "/sample" {
+						ownedRoot = filepath.Dir(filepath.Dir(m.Source))
+					}
+				}
+				if ownedRoot == "" {
+					t.Fatal("missing materialized config mount")
+				}
+				marker := filepath.Join(ownedRoot, "preserved")
 				metadataWrite(t, marker, "sample-data")
 				requested := []string{first}
 				if topology == "both-primaries" {
@@ -213,6 +226,11 @@ func cleanupIdentityProject(t *testing.T, cli *dockerclient.Client, project, obj
 	vols, _ := cli.VolumeList(ctx, volume.ListOptions{Filters: args})
 	for _, v := range vols.Volumes {
 		if v.Labels[dockercompose.LabelProject] == project {
+			if root := v.Labels["devcontainer.compose.objects"]; root != "" {
+				if err := os.RemoveAll(root); err != nil {
+					t.Error(err)
+				}
+			}
 			if err := cli.VolumeRemove(ctx, v.Name, true); err != nil {
 				t.Error(err)
 			}

@@ -12,7 +12,7 @@ Build output accepts buildx exporter specifications for filesystem, image archiv
 
 GPU availability controls honor single-container and Compose host GPU requirements through Docker Engine runtime detection and device requests.
 
-Data-folder options select host feature/build staging and container lifecycle/dotfiles marker locations.
+Data-folder options select host feature/build staging, Compose config/secret materialization, and container lifecycle/dotfiles marker locations. Compose teardown discovers and removes materialized copies after restart without repeating the selected folder; cleanup errors remain retryable.
 
 Paired terminal dimension flags size lifecycle and exec pseudo-terminals in single-container and Compose mode.
 

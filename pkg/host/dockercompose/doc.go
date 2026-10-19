@@ -81,10 +81,12 @@
 //
 //   - `file:` is bound directly.
 //   - `environment:` reads the named host env var (from
-//     UpRequest.LocalEnv) and writes it to a project-scoped temp
-//     file under $TMPDIR/dcb-compose/<sha256(project)[:8]>/...
-//     before binding it. Remove() cleans these up.
-//   - `content:` writes the literal value to the same temp area.
+//     UpRequest.LocalEnv) and writes it to a private run directory under
+//     Options.UserDataFolder (default: $TMPDIR/dcb-compose) before binding it.
+//     Docker volume labels record ownership before any payload write. Remove
+//     discovers and cleans these directories without the original options or
+//     source configuration; cleanup failures retain ownership for retry.
+//   - `content:` writes the literal value to the same private directory.
 //   - `external: true` is rejected — the package doesn't speak swarm.
 //   - `driver:` is rejected — only file/env/content sources work.
 //

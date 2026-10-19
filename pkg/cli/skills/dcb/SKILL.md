@@ -161,7 +161,13 @@ also work when Docker is unreachable.
 Use `--user-data-folder` on build, exec, read-configuration, run-user-commands,
 set-up, and up to place private feature/build staging inside a selected host
 folder. Explicit `--work-dir` overrides build staging. Existing contents stay
-intact. Use `--container-data-folder` on up, set-up, run-user-commands, and exec
+intact. Compose up also stores inline/environment configs and secrets there
+(default: `$TMPDIR/dcb-compose`). Down discovers their private directories from
+Docker ownership records without repeating the folder option or supplying the
+source configuration. It removes materialized copies, preserves file-backed
+sources, and reports cleanup errors for retry. Run down after a failed or
+interrupted up to remove retained materialized copies.
+Use `--container-data-folder` on up, set-up, run-user-commands, and exec
 for lifecycle/dotfiles markers (default: `.devcontainer` under the container
 user's home). Exec does not write markers. System and session folder flags are
 accepted on their upstream commands; system patch markers and user environment

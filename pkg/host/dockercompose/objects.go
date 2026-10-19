@@ -4,8 +4,6 @@
 package dockercompose
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -14,23 +12,16 @@ import (
 	"github.com/docker/docker/api/types/mount"
 )
 
-// objectMaterializer resolves compose configs and secrets to host
-// files. `file:` sources are returned as-is; `environment:` and
-// `content:` sources are written to a project-scoped directory under
-// os.TempDir so the daemon has a stable on-host path to bind-mount.
-//
-// Materialized files live under
-// $TMPDIR/dcb-compose/<sha256(project)[:8]>/{configs,secrets}/<name>
-// — shared by all containers using that Compose project name. Workspaces
-// selecting the same name share these paths. Remove cleans them up only after
-// checking that no project container is labelled for another workspace.
+// objectMaterializer writes complete files in a private run directory. The
+// allocator publishes durable ownership before the first payload write.
 type objectMaterializer struct {
-	projectName string
-	localEnv    map[string]string
+	localEnv map[string]string
+	allocate func() (string, error)
+	root     string
 }
 
-func newObjectMaterializer(projectName string, localEnv map[string]string) *objectMaterializer {
-	return &objectMaterializer{projectName: projectName, localEnv: localEnv}
+func newObjectMaterializer(allocate func() (string, error), localEnv map[string]string) *objectMaterializer {
+	return &objectMaterializer{allocate: allocate, localEnv: localEnv}
 }
 
 // resolveConfig returns an absolute host path the daemon can bind into
@@ -73,10 +64,14 @@ func (m *objectMaterializer) resolveFileObject(kind, name string, obj types.File
 // the on-host file mirrors the read-only-secret semantic; the bind
 // mount itself is also ReadOnly.
 func (m *objectMaterializer) writeMaterialized(kind, name string, content []byte) (string, error) {
-	dir, err := materializedDir(m.projectName, kind)
-	if err != nil {
-		return "", err
+	if m.root == "" {
+		root, err := m.allocate()
+		if err != nil {
+			return "", err
+		}
+		m.root = root
 	}
+	dir := filepath.Join(m.root, kind)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return "", fmt.Errorf("mkdir %s: %w", dir, err)
 	}
@@ -108,22 +103,12 @@ func (m *objectMaterializer) writeMaterialized(kind, name string, content []byte
 	return path, nil
 }
 
-// materializedDir returns the directory configs/secrets are written
-// under for a project. Pure: callable from Remove without a Host.
-func materializedDir(projectName, kind string) (string, error) {
-	if projectName == "" {
-		return "", fmt.Errorf("materializedDir: empty project name")
-	}
-	hash := sha256.Sum256([]byte(projectName))
-	return filepath.Join(os.TempDir(), "dcb-compose", hex.EncodeToString(hash[:8]), kind), nil
-}
-
 // sanitizeObjectName keeps a config/secret filename predictable on
 // disk: the compose key is only validated as a YAML map key, so it can
 // contain characters that are awkward in filenames. Replace anything
 // not alnum / dot / dash / underscore with "_".
 func sanitizeObjectName(s string) string {
-	if s == "" {
+	if s == "" || s == "." || s == ".." {
 		return "_"
 	}
 	out := make([]byte, 0, len(s))
@@ -199,15 +184,4 @@ func translateConfigsAndSecrets(
 		})
 	}
 	return out, nil
-}
-
-// removeMaterialized deletes any configs/secrets directory the host
-// wrote for a project. Best-effort.
-func removeMaterialized(projectName string) error {
-	if projectName == "" {
-		return nil
-	}
-	hash := sha256.Sum256([]byte(projectName))
-	root := filepath.Join(os.TempDir(), "dcb-compose", hex.EncodeToString(hash[:8]))
-	return os.RemoveAll(root)
 }

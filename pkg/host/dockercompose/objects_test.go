@@ -1,6 +1,9 @@
 package dockercompose
 
 import (
+	"encoding/base64"
+	"encoding/json"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -16,7 +19,7 @@ func TestObjectMaterializer_FileSourceReturnedVerbatim(t *testing.T) {
 	if err := os.WriteFile(host, []byte("api-key"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	m := newObjectMaterializer("proj", nil)
+	m := testObjectMaterializer(t, nil)
 	got, err := m.resolveSecret("creds", types.SecretConfig{File: host})
 	if err != nil {
 		t.Fatalf("resolveSecret: %v", err)
@@ -27,8 +30,7 @@ func TestObjectMaterializer_FileSourceReturnedVerbatim(t *testing.T) {
 }
 
 func TestObjectMaterializer_EnvSourceWritesToTemp(t *testing.T) {
-	defer removeMaterialized("proj-env-test")
-	m := newObjectMaterializer("proj-env-test", map[string]string{"API_KEY": "s3kret"})
+	m := testObjectMaterializer(t, map[string]string{"API_KEY": "s3kret"})
 	got, err := m.resolveSecret("api", types.SecretConfig{Environment: "API_KEY"})
 	if err != nil {
 		t.Fatalf("resolveSecret: %v", err)
@@ -50,7 +52,7 @@ func TestObjectMaterializer_EnvSourceWritesToTemp(t *testing.T) {
 }
 
 func TestObjectMaterializer_EnvMissingReturnsError(t *testing.T) {
-	m := newObjectMaterializer("proj-env-missing", map[string]string{})
+	m := testObjectMaterializer(t, map[string]string{})
 	_, err := m.resolveSecret("api", types.SecretConfig{Environment: "MISSING"})
 	if err == nil {
 		t.Fatal("expected error for missing env")
@@ -61,8 +63,7 @@ func TestObjectMaterializer_EnvMissingReturnsError(t *testing.T) {
 }
 
 func TestObjectMaterializer_ContentSourceWritesToTemp(t *testing.T) {
-	defer removeMaterialized("proj-content-test")
-	m := newObjectMaterializer("proj-content-test", nil)
+	m := testObjectMaterializer(t, nil)
 	got, err := m.resolveConfig("inline", types.ConfigObjConfig{Content: "literal"})
 	if err != nil {
 		t.Fatalf("resolveConfig: %v", err)
@@ -77,7 +78,7 @@ func TestObjectMaterializer_ContentSourceWritesToTemp(t *testing.T) {
 }
 
 func TestObjectMaterializer_RejectsExternal(t *testing.T) {
-	m := newObjectMaterializer("proj", nil)
+	m := testObjectMaterializer(t, nil)
 	_, err := m.resolveSecret("api", types.SecretConfig{External: types.External(true)})
 	if err == nil {
 		t.Fatal("expected error for external secret")
@@ -117,7 +118,7 @@ func TestTranslateConfigsAndSecrets_DefaultTargets(t *testing.T) {
 		},
 	}
 
-	m := newObjectMaterializer("proj_abc", nil)
+	m := testObjectMaterializer(t, nil)
 	got, err := translateConfigsAndSecrets(proj, svc, m)
 	if err != nil {
 		t.Fatalf("translateConfigsAndSecrets: %v", err)
@@ -155,7 +156,7 @@ func TestTranslateConfigsAndSecrets_HonorsExplicitTarget(t *testing.T) {
 		Name:    "app",
 		Configs: []types.ServiceConfigObjConfig{{Source: "c", Target: "/etc/myconfig"}},
 	}
-	m := newObjectMaterializer("p", nil)
+	m := testObjectMaterializer(t, nil)
 	got, err := translateConfigsAndSecrets(proj, svc, m)
 	if err != nil {
 		t.Fatalf("translateConfigsAndSecrets: %v", err)
@@ -171,9 +172,81 @@ func TestTranslateConfigsAndSecrets_UndeclaredReferenceFails(t *testing.T) {
 		Name:    "app",
 		Secrets: []types.ServiceSecretConfig{{Source: "missing"}},
 	}
-	m := newObjectMaterializer("p", nil)
+	m := testObjectMaterializer(t, nil)
 	_, err := translateConfigsAndSecrets(proj, svc, m)
 	if err == nil {
 		t.Fatal("expected error for missing secret")
+	}
+}
+
+func testObjectMaterializer(t *testing.T, env map[string]string) *objectMaterializer {
+	t.Helper()
+	return newObjectMaterializer(func() (string, error) { return os.MkdirTemp(t.TempDir(), "objects-") }, env)
+}
+
+func TestObjectMaterializerPrivatePublication(t *testing.T) {
+	for _, name := range []string{"ordinary", ".", "..", "../../outside"} {
+		t.Run(name, func(t *testing.T) {
+			parent := t.TempDir()
+			m := newObjectMaterializer(func() (string, error) { return os.MkdirTemp(parent, "objects-") }, nil)
+			path, err := m.resolveSecret(name, types.SecretConfig{Content: "synthetic-value"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if filepath.Dir(path) != filepath.Join(m.root, "secrets") {
+				t.Fatal("object escaped its owned directory")
+			}
+			entries, err := os.ReadDir(filepath.Dir(path))
+			if err != nil || len(entries) != 1 {
+				t.Fatalf("temporary output residue: %v %v", entries, err)
+			}
+			// A failed replacement leaves the previous complete object intact.
+			if err := os.Mkdir(filepath.Join(m.root, "configs"), 0700); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Mkdir(filepath.Join(m.root, "configs", "blocked"), 0700); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := m.resolveConfig("blocked", types.ConfigObjConfig{Content: "synthetic-value"}); err == nil {
+				t.Fatal("expected publication failure")
+			}
+			entries, err = os.ReadDir(filepath.Join(m.root, "configs"))
+			if err != nil || len(entries) != 1 {
+				t.Fatalf("failed publication residue: %v %v", entries, err)
+			}
+		})
+	}
+}
+
+func TestObjectMaterializerErrorsDoNotDisclosePayload(t *testing.T) {
+	raw := "synthetic +/\"\\ value"
+	quoted, _ := json.Marshal(raw)
+	spellings := []string{raw, string(quoted), base64.StdEncoding.EncodeToString([]byte(raw)), base64.RawStdEncoding.EncodeToString([]byte(raw)), base64.URLEncoding.EncodeToString([]byte(raw)), base64.RawURLEncoding.EncodeToString([]byte(raw)), url.QueryEscape(raw), url.PathEscape(raw)}
+	for _, payload := range spellings {
+		for _, kind := range []string{"configs", "secrets"} {
+			for _, source := range []string{"content", "environment"} {
+				t.Run(kind+"/"+source+"/"+base64.RawURLEncoding.EncodeToString([]byte(payload)), func(t *testing.T) {
+					parent := t.TempDir()
+					blocked := filepath.Join(parent, "blocked")
+					if err := os.WriteFile(blocked, []byte("sentinel"), 0600); err != nil {
+						t.Fatal(err)
+					}
+					m := newObjectMaterializer(func() (string, error) { return blocked, nil }, map[string]string{"SAMPLE_VALUE": payload})
+					obj := types.FileObjectConfig{Content: payload}
+					if source == "environment" {
+						obj = types.FileObjectConfig{Environment: "SAMPLE_VALUE"}
+					}
+					_, err := m.resolveFileObject(kind, "sample", obj)
+					if err == nil {
+						t.Fatal("expected real filesystem failure")
+					}
+					for _, spelling := range spellings {
+						if strings.Contains(err.Error(), spelling) {
+							t.Fatal("filesystem error disclosed payload")
+						}
+					}
+				})
+			}
+		}
 	}
 }

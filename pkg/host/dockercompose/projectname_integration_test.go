@@ -7,8 +7,6 @@ package dockercompose
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"os"
 	"path/filepath"
@@ -92,7 +90,7 @@ func TestComposeProjectIdentityIntegration(t *testing.T) {
 						}
 					}
 				}
-				_ = removeMaterialized(name)
+				_ = h.Remove(ctx, workspace)
 			})
 			up, err := h.Up(ctx, UpRequest{Spec: dc, SpecPath: config, LocalWorkspace: workspace, LocalEnv: env, SkipLifecycle: true})
 			if err != nil {
@@ -129,12 +127,12 @@ func TestComposeProjectIdentityIntegration(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			hash := sha256.Sum256([]byte(name))
-			objectDir := filepath.Join(os.TempDir(), "dcb-compose", hex.EncodeToString(hash[:8]))
+			objectDir := ""
 			found := false
 			for _, m := range inspect.Mounts {
 				if m.Destination == "/sample" {
-					found = filepath.Dir(m.Source) == filepath.Join(objectDir, "configs")
+					objectDir = filepath.Dir(filepath.Dir(m.Source))
+					found = filepath.Dir(objectDir) == filepath.Join(os.TempDir(), "dcb-compose")
 				}
 			}
 			if !found {

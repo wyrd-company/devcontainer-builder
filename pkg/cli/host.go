@@ -10,6 +10,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"path/filepath"
 	"runtime"
 
 	dockerclient "github.com/docker/docker/client"
@@ -32,7 +33,7 @@ func (a *application) dockerHost(cli *dockerclient.Client) *hostdocker.Host {
 	return hostdocker.New(cli, hostdocker.Options{TerminalSize: a.terminalSize, Logger: a.logf, Stdout: a.logs, Stderr: a.logs, RegistryAuth: registryauth.FromEnvironment()})
 }
 func (a *application) composeHost(cli *dockerclient.Client) *dockercompose.Host {
-	return dockercompose.New(cli, dockercompose.Options{Logger: a.logf, Stdout: a.logs, Stderr: a.logs})
+	return dockercompose.New(cli, dockercompose.Options{UserDataFolder: a.userDataFolder, Logger: a.logf, Stdout: a.logs, Stderr: a.logs})
 }
 
 func (a *application) upCommand() *cobra.Command {
@@ -131,7 +132,7 @@ func (a *application) upCommand() *cobra.Command {
 			req.RemoteEnv, req.Secrets = remoteEnv, secrets
 			req.Mounts = a.composeMounts()
 			req.IDLabels = a.idLabels
-			host := dockercompose.New(cli, dockercompose.Options{TerminalSize: a.terminalSize, Logger: a.logf, Stdout: a.logs, Stderr: a.logs, NoRecreate: controls.expectExisting})
+			host := dockercompose.New(cli, dockercompose.Options{UserDataFolder: a.userDataFolder, TerminalSize: a.terminalSize, Logger: a.logf, Stdout: a.logs, Stderr: a.logs, NoRecreate: controls.expectExisting})
 			res, err := host.Up(cmd.Context(), req)
 			if err != nil {
 				return err
@@ -277,6 +278,23 @@ func (a *application) manageCommand(inspect bool) *cobra.Command {
 		load := cfg.optionalLoad
 		if a.selectsByLabels(cmd) {
 			load = a.labelSelectedConfig
+		}
+		// Runtime ownership must be consulted before mutable configuration. This
+		// also retries object cleanup after all containers have already disappeared.
+		if !inspect {
+			workspace, err := filepath.Abs(cfg.workspace)
+			if err != nil {
+				return err
+			}
+			cli, err := newDockerClient()
+			if err != nil {
+				return err
+			}
+			defer cli.Close()
+			err = a.composeHost(cli).Remove(cmd.Context(), workspace)
+			if !errors.Is(err, dockercompose.ErrProjectNotFound) {
+				return err
+			}
 		}
 		dc, workspace, err := load()
 		if err != nil {

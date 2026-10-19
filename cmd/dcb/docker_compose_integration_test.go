@@ -257,3 +257,112 @@ func TestDockerComposeCLIRemoteEnvScope(t *testing.T) {
 		t.Fatalf("lifecycle and exec remoteEnv = %q", out)
 	}
 }
+
+func TestDockerComposeObjectCleanupCLI(t *testing.T) {
+	ctx := context.Background()
+	cli := hostRequireDocker(t, ctx)
+	defer cli.Close()
+	hostEnsureImage(t, ctx, cli, "alpine:3.20")
+	bin := hostBuildBinary(t)
+	for _, selected := range []bool{false, true} {
+		t.Run(map[bool]string{false: "default", true: "selected"}[selected], func(t *testing.T) {
+			workspace := hostPrepareWorkspace(t, "alpine:3.20")
+			config := filepath.Join(workspace, ".devcontainer", "devcontainer.json")
+			parent := t.TempDir()
+			if err := os.WriteFile(filepath.Join(parent, "keep"), []byte("sentinel"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(config, []byte(`{"dockerComposeFile":"compose.yml","service":"app"}`), 0600); err != nil {
+				t.Fatal(err)
+			}
+			body := "services:\n  app:\n    image: alpine:3.20\n    configs: [sample]\n    secrets: [token]\nconfigs:\n  sample:\n    content: synthetic-config\nsecrets:\n  token:\n    environment: SAMPLE_TOKEN\n"
+			if err := os.WriteFile(filepath.Join(filepath.Dir(config), "compose.yml"), []byte(body), 0600); err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = hostRunCommandAllowError(bin, "down", "--workspace-folder", workspace) })
+			args := []string{"up", "--workspace-folder", workspace, "--skip-post-create"}
+			if selected {
+				args = append(args, "--user-data-folder", parent+"/./")
+			}
+			env := append(os.Environ(), "SAMPLE_TOKEN=synthetic-token")
+			output := hostRunCommand(t, env, bin, args...)
+			var result map[string]any
+			if err := json.Unmarshal(output, &result); err != nil {
+				t.Fatal(err)
+			}
+			info, err := cli.ContainerInspect(ctx, result["containerId"].(string))
+			if err != nil {
+				t.Fatal(err)
+			}
+			var paths []string
+			root := ""
+			for _, m := range info.Mounts {
+				if m.Destination == "/sample" || m.Destination == "/run/secrets/token" {
+					paths = append(paths, m.Source)
+					root = filepath.Dir(filepath.Dir(m.Source))
+					want := filepath.Join(os.TempDir(), "dcb-compose")
+					if selected {
+						want = parent
+					}
+					if filepath.Dir(root) != want {
+						t.Fatalf("object path outside selected folder: %s", m.Source)
+					}
+				}
+			}
+			if len(paths) != 2 {
+				t.Fatalf("object mount count=%d", len(paths))
+			}
+			values := hostRunCommand(t, env, bin, "exec", "--workspace-folder", workspace, "--", "sh", "-c", "cat /sample; echo; cat /run/secrets/token")
+			if string(values) != "synthetic-config\nsynthetic-token" {
+				t.Fatal("container-visible object values differ")
+			}
+			// The next command is a fresh process with neither the secret environment nor
+			// the creation-time folder option. Its source config is malformed.
+			if err := os.WriteFile(config, []byte("{"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			if selected {
+				saved := parent + "-saved"
+				if err := os.Rename(parent, saved); err != nil {
+					t.Fatal(err)
+				}
+				t.Cleanup(func() {
+					if _, err := os.Stat(saved); err == nil {
+						_ = os.Remove(parent)
+						_ = os.Rename(saved, parent)
+					}
+				})
+				if err := os.WriteFile(parent, []byte("blocked"), 0600); err != nil {
+					t.Fatal(err)
+				}
+				if err := hostRunCommandAllowError(bin, "down", "--workspace-folder", workspace); err == nil {
+					t.Fatal("down claimed successful secret cleanup")
+				}
+				if err := os.Remove(parent); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.Rename(saved, parent); err != nil {
+					t.Fatal(err)
+				}
+				if _, err := cli.ContainerInspect(ctx, info.ID); err == nil {
+					t.Fatal("expected container removed before failed cleanup")
+				}
+			}
+			hostRunCommand(t, append(os.Environ(), "TMPDIR="+t.TempDir()), bin, "down", "--workspace-folder", workspace)
+			// Missing configuration must permit idempotent teardown too.
+			if err := os.Remove(config); err != nil {
+				t.Fatal(err)
+			}
+			hostRunCommand(t, os.Environ(), bin, "down", "--workspace-folder", workspace)
+			for _, path := range append(paths, root) {
+				if _, err := os.Lstat(path); !os.IsNotExist(err) {
+					t.Fatalf("secret/config residue at %s: %v", path, err)
+				}
+			}
+			entries, err := os.ReadDir(parent)
+			if err != nil || len(entries) != 1 || entries[0].Name() != "keep" {
+				t.Fatalf("parent residue: %v %v", entries, err)
+			}
+		})
+	}
+}

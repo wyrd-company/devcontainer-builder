@@ -68,7 +68,12 @@ func TestComposeProjectConflictUpIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	configFile := filepath.Join(objectDir, "configs", "sample")
+	configFile := ""
+	for _, m := range first.Mounts {
+		if m.Destination == "/sample" {
+			configFile = m.Source
+		}
+	}
 	before, err := os.ReadFile(configFile)
 	if err != nil {
 		t.Fatal(err)
@@ -120,6 +125,13 @@ func TestComposeProjectConflictUpIntegration(t *testing.T) {
 	if err != nil || second.Config.Labels[dockercompose.LabelLocalFolder] != workspaces[1] {
 		t.Fatalf("override did not create second workspace container: %+v, %v", second.Config, err)
 	}
+	for _, m := range second.Mounts {
+		if m.Destination == "/sample" {
+			if data, err := os.ReadFile(m.Source); err != nil || string(data) != "second-content" {
+				t.Fatalf("replacement config not materialized: %v", err)
+			}
+		}
+	}
 	expected = append(expected, dockercompose.ProjectConflict{Name: strings.TrimPrefix(second.Name, "/"), ID: second.ID, LocalFolder: workspaces[1]})
 	result, logs, code = runIdentityUp(ctx, workspaces[2], "text", false)
 	if code != 1 {
@@ -130,7 +142,7 @@ func TestComposeProjectConflictUpIntegration(t *testing.T) {
 	if err != nil || len(unchanged) != len(initial)+1 {
 		t.Fatalf("third refused up changed project containers: %v, %v", unchanged, err)
 	}
-	if data, err := os.ReadFile(configFile); err != nil || string(data) != "second-content" {
+	if data, err := os.ReadFile(configFile); err != nil || !bytes.Equal(data, before) {
 		t.Fatalf("third refused up changed materialized config: %q, %v", data, err)
 	}
 }

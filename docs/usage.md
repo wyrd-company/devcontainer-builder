@@ -536,6 +536,16 @@ and build staging use a unique private directory inside this folder. Explicit
 these folders are preserved. Feature configuration results retain their staging
 paths; temporary metadata staging is removed after use.
 
+Compose `up` also writes inline and environment-backed configs and secrets in a
+private directory inside `--user-data-folder`. Without this option it uses
+`$TMPDIR/dcb-compose`. File-backed sources are mounted directly and preserved.
+An unmounted Docker volume records each private directory's ownership, without
+secret values. `down` discovers these records without the creation-time folder
+option or source configuration, removes the containers and their materialized
+files, then removes the records. Cleanup failures return an error and retain
+the record for a later `down` retry. An interrupted or failed `up` can leave
+materialized files; run `down` for that workspace to remove them.
+
 `--container-data-folder` selects lifecycle and dotfiles marker storage on
 `up`, `set-up`, `run-user-commands`, and `exec`. Relative paths resolve from the
 container user's home. The default is `.devcontainer` under that home.
