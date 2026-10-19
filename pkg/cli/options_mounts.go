@@ -12,6 +12,7 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/mount"
 	dockerclient "github.com/docker/docker/client"
 	"github.com/spf13/cobra"
@@ -220,4 +221,35 @@ func (a *application) workspaceResult(dc *spec.DevContainer, local string) map[s
 		out["additionalMountString"] = a.placement.AdditionalMount.String()
 	}
 	return out
+}
+
+// mountedWorkspace returns the folder at which an existing container mounts
+// the workspace, read from its bind mounts and workspace label, so commands
+// that attach to the container use the placement it was created with, not one
+// recomputed from this invocation's flags. A configured workspaceFolder wins,
+// a configured Compose service keeps upstream's folder, and a label-only
+// selection has no workspace.
+func (a *application) mountedWorkspace(dc *spec.DevContainer, local string, info container.InspectResponse) (string, bool) {
+	if a.noWorkspace || dc.WorkspaceFolder != "" || dc.Path != "" && dc.Mode() == spec.ModeCompose {
+		return "", false
+	}
+	if info.Config != nil && info.Config.Labels[hostdocker.LabelLocalFolder] != "" {
+		local = info.Config.Labels[hostdocker.LabelLocalFolder]
+	}
+	var binds []workspace.Bind
+	for _, m := range info.Mounts {
+		if m.Type == mount.TypeBind {
+			binds = append(binds, workspace.Bind{Source: m.Source, Destination: m.Destination})
+		}
+	}
+	folder := workspace.MountedFolder(local, binds)
+	return folder, folder != ""
+}
+
+// attachWorkspace makes an existing container's workspace folder this
+// invocation's, for lifecycle working folders and substitution.
+func (a *application) attachWorkspace(dc *spec.DevContainer, local string, info container.InspectResponse) {
+	if folder, ok := a.mountedWorkspace(dc, local, info); ok {
+		a.placement = &workspace.Configuration{WorkspaceFolder: folder}
+	}
 }

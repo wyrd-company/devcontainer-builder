@@ -66,6 +66,7 @@ func (a *application) execCommand() *cobra.Command {
 		if err != nil {
 			return err
 		}
+		a.attachWorkspace(dc, workspace, info)
 		labels := info.Config.Labels
 		if dc.Path == "" && labels[dockercompose.LabelProject] != "" {
 			dc.Service = labels[dockercompose.LabelService]

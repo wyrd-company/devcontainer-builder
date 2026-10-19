@@ -15,9 +15,7 @@ import (
 	"strings"
 
 	"github.com/docker/docker/api/types/container"
-	"github.com/docker/docker/api/types/mount"
 	"github.com/spf13/cobra"
-	hostdocker "github.com/wyrd-company/devcontainer-builder/pkg/host/docker"
 	"github.com/wyrd-company/devcontainer-builder/pkg/spec"
 	"github.com/wyrd-company/devcontainer-builder/pkg/substitute"
 )
@@ -186,22 +184,16 @@ func substituteValues(value any, ctx substitute.Context) any {
 	}
 }
 
-// remoteWorkspaceFolder is the folder reported and used for exec. With a
-// configuration it follows upstream and never reads the container's working
-// directory. Without a configuration, the workspace bind mount is the record.
+// remoteWorkspaceFolder is the folder reported and used for exec. The
+// container's workspace bind mount is the record (mountedWorkspace), unless
+// the configuration sets workspaceFolder or is Compose. With a configuration it
+// never reads the container's working directory.
 func (a *application) remoteWorkspaceFolder(dc *spec.DevContainer, workspace string, info container.InspectResponse) string {
-	if a.noWorkspace {
-		return a.containerWorkspace(dc, workspace)
+	if folder, ok := a.mountedWorkspace(dc, workspace, info); ok {
+		return folder
 	}
-	if dc.WorkspaceFolder != "" || dc.Path != "" || info.Config == nil {
+	if a.noWorkspace || dc.WorkspaceFolder != "" || dc.Path != "" || info.Config == nil {
 		return a.containerWorkspace(dc, workspace)
-	}
-	if local := info.Config.Labels[hostdocker.LabelLocalFolder]; local != "" {
-		for _, m := range info.Mounts {
-			if m.Type == mount.TypeBind && m.Source == local {
-				return m.Destination
-			}
-		}
 	}
 	if info.Config.WorkingDir != "" {
 		return info.Config.WorkingDir

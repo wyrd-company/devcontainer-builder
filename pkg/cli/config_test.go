@@ -108,7 +108,10 @@ func TestRemoteWorkspaceFolder(t *testing.T) {
 		info container.InspectResponse
 		want string
 	}{
-		{"single ignores image workdir", single, inspected("/srv", workspaceMount), "/workspaces/sample"},
+		{"single ignores image workdir", single, inspected("/srv", otherMount), "/workspaces/sample"},
+		{"single uses the container's workspace mount", single, inspected("/srv", workspaceMount), "/mounted"},
+		{"single Git root mount", single, inspected("/srv", container.MountPoint{Type: mount.TypeBind, Source: "/host", Destination: "/workspaces/host"}), "/workspaces/host/sample"},
+		{"single configured folder wins over the mount", &spec.DevContainer{Path: single.Path, WorkspaceFolder: "/sample"}, inspected("/srv", workspaceMount), "/sample"},
 		{"single configured folder", &spec.DevContainer{Path: single.Path, WorkspaceFolder: "/sample"}, inspected("/srv"), "/sample"},
 		{"compose ignores service workdir", compose, inspected("/srv", workspaceMount), "/"},
 		{"compose configured folder", &spec.DevContainer{Path: compose.Path, DockerComposeFile: compose.DockerComposeFile, Service: "app", WorkspaceFolder: "/sample"}, inspected("/srv"), "/sample"},

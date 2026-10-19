@@ -103,6 +103,7 @@ func (a *application) lifecycleCommand(name string) *cobra.Command {
 		if err != nil {
 			return err
 		}
+		a.attachWorkspace(dc, workspace, info)
 		entries, err := a.containerMetadata(dc, info.Config.Labels)
 		if err != nil {
 			return err

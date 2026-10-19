@@ -544,9 +544,12 @@ primary Compose service.
 | `--id-label` | `up`, `exec`, `read-configuration`, `run-user-commands` | none | A `name=value` label. Repeat the flag for more labels. |
 
 The Git root is found from the files in the workspace's parent folders; `dcb`
-does not run `git`. Like upstream, `exec`, `read-configuration`, and
-`run-user-commands` use the same flags to calculate the workspace folder of an
-existing container. Give them the values that `up` used. `read-configuration`
+does not run `git`. `exec`, `run-user-commands`, `set-up`, and an `up` that
+reuses a container use the folder where that container mounts the workspace,
+read from its bind mounts, whatever flags created it. A configured
+`workspaceFolder` still wins. When the container mounts no folder that holds
+the workspace, these commands calculate the folder from the flags, as
+`read-configuration` does. `read-configuration`
 returns the folder and mounts in its `workspace` object. A configuration that
 sets `workspaceMount` keeps its mount. A configuration that sets
 `workspaceFolder` without `workspaceMount` gets the workspace folder mounted at
