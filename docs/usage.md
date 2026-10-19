@@ -562,20 +562,34 @@ against the Compose project folder for a Compose configuration.
 
 ### Id labels
 
-`--id-label` labels select the container in place of the workspace labels
-`devcontainer.local_folder` and `devcontainer.config_file`. They also derive
-`${devcontainerId}`. A container qualifies only if it carries every given label.
+`--id-label` labels also derive `${devcontainerId}` in place of the workspace
+labels `devcontainer.local_folder` and `devcontainer.config_file`. How they
+select a container depends on the configuration mode.
+
+For a single-container configuration, the id labels select the container in
+place of the workspace labels. A container qualifies only if it carries every
+given label.
 
 - `up` reuses a container with every label, or creates one with exactly these
   labels and no workspace labels. `down` and `inspect` select by workspace, so
   they do not find it.
 - `up --remove-existing-container` removes only a container that has every
   label. A container that has only some of the labels is not removed.
-- `exec`, `read-configuration`, and `run-user-commands` select the container
-  with every label. When `--workspace-folder`, `--config`, and
-  `--override-config` are all absent, they read no configuration, as upstream
-  does. The configuration in the current directory is not used.
 
-For a Compose configuration, the id labels are added to the primary container
-beside the workspace labels. The project-conflict check and workspace-scoped
-removal therefore still apply.
+For a Compose configuration, `up` selects and removes as it does without id
+labels, as upstream does:
+
+- `up` finds the primary container by its Compose project and service, and
+  reuses it whatever its labels are. The id labels are set only when `up`
+  creates the primary container; a changed id label does not recreate it.
+- `up --remove-existing-container` and `down` remove the workspace's Compose
+  project. The project-conflict check still refuses a project that holds
+  another workspace's containers.
+- The id labels are added to the primary container beside the workspace labels,
+  so the conflict check and workspace-scoped removal also cover it.
+
+In both modes, `exec`, `read-configuration`, and `run-user-commands` select
+the container that carries every given label. When `--workspace-folder`,
+`--config`, and `--override-config` are all absent, they read no
+configuration, as upstream does. The configuration in the current directory is
+not used.
