@@ -313,6 +313,64 @@ func TestLockfileSiblingCollisionPreservesOtherWriter(t *testing.T) {
 	}
 }
 
+func TestLockfileInterleavedPublication(t *testing.T) {
+	for _, fail := range []bool{false, true} {
+		t.Run(fmt.Sprint("held_cancelled=", fail), func(t *testing.T) {
+			config := filepath.Join(t.TempDir(), "devcontainer.json")
+			prepare := func(version string) *LockfileState {
+				t.Helper()
+				state, err := ReadLockfile(config, true, false)
+				if err != nil {
+					t.Fatal(err)
+				}
+				candidate := lockedSample()
+				candidate[0].Metadata.Version = version
+				if err := state.Prepare(candidate); err != nil {
+					t.Fatal(err)
+				}
+				return state
+			}
+			held := prepare("1.0.0")
+			release := make(chan struct{})
+			result := make(chan error)
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			go func() {
+				<-release
+				result <- held.Publish(ctx)
+			}()
+			other := prepare("2.0.0")
+			err := other.Publish(context.Background())
+			if fail || err != nil {
+				cancel()
+			}
+			close(release)
+			heldErr := <-result
+			if err != nil {
+				t.Fatal(err)
+			}
+			if fail {
+				if heldErr != context.Canceled {
+					t.Fatalf("held error=%v", heldErr)
+				}
+				data, err := os.ReadFile(LockfilePath(config))
+				if err != nil || !strings.Contains(string(data), "2.0.0") {
+					t.Fatalf("cancelled writer changed publication: %s %v", data, err)
+				}
+				if err := held.Publish(context.Background()); err != nil {
+					t.Fatalf("retry: %v", err)
+				}
+			} else if heldErr != nil {
+				t.Fatal(heldErr)
+			}
+			data, err := os.ReadFile(LockfilePath(config))
+			if err != nil || !strings.Contains(string(data), "1.0.0") {
+				t.Fatalf("successful last writer: %s %v", data, err)
+			}
+		})
+	}
+}
+
 func TestLockfileDirectorySymlinkRetainsOrdinaryWriteFailure(t *testing.T) {
 	dir := t.TempDir()
 	config := filepath.Join(dir, "devcontainer.json")
