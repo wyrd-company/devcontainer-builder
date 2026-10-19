@@ -118,6 +118,11 @@ before `postStartCommand`. Combined controls use the first stop point.
 container before build or creation. Explicit `--remove-existing-container`
 then replaces it; otherwise Compose reuses it without recreation.
 All four controls default to false.
+Successful `run-user-commands` returns `result`: `skipNonBlocking`, `prebuild`,
+`stopForPersonalization`, or `done` (default). This identifies the boundary even
+when no command runs there or markers skip commands. At updateContent,
+`skipNonBlocking` precedes `prebuild`; `prebuild` precedes personalization.
+Failures return the error outcome without `result`.
 
 `up`, `run-user-commands`, and `set-up` take `--dotfiles-repository`,
 `--dotfiles-install-command`, and `--dotfiles-target-path` (default

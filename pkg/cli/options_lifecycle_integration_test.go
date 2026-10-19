@@ -92,7 +92,8 @@ func TestLifecycleOptionsDockerIntegration(t *testing.T) {
 					if command == "set-up" {
 						commandArgs = append(commandArgs, "--container-id", id)
 					}
-					invoke(t, 0, commandArgs...)
+					got, _ := invoke(t, 0, commandArgs...)
+					checkLifecycleResponse(t, command, got, "skipNonBlocking")
 					check(t, "cups")
 				})
 			}
@@ -100,20 +101,28 @@ func TestLifecycleOptionsDockerIntegration(t *testing.T) {
 				t.Run("prebuild-"+command, func(t *testing.T) {
 					reset(t)
 					commandArgs := append([]string{command, "--prebuild"}, args...)
-					invoke(t, 0, commandArgs...)
-					invoke(t, 0, commandArgs...)
+					got, _ := invoke(t, 0, commandArgs...)
+					checkLifecycleResponse(t, command, got, "prebuild")
+					got, _ = invoke(t, 0, commandArgs...)
+					checkLifecycleResponse(t, command, got, "prebuild")
 					check(t, "cuu")
 				})
 			}
 			t.Run("personalization", func(t *testing.T) {
 				reset(t)
 				runShell(t, "mkdir -p /tmp/personal; printf '#!/bin/sh\\nexit 99\\n' > /usr/local/bin/git; chmod +x /usr/local/bin/git; printf 'printf d >> /tmp/events\\n' > /tmp/personal/install.sh")
-				invoke(t, 0, append([]string{"run-user-commands", "--stop-for-personalization", "--dotfiles-repository", "/tmp/personal", "--dotfiles-target-path", "/tmp/personal", "--dotfiles-install-command", "install.sh"}, args...)...)
+				got, _ := invoke(t, 0, append([]string{"run-user-commands", "--stop-for-personalization", "--dotfiles-repository", "/tmp/personal", "--dotfiles-target-path", "/tmp/personal", "--dotfiles-install-command", "install.sh"}, args...)...)
+				checkLifecycleResponse(t, "run-user-commands", got, "stopForPersonalization")
 				check(t, "cupd")
 			})
 			t.Run("default", func(t *testing.T) {
 				reset(t)
-				invoke(t, 0, append([]string{"up"}, args...)...)
+				up, _ := invoke(t, 0, append([]string{"up"}, args...)...)
+				checkLifecycleResponse(t, "up", up, "")
+				check(t, "cupsa")
+				reset(t)
+				got, _ := invoke(t, 0, append([]string{"run-user-commands"}, args...)...)
+				checkLifecycleResponse(t, "run-user-commands", got, "done")
 				check(t, "cupsa")
 			})
 			if mode == "compose" {
@@ -152,5 +161,16 @@ func TestLifecycleOptionsDockerIntegration(t *testing.T) {
 				}
 			})
 		})
+	}
+}
+
+func checkLifecycleResponse(t *testing.T, command string, got map[string]any, want string) {
+	t.Helper()
+	if command == "run-user-commands" {
+		if got["result"] != want {
+			t.Fatalf("response=%v want result %s", got, want)
+		}
+	} else if _, present := got["result"]; present {
+		t.Fatalf("%s must preserve its response fields: %v", command, got)
 	}
 }

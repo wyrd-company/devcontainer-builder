@@ -104,3 +104,16 @@ func TestPrebuildRerunsUpdateContentWithCurrentMarker(t *testing.T) {
 		}
 	}
 }
+
+func TestLifecycleFailureHasNoStopReason(t *testing.T) {
+	f := &fakeExecer{handler: func(req ExecRequest) (*ExecResult, error) {
+		if len(req.Cmd) == 3 && req.Cmd[2] == "create" {
+			return &ExecResult{ExitCode: 23}, nil
+		}
+		return &ExecResult{}, nil
+	}}
+	result, err := RunWithResult(context.Background(), f, controlPlan(), dotfilesRuntime(), Options{})
+	if err == nil || result.Result != "" {
+		t.Fatalf("result=%+v err=%v", result, err)
+	}
+}

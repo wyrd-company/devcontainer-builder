@@ -152,6 +152,9 @@ func (a *application) lifecycleCommand(name string) *cobra.Command {
 			return err
 		}
 		a.result["phasesRun"] = phaseResults(result.RanPhases())
+		if name == "run-user-commands" {
+			a.result["result"] = result.Result
+		}
 		if err := configuration.result(a, cmd, cli, originalConfig, workspace, containerID); err != nil {
 			return err
 		}

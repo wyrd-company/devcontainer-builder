@@ -292,6 +292,11 @@ features, dotfiles, environment probing and version support.
 
 ### run-user-commands
 
+Successful responses include the lifecycle `result`: `skipNonBlocking`, `prebuild`,
+`stopForPersonalization`, or `done`. Boundaries apply even without a command or
+when markers skip commands. Source: `injectHeadless.ts:364-410` and
+`devContainersSpecCLI.ts:933-937`.
+
 | Upstream option | dcb equivalent | Disposition | Unit | Reason / source |
 | --- | --- | --- | --- | --- |
 | --user-data-folder | --user-data-folder | implemented | data-folders | Private host feature/build staging honors this folder; existing contents are preserved. Source: devContainersSpecCLI.ts:753. |

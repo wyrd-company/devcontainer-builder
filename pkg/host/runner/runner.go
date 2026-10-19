@@ -124,6 +124,8 @@ type PhaseResult struct {
 
 // RunResult is the structured result of a lifecycle run.
 type RunResult struct {
+	// Result is the terminal reason; empty if the lifecycle run failed.
+	Result StopReason
 	Phases []PhaseResult
 	// Dotfiles reports the dotfiles step; a failure there is not an error.
 	Dotfiles DotfilesOutcome
@@ -149,12 +151,12 @@ func Run(ctx context.Context, execer Execer, plan []lifecycle.Phase, rt Runtime,
 	return err
 }
 
-// RunWithResult is Run plus executed/skipped phase reporting.
+// RunWithResult is Run plus executed/skipped phases and the successful stop reason.
 func RunWithResult(ctx context.Context, execer Execer, plan []lifecycle.Phase, rt Runtime, opts Options) (*RunResult, error) {
 	if execer == nil {
 		return nil, fmt.Errorf("runner: Execer is required")
 	}
-	plan, allowDotfiles := rt.Lifecycle.selectPlan(plan)
+	plan, allowDotfiles, reason := rt.Lifecycle.selectPlan(plan)
 	result := &RunResult{Phases: make([]PhaseResult, 0, len(plan))}
 	// Like upstream, a hook's marker is checked once; the decision covers
 	// every command of that hook.
@@ -184,6 +186,7 @@ func RunWithResult(ctx context.Context, execer Execer, plan []lifecycle.Phase, r
 	if dotfilesPending {
 		result.Dotfiles = installDotfiles(ctx, execer, rt, opts)
 	}
+	result.Result = reason
 	return result, nil
 }
 

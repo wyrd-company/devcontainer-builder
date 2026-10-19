@@ -130,7 +130,8 @@ Other result fields by command:
 | --- | --- |
 | `up` | `containerId`, `remoteUser`, `remoteWorkspaceFolder`; `composeProjectName` for a Compose configuration |
 | `inspect` | `container`, and the `up` fields |
-| `run-user-commands`, `set-up` | `phasesRun`, and the `up` fields |
+| `run-user-commands` | `result`, `phasesRun`, and the `up` fields |
+| `set-up` | `phasesRun`, and the `up` fields |
 | `build` | `imageName`; `cacheOnly` for cache builds; `output` for explicit exports, plus `outputDir` for local exports |
 | `generate` | `dockerfile`, `contextDir` |
 | `read-configuration` | `configuration`, `workspace`; `mergedConfiguration` with `--include-merged-configuration`; `featuresConfiguration` with `--include-features-configuration` |
@@ -179,6 +180,13 @@ containers, networks, volumes, and materialized configuration files remain intac
 `phasesRun` lists the lifecycle commands that ran, in order. Each entry has
 `hook`, the upstream name such as `postCreateCommand`, and `origin`, which is
 `devcontainer.json` or the reference of the feature that contributed it.
+
+A successful `run-user-commands` also returns `result`: `skipNonBlocking`,
+`prebuild`, `stopForPersonalization`, or `done`. It identifies the stop point,
+even when that hook has no command or markers skip the commands. At
+`updateContentCommand`, `skipNonBlocking` takes precedence over `prebuild`;
+`prebuild` takes precedence over personalization. Default execution returns
+`done`. A failed lifecycle command returns the error outcome without `result`.
 
 ### Exit codes
 
