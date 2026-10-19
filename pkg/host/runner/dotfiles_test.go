@@ -285,6 +285,17 @@ func TestDotfilesRepositoryURL(t *testing.T) {
 // prepared directory. HOME is the test directory, so "~" resolves there.
 func runDotfilesScript(t *testing.T, d Dotfiles, files map[string]string, withGit bool) (string, string, int) {
 	t.Helper()
+	gitStub := ""
+	if withGit {
+		gitStub = "#!/bin/sh\n[ \"$1 $2 $3\" = 'clone --depth 1' ] || exit 2\necho \"$4\" > \"$HOME/cloned-from\"\ncp -R \"$SOURCE\" \"$5\"\n"
+	}
+	return runDotfilesScriptWithGit(t, d, files, gitStub)
+}
+
+// runDotfilesScriptWithGit uses gitStub as git; SOURCE names the prepared
+// repository files. An empty gitStub means no git.
+func runDotfilesScriptWithGit(t *testing.T, d Dotfiles, files map[string]string, gitStub string) (string, string, int) {
+	t.Helper()
 	home, bin, source := t.TempDir(), t.TempDir(), t.TempDir()
 	for name, body := range files {
 		p := filepath.Join(source, name)
@@ -295,20 +306,19 @@ func runDotfilesScript(t *testing.T, d Dotfiles, files map[string]string, withGi
 			t.Fatal(err)
 		}
 	}
-	if withGit {
-		stub := "#!/bin/sh\n[ \"$1 $2 $3\" = 'clone --depth 1' ] || exit 2\necho \"$4\" > \"$HOME/cloned-from\"\ncp -R '" + source + "' \"$5\"\n"
-		if err := os.WriteFile(filepath.Join(bin, "git"), []byte(stub), 0o755); err != nil {
+	if gitStub != "" {
+		if err := os.WriteFile(filepath.Join(bin, "git"), []byte(gitStub), 0o755); err != nil {
 			t.Fatal(err)
 		}
 	}
-	for _, tool := range []string{"sh", "ls", "grep", "ln", "chmod", "cp", "cat"} {
+	for _, tool := range []string{"sh", "ls", "grep", "ln", "chmod", "cp", "cat", "rm", "mv", "mkdir"} {
 		if p, err := exec.LookPath(tool); err == nil {
 			_ = os.Symlink(p, filepath.Join(bin, tool))
 		}
 	}
 	cmd := exec.Command("/bin/sh", "-c", d.script())
 	cmd.Dir = home
-	cmd.Env = []string{"HOME=" + home, "PATH=" + bin}
+	cmd.Env = []string{"HOME=" + home, "PATH=" + bin, "SOURCE=" + source}
 	out, err := cmd.CombinedOutput()
 	code := 0
 	if exitErr, ok := err.(*exec.ExitError); ok {
@@ -404,5 +414,15 @@ func TestDotfilesMarkerCommandsOnShell(t *testing.T) {
 	}
 	if entries, err := os.ReadDir(filepath.Dir(marker)); err != nil || len(entries) != 1 {
 		t.Fatalf("marker folder: %v %v", entries, err)
+	}
+}
+
+// A clone that dies without cleaning up leaves no staging folder and no target.
+func TestDotfilesScriptFailedCloneLeavesNothing(t *testing.T) {
+	stub := "#!/bin/sh\nmkdir -p \"$5/.git\"\nexit 128\n"
+	home, out, code := runDotfilesScriptWithGit(t, Dotfiles{Repository: "/srv/d.git"}, nil, stub)
+	entries, err := os.ReadDir(home)
+	if code != 128 || err != nil || len(entries) != 0 {
+		t.Fatalf("code=%d entries=%v err=%v out=%s", code, entries, err, out)
 	}
 }

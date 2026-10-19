@@ -60,9 +60,10 @@ func (d Dotfiles) repositoryURL() string {
 	return d.Repository
 }
 
-// script is upstream's install script without its marker line. Values are
-// interpolated unquoted as upstream does, so that "~" in the target expands.
-// A missing git is a failure here; upstream reports it and exits 0.
+// script is upstream's install script without its marker line, with a staged
+// clone. Values are interpolated unquoted as upstream does, so that "~" in
+// the target expands. A missing git is a failure here; upstream reports it
+// and exits 0.
 func (d Dotfiles) script() string {
 	target := d.TargetPath
 	if target == "" {
@@ -74,7 +75,22 @@ func (d Dotfiles) script() string {
 		header += " via '" + d.InstallCommand + "'"
 	}
 	fmt.Fprintf(&b, "%s\ncommand -v git >/dev/null 2>&1 || { echo git not found; exit 127; }\n", header)
-	fmt.Fprintf(&b, "[ -e %s ] || git clone --depth 1 %s %s || exit $?\n", target, d.repositoryURL(), target)
+	// The clone goes to a folder unique to this run and is renamed into place
+	// only when complete, so no run reads another run's partial clone. mv -T
+	// does not replace a published clone; this run then uses that one.
+	fmt.Fprintf(&b, `if [ ! -e %[1]s ]
+then
+	stage=%[1]s.clone.$$
+	rm -rf "$stage"
+	git clone --depth 1 %[2]s "$stage" || { code=$?; rm -rf "$stage"; exit $code; }
+	if ! mv -T "$stage" %[1]s 2>/dev/null
+	then
+		rm -rf "$stage"
+		[ -e %[1]s ] || exit 1
+		echo Using the dotfiles clone that another run published
+	fi
+fi
+`, target, d.repositoryURL())
 	if d.InstallCommand != "" {
 		cmd := d.InstallCommand
 		fmt.Fprintf(&b, "echo Setting current directory to '%s'\ncd %s || exit $?\n\n", target, target)

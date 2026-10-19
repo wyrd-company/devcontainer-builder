@@ -231,10 +231,12 @@ dcb up --workspace-folder . \
 | `--dotfiles-target-path` | The clone location. The default is `~/dotfiles`. |
 
 The clone and the install command run in the container as the remote user,
-with the remote environment, so the container needs `git`. After a
-successful install, `dcb` writes a marker file, so a later command on the
-same container does not repeat it. `--skip-post-create` also skips the
-dotfiles.
+with the remote environment, so the container needs `git`. `dcb` clones
+into a temporary folder beside the clone location and moves the clone into
+place only when it is complete, so a command never uses the partial clone of
+another command. After a successful install, `dcb` writes a marker file, so
+a later command on the same container does not repeat it.
+`--skip-post-create` also skips the dotfiles.
 
 A failed install does not fail the command, as in the upstream CLI: the
 result is `success` and stderr has a warning that names the repository. In
