@@ -27,7 +27,11 @@ class ReleaseGitEnvironmentTests(unittest.TestCase):
         self.git("-C", str(self.sentinel), "remote", "add", "origin", str(self.origin))
         self.before = self.snapshot()
         self.addCleanup(self.assert_sentinel_unchanged)
+        home = self.root / "home"
+        home.mkdir()
         self.enterContext(patch.dict(os.environ, {
+            "HOME": str(home),
+            "XDG_CONFIG_HOME": str(home / ".config"),
             "GIT_DIR": str(self.sentinel / ".git"),
             "GIT_WORK_TREE": str(self.sentinel),
         }))
