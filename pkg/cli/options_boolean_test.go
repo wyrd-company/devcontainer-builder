@@ -84,7 +84,7 @@ func TestBooleanOptionNonLiteralsAndBoundaries(t *testing.T) {
 		{"nonboolean-literal", []string{"up", "--config", "true"}, []string{"up", "--config", "true"}},
 		{"positional-command", []string{"skills", "dcb", "install", "--list", "false"}, []string{"skills", "dcb", "install", "--list=false"}},
 		{"short-help", []string{"up", "-h", "false"}, []string{"up", "-h=false"}},
-		{"nonboolean-value", []string{"read-configuration", "--config", "--include-configuration", "false"}, []string{"read-configuration", "--config", "--include-configuration", "false"}},
+		{"nonboolean-value", []string{"read-configuration", "--config", "--include-merged-configuration", "false"}, []string{"read-configuration", "--config", "--include-merged-configuration", "false"}},
 		{"nonboolean-command", []string{"--log-level", "up", "version", "--help", "false"}, []string{"--log-level", "up", "version", "--help=false"}},
 		{"nested", []string{"skills", "install", "--help", "false"}, []string{"skills", "install", "--help=false"}},
 		{"inherited", []string{"skills", "install", "--version", "false"}, []string{"skills", "install", "--version=false"}},
@@ -120,9 +120,9 @@ func TestRunSeparatedBooleanValues(t *testing.T) {
 		t.Fatalf("result=%v", result)
 	}
 	for _, token := range []string{"FALSE", "True", "0", "1", "example", ""} {
-		invoke(t, 2, "read-configuration", "--include-configuration", token)
+		invoke(t, 2, "read-configuration", "--include-merged-configuration", token)
 	}
-	invoke(t, 2, "read-configuration", "--no-include-configuration")
+	invoke(t, 2, "read-configuration", "--no-include-merged-configuration")
 }
 
 func TestBooleanOptionHelpUnchanged(t *testing.T) {
