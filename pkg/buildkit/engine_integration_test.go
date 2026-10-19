@@ -267,3 +267,35 @@ func (w testLogWriter) Write(p []byte) (int, error) {
 	w.t.Log(strings.TrimRight(string(p), "\n"))
 	return len(p), nil
 }
+
+// TestDaemonOCIExportIntegration checks the native exporter or its diagnostic
+// against the image store actually provided by the daemon.
+func TestDaemonOCIExportIntegration(t *testing.T) {
+	ctx := context.Background()
+	t.Setenv("BUILDKIT_HOST", "")
+	cli := requireEngine(t, ctx)
+	info, err := cli.Info(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	containerd := false
+	for _, status := range info.DriverStatus {
+		if status[0] == "driver-type" && status[1] == "io.containerd.snapshotter.v1" {
+			containerd = true
+		}
+	}
+	dir := t.TempDir()
+	writeTestFile(t, filepath.Join(dir, "Dockerfile"), "FROM scratch\nCOPY sample /sample\n")
+	writeTestFile(t, filepath.Join(dir, "sample"), "sample")
+	_, err = SolveDockerfile(ctx, DockerfileBuild{ContextDir: dir}, SolveOptions{Docker: cli, Output: "type=oci,dest=" + filepath.Join(dir, "image.tar"), Progress: "plain", Stderr: testLogWriter{t}})
+	if containerd {
+		if err != nil {
+			t.Fatal(err)
+		}
+	} else {
+		if err == nil || !strings.Contains(err.Error(), "classic Docker image store") || !strings.Contains(err.Error(), "containerd image store") {
+			t.Fatalf("classic-store OCI diagnostic: %v", err)
+		}
+		t.Logf("classic-store OCI diagnostic: %v", err)
+	}
+}

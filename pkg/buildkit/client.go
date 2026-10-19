@@ -206,6 +206,9 @@ func runSolve(ctx context.Context, opt SolveOptions, multi bool, localMounts map
 		err = plan.finish(ctx)
 	}
 	if err != nil {
+		if conn.Daemon && strings.Contains(err.Error(), `exporter "oci" could not be found`) {
+			return nil, fmt.Errorf("OCI export requires Docker's containerd image store or a separate BuildKit worker; the classic Docker image store does not support it: %w", err)
+		}
 		return nil, err
 	}
 	return &Result{SolveResponse: resp}, nil

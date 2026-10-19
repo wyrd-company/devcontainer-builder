@@ -513,7 +513,8 @@ on its worker and the Docker image store.
 `type=registry` is shorthand for the image exporter with `push=true`.
 The Docker daemon path uses the Engine API for push and Docker archive export.
 A separate BuildKit uses its native exporters. The classic Docker image store
-does not provide the OCI exporter; use a worker that supports OCI export.
+does not provide the OCI exporter. Enable Docker's containerd image store or use
+a separate BuildKit worker for OCI export.
 
 `--output -` means a filesystem tar archive on stdout. `dest=-` also streams
 archives to stdout; omitted destinations stream tar and OCI archives to stdout.
