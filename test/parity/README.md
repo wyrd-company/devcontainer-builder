@@ -98,8 +98,7 @@ The `additional-features` fixture runs the image fixture again and passes
 sides' `up`. The shared runner passes `--mount-workspace-git-root=false` to both
 CLIs,
 followed by the fixture's extra `up` arguments. The `=false` form is accepted
-by both parsers; dcb currently rejects the separated boolean value that upstream
-accepts (`--mount-workspace-git-root false`). Both CLIs default to Git-root
+by both parsers. Both CLIs default to Git-root
 mounting. The harness explicitly disables it so each copied fixture mounts its
 own workspace instead of the enclosing checkout that holds `.tmp/`. This keeps
 the fixture's workspace paths and mount contents independent of that checkout.
