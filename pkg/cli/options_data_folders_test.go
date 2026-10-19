@@ -5,6 +5,8 @@ package cli
 
 import (
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -83,6 +85,17 @@ func TestUserDataFolderFeatureStaging(t *testing.T) {
 }
 
 func TestUserDataFolderReadConfigurationHandler(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.HasSuffix(r.URL.Path, "/containers/json") {
+			t.Errorf("unexpected Docker request: %s", r.URL.Path)
+			http.NotFound(w, r)
+			return
+		}
+		_, _ = w.Write([]byte(`[]`))
+	}))
+	defer server.Close()
+	t.Setenv("DOCKER_HOST", "tcp://"+strings.TrimPrefix(server.URL, "http://"))
+	t.Setenv("DOCKER_API_VERSION", "1.47")
 	workspace, parent := t.TempDir(), t.TempDir()
 	feature := filepath.Join(workspace, "sample")
 	if err := os.Mkdir(feature, 0o755); err != nil {
