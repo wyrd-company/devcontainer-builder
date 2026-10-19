@@ -93,6 +93,12 @@ Their `phasesRun` result lists executed phases as objects with `hook` (the
 upstream name, such as `postAttachCommand`) and `origin` (such as
 `devcontainer.json` or the feature reference). No executed phases gives `[]`.
 
+`up`, `run-user-commands`, and `set-up` take `--dotfiles-repository`,
+`--dotfiles-install-command`, and `--dotfiles-target-path` (default
+`~/dotfiles`). The install runs after postCreateCommand, once per container,
+as the remote user; the container needs `git`. A failed install still gives a
+`success` result, with a `warn` diagnostic on stderr; the next `up` retries.
+
 `dcb version` and `dcb --version` return the version. `dcb skills --list`
 lists bundled skills; `dcb skills dcb` prints this skill in the result's `skills[].content`.
 `dcb skills install --dir .agents/skills` writes `dcb/SKILL.md` below the

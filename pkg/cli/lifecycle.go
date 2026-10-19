@@ -18,14 +18,33 @@ import (
 type skipOptions struct{ postCreate, postAttach bool }
 
 func (o *skipOptions) flags(cmd *cobra.Command) {
-	cmd.Flags().BoolVar(&o.postCreate, "skip-post-create", false, "Skip all lifecycle commands")
+	cmd.Flags().BoolVar(&o.postCreate, "skip-post-create", false, "Skip all lifecycle commands and the dotfiles install")
 	cmd.Flags().BoolVar(&o.postAttach, "skip-post-attach", false, "Skip postAttachCommand")
+}
+
+// dotfilesOptions are upstream's dotfiles flags on up, set-up and run-user-commands.
+type dotfilesOptions struct{ runner.Dotfiles }
+
+func (o *dotfilesOptions) flags(cmd *cobra.Command) {
+	cmd.Flags().StringVar(&o.Repository, "dotfiles-repository", "", "Dotfiles Git repository: a URL, a container path, or GitHub owner/repository")
+	cmd.Flags().StringVar(&o.InstallCommand, "dotfiles-install-command", "", "Command to run in the clone (default: first of install.sh, install, bootstrap.sh, bootstrap, script/bootstrap, setup.sh, setup, script/setup)")
+	cmd.Flags().StringVar(&o.TargetPath, "dotfiles-target-path", runner.DefaultDotfilesTargetPath, "Clone location in the container")
+}
+
+// forRun applies upstream's rule that skipping lifecycle commands also skips
+// dotfiles. Up leaves this to the host, which applies SkipLifecycle.
+func (o dotfilesOptions) forRun(skip skipOptions) runner.Dotfiles {
+	if skip.postCreate {
+		return runner.Dotfiles{}
+	}
+	return o.Dotfiles
 }
 
 func (a *application) lifecycleCommand(name string) *cobra.Command {
 	var cfg configOptions
 	var id string
 	var skip skipOptions
+	var dotfiles dotfilesOptions
 	short := "Run lifecycle commands in an existing devcontainer"
 	if name == "set-up" {
 		short = "Set up an existing container with devcontainer lifecycle commands"
@@ -33,6 +52,7 @@ func (a *application) lifecycleCommand(name string) *cobra.Command {
 	cmd := &cobra.Command{Use: name, Short: short, Args: cobra.NoArgs}
 	cfg.flags(cmd)
 	skip.flags(cmd)
+	dotfiles.flags(cmd)
 	cmd.Flags().StringVar(&id, "container-id", "", "Target an existing container by ID")
 	if name == "set-up" {
 		_ = cmd.MarkFlagRequired("container-id")
@@ -92,7 +112,7 @@ func (a *application) lifecycleCommand(name string) *cobra.Command {
 		for i := range plan {
 			plan[i].Command = resolveCommand(plan[i].Command, sub, env)
 		}
-		rt := runner.Runtime{User: dc.RemoteUser, Workdir: containerWorkspace(dc, workspace), Env: resolveRemoteEnv(dc.UpdateRemoteEnv, sub, env), CreatedAt: info.Created, StartedAt: info.State.StartedAt, UserDataFolder: lifecycle.UserDataFolder(home, "")}
+		rt := runner.Runtime{User: dc.RemoteUser, Workdir: containerWorkspace(dc, workspace), Env: resolveRemoteEnv(dc.UpdateRemoteEnv, sub, env), CreatedAt: info.Created, StartedAt: info.State.StartedAt, UserDataFolder: lifecycle.UserDataFolder(home, ""), Dotfiles: dotfiles.forRun(skip)}
 		result, err := runner.RunWithResult(cmd.Context(), execer, plan, rt, runner.Options{Logger: a.logf, Stdout: a.logs, Stderr: a.logs})
 		if err != nil {
 			return err

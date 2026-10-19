@@ -213,6 +213,35 @@ container. The markers skip the creation commands that already ran.
 `dcb set-up --container-id <id>` applies the lifecycle commands of a
 configuration to a container that was started some other way.
 
+### Dotfiles
+
+`up`, `run-user-commands`, and `set-up` can install a dotfiles repository
+after `postCreateCommand` and before `postStartCommand`:
+
+```bash
+dcb up --workspace-folder . \
+  --dotfiles-repository https://example.com/example-owner/dotfiles.git \
+  --dotfiles-install-command install.sh
+```
+
+| Flag | Meaning |
+| --- | --- |
+| `--dotfiles-repository` | A Git URL or a path in the container. A value such as `example-owner/dotfiles`, without `:` and not starting with `/`, `./`, or `../`, is a GitHub repository. |
+| `--dotfiles-install-command` | The command to run in the clone. Without it, `dcb` runs the first of `install.sh`, `install`, `bootstrap.sh`, `bootstrap`, `script/bootstrap`, `setup.sh`, `setup`, and `script/setup`. Without any of them, it links the repository's dot files into the home folder. |
+| `--dotfiles-target-path` | The clone location. The default is `~/dotfiles`. |
+
+The clone and the install command run in the container as the remote user,
+with the remote environment, so the container needs `git`. A marker file
+records the install, so a later command on the same container does not
+repeat it. `--skip-post-create` also skips the dotfiles.
+
+A failed install does not fail the command, as in the upstream CLI: the
+result is `success` and stderr has a warning that names the repository. In
+JSON log mode the warning is a record with `type: diagnostic` and
+`level: warn`. Unlike the upstream CLI, `dcb` removes the marker after a
+failure, so the next `up` tries the install again. A missing `git` is a
+failure.
+
 ## Build an image
 
 `dcb build` loads the image into Docker by default:

@@ -48,6 +48,9 @@ type UpRequest struct {
 	SkipLifecycle bool
 	// SkipPostAttach suppresses postAttachCommand for this invocation.
 	SkipPostAttach bool
+	// Dotfiles installs the user's dotfiles after postCreateCommand unless
+	// SkipLifecycle is set.
+	Dotfiles runner.Dotfiles
 	// metadataEntries carries the complete raw list to container creation.
 	metadataEntries []metadata.Entry
 	entrypoints     []string
@@ -245,6 +248,9 @@ func (h *Host) Up(ctx context.Context, req UpRequest) (*UpResult, error) {
 		CreatedAt:      inspect.Created,
 		StartedAt:      inspect.State.StartedAt,
 		UserDataFolder: udf,
+	}
+	if !req.SkipLifecycle {
+		rt.Dotfiles = req.Dotfiles
 	}
 	runResult, err := runner.RunWithResult(ctx, execer, plan, rt, runner.Options{
 		Logger: h.opts.Logger,

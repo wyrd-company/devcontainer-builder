@@ -48,6 +48,9 @@ type UpRequest struct {
 	SkipLifecycle bool
 	// SkipPostAttach suppresses postAttachCommand for this invocation.
 	SkipPostAttach bool
+	// Dotfiles installs the user's dotfiles after postCreateCommand unless
+	// SkipLifecycle is set.
+	Dotfiles runner.Dotfiles
 	// Features as resolved by pkg/features. Their containerEnv and
 	// lifecycle commands are merged into the primary service.
 	Features []features.Resolved
@@ -519,6 +522,9 @@ func (h *Host) runLifecycle(
 		CreatedAt:      inspect.Created,
 		StartedAt:      inspect.State.StartedAt,
 		UserDataFolder: udf,
+	}
+	if !req.SkipLifecycle {
+		rt.Dotfiles = req.Dotfiles
 	}
 	runResult, err := runner.RunWithResult(ctx, execer, plan, rt, runner.Options{
 		Logger: h.opts.Logger,
