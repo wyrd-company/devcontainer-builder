@@ -119,6 +119,11 @@ help, a valid `exec` invocation, and archive exports to stdout (see
 
 <!-- rumdl-enable MD013 -->
 
+`build` and `up` remove staged build artifacts after success or failure.
+Use `--keep` to retain them for inspection. A build error includes `contextDir`
+only when `--keep` retains the context. An explicit `--work-dir` has the same
+cleanup rules. `generate` retains its output folder.
+
 Other result fields by command:
 
 | Command | Fields |

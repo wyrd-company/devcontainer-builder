@@ -73,7 +73,10 @@ and cannot be
 combined with `--push` or `--load`. The result contains `cacheOnly: true`
 for a cache-only build, or `output` for an exporter (`outputDir` also names a local
 destination). Archive exports to stdout omit the JSON result. `generate` returns
-`dockerfile` and `contextDir` paths.
+`dockerfile` and `contextDir` paths and retains its output folder.
+`build` and `up` remove staging on success and failure unless `--keep` is set,
+including an explicit `--work-dir`. Build errors report `contextDir` only when
+`--keep` retains the context.
 
 `build`, `generate`, `up`, and `read-configuration` take
 `--additional-features '<json>'`, an

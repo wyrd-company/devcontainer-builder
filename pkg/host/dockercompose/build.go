@@ -169,7 +169,7 @@ func BuildPrimaryImage(ctx context.Context, in BuildPrimaryInputs) (*BuildPrimar
 	b := builder.New()
 	res, err := b.Build(ctx, opts)
 	if err != nil {
-		return nil, fmt.Errorf("build derived image: %w", err)
+		return &BuildPrimaryResult{Image: tag, BuildResult: res}, fmt.Errorf("build derived image: %w", err)
 	}
 	return &BuildPrimaryResult{Image: tag, Built: true, BuildResult: res}, nil
 }

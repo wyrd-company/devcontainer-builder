@@ -176,7 +176,7 @@ func (a *application) buildImage(ctx context.Context, dc *spec.DevContainer, wor
 		result, err = builder.New().Build(ctx, bo)
 	}
 	if err != nil {
-		if result != nil {
+		if bo.KeepWorkDir && result != nil && result.ContextDir != "" {
 			a.result["contextDir"] = result.ContextDir
 		}
 		return result, images, err

@@ -165,14 +165,14 @@ func (b *Builder) Build(ctx context.Context, opts Options) (*Result, error) {
 	}
 
 	dc, workDir, ctxDir, baseImage, upstream, resolved, sr, dfPath, df, err := b.prepareBuildContext(ctx, opts, logf)
-	if err != nil {
-		return nil, err
-	}
-	cleanup := func() {
-		if !opts.KeepWorkDir {
+	// Preparation can fail after allocating staging. Its returned workDir is
+	// set only after allocation succeeds, so cleanup never targets a failed
+	// allocation or a caller's unallocated path.
+	defer func() {
+		if workDir != "" && !opts.KeepWorkDir {
 			_ = os.RemoveAll(workDir)
 		}
-	}
+	}()
 	_ = df // already written; retained in case future engines want it inline
 
 	result := &Result{
@@ -182,11 +182,17 @@ func (b *Builder) Build(ctx context.Context, opts Options) (*Result, error) {
 		Features:        resolved,
 	}
 
+	if err != nil {
+		if workDir == "" {
+			return nil, err
+		}
+		return result, err
+	}
+
 	if err := b.runBuildKit(ctx, opts, ctxDir, dc, baseImage, upstream, resolved, sr, logf); err != nil {
 		return result, err
 	}
 
-	cleanup()
 	return result, nil
 }
 
@@ -206,21 +212,23 @@ func (b *Builder) prepareBuildContext(ctx context.Context, opts Options, logf fu
 	}
 	logf("loaded spec from %s", dc.Path)
 
-	workDir = opts.WorkDir
-	if workDir == "" {
-		workDir, err = datafolder.NewStaging(opts.UserDataFolder, "devcontainer-builder-")
+	stagingDir := opts.WorkDir
+	if stagingDir == "" {
+		stagingDir, err = datafolder.NewStaging(opts.UserDataFolder, "devcontainer-builder-")
 		if err != nil {
 			return
 		}
-	} else if err = os.MkdirAll(workDir, 0o755); err != nil {
+	} else if err = os.MkdirAll(stagingDir, 0o755); err != nil {
 		return
 	}
+	workDir = stagingDir
 	logf("staging in %s", workDir)
 
-	ctxDir = filepath.Join(workDir, "context")
-	if err = os.MkdirAll(ctxDir, 0o755); err != nil {
+	contextDir := filepath.Join(workDir, "context")
+	if err = os.MkdirAll(contextDir, 0o755); err != nil {
 		return
 	}
+	ctxDir = contextDir
 
 	// Determine the base image: the spec's image, or its Dockerfile,
 	// chained in-process through the dockerfile.v0 frontend.
