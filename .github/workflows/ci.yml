@@ -79,6 +79,7 @@ jobs:
       - name: Enable the containerd image store for OCI exporters
         uses: docker/setup-docker-action@e43656e248c0bd0647d3f5c195d116aacf6fcaf4 # v4
         with:
+          set-host: true
           daemon-config: |
             {"features":{"containerd-snapshotter":true}}
       - run: task integration:docker
