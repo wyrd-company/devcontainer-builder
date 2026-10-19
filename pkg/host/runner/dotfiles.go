@@ -38,9 +38,12 @@ const (
 	// DotfilesNotRun means no repository was configured or a lifecycle
 	// command failed before the dotfiles step.
 	DotfilesNotRun DotfilesOutcome = ""
-	// DotfilesInstalled means the clone and install command succeeded.
+	// DotfilesInstalled means the clone and install command succeeded. If
+	// the marker could not be written, a warning says the next run installs
+	// again.
 	DotfilesInstalled DotfilesOutcome = "installed"
-	// DotfilesSkipped means the container's dotfiles marker already exists.
+	// DotfilesSkipped means the completion marker of an earlier successful
+	// install exists.
 	DotfilesSkipped DotfilesOutcome = "skipped"
 	// DotfilesFailed means the install failed. Like upstream, the failure
 	// does not stop the lifecycle; the runner logs a warning.
@@ -137,42 +140,48 @@ fi
 	return b.String()
 }
 
-// createFileCommand is upstream's atomic marker creation: it fails when the
-// file exists, so two concurrent runs cannot both install.
-func createFileCommand(location string) string {
-	return fmt.Sprintf(`test ! -f '%[1]s' && set -o noclobber && mkdir -p '%[2]s' && { > '%[1]s' ; } 2> /dev/null`, shellSQRaw(location), shellSQRaw(path.Dir(location)))
+// markerExistsCommand succeeds only when the completion marker is a file.
+// Any other result, including an error, means not installed.
+func markerExistsCommand(location string) string {
+	return fmt.Sprintf(`test -f '%s'`, shellSQRaw(location))
 }
 
-// installDotfiles claims the once-per-container marker, then clones and
-// installs. Unlike upstream, a failed install removes the marker so that the
-// next run retries. Failures are logged as warnings and never returned.
+// writeMarkerCommand writes the completion marker atomically: a temporary
+// file in the same folder, then a rename.
+func writeMarkerCommand(location string) string {
+	return fmt.Sprintf(`mkdir -p '%[2]s' && tmp='%[1]s.tmp.'$$ && : > "$tmp" && mv -f "$tmp" '%[1]s'`, shellSQRaw(location), shellSQRaw(path.Dir(location)))
+}
+
+// installDotfiles installs unless the completion marker exists, and writes
+// the marker only after a successful install. Unlike upstream, which writes
+// the marker first, a failed or interrupted install runs again on the next
+// run. Failures are logged as warnings and never returned.
 func installDotfiles(ctx context.Context, execer Execer, rt Runtime, opts Options) DotfilesOutcome {
 	d := rt.Dotfiles
 	marker := path.Join(rt.UserDataFolder, ".dotfilesMarker")
-	claim, err := execer.Exec(ctx, ExecRequest{Cmd: []string{"/bin/sh", "-c", createFileCommand(marker)}, User: rt.User})
-	if err != nil {
-		logf(opts, "warning: dotfiles install from %s failed: marker: %v", d.Repository, err)
-		return DotfilesFailed
-	}
-	if claim.ExitCode != 0 {
+	check, err := execer.Exec(ctx, ExecRequest{Cmd: []string{"/bin/sh", "-c", markerExistsCommand(marker)}, User: rt.User})
+	if err == nil && check.ExitCode == 0 {
 		logf(opts, "skipping dotfiles install (marker found)")
 		return DotfilesSkipped
 	}
+	if err != nil {
+		logf(opts, "warning: check dotfiles marker %s: %v; installing", marker, err)
+	}
 	logf(opts, "installing dotfiles from %s", d.Repository)
 	res, err := execer.Exec(ctx, ExecRequest{Cmd: []string{"/bin/sh", "-c", d.script()}, User: rt.User, Env: rt.Env, Stdout: opts.Stdout, Stderr: opts.Stderr})
-	if err == nil && res.ExitCode == 0 {
-		return DotfilesInstalled
-	}
-	if err == nil {
+	if err == nil && res.ExitCode != 0 {
 		err = fmt.Errorf("exit %d", res.ExitCode)
 	}
-	logf(opts, "warning: dotfiles install from %s failed: %v; the next run retries", d.Repository, err)
-	release, rmErr := execer.Exec(ctx, ExecRequest{Cmd: []string{"/bin/sh", "-c", "rm -f '" + shellSQRaw(marker) + "'"}, User: rt.User})
-	if rmErr == nil && release.ExitCode != 0 {
-		rmErr = fmt.Errorf("exit %d", release.ExitCode)
+	if err != nil {
+		logf(opts, "warning: dotfiles install from %s failed: %v; the next run retries", d.Repository, err)
+		return DotfilesFailed
 	}
-	if rmErr != nil {
-		logf(opts, "warning: remove dotfiles marker %s: %v", marker, rmErr)
+	write, err := execer.Exec(ctx, ExecRequest{Cmd: []string{"/bin/sh", "-c", writeMarkerCommand(marker)}, User: rt.User})
+	if err == nil && write.ExitCode != 0 {
+		err = fmt.Errorf("exit %d", write.ExitCode)
 	}
-	return DotfilesFailed
+	if err != nil {
+		logf(opts, "warning: write dotfiles marker %s: %v; the next run installs again", marker, err)
+	}
+	return DotfilesInstalled
 }

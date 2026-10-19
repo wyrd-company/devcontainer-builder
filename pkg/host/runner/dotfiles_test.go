@@ -7,20 +7,21 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 
 	"github.com/wyrd-company/devcontainer-builder/pkg/lifecycle"
 	"github.com/wyrd-company/devcontainer-builder/pkg/spec"
 )
 
-func isMarkerClaim(req ExecRequest) bool {
-	return len(req.Cmd) == 3 && strings.Contains(req.Cmd[2], "set -o noclobber")
+func isMarkerCheck(req ExecRequest) bool {
+	return len(req.Cmd) == 3 && strings.HasPrefix(req.Cmd[2], "test -f ")
 }
 func isDotfilesScript(req ExecRequest) bool {
 	return len(req.Cmd) == 3 && strings.HasPrefix(req.Cmd[2], "# Clone & install dotfiles")
 }
-func isMarkerRelease(req ExecRequest) bool {
-	return len(req.Cmd) == 3 && strings.HasPrefix(req.Cmd[2], "rm -f ")
+func isMarkerWrite(req ExecRequest) bool {
+	return len(req.Cmd) == 3 && strings.Contains(req.Cmd[2], "mv -f ")
 }
 
 func dotfilesRuntime() Runtime {
@@ -28,10 +29,39 @@ func dotfilesRuntime() Runtime {
 		Dotfiles: Dotfiles{Repository: "https://example.invalid/dotfiles.git"}}
 }
 
+// noMarker answers the marker check with "absent" and every other command
+// with success, unless override handles the request.
+func noMarker(override func(ExecRequest) (*ExecResult, error)) *fakeExecer {
+	return &fakeExecer{handler: func(req ExecRequest) (*ExecResult, error) {
+		if override != nil {
+			if res, err := override(req); res != nil || err != nil {
+				return res, err
+			}
+		}
+		if isMarkerCheck(req) {
+			return &ExecResult{ExitCode: 1}, nil
+		}
+		return &ExecResult{}, nil
+	}}
+}
+
+func collectLogs(logs *[]string) Options {
+	return Options{Logger: func(format string, args ...any) { *logs = append(*logs, fmt.Sprintf(format, args...)) }}
+}
+
+func hasLog(logs []string, prefix string) bool {
+	for _, line := range logs {
+		if strings.HasPrefix(line, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
 // Upstream runLifecycleHooks installs dotfiles after postCreateCommand and
 // before postStartCommand, with the remote user and remote environment.
 func TestDotfilesRunAfterPostCreateBeforePostStart(t *testing.T) {
-	f := &fakeExecer{}
+	f := noMarker(nil)
 	plan := []lifecycle.Phase{
 		{Hook: lifecycle.HookPostCreate, When: lifecycle.WhenOnce, Command: spec.Command{Shell: "echo create"}},
 		{Hook: lifecycle.HookPostStart, When: lifecycle.WhenStart, Command: spec.Command{Shell: "echo start"}},
@@ -57,23 +87,26 @@ func TestDotfilesRunAfterPostCreateBeforePostStart(t *testing.T) {
 	}
 }
 
+// The marker is checked first and written only after the install succeeded.
 func TestDotfilesRunWithoutLifecyclePhases(t *testing.T) {
-	f := &fakeExecer{}
+	f := noMarker(nil)
 	result, err := RunWithResult(context.Background(), f, nil, dotfilesRuntime(), Options{})
 	if err != nil || result.Dotfiles != DotfilesInstalled {
 		t.Fatalf("result=%+v err=%v", result, err)
 	}
 	calls := f.callsCopy()
-	if len(calls) != 2 || !isMarkerClaim(calls[0]) || !isDotfilesScript(calls[1]) {
+	if len(calls) != 3 || !isMarkerCheck(calls[0]) || !isDotfilesScript(calls[1]) || !isMarkerWrite(calls[2]) {
 		t.Fatalf("calls=%v", calls)
 	}
-	if !strings.Contains(calls[0].Cmd[2], "'/home/dev/.devcontainer/.dotfilesMarker'") || calls[0].User != "dev" {
-		t.Fatalf("marker claim=%+v", calls[0])
+	for _, c := range []ExecRequest{calls[0], calls[2]} {
+		if !strings.Contains(c.Cmd[2], "'/home/dev/.devcontainer/.dotfilesMarker'") || c.User != "dev" {
+			t.Fatalf("marker command=%+v", c)
+		}
 	}
 }
 
 func TestDotfilesNotConfigured(t *testing.T) {
-	f := &fakeExecer{}
+	f := noMarker(nil)
 	rt := dotfilesRuntime()
 	rt.Dotfiles = Dotfiles{InstallCommand: "install.sh"}
 	result, err := RunWithResult(context.Background(), f, nil, rt, Options{})
@@ -83,62 +116,153 @@ func TestDotfilesNotConfigured(t *testing.T) {
 }
 
 func TestDotfilesMarkerFoundSkipsInstall(t *testing.T) {
-	f := &fakeExecer{handler: func(req ExecRequest) (*ExecResult, error) {
-		if isMarkerClaim(req) {
-			return &ExecResult{ExitCode: 1}, nil
-		}
-		return &ExecResult{}, nil
-	}}
+	f := &fakeExecer{} // every command, including the marker check, succeeds
 	result, err := RunWithResult(context.Background(), f, nil, dotfilesRuntime(), Options{})
 	if err != nil || result.Dotfiles != DotfilesSkipped {
 		t.Fatalf("result=%+v err=%v", result, err)
 	}
-	for _, c := range f.callsCopy() {
-		if isDotfilesScript(c) {
-			t.Fatal("install ran although the marker exists")
-		}
+	if calls := f.callsCopy(); len(calls) != 1 || !isMarkerCheck(calls[0]) {
+		t.Fatalf("install ran although the marker exists: %v", calls)
 	}
 }
 
-// A failed install is a warning, as upstream; the marker is released so the
-// next run retries, and later lifecycle commands still run.
-func TestDotfilesFailureWarnsReleasesMarkerAndContinues(t *testing.T) {
-	for _, tc := range []struct {
-		name string
-		fail func() (*ExecResult, error)
-	}{
-		{"exit", func() (*ExecResult, error) { return &ExecResult{ExitCode: 128}, nil }},
-		{"transport", func() (*ExecResult, error) { return nil, fmt.Errorf("exec broke") }},
+// A marker check that fails is never "found": the install runs.
+func TestDotfilesMarkerCheckErrorInstalls(t *testing.T) {
+	for name, check := range map[string]func() (*ExecResult, error){
+		"transport": func() (*ExecResult, error) { return nil, fmt.Errorf("exec broke") },
+		"exit":      func() (*ExecResult, error) { return &ExecResult{ExitCode: 2}, nil },
 	} {
-		t.Run(tc.name, func(t *testing.T) {
-			f := &fakeExecer{handler: func(req ExecRequest) (*ExecResult, error) {
-				if isDotfilesScript(req) {
-					return tc.fail()
+		t.Run(name, func(t *testing.T) {
+			f := noMarker(func(req ExecRequest) (*ExecResult, error) {
+				if isMarkerCheck(req) {
+					return check()
 				}
-				return &ExecResult{}, nil
-			}}
+				return nil, nil
+			})
+			result, err := RunWithResult(context.Background(), f, nil, dotfilesRuntime(), Options{})
+			if err != nil || result.Dotfiles != DotfilesInstalled {
+				t.Fatalf("result=%+v err=%v calls=%v", result, err, f.callsCopy())
+			}
+		})
+	}
+}
+
+// A failed install is a warning, as upstream. No marker is written, so the
+// next run retries, and later lifecycle commands still run.
+func TestDotfilesFailureWarnsWritesNoMarkerAndContinues(t *testing.T) {
+	for name, fail := range map[string]func() (*ExecResult, error){
+		"exit":      func() (*ExecResult, error) { return &ExecResult{ExitCode: 128}, nil },
+		"transport": func() (*ExecResult, error) { return nil, fmt.Errorf("exec broke") },
+	} {
+		t.Run(name, func(t *testing.T) {
+			f := noMarker(func(req ExecRequest) (*ExecResult, error) {
+				if isDotfilesScript(req) {
+					return fail()
+				}
+				return nil, nil
+			})
 			var logs []string
 			plan := []lifecycle.Phase{{Hook: lifecycle.HookPostStart, When: lifecycle.WhenStart, Command: spec.Command{Shell: "echo start"}}}
-			opts := Options{Logger: func(format string, args ...any) { logs = append(logs, fmt.Sprintf(format, args...)) }}
-			result, err := RunWithResult(context.Background(), f, plan, dotfilesRuntime(), opts)
+			result, err := RunWithResult(context.Background(), f, plan, dotfilesRuntime(), collectLogs(&logs))
 			if err != nil || result.Dotfiles != DotfilesFailed || len(result.RanPhases()) != 1 {
 				t.Fatalf("result=%+v err=%v", result, err)
 			}
-			warned := false
-			for _, line := range logs {
-				warned = warned || strings.HasPrefix(line, "warning: dotfiles install from https://example.invalid/dotfiles.git failed")
-			}
-			if !warned {
+			if !hasLog(logs, "warning: dotfiles install from https://example.invalid/dotfiles.git failed") {
 				t.Fatalf("no warning: %q", logs)
 			}
-			var released bool
 			for _, c := range f.callsCopy() {
-				released = released || (isMarkerRelease(c) && strings.Contains(c.Cmd[2], "'/home/dev/.devcontainer/.dotfilesMarker'") && c.User == "dev")
-			}
-			if !released {
-				t.Fatalf("marker not released: %v", f.callsCopy())
+				if isMarkerWrite(c) {
+					t.Fatalf("marker written after a failed install: %v", c)
+				}
 			}
 		})
+	}
+}
+
+// A marker that cannot be written after a successful install is a warning.
+func TestDotfilesMarkerWriteFailureWarns(t *testing.T) {
+	f := noMarker(func(req ExecRequest) (*ExecResult, error) {
+		if isMarkerWrite(req) {
+			return &ExecResult{ExitCode: 1}, nil
+		}
+		return nil, nil
+	})
+	var logs []string
+	result, err := RunWithResult(context.Background(), f, nil, dotfilesRuntime(), collectLogs(&logs))
+	if err != nil || result.Dotfiles != DotfilesInstalled || !hasLog(logs, "warning: write dotfiles marker /home/dev/.devcontainer/.dotfilesMarker: exit 1") {
+		t.Fatalf("result=%+v err=%v logs=%q", result, err, logs)
+	}
+}
+
+// shellExecer runs marker commands on the host shell, so that the marker
+// file is real; install answers the dotfiles script.
+func shellExecer(ctx context.Context, install func() (*ExecResult, error)) *fakeExecer {
+	return &fakeExecer{handler: func(req ExecRequest) (*ExecResult, error) {
+		if isDotfilesScript(req) {
+			return install()
+		}
+		out, err := exec.CommandContext(ctx, req.Cmd[0], req.Cmd[1:]...).CombinedOutput()
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			return &ExecResult{ExitCode: exitErr.ExitCode(), Stderr: out}, nil
+		}
+		return &ExecResult{Stdout: out}, err
+	}}
+}
+
+func scriptRuns(f *fakeExecer) int {
+	n := 0
+	for _, c := range f.callsCopy() {
+		if isDotfilesScript(c) {
+			n++
+		}
+	}
+	return n
+}
+
+// An install cancelled midway leaves no marker; the next run installs, and
+// only then does a later run skip.
+func TestDotfilesCancelledInstallRetries(t *testing.T) {
+	rt := dotfilesRuntime()
+	rt.UserDataFolder = filepath.Join(t.TempDir(), "data")
+	marker := filepath.Join(rt.UserDataFolder, ".dotfilesMarker")
+	ctx, cancel := context.WithCancel(context.Background())
+	first := shellExecer(ctx, func() (*ExecResult, error) { cancel(); return nil, ctx.Err() })
+	result, err := RunWithResult(ctx, first, nil, rt, Options{})
+	if err != nil || result.Dotfiles != DotfilesFailed {
+		t.Fatalf("cancelled run: %+v %v", result, err)
+	}
+	if _, err := os.Stat(marker); !os.IsNotExist(err) {
+		t.Fatalf("marker after a cancelled install: %v", err)
+	}
+	second := shellExecer(context.Background(), func() (*ExecResult, error) { return &ExecResult{}, nil })
+	if result, err = RunWithResult(context.Background(), second, nil, rt, Options{}); err != nil || result.Dotfiles != DotfilesInstalled || scriptRuns(second) != 1 {
+		t.Fatalf("retry: %+v %v", result, err)
+	}
+	if entries, err := os.ReadDir(rt.UserDataFolder); err != nil || len(entries) != 1 || entries[0].Name() != ".dotfilesMarker" {
+		t.Fatalf("marker folder after success: %v %v", entries, err)
+	}
+	third := shellExecer(context.Background(), func() (*ExecResult, error) { return &ExecResult{}, nil })
+	if result, err = RunWithResult(context.Background(), third, nil, rt, Options{}); err != nil || result.Dotfiles != DotfilesSkipped || scriptRuns(third) != 0 {
+		t.Fatalf("after success: %+v %v", result, err)
+	}
+}
+
+// A user data folder below a regular file can hold no marker: the check is
+// not "found", the install runs, the write warns, and the next run installs.
+func TestDotfilesUnusableMarkerFolder(t *testing.T) {
+	rt := dotfilesRuntime()
+	parent := filepath.Join(t.TempDir(), "regular-file")
+	if err := os.WriteFile(parent, []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	rt.UserDataFolder = filepath.Join(parent, "data")
+	for run := 1; run <= 2; run++ {
+		f := shellExecer(context.Background(), func() (*ExecResult, error) { return &ExecResult{}, nil })
+		var logs []string
+		result, err := RunWithResult(context.Background(), f, nil, rt, collectLogs(&logs))
+		if err != nil || result.Dotfiles != DotfilesInstalled || scriptRuns(f) != 1 || !hasLog(logs, "warning: write dotfiles marker") {
+			t.Fatalf("run %d: %+v %v logs=%q", run, result, err, logs)
+		}
 	}
 }
 
@@ -245,12 +369,11 @@ func TestDotfilesScriptInstallCommand(t *testing.T) {
 	}
 }
 
-// The marker claim creates the folder and file once; a second claim fails, so
-// a concurrent or later run skips the install.
-func TestDotfilesMarkerClaimOnShell(t *testing.T) {
+// The marker write leaves exactly the marker, and the check finds it.
+func TestDotfilesMarkerCommandsOnShell(t *testing.T) {
 	marker := filepath.Join(t.TempDir(), "data dir", ".dotfilesMarker")
-	claim := func() int {
-		err := exec.Command("/bin/sh", "-c", createFileCommand(marker)).Run()
+	run := func(script string) int {
+		err := exec.Command("/bin/sh", "-c", script).Run()
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			return exitErr.ExitCode()
 		} else if err != nil {
@@ -258,13 +381,28 @@ func TestDotfilesMarkerClaimOnShell(t *testing.T) {
 		}
 		return 0
 	}
-	if code := claim(); code != 0 {
-		t.Fatalf("first claim exit %d", code)
+	if run(markerExistsCommand(marker)) == 0 {
+		t.Fatal("marker found before it was written")
 	}
-	if _, err := os.Stat(marker); err != nil {
-		t.Fatal(err)
+	var inodes []uint64
+	for i := 0; i < 2; i++ {
+		if code := run(writeMarkerCommand(marker)); code != 0 {
+			t.Fatalf("write %d: exit %d", i, code)
+		}
+		info, err := os.Stat(marker)
+		if err != nil {
+			t.Fatal(err)
+		}
+		inodes = append(inodes, info.Sys().(*syscall.Stat_t).Ino)
 	}
-	if code := claim(); code == 0 {
-		t.Fatal("second claim succeeded")
+	// A rename puts a new file in place; an in-place write keeps the inode.
+	if inodes[0] == inodes[1] {
+		t.Fatal("marker rewritten in place, not renamed from a temporary file")
+	}
+	if run(markerExistsCommand(marker)) != 0 {
+		t.Fatal("marker not found after the write")
+	}
+	if entries, err := os.ReadDir(filepath.Dir(marker)); err != nil || len(entries) != 1 {
+		t.Fatalf("marker folder: %v %v", entries, err)
 	}
 }
