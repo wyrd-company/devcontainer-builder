@@ -49,6 +49,8 @@ Behavioral evidence is separate from option-registration coverage:
 - `TestComposeObjectRemoveIntegration` proves host Remove for default and selected
   parents, lost containers, changed configuration, file-source preservation and
   independent workspace isolation.
+  `TestComposeObjectWorkspaceOwnershipIntegration` preserves another workspace's
+  ownership even when only records remain in a shared project.
 - `TestComposeObjectPublicationIntegration` holds ownership publication while a
   second writer completes; the first then succeeds or fails. It proves private
   output, retained ownership on cleanup failure and a fresh-host retry.
@@ -57,6 +59,8 @@ Behavioral evidence is separate from option-registration coverage:
   proves cleanup after killing the producer process.
 - `TestComposeObjectLedgerRemovalRetryIntegration` proves retry when a real
   Docker container holds the ownership volume.
+  `TestComposeObjectContainerRemovalFailureIntegration` forwards a real stale
+  deletion to Docker and proves that its failure preserves backing objects.
 - `TestObjectMaterializerErrorsDoNotDisclosePayload` proves local filesystem
   errors contain none of the individually injected payload spellings.
 - `TestComposeObjectOwnershipValidationIntegration` proves malformed deletion

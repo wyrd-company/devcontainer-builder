@@ -95,6 +95,10 @@ func TestComposeObjectRemoveIntegration(t *testing.T) {
 				if err != nil || len(records) != 1 || records[0].Labels[labelObjectRoot] != root {
 					t.Fatal("mount and ownership paths disagree")
 				}
+				if records[0].Labels[LabelProject] != up.ProjectName {
+					t.Fatal("mount and ownership projects disagree")
+				}
+
 				for _, value := range records[0].Labels {
 					if strings.Contains(value, "synthetic-token") || strings.Contains(value, "synthetic-config") {
 						t.Fatal("payload in ownership labels")
@@ -515,3 +519,38 @@ func TestComposeObjectContainerRemovalFailureIntegration(t *testing.T) {
 type objectRoundTripper func(*http.Request) (*http.Response, error)
 
 func (fn objectRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) { return fn(req) }
+
+func TestComposeObjectWorkspaceOwnershipIntegration(t *testing.T) {
+	ctx := context.Background()
+	cli := requireComposeDocker(t, ctx)
+	defer cli.Close()
+	parent := t.TempDir()
+	h := New(cli, Options{UserDataFolder: parent})
+	first, second := t.TempDir(), t.TempDir()
+	project := objectTestProject(first)
+	var roots []string
+	for _, workspace := range []string{first, second} {
+		workspace := workspace
+		t.Cleanup(func() { _ = h.Remove(ctx, workspace) })
+		m := newObjectMaterializer(func() (string, error) { return h.allocateObjects(ctx, project, workspace) }, nil)
+		if _, err := m.resolveSecret("token", types.SecretConfig{Content: "synthetic-token"}); err != nil {
+			t.Fatal(err)
+		}
+		roots = append(roots, m.root)
+	}
+	if err := h.Remove(ctx, first); err != nil {
+		t.Fatal(err)
+	}
+	assertObjectAbsent(t, roots[0])
+	records, err := h.objectRecords(ctx, second)
+	if err != nil || len(records) != 1 {
+		t.Fatal("other workspace ownership removed")
+	}
+	if _, err := os.Stat(filepath.Join(roots[1], "secrets", "token")); err != nil {
+		t.Fatal("other workspace secret removed")
+	}
+	if err := h.Remove(ctx, second); err != nil {
+		t.Fatal(err)
+	}
+	assertObjectAbsent(t, roots[1])
+}

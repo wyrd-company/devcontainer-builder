@@ -321,15 +321,6 @@ func (h *Host) projectForWorkspace(ctx context.Context, workspace string) (strin
 			return name, nil
 		}
 	}
-	records, err := h.objectRecords(ctx, workspace)
-	if err != nil {
-		return "", err
-	}
-	for _, record := range records {
-		if name := record.Labels[LabelProject]; name != "" {
-			return name, nil
-		}
-	}
 	// A partial project can have only sidecars or resources left. Without a
 	// labelled container, only a readable Compose config can identify it.
 	dc, err := spec.LoadFromWorkspace(workspace)
