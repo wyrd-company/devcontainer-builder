@@ -146,6 +146,12 @@ func TestResolveWorktreeCommonDir(t *testing.T) {
 		}
 	}
 
+	// With workspaceFolder and workspaceMount configured nothing is derived,
+	// not even the common-folder mount.
+	if got, err := Resolve(sub, true, true, opts); err != nil || got.AdditionalMount != nil || got.WorkspaceMount != nil || got.WorkspaceFolder != "" {
+		t.Fatalf("both configured: %+v %v", got, err)
+	}
+
 	// An absolute gitdir is not handled, as upstream.
 	absolute := filepath.Join(base, "abs")
 	writeFile(t, filepath.Join(absolute, ".git"), "gitdir: "+admin+"\n")

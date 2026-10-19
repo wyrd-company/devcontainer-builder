@@ -207,7 +207,9 @@ func TestIDLabelsSubstituteDevcontainerID(t *testing.T) {
 	_, app := gitWorkspace(t, `{"image":"alpine:3.20","containerEnv":{"ID":"${devcontainerId}"}}`)
 	id := func(args ...string) any {
 		result, _ := invoke(t, 0, append([]string{"read-configuration", "--workspace-folder", app}, args...)...)
-		return result["configuration"].(map[string]any)["containerEnv"].(map[string]any)["ID"]
+		cfg, _ := result["configuration"].(map[string]any)
+		env, _ := cfg["containerEnv"].(map[string]any)
+		return env["ID"]
 	}
 	want := substitute.Substitute(substitute.Context{IDLabels: map[string]string{"example.test/id": "one", "example.test/role": "a=b"}}, "${devcontainerId}")
 	if got := id("--id-label", "example.test/id=one", "--id-label", "example.test/role=a=b"); got != want {
@@ -223,16 +225,26 @@ func TestIDLabelsSubstituteDevcontainerID(t *testing.T) {
 func TestIDLabelsWithoutWorkspaceReadNoConfiguration(t *testing.T) {
 	_, app := gitWorkspace(t, `{"image":"alpine:3.20","remoteEnv":{"FROM":"current-directory"}}`)
 	t.Chdir(app)
+	configuration := func(result map[string]any) map[string]any {
+		cfg, _ := result["configuration"].(map[string]any)
+		return cfg
+	}
 	result, _ := invoke(t, 0, "read-configuration", "--id-label", "example.test/id=one")
-	if cfg := result["configuration"].(map[string]any); len(cfg) != 0 || result["workspace"] != nil {
+	if cfg, ok := result["configuration"].(map[string]any); !ok || len(cfg) != 0 || result["workspace"] != nil {
 		t.Fatalf("label-only result=%v", result)
 	}
-	result, _ = invoke(t, 0, "read-configuration", "--id-label", "example.test/id=one", "--workspace-folder", ".")
-	if cfg := result["configuration"].(map[string]any); cfg["remoteEnv"] == nil || result["workspace"] == nil {
-		t.Fatalf("explicit workspace result=%v", result)
+	for _, flag := range []string{"--workspace-folder", "--config"} {
+		value := "."
+		if flag == "--config" {
+			value = ".devcontainer.json"
+		}
+		result, _ = invoke(t, 0, "read-configuration", "--id-label", "example.test/id=one", flag, value)
+		if configuration(result)["remoteEnv"] == nil || result["workspace"] == nil {
+			t.Fatalf("explicit %s result=%v", flag, result)
+		}
 	}
 	result, _ = invoke(t, 0, "read-configuration")
-	if result["configuration"].(map[string]any)["remoteEnv"] == nil {
+	if configuration(result)["remoteEnv"] == nil {
 		t.Fatalf("default result=%v", result)
 	}
 }
