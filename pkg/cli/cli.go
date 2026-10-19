@@ -23,6 +23,7 @@ import (
 )
 
 type application struct {
+	userDataFolder         string
 	version                string
 	stdin                  io.Reader
 	stderr                 io.Writer
@@ -157,6 +158,7 @@ func (a *application) command() *cobra.Command {
 		default:
 			return usageError("invalid --log-level %q", a.logLevel)
 		}
+		a.userDataFolder = folderOption(cmd, "user-data-folder")
 		a.logs = &logWriter{dst: a.stderr, json: a.logFormat == "json"}
 		return nil
 	}

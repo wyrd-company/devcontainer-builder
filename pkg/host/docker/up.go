@@ -24,6 +24,8 @@ import (
 // CLI's responsibility, kept out of the package so a service or
 // operator can supply a curated environment.
 type UpRequest struct {
+	// ContainerDataFolder selects lifecycle and dotfiles marker storage.
+	ContainerDataFolder string
 	// GPUAvailability controls implicit hostRequirements.gpu requests. Empty means detect.
 	GPUAvailability string
 	// Spec is the parsed devcontainer.json. Required.
@@ -232,7 +234,7 @@ func (h *Host) Up(ctx context.Context, req UpRequest) (*UpResult, error) {
 	if err != nil {
 		return res, errorf("detect home: %w", err)
 	}
-	udf := lifecycle.UserDataFolder(homeDir, "")
+	udf := lifecycle.UserDataFolder(homeDir, req.ContainerDataFolder)
 	containerEnv, err := runner.DetectContainerEnv(ctx, execer)
 	if err != nil {
 		// Non-fatal: lifecycle commands will just see whatever shell sets

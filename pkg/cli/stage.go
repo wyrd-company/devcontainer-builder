@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 
 	"github.com/spf13/cobra"
+	"github.com/wyrd-company/devcontainer-builder/internal/datafolder"
 	"github.com/wyrd-company/devcontainer-builder/pkg/features"
 	"github.com/wyrd-company/devcontainer-builder/pkg/platform"
 	"github.com/wyrd-company/devcontainer-builder/pkg/spec"
@@ -21,7 +22,7 @@ func (a *application) resolveFeatures(dc *spec.DevContainer) ([]features.Resolve
 	if dc.Features.Len() == 0 {
 		return nil, func() {}, nil
 	}
-	dir, err := os.MkdirTemp("", "dcb-features-")
+	dir, err := datafolder.NewStaging(a.userDataFolder, "dcb-features-")
 	if err != nil {
 		return nil, nil, err
 	}

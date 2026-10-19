@@ -24,6 +24,8 @@ import (
 // (typically via pkg/features) and optionally supplies a derived image from
 // BuildPrimaryImage. Otherwise the primary Compose service selects the image.
 type UpRequest struct {
+	// ContainerDataFolder selects lifecycle and dotfiles marker storage.
+	ContainerDataFolder string
 	// GPUAvailability controls implicit hostRequirements.gpu reservations. Empty means detect.
 	GPUAvailability string
 	// Spec is the parsed devcontainer.json (must be in compose mode).
@@ -512,7 +514,7 @@ func (h *Host) runLifecycle(
 	if err != nil {
 		return errorf("detect home: %w", err)
 	}
-	udf := lifecycle.UserDataFolder(homeDir, "")
+	udf := lifecycle.UserDataFolder(homeDir, req.ContainerDataFolder)
 	containerEnv, err := runner.DetectContainerEnv(ctx, execer)
 	if err != nil {
 		h.logf("warning: detect container env: %v", err)

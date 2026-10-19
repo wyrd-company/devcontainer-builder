@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -163,4 +164,48 @@ func TestResolve_PreservesConfigurationReportingInputs(t *testing.T) {
 	if len(got) != 1 || got[0].Manifest == nil || got[0].Manifest.SchemaVersion != 2 || len(got[0].Manifest.Layers) != 1 || got[0].Value != true || got[0].Digest == "" {
 		t.Fatalf("resolved=%+v", got)
 	}
+}
+
+// A metadata alias lookup has no annotation, so the real registry transport
+// must extract the layer into a private folder within the selected staging.
+func TestAliasMetadataUsesSelectedStaging(t *testing.T) {
+	registry := newFakeRegistry(t)
+	registry.publish("collection/sample", "1", `{"id":"sample","version":"1.0.0","name":"Sample"}`, "")
+	staging := t.TempDir()
+	observed := false
+	resolver := registry.resolver()
+	original := resolver.OCI.HTTP.Transport
+	resolver.OCI.HTTP.Transport = aliasInspectTransport{base: original, inspect: func() {
+		entries, err := os.ReadDir(staging)
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		for _, entry := range entries {
+			if strings.HasPrefix(entry.Name(), ".metadata-") {
+				observed = true
+			}
+		}
+	}}
+	aliases, err := resolver.featureAliases(registry.host()+"/collection/sample:1", staging)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !observed || len(aliases) != 1 || aliases[0] != "sample" {
+		t.Fatalf("metadata staged outside selected folder: observed=%v aliases=%v", observed, aliases)
+	}
+	entries, err := os.ReadDir(staging)
+	if err != nil || len(entries) != 0 {
+		t.Fatalf("metadata staging not cleaned: %v %v", entries, err)
+	}
+}
+
+type aliasInspectTransport struct {
+	base    http.RoundTripper
+	inspect func()
+}
+
+func (t aliasInspectTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	t.inspect()
+	return t.base.RoundTrip(req)
 }

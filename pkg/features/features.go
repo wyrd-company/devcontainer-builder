@@ -198,7 +198,7 @@ func (r *Resolver) Resolve(specFeatures spec.OrderedMap, override []string, stag
 		if a, ok := aliases[id]; ok {
 			return a, nil
 		}
-		a, err := r.featureAliases(id)
+		a, err := r.featureAliases(id, stagingDir)
 		if err != nil {
 			return nil, err
 		}
@@ -299,7 +299,7 @@ func (m Metadata) aliases() []string {
 // featureAliases reads the aliases of the OCI feature id references, from
 // the manifest's dev.containers.metadata annotation when present, else
 // from the feature's devcontainer-feature.json.
-func (r *Resolver) featureAliases(id string) ([]string, error) {
+func (r *Resolver) featureAliases(id, stagingDir string) ([]string, error) {
 	ref, err := oci.ParseReference(id)
 	if err != nil {
 		return nil, err
@@ -316,7 +316,7 @@ func (r *Resolver) featureAliases(id string) ([]string, error) {
 		}
 		return meta.aliases(), nil
 	}
-	dir, err := os.MkdirTemp("", "devcontainer-feature-metadata-")
+	dir, err := os.MkdirTemp(stagingDir, ".metadata-")
 	if err != nil {
 		return nil, err
 	}

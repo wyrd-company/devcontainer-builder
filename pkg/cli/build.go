@@ -133,6 +133,7 @@ func (o *buildOptions) prepare(a *application, dc *spec.DevContainer, workspace 
 		return bo, err
 	}
 	bo.Spec, bo.SpecPath, bo.Workspace = dc, dc.Path, workspace
+	bo.UserDataFolder = a.userDataFolder
 	bo.Logger, bo.Stdout, bo.Stderr = a.logf, a.logs, a.logs
 	bo.OutputWriter = a.stdout
 	if len(bo.Tags) == 0 {

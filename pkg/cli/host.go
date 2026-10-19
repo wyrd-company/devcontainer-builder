@@ -110,6 +110,7 @@ func (a *application) upCommand() *cobra.Command {
 			req := composeUpRequest(dc, workspace, image, built, skip)
 			req.GPUAvailability = gpu
 			req.AllowProjectConflict = allowProjectConflict
+			req.ContainerDataFolder = folderOption(cmd, "container-data-folder")
 			req.Dotfiles = dotfiles.Dotfiles
 			req.Lifecycle = controls.LifecycleControls
 			host := dockercompose.New(cli, dockercompose.Options{Logger: a.logf, Stdout: a.logs, Stderr: a.logs, NoRecreate: controls.expectExisting})
@@ -120,7 +121,7 @@ func (a *application) upCommand() *cobra.Command {
 			id = res.PrimaryContainerID
 			a.result["composeProjectName"] = res.ProjectName
 		} else {
-			res, err := a.dockerHost(cli).Up(cmd.Context(), hostdocker.UpRequest{Spec: dc, SpecPath: dc.Path, LocalWorkspace: workspace, Image: image, ImageBuilt: built != nil, SkipLifecycle: skip.postCreate, SkipPostAttach: skip.postAttach, Features: resolved, LocalEnv: envMap(), RemoteUserUIDUpdate: uid, GPUAvailability: gpu, Dotfiles: dotfiles.Dotfiles, Lifecycle: controls.LifecycleControls})
+			res, err := a.dockerHost(cli).Up(cmd.Context(), hostdocker.UpRequest{Spec: dc, SpecPath: dc.Path, LocalWorkspace: workspace, Image: image, ImageBuilt: built != nil, SkipLifecycle: skip.postCreate, SkipPostAttach: skip.postAttach, Features: resolved, LocalEnv: envMap(), RemoteUserUIDUpdate: uid, GPUAvailability: gpu, ContainerDataFolder: folderOption(cmd, "container-data-folder"), Dotfiles: dotfiles.Dotfiles, Lifecycle: controls.LifecycleControls})
 			if err != nil {
 				return err
 			}

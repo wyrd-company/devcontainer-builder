@@ -25,11 +25,13 @@ including inherited help/version on each command. It records short aliases but
 scores each canonical long option once. It never subtracts omissions. Registration
 coverage is distinct from behavior parity and does not use these dispositions.
 The pinned `up` table has **44 explicit options**, plus inherited help/version.
+Registered option coverage is **108/253 (42.69%)**;
+registration includes the three session-folder pairs awaiting probe-cache behavior.
 
 ## Dispositions
 
-- implemented: **91**.
-- implement: **146**.
+- implemented: **105**.
+- implement: **132**.
 - not applicable by design: **15**.
 - needs Bob's decision: **1**.
 
@@ -49,7 +51,7 @@ supports outdated reporting and template metadata.
 | lifecycle | M | 7 | Lifecycle controls: skip-non-blocking-commands, prebuild, stop-for-personalization, expect-existing-container. |
 | mounts | L | 14 | Workspace mounts and container selection: mount, workspace-mount-consistency, mount-workspace-git-root, mount-git-worktree-common-dir, id-label; mount-workspace-git-root defaults to true; mount-git-worktree-common-dir defaults to false; additional mounts are explicit. |
 | environment | M | 5 | Remote environment and secrets: remote-env, secrets-file; lifecycle secret inputs are separate from configuration remoteEnv metadata. |
-| data-folders | M | 17 | Persistent data and probe caches: user-data-folder, container-data-folder, container-system-data-folder, container-session-data-folder. |
+| data-folders | M | 17 | All folder options registered; existing host staging and container markers are routed. Session probe-cache behavior depends on user environment probe support and its timeout decision. System patch markers have no current writer. |
 | terminal | S | 10 | Terminal dimensions: terminal-columns, terminal-rows. |
 | lockfile | L | 4 | Feature lockfiles: experimental-lockfile, experimental-frozen-lockfile. |
 | feature-controls | M | 9 | Feature mapping and metadata controls: skip-feature-auto-mapping, skip-persisting-customizations-from-features, omit-config-remote-env-from-metadata, omit-syntax-directive; persist remoteEnv in metadata by default; omit-config-remote-env-from-metadata defaults to false and omits it when enabled. |
@@ -119,7 +121,7 @@ features, dotfiles, environment probing and version support.
 
 | Upstream option | dcb equivalent | Disposition | Unit | Reason / source |
 | --- | --- | --- | --- | --- |
-| --user-data-folder | none | implement | data-folders | Add this upstream control to the corresponding handler. Source: devContainersSpecCLI.ts:509. |
+| --user-data-folder | --user-data-folder | implemented | data-folders | Private host feature/build staging honors this folder; existing contents are preserved. Source: devContainersSpecCLI.ts:509. |
 | --docker-path | none | not applicable by design | native-api | Approved native API requirement: runtime integrations use Engine/Compose APIs; executable path selection does not apply. Source: devContainersSpecCLI.ts:510. |
 | --docker-compose-path | none | not applicable by design | native-api | Approved native API requirement: runtime integrations use Engine/Compose APIs; executable path selection does not apply. Source: devContainersSpecCLI.ts:511. |
 | --workspace-folder | --workspace-folder | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: devContainersSpecCLI.ts:512. |
@@ -148,11 +150,11 @@ features, dotfiles, environment probing and version support.
 
 | Upstream option | dcb equivalent | Disposition | Unit | Reason / source |
 | --- | --- | --- | --- | --- |
-| --user-data-folder | none | implement | data-folders | Add this upstream control to the corresponding handler. Source: devContainersSpecCLI.ts:1217. |
+| --user-data-folder | --user-data-folder | implemented | data-folders | Private host feature/build staging honors this folder; existing contents are preserved. Source: devContainersSpecCLI.ts:1217. |
 | --docker-path | none | not applicable by design | native-api | Approved native API requirement: runtime integrations use Engine/Compose APIs; executable path selection does not apply. Source: devContainersSpecCLI.ts:1218. |
 | --docker-compose-path | none | not applicable by design | native-api | Approved native API requirement: runtime integrations use Engine/Compose APIs; executable path selection does not apply. Source: devContainersSpecCLI.ts:1219. |
-| --container-data-folder | none | implement | data-folders | Add this upstream control to the corresponding handler. Source: devContainersSpecCLI.ts:1220. |
-| --container-system-data-folder | none | implement | data-folders | Add this upstream control to the corresponding handler. Source: devContainersSpecCLI.ts:1221. |
+| --container-data-folder | --container-data-folder | implemented | data-folders | Lifecycle and dotfiles markers honor this folder; exec writes no markers. Source: devContainersSpecCLI.ts:1220. |
+| --container-system-data-folder | --container-system-data-folder | implemented | data-folders | Accepted with upstream default /var/devcontainer; dcb has no system patch marker writer. Source: devContainersSpecCLI.ts:1221. |
 | --workspace-folder | --workspace-folder | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: devContainersSpecCLI.ts:1222. |
 | --mount-workspace-git-root | none | implement | mounts | Default true, matching upstream; mount the workspace Git root unless disabled. Source: devContainersSpecCLI.ts:1223. |
 | --mount-git-worktree-common-dir | none | implement | mounts | Default false, matching upstream; mount the Git worktree common directory only when enabled. Source: devContainersSpecCLI.ts:1224. |
@@ -267,7 +269,7 @@ features, dotfiles, environment probing and version support.
 
 | Upstream option | dcb equivalent | Disposition | Unit | Reason / source |
 | --- | --- | --- | --- | --- |
-| --user-data-folder | none | implement | data-folders | Add this upstream control to the corresponding handler. Source: devContainersSpecCLI.ts:960. |
+| --user-data-folder | --user-data-folder | implemented | data-folders | Private host feature/build staging honors this folder; existing contents are preserved. Source: devContainersSpecCLI.ts:960. |
 | --docker-path | none | not applicable by design | native-api | Approved native API requirement: runtime integrations use Engine/Compose APIs; executable path selection does not apply. Source: devContainersSpecCLI.ts:961. |
 | --docker-compose-path | none | not applicable by design | native-api | Approved native API requirement: runtime integrations use Engine/Compose APIs; executable path selection does not apply. Source: devContainersSpecCLI.ts:962. |
 | --workspace-folder | --workspace-folder | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: devContainersSpecCLI.ts:963. |
@@ -292,11 +294,11 @@ features, dotfiles, environment probing and version support.
 
 | Upstream option | dcb equivalent | Disposition | Unit | Reason / source |
 | --- | --- | --- | --- | --- |
-| --user-data-folder | none | implement | data-folders | Add this upstream control to the corresponding handler. Source: devContainersSpecCLI.ts:753. |
+| --user-data-folder | --user-data-folder | implemented | data-folders | Private host feature/build staging honors this folder; existing contents are preserved. Source: devContainersSpecCLI.ts:753. |
 | --docker-path | none | not applicable by design | native-api | Approved native API requirement: runtime integrations use Engine/Compose APIs; executable path selection does not apply. Source: devContainersSpecCLI.ts:754. |
 | --docker-compose-path | none | not applicable by design | native-api | Approved native API requirement: runtime integrations use Engine/Compose APIs; executable path selection does not apply. Source: devContainersSpecCLI.ts:755. |
-| --container-data-folder | none | implement | data-folders | Add this upstream control to the corresponding handler. Source: devContainersSpecCLI.ts:756. |
-| --container-system-data-folder | none | implement | data-folders | Add this upstream control to the corresponding handler. Source: devContainersSpecCLI.ts:757. |
+| --container-data-folder | --container-data-folder | implemented | data-folders | Lifecycle and dotfiles markers honor this folder; exec writes no markers. Source: devContainersSpecCLI.ts:756. |
+| --container-system-data-folder | --container-system-data-folder | implemented | data-folders | Accepted with upstream default /var/devcontainer; dcb has no system patch marker writer. Source: devContainersSpecCLI.ts:757. |
 | --workspace-folder | --workspace-folder | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: devContainersSpecCLI.ts:758. |
 | --mount-workspace-git-root | none | implement | mounts | Default true, matching upstream; mount the workspace Git root unless disabled. Source: devContainersSpecCLI.ts:759. |
 | --mount-git-worktree-common-dir | none | implement | mounts | Default false, matching upstream; mount the Git worktree common directory only when enabled. Source: devContainersSpecCLI.ts:760. |
@@ -318,7 +320,7 @@ features, dotfiles, environment probing and version support.
 | --dotfiles-repository | --dotfiles-repository | implemented | sibling-unit | Registered; installs after postCreateCommand once per container. A failed install warns and the next run retries. Source: devContainersSpecCLI.ts:776. |
 | --dotfiles-install-command | --dotfiles-install-command | implemented | sibling-unit | Registered; runs in the clone in place of the default install-script search. Source: devContainersSpecCLI.ts:777. |
 | --dotfiles-target-path | --dotfiles-target-path | implemented | sibling-unit | Registered; default ~/dotfiles. Source: devContainersSpecCLI.ts:778. |
-| --container-session-data-folder | none | implement | data-folders | Add this upstream control to the corresponding handler. Source: devContainersSpecCLI.ts:779. |
+| --container-session-data-folder | --container-session-data-folder | implement | data-folders | Registered; probe-cache behavior depends on the user environment probe backlog work and its timeout decision. Source: devContainersSpecCLI.ts:779. |
 | --secrets-file | none | implement | environment | Optional JSON secret inputs for lifecycle command environments; do not add these inputs to image metadata. Source: devContainersSpecCLI.ts:780. |
 | --help | --help | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: yargs built-in help. |
 | --version | --version | implemented | sibling-unit | Registered on every command; prints the version result in place of the command, as upstream. Source: devContainersSpecCLI.ts (.version). |
@@ -328,8 +330,8 @@ features, dotfiles, environment probing and version support.
 | Upstream option | dcb equivalent | Disposition | Unit | Reason / source |
 | --- | --- | --- | --- | --- |
 | --docker-path | none | not applicable by design | native-api | Approved native API requirement: runtime integrations use Engine/Compose APIs; executable path selection does not apply. Source: devContainersSpecCLI.ts:340. |
-| --container-data-folder | none | implement | data-folders | Add this upstream control to the corresponding handler. Source: devContainersSpecCLI.ts:341. |
-| --container-system-data-folder | none | implement | data-folders | Add this upstream control to the corresponding handler. Source: devContainersSpecCLI.ts:342. |
+| --container-data-folder | --container-data-folder | implemented | data-folders | Lifecycle and dotfiles markers honor this folder; exec writes no markers. Source: devContainersSpecCLI.ts:341. |
+| --container-system-data-folder | --container-system-data-folder | implemented | data-folders | Accepted with upstream default /var/devcontainer; dcb has no system patch marker writer. Source: devContainersSpecCLI.ts:342. |
 | --container-id | --container-id | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: devContainersSpecCLI.ts:343. |
 | --config | --config | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: devContainersSpecCLI.ts:344. |
 | --log-level | --log-level | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: devContainersSpecCLI.ts:345. |
@@ -339,12 +341,12 @@ features, dotfiles, environment probing and version support.
 | --default-user-env-probe | none | implement | sibling-unit | Needs the upstream probe and its 10-second timeout, a new timeout mechanic that awaits Bob's decision. Source: devContainersSpecCLI.ts:349. |
 | --skip-post-create | --skip-post-create | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: devContainersSpecCLI.ts:350. |
 | --skip-non-blocking-commands | --skip-non-blocking-commands | implemented | covered | Stops after merged waitFor (default updateContentCommand), without background continuation. Docker and Compose behavior tests. Source: devContainersSpecCLI.ts:351. |
-| --user-data-folder | none | implement | data-folders | Add this upstream control to the corresponding handler. Source: devContainersSpecCLI.ts:352. |
+| --user-data-folder | --user-data-folder | implemented | data-folders | Private host feature/build staging honors this folder; existing contents are preserved. Source: devContainersSpecCLI.ts:352. |
 | --remote-env | none | implement | environment | Add this upstream control to the corresponding handler. Source: devContainersSpecCLI.ts:353. |
 | --dotfiles-repository | --dotfiles-repository | implemented | sibling-unit | Registered; installs after postCreateCommand once per container. A failed install warns and the next run retries. Source: devContainersSpecCLI.ts:354. |
 | --dotfiles-install-command | --dotfiles-install-command | implemented | sibling-unit | Registered; runs in the clone in place of the default install-script search. Source: devContainersSpecCLI.ts:355. |
 | --dotfiles-target-path | --dotfiles-target-path | implemented | sibling-unit | Registered; default ~/dotfiles. Source: devContainersSpecCLI.ts:356. |
-| --container-session-data-folder | none | implement | data-folders | Add this upstream control to the corresponding handler. Source: devContainersSpecCLI.ts:357. |
+| --container-session-data-folder | --container-session-data-folder | implement | data-folders | Registered; probe-cache behavior depends on the user environment probe backlog work and its timeout decision. Source: devContainersSpecCLI.ts:357. |
 | --include-configuration | --include-configuration | implemented | covered | Configuration snapshot is included on request. Source: devContainersSpecCLI.ts:358. |
 | --include-merged-configuration | --include-merged-configuration | implemented | covered | Merged configuration snapshot is included on request. Source: devContainersSpecCLI.ts:359. |
 | --help | --help | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: yargs built-in help. |
@@ -406,8 +408,8 @@ features, dotfiles, environment probing and version support.
 | --- | --- | --- | --- | --- |
 | --docker-path | none | not applicable by design | native-api | Approved native API requirement: runtime integrations use Engine/Compose APIs; executable path selection does not apply. Source: devContainersSpecCLI.ts:102. |
 | --docker-compose-path | none | not applicable by design | native-api | Approved native API requirement: runtime integrations use Engine/Compose APIs; executable path selection does not apply. Source: devContainersSpecCLI.ts:103. |
-| --container-data-folder | none | implement | data-folders | Add this upstream control to the corresponding handler. Source: devContainersSpecCLI.ts:104. |
-| --container-system-data-folder | none | implement | data-folders | Add this upstream control to the corresponding handler. Source: devContainersSpecCLI.ts:105. |
+| --container-data-folder | --container-data-folder | implemented | data-folders | Lifecycle and dotfiles markers honor this folder; exec writes no markers. Source: devContainersSpecCLI.ts:104. |
+| --container-system-data-folder | --container-system-data-folder | implemented | data-folders | Accepted with upstream default /var/devcontainer; dcb has no system patch marker writer. Source: devContainersSpecCLI.ts:105. |
 | --workspace-folder | --workspace-folder | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: devContainersSpecCLI.ts:106. |
 | --workspace-mount-consistency | none | implement | mounts | Add this upstream control to the corresponding handler. Source: devContainersSpecCLI.ts:107. |
 | --gpu-availability | --gpu-availability | implemented | gpu | Default detect, matching upstream; all/detect/none use Engine runtime detection and device requests, including Compose GPU reservations; explicit GPU selection is preserved. Source: devContainersSpecCLI.ts:108. |
@@ -428,7 +430,7 @@ features, dotfiles, environment probing and version support.
 | --skip-post-create | --skip-post-create | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: devContainersSpecCLI.ts:123. |
 | --skip-non-blocking-commands | --skip-non-blocking-commands | implemented | covered | Stops after merged waitFor (default updateContentCommand), without background continuation. Docker and Compose behavior tests. Source: devContainersSpecCLI.ts:124. |
 | --prebuild | --prebuild | implemented | covered | Stops after updateContentCommand and reruns that hook with a current marker. Docker and Compose behavior tests. Source: devContainersSpecCLI.ts:125. |
-| --user-data-folder | none | implement | data-folders | Add this upstream control to the corresponding handler. Source: devContainersSpecCLI.ts:126. |
+| --user-data-folder | --user-data-folder | implemented | data-folders | Private host feature/build staging honors this folder; existing contents are preserved. Source: devContainersSpecCLI.ts:126. |
 | --mount | none | implement | mounts | Add bind/volume mounts through the Engine API; no additional CLI mounts are supplied by default. Source: devContainersSpecCLI.ts:127. |
 | --remote-env | none | implement | environment | Add this upstream control to the corresponding handler. Source: devContainersSpecCLI.ts:128. |
 | --cache-from | --cache-from | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: devContainersSpecCLI.ts:129. |
@@ -440,7 +442,7 @@ features, dotfiles, environment probing and version support.
 | --dotfiles-repository | --dotfiles-repository | implemented | sibling-unit | Registered; installs after postCreateCommand once per container. A failed install warns and the next run retries. Source: devContainersSpecCLI.ts:135. |
 | --dotfiles-install-command | --dotfiles-install-command | implemented | sibling-unit | Registered; runs in the clone in place of the default install-script search. Source: devContainersSpecCLI.ts:136. |
 | --dotfiles-target-path | --dotfiles-target-path | implemented | sibling-unit | Registered; default ~/dotfiles. Source: devContainersSpecCLI.ts:137. |
-| --container-session-data-folder | none | implement | data-folders | Add this upstream control to the corresponding handler. Source: devContainersSpecCLI.ts:138. |
+| --container-session-data-folder | --container-session-data-folder | implement | data-folders | Registered; probe-cache behavior depends on the user environment probe backlog work and its timeout decision. Source: devContainersSpecCLI.ts:138. |
 | --omit-config-remote-env-from-metadata [hidden] | none | implement | feature-controls | Default false, matching upstream: persist configuration remoteEnv in image metadata; enabling this option omits it. Source: devContainersSpecCLI.ts:139. |
 | --secrets-file | none | implement | environment | Optional JSON secret inputs for lifecycle command environments; do not add these inputs to image metadata. Source: devContainersSpecCLI.ts:140. |
 | --experimental-lockfile [hidden] | none | implement | lockfile | Add this upstream control to the corresponding handler. Source: devContainersSpecCLI.ts:141. |

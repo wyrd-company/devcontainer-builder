@@ -426,3 +426,30 @@ in `runArgs` is preserved in every mode. For Compose, dcb adds a
 under the same availability rules. Explicit Compose GPU reservations and `gpus`
 selection take precedence and are preserved in every mode. Detection uses the
 Engine API without a host command.
+
+## Data folders
+
+`--user-data-folder` selects the host folder for CLI state on `build`, `exec`,
+`read-configuration`, `run-user-commands`, `set-up`, and `up`. Feature staging
+and build staging use a unique private directory inside this folder. Explicit
+`--work-dir` selects the build staging location instead. Existing contents of
+these folders are preserved. Feature configuration results retain their staging
+paths; temporary metadata staging is removed after use.
+
+`--container-data-folder` selects lifecycle and dotfiles marker storage on
+`up`, `set-up`, `run-user-commands`, and `exec`. Relative paths resolve from the
+container user's home. The default is `.devcontainer` under that home.
+`exec` writes no lifecycle markers. Lifecycle hook markers retain upstream's
+write-before-hook behavior; a failed hook remains marked for that container
+creation or start. Dotfiles completion markers are written after a successful
+install.
+
+`--container-system-data-folder` is accepted on those same commands. Its
+upstream default is `/var/devcontainer`. The upstream consumers are the
+`/etc/environment` and `/etc/profile` patch markers; dcb does not write these
+markers.
+
+`--container-session-data-folder` is accepted on `up`, `set-up`, and
+`run-user-commands`, with no default. Probe caching depends on user environment
+probe support. These commands do not currently produce a probe cache or create
+the supplied session folder.

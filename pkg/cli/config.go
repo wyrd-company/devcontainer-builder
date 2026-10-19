@@ -25,6 +25,7 @@ import (
 type configOptions struct{ workspace, path, override string }
 
 func (o *configOptions) flags(cmd *cobra.Command) {
+	dataFolderFlags(cmd)
 	cmd.Flags().StringVar(&o.workspace, "workspace-folder", ".", "Local workspace folder")
 	cmd.Flags().StringVar(&o.path, "config", "", "Path to devcontainer.json (default: workspace discovery)")
 	cmd.Flags().StringVar(&o.override, "override-config", "", "Read configuration content from this file; resolve relative paths against --config")

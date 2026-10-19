@@ -21,6 +21,7 @@ import (
 
 	dockerclient "github.com/docker/docker/client"
 
+	"github.com/wyrd-company/devcontainer-builder/internal/datafolder"
 	"github.com/wyrd-company/devcontainer-builder/pkg/buildkit"
 	"github.com/wyrd-company/devcontainer-builder/pkg/dockerfile"
 	"github.com/wyrd-company/devcontainer-builder/pkg/features"
@@ -104,6 +105,8 @@ type Options struct {
 	// context) are written. When empty, a directory under os.TempDir()
 	// is used.
 	WorkDir string
+	// UserDataFolder contains private staging folders when WorkDir is unset.
+	UserDataFolder string
 	// KeepWorkDir keeps the working directory for inspection after the
 	// build. Default removes it.
 	KeepWorkDir bool
@@ -194,7 +197,7 @@ func (b *Builder) prepareBuildContext(ctx context.Context, opts Options, logf fu
 
 	workDir = opts.WorkDir
 	if workDir == "" {
-		workDir, err = os.MkdirTemp("", "devcontainer-builder-")
+		workDir, err = datafolder.NewStaging(opts.UserDataFolder, "devcontainer-builder-")
 		if err != nil {
 			return
 		}

@@ -132,3 +132,14 @@ chosen directory.
 Both default to false. `read-configuration --include-features-configuration`
 adds resolved feature metadata, values and sources as `featuresConfiguration`
 when features exist.
+
+### Data folders
+
+Use `--user-data-folder` on build, exec, read-configuration, run-user-commands,
+set-up, and up to place private feature/build staging inside a selected host
+folder. Explicit `--work-dir` overrides build staging. Existing contents stay
+intact. Use `--container-data-folder` on up, set-up, run-user-commands, and exec
+for lifecycle/dotfiles markers (default: `.devcontainer` under the container
+user's home). Exec does not write markers. System and session folder flags are
+accepted on their upstream commands; system patch markers and user environment
+probe caches have no current writer.

@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/wyrd-company/devcontainer-builder/internal/datafolder"
 	"github.com/wyrd-company/devcontainer-builder/pkg/dockerfile"
 	"github.com/wyrd-company/devcontainer-builder/pkg/features"
 	"github.com/wyrd-company/devcontainer-builder/pkg/platform"
@@ -36,7 +37,7 @@ func (b *Builder) Generate(ctx context.Context, opts Options) (*Result, error) {
 
 	workDir := opts.WorkDir
 	if workDir == "" {
-		workDir, err = os.MkdirTemp("", "devcontainer-builder-gen-")
+		workDir, err = datafolder.NewStaging(opts.UserDataFolder, "devcontainer-builder-gen-")
 		if err != nil {
 			return nil, err
 		}
