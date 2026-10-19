@@ -95,8 +95,8 @@ func (h *Host) previousObjectRecords(ctx context.Context, workspace, project str
 		return nil, err
 	}
 	var previous []*volume.Volume
-	for _, record := range records {
-		if record.Labels[LabelProject] == project && objectRootMounted(record.Labels[labelObjectRoot], containers) {
+	for _, record := range objectRecordsForProject(records, project) {
+		if objectRootMounted(record.Labels[labelObjectRoot], containers) {
 			previous = append(previous, record)
 		}
 	}
@@ -133,4 +133,15 @@ func objectRootMounted(root string, containers []container.Summary) bool {
 		}
 	}
 	return false
+}
+
+// objectRecordsForProject is shared by recreation and explicitly selected teardown.
+func objectRecordsForProject(records []*volume.Volume, project string) []*volume.Volume {
+	var owned []*volume.Volume
+	for _, record := range records {
+		if record.Labels[LabelProject] == project {
+			owned = append(owned, record)
+		}
+	}
+	return owned
 }

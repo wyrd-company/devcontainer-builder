@@ -177,19 +177,22 @@ func (h *Host) stopContainers(ctx context.Context, containers []container.Summar
 // resources are left alone. A project with another workspace's labelled
 // container is refused before any container or resource is changed.
 func (h *Host) Remove(ctx context.Context, localWorkspace string) error {
-	return h.removeWorkspace(ctx, localWorkspace, h.projectForWorkspace)
+	return h.removeWorkspace(ctx, localWorkspace, h.projectForWorkspace, "")
 }
 
 // RemoveRuntime removes only projects identified by recorded object ownership or
 // existing container labels. It never reads a workspace's default configuration.
 func (h *Host) RemoveRuntime(ctx context.Context, localWorkspace string) error {
-	return h.removeWorkspace(ctx, localWorkspace, h.runtimeProjectForWorkspace)
+	return h.removeWorkspace(ctx, localWorkspace, h.runtimeProjectForWorkspace, "")
 }
 
-func (h *Host) removeWorkspace(ctx context.Context, localWorkspace string, projectForWorkspace func(context.Context, string) (string, error)) error {
+func (h *Host) removeWorkspace(ctx context.Context, localWorkspace string, projectForWorkspace func(context.Context, string) (string, error), onlyProject string) error {
 	records, err := h.objectRecords(ctx, localWorkspace)
 	if err != nil {
 		return err
+	}
+	if onlyProject != "" {
+		records = objectRecordsForProject(records, onlyProject)
 	}
 	projects := map[string][]*volume.Volume{}
 	for _, record := range records {
@@ -232,24 +235,7 @@ func (h *Host) RemoveProject(ctx context.Context, projectName, localWorkspace st
 	if projectName == "" || localWorkspace == "" {
 		return errorf("remove selected project requires project and workspace labels")
 	}
-	containers, err := h.listProjectContainers(ctx, projectName)
-	if err != nil {
-		return err
-	}
-	if conflict := projectConflict(projectName, localWorkspace, containers); conflict != nil {
-		return conflict
-	}
-	records, err := h.objectRecords(ctx, localWorkspace)
-	if err != nil {
-		return err
-	}
-	var owned []*volume.Volume
-	for _, record := range records {
-		if record.Labels[LabelProject] == projectName {
-			owned = append(owned, record)
-		}
-	}
-	return h.removeProject(ctx, projectName, containers, owned)
+	return h.removeWorkspace(ctx, localWorkspace, func(context.Context, string) (string, error) { return projectName, nil }, projectName)
 }
 
 func (h *Host) removeProject(ctx context.Context, projectName string, containers []container.Summary, records []*volume.Volume) error {

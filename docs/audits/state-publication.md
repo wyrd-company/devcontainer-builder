@@ -39,7 +39,8 @@ are cleanup indexes, not readable completion markers.
 `Host.Remove` snapshots workspace ownership records and validates each project's
 container ownership before destructive operations. Successful container removal
 precedes backing-file deletion. File cleanup precedes ownership-record deletion.
-A failed cleanup returns an error and retains the record for retry. Other
+A failed cleanup returns an error and retains the record for retry. Project-selected
+removal filters ownership to that project through the same selector as recreation. Other
 workspaces' records and private directories remain outside that snapshot. CLI
 `down` consults this runtime ownership without falling back to the default config,
 then continues the selected configuration's removal path. Explicit ID-label
@@ -63,7 +64,7 @@ Behavioral evidence is separate from option-registration coverage:
   container-visible values, down without the creation flag, malformed and absent
   configuration, cleanup failure/retry, idempotence, and parent sentinels.
 - `TestDockerComposeObjectSelectedConfigCLI` proves default Compose config cannot
-  swallow selected non-Compose teardown, including after runtime cleanup.
+  swallow selected non-Compose or ID-label teardown, including after runtime cleanup.
 - `TestComposeObjectRecreateCleanupIntegration` proves retired-root absence,
   shared and external consumer preservation, workspace/project isolation,
   in-flight producer preservation and cleanup/consumer lookup failures.

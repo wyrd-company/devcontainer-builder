@@ -28,7 +28,7 @@ func TestComposeObjectRecreateCleanupIntegration(t *testing.T) {
 	cli := requireComposeDocker(t, ctx)
 	defer cli.Close()
 	dockertest.EnsureImage(t, ctx, cli, "alpine:3.20")
-	for _, scenario := range []string{"recreated", "reused-service", "external-directory", "external-parent", "external-file-stopped", "prefix-neighbor", "ownership", "unmounted-producer", "cleanup-error", "consumer-error"} {
+	for _, scenario := range []string{"recreated", "reused-service", "external-directory", "external-parent", "external-file-stopped", "prefix-neighbor", "ownership", "selected-project", "unmounted-producer", "cleanup-error", "consumer-error"} {
 		t.Run(scenario, func(t *testing.T) {
 			workspace := prepareComposeWorkspace(t)
 			parent := t.TempDir()
@@ -40,8 +40,11 @@ func TestComposeObjectRecreateCleanupIntegration(t *testing.T) {
 			t.Cleanup(func() { _ = h.Remove(ctx, workspace) })
 			var preserved []string
 			extraMounts := ""
-			if scenario == "ownership" || scenario == "unmounted-producer" {
+			if scenario == "ownership" || scenario == "unmounted-producer" || scenario == "selected-project" {
 				for _, owner := range []struct{ workspace, project string }{{workspace + "-other", project}, {workspace, project + "-other"}, {workspace, project}} {
+					if scenario == "selected-project" && owner.workspace == workspace && owner.project == project {
+						continue
+					}
 					root, err := h.allocateObjects(ctx, owner.project, owner.workspace)
 					if err != nil {
 						t.Fatal(err)
@@ -156,6 +159,18 @@ func TestComposeObjectRecreateCleanupIntegration(t *testing.T) {
 				}
 				if _, err := cli.ContainerInspect(ctx, first.PrimaryContainerID); err != nil {
 					t.Fatal("ownership lookup failure changed previous container")
+				}
+				return
+			}
+			if scenario == "selected-project" {
+				if err := h.RemoveProject(ctx, project, workspace); err != nil {
+					t.Fatal(err)
+				}
+				assertObjectAbsent(t, oldRoot)
+				for _, root := range preserved {
+					if data, err := os.ReadFile(filepath.Join(root, "source")); err != nil || string(data) != "retained-synthetic" {
+						t.Fatal("selected teardown removed another project's ownership")
+					}
 				}
 				return
 			}

@@ -127,6 +127,13 @@ func managementEngine(t *testing.T, labels map[string]string, conflict bool) *ma
 		case strings.HasSuffix(r.URL.Path, "/networks"), strings.HasSuffix(r.URL.Path, "/volumes"):
 			var filter map[string]map[string]bool
 			_ = json.Unmarshal([]byte(r.URL.Query().Get("filters")), &filter)
+			if strings.HasSuffix(r.URL.Path, "/volumes") {
+				ownership := map[string]map[string]bool{"label": {"devcontainer.compose.objects": true, "devcontainer.local_folder=" + labels["devcontainer.local_folder"]: true}}
+				if reflect.DeepEqual(filter, ownership) {
+					_, _ = w.Write([]byte(`{"Volumes":[]}`))
+					return
+				}
+			}
 			want := map[string]map[string]bool{"label": {"com.docker.compose.project=" + project: true}}
 			if !reflect.DeepEqual(filter, want) {
 				t.Errorf("resource selector=%v, want %v", filter, want)
