@@ -5,6 +5,7 @@ package dockercompose
 
 import (
 	"context"
+	"errors"
 	"os"
 	"strings"
 
@@ -176,6 +177,16 @@ func (h *Host) stopContainers(ctx context.Context, containers []container.Summar
 // resources are left alone. A project with another workspace's labelled
 // container is refused before any container or resource is changed.
 func (h *Host) Remove(ctx context.Context, localWorkspace string) error {
+	return h.removeWorkspace(ctx, localWorkspace, h.projectForWorkspace)
+}
+
+// RemoveRuntime removes only projects identified by recorded object ownership or
+// existing container labels. It never reads a workspace's default configuration.
+func (h *Host) RemoveRuntime(ctx context.Context, localWorkspace string) error {
+	return h.removeWorkspace(ctx, localWorkspace, h.runtimeProjectForWorkspace)
+}
+
+func (h *Host) removeWorkspace(ctx context.Context, localWorkspace string, projectForWorkspace func(context.Context, string) (string, error)) error {
 	records, err := h.objectRecords(ctx, localWorkspace)
 	if err != nil {
 		return err
@@ -184,7 +195,7 @@ func (h *Host) Remove(ctx context.Context, localWorkspace string) error {
 	for _, record := range records {
 		projects[record.Labels[LabelProject]] = append(projects[record.Labels[LabelProject]], record)
 	}
-	project, err := h.projectForWorkspace(ctx, localWorkspace)
+	project, err := projectForWorkspace(ctx, localWorkspace)
 	if err != nil && err != ErrProjectNotFound {
 		return err
 	}
@@ -304,10 +315,8 @@ func (h *Host) workspaceProjectContainers(ctx context.Context, workspace string)
 	return project, containers, nil
 }
 
-// projectForWorkspace reads the persisted Compose identity from the primary's
-// workspace label before consulting current configuration. Teardown still works
-// when the config is removed or its name/environment has changed since Up.
-func (h *Host) projectForWorkspace(ctx context.Context, workspace string) (string, error) {
+// runtimeProjectForWorkspace reads only persisted container labels.
+func (h *Host) runtimeProjectForWorkspace(ctx context.Context, workspace string) (string, error) {
 	args := filters.NewArgs(
 		filters.Arg("label", LabelLocalFolder+"="+workspace),
 		filters.Arg("label", LabelProject),
@@ -320,6 +329,14 @@ func (h *Host) projectForWorkspace(ctx context.Context, workspace string) (strin
 		if name := c.Labels[LabelProject]; name != "" {
 			return name, nil
 		}
+	}
+	return "", ErrProjectNotFound
+}
+
+func (h *Host) projectForWorkspace(ctx context.Context, workspace string) (string, error) {
+	project, err := h.runtimeProjectForWorkspace(ctx, workspace)
+	if err == nil || !errors.Is(err, ErrProjectNotFound) {
+		return project, err
 	}
 	// A partial project can have only sidecars or resources left. Without a
 	// labelled container, only a readable Compose config can identify it.

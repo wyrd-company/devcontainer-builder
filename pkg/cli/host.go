@@ -281,7 +281,8 @@ func (a *application) manageCommand(inspect bool) *cobra.Command {
 		}
 		// Runtime ownership must be consulted before mutable configuration. This
 		// also retries object cleanup after all containers have already disappeared.
-		if !inspect {
+		runtimeRemoved := false
+		if !inspect && len(a.idLabels) == 0 {
 			workspace, err := filepath.Abs(cfg.workspace)
 			if err != nil {
 				return err
@@ -291,13 +292,17 @@ func (a *application) manageCommand(inspect bool) *cobra.Command {
 				return err
 			}
 			defer cli.Close()
-			err = a.composeHost(cli).Remove(cmd.Context(), workspace)
-			if !errors.Is(err, dockercompose.ErrProjectNotFound) {
+			err = a.composeHost(cli).RemoveRuntime(cmd.Context(), workspace)
+			if err != nil && !errors.Is(err, dockercompose.ErrProjectNotFound) {
 				return err
 			}
+			runtimeRemoved = err == nil
 		}
 		dc, workspace, err := load()
 		if err != nil {
+			if runtimeRemoved {
+				return nil // recorded state was removed despite unavailable configuration
+			}
 			return err
 		}
 		cli, err := newDockerClient()
