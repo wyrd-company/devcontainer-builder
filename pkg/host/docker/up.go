@@ -16,6 +16,7 @@ import (
 	"github.com/wyrd-company/devcontainer-builder/pkg/metadata"
 	"github.com/wyrd-company/devcontainer-builder/pkg/spec"
 	"github.com/wyrd-company/devcontainer-builder/pkg/substitute"
+	"github.com/wyrd-company/devcontainer-builder/pkg/workspace"
 )
 
 // UpRequest captures everything Up needs. The caller is responsible
@@ -41,7 +42,8 @@ type UpRequest struct {
 	LocalWorkspace string
 	// ContainerWorkspace is the path inside the container where the
 	// workspace is mounted. When empty, falls back to spec
-	// workspaceFolder, then "/workspaces/<basename>".
+	// workspaceFolder, then "/workspaces/<basename>". Without a spec
+	// workspaceFolder, a reused container's bind mounts take precedence.
 	ContainerWorkspace string
 	// Image is the image reference to run (use pkg/builder to produce
 	// one). Up pulls it when the daemon does not have it.
@@ -137,6 +139,28 @@ func (h *Host) Up(ctx context.Context, req UpRequest) (*UpResult, error) {
 	}
 	containerWorkspace = ensurePosixPath(containerWorkspace)
 
+	// 1. Discover. A reused container keeps the workspace placement it was
+	// created with; without a spec workspaceFolder, read it from its mounts.
+	var id string
+	var err error
+	if len(req.IDLabels) > 0 {
+		id, err = h.findLabeled(ctx, req.IDLabels)
+	} else {
+		id, err = h.findExisting(ctx, req.LocalWorkspace)
+	}
+	if err != nil {
+		return nil, err
+	}
+	if id != "" && req.Spec.WorkspaceFolder == "" {
+		existing, err := h.client.ContainerInspect(ctx, id)
+		if err != nil {
+			return nil, errorf("inspect: %w", err)
+		}
+		if folder := workspace.MountedFolder(req.LocalWorkspace, bindMounts(existing.Mounts)); folder != "" {
+			containerWorkspace = folder
+		}
+	}
+
 	idLabels := req.IDLabels
 	if len(idLabels) == 0 {
 		idLabels = map[string]string{LabelLocalFolder: req.LocalWorkspace}
@@ -154,17 +178,7 @@ func (h *Host) Up(ctx context.Context, req UpRequest) (*UpResult, error) {
 	dc := substituteSpec(req.Spec, subCtx)
 	var entries []metadata.Entry
 
-	// 1. Discover or create.
-	var id string
-	var err error
-	if len(req.IDLabels) > 0 {
-		id, err = h.findLabeled(ctx, req.IDLabels)
-	} else {
-		id, err = h.findExisting(ctx, req.LocalWorkspace)
-	}
-	if err != nil {
-		return nil, err
-	}
+	// Create when none exists.
 	res := &UpResult{}
 	if id == "" {
 		if err := h.ensureImage(ctx, req.Image); err != nil {
@@ -355,6 +369,17 @@ func applyRequestIdentity(cfg *container.Config, host *container.HostConfig, dc 
 		host.Mounts[0] = *req.WorkspaceMount
 	}
 	host.Mounts = append(host.Mounts, req.Mounts...)
+}
+
+// bindMounts lists a container's bind mounts for workspace.MountedFolder.
+func bindMounts(points []container.MountPoint) []workspace.Bind {
+	var out []workspace.Bind
+	for _, m := range points {
+		if m.Type == mount.TypeBind {
+			out = append(out, workspace.Bind{Source: m.Source, Destination: m.Destination})
+		}
+	}
+	return out
 }
 
 // substituteContainerEnv resolves ${containerEnv:VAR} inside a few
