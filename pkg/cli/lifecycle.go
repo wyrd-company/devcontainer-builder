@@ -48,6 +48,7 @@ func (a *application) lifecycleCommand(name string) *cobra.Command {
 	var dotfiles dotfilesOptions
 	var configuration configurationOptions
 	var environment environmentOptions
+	var mounts mountOptions
 	short := "Run lifecycle commands in an existing devcontainer"
 	if name == "set-up" {
 		short = "Set up an existing container with devcontainer lifecycle commands"
@@ -59,6 +60,8 @@ func (a *application) lifecycleCommand(name string) *cobra.Command {
 	dotfiles.flags(cmd)
 	if name == "set-up" {
 		configuration.flags(cmd)
+	} else {
+		mounts.flags(cmd)
 	}
 	environment.flags(cmd, name == "run-user-commands")
 	cmd.Flags().StringVar(&id, "container-id", "", "Target an existing container by ID")
@@ -73,8 +76,18 @@ func (a *application) lifecycleCommand(name string) *cobra.Command {
 		if err != nil {
 			return err
 		}
-		dc, workspace, err := cfg.load()
+		if err := mounts.prepare(a); err != nil {
+			return err
+		}
+		load := cfg.load
+		if a.selectsByLabels(cmd) {
+			load = a.labelSelectedConfig
+		}
+		dc, workspace, err := load()
 		if err != nil {
+			return err
+		}
+		if err := a.placeWorkspace(dc, workspace); err != nil {
 			return err
 		}
 		cli, err := newDockerClient()
@@ -125,7 +138,12 @@ func (a *application) lifecycleCommand(name string) *cobra.Command {
 		for i := range plan {
 			plan[i].Command = resolveCommand(plan[i].Command, sub, env)
 		}
-		rt := runner.Runtime{User: dc.RemoteUser, Workdir: a.containerWorkspace(dc, workspace), Env: runner.LifecycleEnv(remoteEnv, resolveRemoteEnv(dc.UpdateRemoteEnv, sub, env), secrets), CreatedAt: info.Created, StartedAt: info.State.StartedAt, UserDataFolder: lifecycle.UserDataFolder(home, folderOption(cmd, "container-data-folder")), Dotfiles: dotfiles.forRun(skip)}
+		workdir := a.containerWorkspace(dc, workspace)
+		if workdir == "" {
+			// No workspace folder: the user's home folder, as upstream.
+			workdir = home
+		}
+		rt := runner.Runtime{User: dc.RemoteUser, Workdir: workdir, Env: runner.LifecycleEnv(remoteEnv, resolveRemoteEnv(dc.UpdateRemoteEnv, sub, env), secrets), CreatedAt: info.Created, StartedAt: info.State.StartedAt, UserDataFolder: lifecycle.UserDataFolder(home, folderOption(cmd, "container-data-folder")), Dotfiles: dotfiles.forRun(skip)}
 		rt.Lifecycle = controls.LifecycleControls
 		rt.Lifecycle.WaitFor = dc.WaitFor
 		result, err := runner.RunWithResult(cmd.Context(), execer, plan, rt, runner.Options{TerminalSize: a.terminalSize, Logger: a.logf, Stdout: a.logs, Stderr: a.logs})

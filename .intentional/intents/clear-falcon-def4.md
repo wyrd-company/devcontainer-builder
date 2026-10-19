@@ -17,3 +17,5 @@ Data-folder options select host feature/build staging and container lifecycle/do
 Paired terminal dimension flags size lifecycle and exec pseudo-terminals in single-container and Compose mode.
 
 Lifecycle commands take a remote environment and a secrets file; dcb masks secret values in its output and does not store them.
+
+Workspace mounts follow upstream: the workspace's Git root is mounted by default, a linked worktree's common Git folder can be mounted, additional bind and volume mounts can be added, and id labels select the container.

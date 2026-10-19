@@ -37,11 +37,17 @@ func (o *lifecycleOptions) flags(cmd *cobra.Command) {
 
 // requireExisting precedes builds and removal, matching upstream's existence
 // check even when --remove-existing-container asks to replace the container.
-func (o lifecycleOptions) requireExisting(ctx context.Context, cli *dockerclient.Client, dc *spec.DevContainer, workspace string) error {
+func (o lifecycleOptions) requireExisting(ctx context.Context, cli *dockerclient.Client, dc *spec.DevContainer, workspace string, idLabels map[string]string) error {
 	if !o.expectExisting {
 		return nil
 	}
-	if dc.Mode() == spec.ModeCompose {
+	if len(idLabels) > 0 && dc.Mode() != spec.ModeCompose {
+		// Upstream looks the container up by its id labels.
+		_, err := hostdocker.New(cli, hostdocker.Options{}).FindByLabels(ctx, idLabels)
+		if !errors.Is(err, hostdocker.ErrContainerNotFound) {
+			return err
+		}
+	} else if dc.Mode() == spec.ModeCompose {
 		proj, err := dockercompose.LoadProject(ctx, dockercompose.LoadInputs{Spec: dc, Workspace: workspace, LocalEnv: envMap()})
 		if err != nil {
 			return err

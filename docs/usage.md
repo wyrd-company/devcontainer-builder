@@ -69,7 +69,8 @@ Commands that read a configuration take these flags:
 `dcb` identifies the container of a workspace by its labels, so `exec`,
 `down`, `inspect`, and `run-user-commands` find the container that `up`
 created. `exec`, `run-user-commands`, `set-up`, and `read-configuration` also
-take `--container-id` to select a container directly.
+take `--container-id` to select a container directly. `--id-label` selects by
+other labels; see [Id labels](#id-labels).
 
 ## Results
 
@@ -526,3 +527,50 @@ dcb read-configuration --workspace-folder . \
 dcb exec --workspace-folder . --tty \
   --terminal-columns 100 --terminal-rows 40 -- sh
 ```
+
+## Workspace mounts and container selection
+
+`dcb up` bind-mounts the workspace into a single container. These flags change
+the mount, add mounts, and select the container. Compose configurations mount
+what their Compose files declare; `--mount` and `--id-label` also apply to the
+primary Compose service.
+
+| Flag | Commands | Default | Meaning |
+| --- | --- | --- | --- |
+| `--mount-workspace-git-root` | `up`, `exec`, `read-configuration`, `run-user-commands` | `true` | Mount the top folder of the workspace's Git working tree at `/workspaces/<name>`. The workspace folder is its subfolder there, for example `/workspaces/repository/app`. Outside a Git working tree, the workspace folder is mounted. `--mount-workspace-git-root=false` mounts only the workspace folder. |
+| `--mount-git-worktree-common-dir` | `up`, `exec`, `read-configuration`, `run-user-commands` | `false` | For a linked worktree added with `git worktree add --relative-paths`, also mount the repository's common Git folder, so Git works in the container. Applies only with Git-root mounting. |
+| `--workspace-mount-consistency` | `up` | `cached` | `consistent`, `cached`, or `delegated`. On macOS and Windows hosts the workspace mount gets this consistency; Linux hosts ignore it, as upstream does. |
+| `--mount` | `up` | none | An additional mount, `type=<bind\|volume>,source=<source>,target=<target>[,external=<true\|false>]`. Repeat the flag for more mounts. `external=true` marks a Compose named volume as external. |
+| `--id-label` | `up`, `exec`, `read-configuration`, `run-user-commands` | none | A `name=value` label. Repeat the flag for more labels. |
+
+The Git root is found from the files in the workspace's parent folders; `dcb`
+does not run `git`. Like upstream, `exec`, `read-configuration`, and
+`run-user-commands` use the same flags to calculate the workspace folder of an
+existing container. Give them the values that `up` used. `read-configuration`
+returns the folder and mounts in its `workspace` object. A configuration that
+sets `workspaceFolder` keeps it; one that sets `workspaceMount` keeps its mount.
+
+`dcb` mounts no host path that is not in the configuration or in a flag.
+`--mount-workspace-git-root` exposes the Git root, which can hold more than the
+workspace folder; use `--mount-workspace-git-root=false` to keep the mount to
+the workspace folder.
+
+### Id labels
+
+`--id-label` labels select the container in place of the workspace labels
+`devcontainer.local_folder` and `devcontainer.config_file`. They also derive
+`${devcontainerId}`. A container qualifies only if it carries every given label.
+
+- `up` reuses a container with every label, or creates one with exactly these
+  labels and no workspace labels. `down` and `inspect` select by workspace, so
+  they do not find it.
+- `up --remove-existing-container` removes only a container that has every
+  label. A container that has only some of the labels is not removed.
+- `exec`, `read-configuration`, and `run-user-commands` select the container
+  with every label. When `--workspace-folder`, `--config`, and
+  `--override-config` are all absent, they read no configuration, as upstream
+  does. The configuration in the current directory is not used.
+
+For a Compose configuration, the id labels are added to the primary container
+beside the workspace labels. The project-conflict check and workspace-scoped
+removal therefore still apply.

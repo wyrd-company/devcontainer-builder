@@ -19,11 +19,13 @@ import (
 
 func (a *application) execCommand() *cobra.Command {
 	var cfg configOptions
+	var mounts mountOptions
 	var id, user, workdir string
 	var remoteEnv []string
 	var tty bool
 	cmd := &cobra.Command{Use: "exec [flags] -- <command> [args...]", Short: "Run a command in the devcontainer; pass through its stdout and stderr", Args: cobra.MinimumNArgs(1)}
 	cfg.flags(cmd)
+	mounts.flags(cmd)
 	cmd.Flags().BoolVar(&tty, "tty", false, "Allocate a pseudo-terminal for the container command")
 	cmd.Flags().StringVar(&id, "container-id", "", "Target an existing container by ID")
 	cmd.Flags().StringVar(&user, "user", "", "Exec user (default: remoteUser or container user)")
@@ -37,8 +39,18 @@ func (a *application) execCommand() *cobra.Command {
 		if err != nil {
 			return err
 		}
-		dc, workspace, err := cfg.optionalLoad()
+		if err := mounts.prepare(a); err != nil {
+			return err
+		}
+		load := cfg.optionalLoad
+		if a.selectsByLabels(cmd) {
+			load = a.labelSelectedConfig
+		}
+		dc, workspace, err := load()
 		if err != nil {
+			return err
+		}
+		if err := a.placeWorkspace(dc, workspace); err != nil {
 			return err
 		}
 		cli, err := newDockerClient()
@@ -76,6 +88,13 @@ func (a *application) execCommand() *cobra.Command {
 		wd := workdir
 		if wd == "" {
 			wd = a.remoteWorkspaceFolder(dc, workspace, info)
+		}
+		if wd == "" {
+			// No workspace folder: the user's home folder, as upstream.
+			wd, err = runner.DetectHome(cmd.Context(), a.execer(cli, dc, containerID), user)
+			if err != nil {
+				return fmt.Errorf("detect home: %w", err)
+			}
 		}
 		a.execStarted = true
 		res, err := a.execute(cmd.Context(), cli, dc, hostdocker.ExecRequest{ContainerID: containerID, TTY: tty, TerminalSize: a.terminalSize, Cmd: args, User: user, WorkDir: wd, Env: execEnv, Stdin: a.stdin, Stdout: a.stdout, Stderr: a.stderr})

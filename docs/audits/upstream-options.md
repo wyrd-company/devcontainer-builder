@@ -25,13 +25,13 @@ including inherited help/version on each command. It records short aliases but
 scores each canonical long option once. It never subtracts omissions. Registration
 coverage is distinct from behavior parity and does not use these dispositions.
 The pinned `up` table has **44 explicit options**, plus inherited help/version.
-Registered option coverage is **118/253 (46.64%)**;
+Registered option coverage is **137/253 (54.15%)**;
 registration includes the three session-folder pairs awaiting probe-cache behavior.
 
 ## Dispositions
 
-- implemented: **120**.
-- implement: **117**.
+- implemented: **134**.
+- implement: **103**.
 - not applicable by design: **15**.
 - needs Bob's decision: **1**.
 
@@ -156,10 +156,10 @@ features, dotfiles, environment probing and version support.
 | --container-data-folder | --container-data-folder | implemented | data-folders | Lifecycle and dotfiles markers honor this folder; exec writes no markers. Source: devContainersSpecCLI.ts:1220. |
 | --container-system-data-folder | --container-system-data-folder | implemented | data-folders | Accepted with upstream default /var/devcontainer; dcb has no system patch marker writer. Source: devContainersSpecCLI.ts:1221. |
 | --workspace-folder | --workspace-folder | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: devContainersSpecCLI.ts:1222. |
-| --mount-workspace-git-root | none | implement | mounts | Default true, matching upstream; mount the workspace Git root unless disabled. Source: devContainersSpecCLI.ts:1223. |
-| --mount-git-worktree-common-dir | none | implement | mounts | Default false, matching upstream; mount the Git worktree common directory only when enabled. Source: devContainersSpecCLI.ts:1224. |
+| --mount-workspace-git-root | --mount-workspace-git-root | implemented | mounts | Default true, matching upstream; mounts the Git root found from the file system (no git subprocess); =false mounts the workspace folder alone. Source: devContainersSpecCLI.ts:1223. |
+| --mount-git-worktree-common-dir | --mount-git-worktree-common-dir | implemented | mounts | Default false, matching upstream; mounts a relative-path worktree's common Git folder only when enabled. Source: devContainersSpecCLI.ts:1224. |
 | --container-id | --container-id | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: devContainersSpecCLI.ts:1225. |
-| --id-label | none | implement | mounts | Add this upstream control to the corresponding handler. Source: devContainersSpecCLI.ts:1226. |
+| --id-label | --id-label | implemented | mounts | Selects by the full label set; single-container up sets only these labels; Compose keeps ownership labels beside them so the project-conflict check and workspace-scoped removal apply. Source: devContainersSpecCLI.ts:1226. |
 | --config | --config | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: devContainersSpecCLI.ts:1227. |
 | --override-config | --override-config | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: devContainersSpecCLI.ts:1228. |
 | --log-level | --log-level | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: devContainersSpecCLI.ts:1229. |
@@ -273,10 +273,10 @@ features, dotfiles, environment probing and version support.
 | --docker-path | none | not applicable by design | native-api | Approved native API requirement: runtime integrations use Engine/Compose APIs; executable path selection does not apply. Source: devContainersSpecCLI.ts:961. |
 | --docker-compose-path | none | not applicable by design | native-api | Approved native API requirement: runtime integrations use Engine/Compose APIs; executable path selection does not apply. Source: devContainersSpecCLI.ts:962. |
 | --workspace-folder | --workspace-folder | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: devContainersSpecCLI.ts:963. |
-| --mount-workspace-git-root | none | implement | mounts | Default true, matching upstream; mount the workspace Git root unless disabled. Source: devContainersSpecCLI.ts:964. |
-| --mount-git-worktree-common-dir | none | implement | mounts | Default false, matching upstream; mount the Git worktree common directory only when enabled. Source: devContainersSpecCLI.ts:965. |
+| --mount-workspace-git-root | --mount-workspace-git-root | implemented | mounts | Default true, matching upstream; mounts the Git root found from the file system (no git subprocess); =false mounts the workspace folder alone. Source: devContainersSpecCLI.ts:964. |
+| --mount-git-worktree-common-dir | --mount-git-worktree-common-dir | implemented | mounts | Default false, matching upstream; mounts a relative-path worktree's common Git folder only when enabled. Source: devContainersSpecCLI.ts:965. |
 | --container-id | --container-id | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: devContainersSpecCLI.ts:966. |
-| --id-label | none | implement | mounts | Add this upstream control to the corresponding handler. Source: devContainersSpecCLI.ts:967. |
+| --id-label | --id-label | implemented | mounts | Selects by the full label set; single-container up sets only these labels; Compose keeps ownership labels beside them so the project-conflict check and workspace-scoped removal apply. Source: devContainersSpecCLI.ts:967. |
 | --config | --config | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: devContainersSpecCLI.ts:968. |
 | --override-config | --override-config | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: devContainersSpecCLI.ts:969. |
 | --log-level | --log-level | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: devContainersSpecCLI.ts:970. |
@@ -300,10 +300,10 @@ features, dotfiles, environment probing and version support.
 | --container-data-folder | --container-data-folder | implemented | data-folders | Lifecycle and dotfiles markers honor this folder; exec writes no markers. Source: devContainersSpecCLI.ts:756. |
 | --container-system-data-folder | --container-system-data-folder | implemented | data-folders | Accepted with upstream default /var/devcontainer; dcb has no system patch marker writer. Source: devContainersSpecCLI.ts:757. |
 | --workspace-folder | --workspace-folder | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: devContainersSpecCLI.ts:758. |
-| --mount-workspace-git-root | none | implement | mounts | Default true, matching upstream; mount the workspace Git root unless disabled. Source: devContainersSpecCLI.ts:759. |
-| --mount-git-worktree-common-dir | none | implement | mounts | Default false, matching upstream; mount the Git worktree common directory only when enabled. Source: devContainersSpecCLI.ts:760. |
+| --mount-workspace-git-root | --mount-workspace-git-root | implemented | mounts | Default true, matching upstream; mounts the Git root found from the file system (no git subprocess); =false mounts the workspace folder alone. Source: devContainersSpecCLI.ts:759. |
+| --mount-git-worktree-common-dir | --mount-git-worktree-common-dir | implemented | mounts | Default false, matching upstream; mounts a relative-path worktree's common Git folder only when enabled. Source: devContainersSpecCLI.ts:760. |
 | --container-id | --container-id | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: devContainersSpecCLI.ts:761. |
-| --id-label | none | implement | mounts | Add this upstream control to the corresponding handler. Source: devContainersSpecCLI.ts:762. |
+| --id-label | --id-label | implemented | mounts | Selects by the full label set; single-container up sets only these labels; Compose keeps ownership labels beside them so the project-conflict check and workspace-scoped removal apply. Source: devContainersSpecCLI.ts:762. |
 | --config | --config | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: devContainersSpecCLI.ts:763. |
 | --override-config | --override-config | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: devContainersSpecCLI.ts:764. |
 | --log-level | --log-level | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: devContainersSpecCLI.ts:765. |
@@ -411,11 +411,11 @@ features, dotfiles, environment probing and version support.
 | --container-data-folder | --container-data-folder | implemented | data-folders | Lifecycle and dotfiles markers honor this folder; exec writes no markers. Source: devContainersSpecCLI.ts:104. |
 | --container-system-data-folder | --container-system-data-folder | implemented | data-folders | Accepted with upstream default /var/devcontainer; dcb has no system patch marker writer. Source: devContainersSpecCLI.ts:105. |
 | --workspace-folder | --workspace-folder | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: devContainersSpecCLI.ts:106. |
-| --workspace-mount-consistency | none | implement | mounts | Add this upstream control to the corresponding handler. Source: devContainersSpecCLI.ts:107. |
+| --workspace-mount-consistency | --workspace-mount-consistency | implemented | mounts | Default cached; applied to the workspace mount on hosts other than Linux, as upstream. Source: devContainersSpecCLI.ts:107. |
 | --gpu-availability | --gpu-availability | implemented | gpu | Default detect, matching upstream; all/detect/none use Engine runtime detection and device requests, including Compose GPU reservations; explicit GPU selection is preserved. Source: devContainersSpecCLI.ts:108. |
-| --mount-workspace-git-root | none | implement | mounts | Default true, matching upstream; mount the workspace Git root unless disabled. Source: devContainersSpecCLI.ts:109. |
-| --mount-git-worktree-common-dir | none | implement | mounts | Default false, matching upstream; mount the Git worktree common directory only when enabled. Source: devContainersSpecCLI.ts:110. |
-| --id-label | none | implement | mounts | Add this upstream control to the corresponding handler. Source: devContainersSpecCLI.ts:111. |
+| --mount-workspace-git-root | --mount-workspace-git-root | implemented | mounts | Default true, matching upstream; mounts the Git root found from the file system (no git subprocess); =false mounts the workspace folder alone. Source: devContainersSpecCLI.ts:109. |
+| --mount-git-worktree-common-dir | --mount-git-worktree-common-dir | implemented | mounts | Default false, matching upstream; mounts a relative-path worktree's common Git folder only when enabled. Source: devContainersSpecCLI.ts:110. |
+| --id-label | --id-label | implemented | mounts | Selects by the full label set; single-container up sets only these labels; Compose keeps ownership labels beside them so the project-conflict check and workspace-scoped removal apply. Source: devContainersSpecCLI.ts:111. |
 | --config | --config | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: devContainersSpecCLI.ts:112. |
 | --override-config | --override-config | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: devContainersSpecCLI.ts:113. |
 | --log-level | --log-level | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: devContainersSpecCLI.ts:114. |
@@ -431,7 +431,7 @@ features, dotfiles, environment probing and version support.
 | --skip-non-blocking-commands | --skip-non-blocking-commands | implemented | covered | Stops after merged waitFor (default updateContentCommand), without background continuation. Docker and Compose behavior tests. Source: devContainersSpecCLI.ts:124. |
 | --prebuild | --prebuild | implemented | covered | Stops after updateContentCommand and reruns that hook with a current marker. Docker and Compose behavior tests. Source: devContainersSpecCLI.ts:125. |
 | --user-data-folder | --user-data-folder | implemented | data-folders | Private host feature/build staging honors this folder; existing contents are preserved. Source: devContainersSpecCLI.ts:126. |
-| --mount | none | implement | mounts | Add bind/volume mounts through the Engine API; no additional CLI mounts are supplied by default. Source: devContainersSpecCLI.ts:127. |
+| --mount | --mount | implemented | mounts | Bind/volume mounts through the Engine API and Compose; no additional mounts unless given. Source: devContainersSpecCLI.ts:127. |
 | --remote-env | --remote-env | implemented | environment | Registered; adds variables to lifecycle commands and the dotfiles install, below configuration remoteEnv, as upstream. Not stored. Source: devContainersSpecCLI.ts:128. |
 | --cache-from | --cache-from | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: devContainersSpecCLI.ts:129. |
 | --cache-to | --cache-to | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: devContainersSpecCLI.ts:130. |

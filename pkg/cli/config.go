@@ -85,10 +85,12 @@ func (o configOptions) optionalLoad() (*spec.DevContainer, string, error) {
 
 func (a *application) readCommand() *cobra.Command {
 	var cfg configOptions
+	var mounts mountOptions
 	var includeMerged, includeFeatures bool
 	var containerID, additionalFeatures string
 	cmd := &cobra.Command{Use: "read-configuration", Short: "Read and substitute devcontainer configuration", Args: cobra.NoArgs}
 	cfg.flags(cmd)
+	mounts.flags(cmd)
 	cmd.Flags().BoolVar(&includeFeatures, "include-features-configuration", false, "Include resolved features configuration")
 	cmd.Flags().BoolVar(&includeMerged, "include-merged-configuration", false, "Include configuration merged with image and feature metadata")
 	cmd.Flags().StringVar(&containerID, "container-id", "", "Container metadata source for merged configuration")
@@ -101,8 +103,18 @@ func (a *application) readCommand() *cobra.Command {
 		if err != nil {
 			return err
 		}
-		dc, workspace, err := cfg.load()
+		if err := mounts.prepare(a); err != nil {
+			return err
+		}
+		load := cfg.load
+		if a.selectsByLabels(cmd) {
+			load = a.labelSelectedConfig
+		}
+		dc, workspace, err := load()
 		if err != nil {
+			return err
+		}
+		if err := a.placeWorkspace(dc, workspace); err != nil {
 			return err
 		}
 		configuration, err := a.readConfiguration(dc, workspace)
@@ -130,7 +142,9 @@ func (a *application) readCommand() *cobra.Command {
 			a.result["mergedConfiguration"] = merged
 		}
 		a.result["configuration"] = configuration
-		a.result["workspace"] = map[string]string{"workspaceFolder": a.containerWorkspace(dc, workspace)}
+		if dc.Path != "" {
+			a.result["workspace"] = a.workspaceResult(dc, workspace)
+		}
 		return nil
 	}
 	return cmd
@@ -145,7 +159,9 @@ func (a *application) readConfiguration(dc *spec.DevContainer, workspace string)
 	}
 	ctx := a.substitutionContext(dc, workspace, nil)
 	result := substituteValues(raw, ctx).(map[string]any)
-	result["configFilePath"] = dc.Path
+	if dc.Path != "" {
+		result["configFilePath"] = dc.Path
+	}
 	return result, nil
 }
 
@@ -174,6 +190,9 @@ func substituteValues(value any, ctx substitute.Context) any {
 // configuration it follows upstream and never reads the container's working
 // directory. Without a configuration, the workspace bind mount is the record.
 func (a *application) remoteWorkspaceFolder(dc *spec.DevContainer, workspace string, info container.InspectResponse) string {
+	if a.noWorkspace {
+		return a.containerWorkspace(dc, workspace)
+	}
 	if dc.WorkspaceFolder != "" || dc.Path != "" || info.Config == nil {
 		return a.containerWorkspace(dc, workspace)
 	}
@@ -192,9 +211,15 @@ func (a *application) remoteWorkspaceFolder(dc *spec.DevContainer, workspace str
 
 func (a *application) containerWorkspace(dc *spec.DevContainer, workspace string) string {
 	folder := dc.WorkspaceFolder
+	if folder == "" && a.noWorkspace {
+		return ""
+	}
 	if folder == "" && dc.Mode() == spec.ModeCompose {
 		// As upstream getRemoteWorkspaceFolder for Compose configurations.
 		folder = "/"
+	} else if folder == "" && a.placement != nil && a.placement.WorkspaceFolder != "" {
+		// The placement accounts for a mounted Git root (options_mounts.go).
+		folder = a.placement.WorkspaceFolder
 	} else if folder == "" {
 		folder = "/workspaces/" + filepath.Base(workspace)
 	}
@@ -202,6 +227,12 @@ func (a *application) containerWorkspace(dc *spec.DevContainer, workspace string
 }
 
 func (a *application) substitutionContext(dc *spec.DevContainer, workspace string, labels map[string]string) substitute.Context {
+	sub := substitute.Context{LocalWorkspaceFolder: workspace, ContainerWorkspaceFolder: a.containerWorkspace(dc, workspace), LocalEnv: envMap()}
+	if len(a.idLabels) > 0 {
+		// --id-label replaces the workspace labels as the identity, as upstream.
+		sub.IDLabels = a.idLabels
+		return sub
+	}
 	// Only discovery labels participate in the devcontainer identity. Runtime
 	// labels, including metadata and Compose state, must not change that identity.
 	idLabels := map[string]string{"devcontainer.local_folder": workspace}
@@ -213,7 +244,8 @@ func (a *application) substitutionContext(dc *spec.DevContainer, workspace strin
 			idLabels[key] = value
 		}
 	}
-	return substitute.Context{LocalWorkspaceFolder: workspace, ContainerWorkspaceFolder: a.containerWorkspace(dc, workspace), LocalEnv: envMap(), IDLabels: idLabels}
+	sub.IDLabels = idLabels
+	return sub
 }
 
 func envMap() map[string]string {

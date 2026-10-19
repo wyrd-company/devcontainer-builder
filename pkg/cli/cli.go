@@ -20,6 +20,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/wyrd-company/devcontainer-builder/pkg/host/dockercompose"
+	"github.com/wyrd-company/devcontainer-builder/pkg/workspace"
 )
 
 type application struct {
@@ -39,6 +40,13 @@ type application struct {
 	mask                   *secretMask
 	secretValues           map[string]string
 	secretFiles            map[string]secretsFileRead
+	// Workspace placement and container selection (options_mounts.go).
+	mounts    *mountOptions
+	idLabels  map[string]string
+	placement *workspace.Configuration
+	// noWorkspace marks a label-only selection: there is no workspace folder,
+	// and commands run in the remote user's home folder, as upstream.
+	noWorkspace bool
 }
 
 type exitError struct {

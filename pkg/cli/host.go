@@ -42,9 +42,11 @@ func (a *application) upCommand() *cobra.Command {
 	var dotfiles dotfilesOptions
 	var configuration configurationOptions
 	var environment environmentOptions
+	var mounts mountOptions
 	var remove, allowProjectConflict bool
 	cmd := &cobra.Command{Use: "up", Short: "Build, create, start, and run lifecycle commands", Args: cobra.NoArgs}
 	opts.flags(cmd, false)
+	mounts.flags(cmd)
 	skip.flags(cmd)
 	controls.flags(cmd)
 	gpuAvailabilityFlag(cmd)
@@ -60,12 +62,18 @@ func (a *application) upCommand() *cobra.Command {
 		if err != nil {
 			return err
 		}
+		if err := mounts.prepare(a); err != nil {
+			return err
+		}
 		gpu, err := resolveGPUAvailability(cmd)
 		if err != nil {
 			return err
 		}
 		dc, workspace, err := opts.cfg.load()
 		if err != nil {
+			return err
+		}
+		if err := a.placeWorkspace(dc, workspace); err != nil {
 			return err
 		}
 		uid, err := resolveUIDUpdate(cmd, runtime.GOOS)
@@ -83,7 +91,7 @@ func (a *application) upCommand() *cobra.Command {
 			return err
 		}
 		defer cli.Close()
-		if err := controls.requireExisting(cmd.Context(), cli, dc, workspace); err != nil {
+		if err := controls.requireExisting(cmd.Context(), cli, dc, workspace, a.idLabels); err != nil {
 			return err
 		}
 		bo.Docker = cli
@@ -120,6 +128,8 @@ func (a *application) upCommand() *cobra.Command {
 			req.Dotfiles = dotfiles.Dotfiles
 			req.Lifecycle = controls.LifecycleControls
 			req.RemoteEnv, req.Secrets = remoteEnv, secrets
+			req.Mounts = a.composeMounts()
+			req.IDLabels = a.idLabels
 			host := dockercompose.New(cli, dockercompose.Options{TerminalSize: a.terminalSize, Logger: a.logf, Stdout: a.logs, Stderr: a.logs, NoRecreate: controls.expectExisting})
 			res, err := host.Up(cmd.Context(), req)
 			if err != nil {
@@ -128,7 +138,12 @@ func (a *application) upCommand() *cobra.Command {
 			id = res.PrimaryContainerID
 			a.result["composeProjectName"] = res.ProjectName
 		} else {
-			res, err := a.dockerHost(cli).Up(cmd.Context(), hostdocker.UpRequest{Spec: dc, SpecPath: dc.Path, LocalWorkspace: workspace, Image: image, ImageBuilt: built != nil, SkipLifecycle: skip.postCreate, SkipPostAttach: skip.postAttach, Features: resolved, LocalEnv: envMap(), RemoteUserUIDUpdate: uid, GPUAvailability: gpu, ContainerDataFolder: folderOption(cmd, "container-data-folder"), Dotfiles: dotfiles.Dotfiles, Lifecycle: controls.LifecycleControls, RemoteEnv: remoteEnv, Secrets: secrets})
+			req := hostdocker.UpRequest{Spec: dc, SpecPath: dc.Path, LocalWorkspace: workspace, Image: image, ImageBuilt: built != nil, SkipLifecycle: skip.postCreate, SkipPostAttach: skip.postAttach, Features: resolved, LocalEnv: envMap(), RemoteUserUIDUpdate: uid, GPUAvailability: gpu, ContainerDataFolder: folderOption(cmd, "container-data-folder"), Dotfiles: dotfiles.Dotfiles, Lifecycle: controls.LifecycleControls, RemoteEnv: remoteEnv, Secrets: secrets, IDLabels: a.idLabels}
+			if a.placement != nil {
+				req.ContainerWorkspace = a.placement.WorkspaceFolder
+			}
+			req.WorkspaceMount, req.Mounts = a.dockerMounts()
+			res, err := a.dockerHost(cli).Up(cmd.Context(), req)
 			if err != nil {
 				return err
 			}
@@ -206,6 +221,9 @@ func resolveUIDUpdate(cmd *cobra.Command, platform string) (*hostdocker.RemoteUs
 
 func (a *application) remove(ctx context.Context, cli *dockerclient.Client, dc *spec.DevContainer, workspace string) error {
 	var err error
+	if len(a.idLabels) > 0 && dc.Mode() != spec.ModeCompose {
+		return a.removeByIDLabels(ctx, cli)
+	}
 	if dc.Mode() == spec.ModeCompose {
 		err = a.composeHost(cli).Remove(ctx, workspace)
 	} else {
@@ -220,6 +238,9 @@ func (a *application) remove(ctx context.Context, cli *dockerclient.Client, dc *
 func (a *application) findContainer(ctx context.Context, cli *dockerclient.Client, dc *spec.DevContainer, workspace, id string) (string, error) {
 	if id != "" {
 		return id, nil
+	}
+	if len(a.idLabels) > 0 {
+		return a.findByIDLabels(ctx, cli)
 	}
 	if dc.Mode() == spec.ModeCompose {
 		info, err := a.composeHost(cli).InspectPrimary(ctx, workspace)
