@@ -62,6 +62,7 @@ type FixtureResult struct {
 	Total      int                  `json:"total"`
 }
 type Report struct {
+	Options       OptionCoverage  `json:"optionCoverage"`
 	Version       string          `json:"upstreamVersion"`
 	Adapter       string          `json:"adapter"`
 	Fixtures      []FixtureResult `json:"fixtures"`

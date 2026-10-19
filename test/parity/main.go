@@ -52,6 +52,7 @@ func writeReport(dir string, report Report) error {
 	}
 	var md strings.Builder
 	fmt.Fprintf(&md, "# Parity report\n\nUpstream: `@devcontainers/cli@%s`\n\nGo adapter: %s\n\nScore: **%d/%d (%.2f%%)**\n", report.Version, report.Adapter, report.Passed, report.Total, report.Score*100)
+	md.WriteString(report.Options.markdown())
 	if report.Skipped != "" {
 		fmt.Fprintf(&md, "\nSkipped: %s\n", report.Skipped)
 	}
@@ -77,11 +78,28 @@ func writeReport(dir string, report Report) error {
 	return os.WriteFile(filepath.Join(dir, "report.md"), []byte(md.String()), 0644)
 }
 func run(ctx context.Context, root, output string) error {
+	return runParity(ctx, root, output, false)
+}
+
+func runParity(ctx context.Context, root, output string, optionsOnly bool) error {
 	if err := os.MkdirAll(output, 0755); err != nil {
 		return err
 	}
+	report := Report{Adapter: DCBAdapter{}.Name(), Options: optionCoverage(root)}
+	if !report.Options.Complete {
+		if err := writeReport(output, report); err != nil {
+			return err
+		}
+		return fmt.Errorf("option coverage incomplete: %s", report.Options.Error)
+	}
+	fmt.Printf("Option coverage: %d/%d (%.2f%%); %s\n", report.Options.Covered, report.Options.Total, report.Options.Score*100, output)
+	if optionsOnly {
+		report.Version, _ = upstreamVersion(root)
+		report.Skipped = "fixture comparison not requested (--options-only)"
+		return writeReport(output, report)
+	}
 	version, skip := prerequisites(root)
-	report := Report{Version: version, Skipped: skip, Adapter: DCBAdapter{}.Name()}
+	report.Version, report.Skipped = version, skip
 	if skip != "" {
 		fmt.Println("SKIP parity:", skip)
 		return writeReport(output, report)
@@ -138,6 +156,7 @@ func run(ctx context.Context, root, output string) error {
 	return nil
 }
 func main() {
+	optionsOnly := flag.Bool("options-only", false, "measure registered option coverage without Docker or Node")
 	root := flag.String("root", ".", "repository root")
 	output := flag.String("output", ".tmp/parity", "report directory relative to root")
 	flag.Parse()
@@ -152,7 +171,7 @@ func main() {
 	}
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
-	if err := run(ctx, abs, out); err != nil {
+	if err := runParity(ctx, abs, out, *optionsOnly); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}

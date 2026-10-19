@@ -118,6 +118,7 @@ func TestRealDockerConfigIsolation(t *testing.T) {
 func TestMissingToolsSkipWithReport(t *testing.T) {
 	t.Setenv("PATH", t.TempDir())
 	root := t.TempDir()
+	writeSampleSource(t, root)
 	output := filepath.Join(root, "report")
 	if err := run(context.Background(), root, output); err != nil {
 		t.Fatal(err)
@@ -130,7 +131,7 @@ func TestMissingToolsSkipWithReport(t *testing.T) {
 	if err := json.Unmarshal(body, &r); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(r.Skipped, "node") || r.Total != 0 || r.Adapter != (DCBAdapter{}).Name() {
+	if !strings.Contains(r.Skipped, "node") || r.Total != 0 || r.Adapter != (DCBAdapter{}).Name() || !r.Options.Complete {
 		t.Fatalf("skip report: %+v", r)
 	}
 }

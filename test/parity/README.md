@@ -1,25 +1,57 @@
 ---
 relationships:
-  references: ../../reference/cli/package.json
+  references: [../../reference/cli/package.json, ../../docs/audits/upstream-options]
 ---
 
 # Parity harness
 
 Run `git submodule update --init --depth 1`, then `task parity` from the repository
-root. Docker with buildx (for upstream), Go, Node and npx are needed. The upstream executable is
+root. Docker with buildx (for upstream), Go, Node and npx are needed.
+The upstream executable is
 resolved with `npx --yes @devcontainers/cli@<version>` using the checked-out
 `reference/cli/package.json`, independent of any global CLI installation.
-Missing Node/npx, Docker or the CLI submodule produces a clear skip report.
+Missing Node/npx or Docker skips fixture comparison and retains option coverage.
+A missing CLI submodule produces an incomplete option report and a nonzero exit.
 The live harness is separate from `task check` and `go test ./...`.
 
 Reports are written to `.tmp/parity/score.json`, `.tmp/parity/report.md` and
 `.tmp/parity/run.log`. Override with `task parity -- --output <directory>`.
 The JSON includes both normalized observations for each fixture and dimension.
-The score is matched dimensions divided by all dimensions (0 to 1). Failed CLI
-calls and unavailable observations count as failures, including when both sides
-fail. Parity differences do not make the command fail; harness setup, report and
-cleanup errors do. A skipped run has zero dimensions and a `skipped` reason;
-it is not a baseline score.
+The fixture score divides matched dimensions by all fixture dimensions (0 to
+1). Failed CLI calls and unavailable observations count as failures, including
+when both sides fail. Parity differences do not make the command fail; harness
+setup, report and cleanup errors do. A skipped fixture run has zero fixture
+dimensions and a `skipped` reason; it is not a fixture baseline score. Its
+independent option coverage can be complete.
+
+## Option coverage
+
+`task parity` also prints registered-option coverage. Run
+`task parity -- --options-only` to measure it without Docker, Go-built subprocesses,
+Node or npx. Go still builds the harness itself. Both report formats include
+coverage even when runtime prerequisites skip the fixture comparison.
+
+The denominator comes from the checked-out upstream command registrations and
+yargs option tables, including shared builders, nested commands and hidden flags.
+Each command/long-option pair counts once. Inherited help/version count on the
+root, groups and leaf commands; aliases are recorded but do not add score units.
+Absent commands contribute uncovered options. Approved design omissions stay in
+the raw denominator. The numerator comes from the real Cobra registrations,
+including inherited and hidden flags. No hand-maintained option list drives
+either number. `optionCoverage.complete` is true only after a nonempty inventory
+is read and measured; a missing or unsupported source table writes an incomplete
+report and makes the command fail. The source reader accepts the pinned upstream
+declarative table shape and fails on unrecognized registrations or table entries;
+a reference update can require a reader change.
+
+This dimension measures registration, not supported values or behavior. A
+registered flag with incomplete semantics can count as covered here and still
+require implementation in the [option audit](../../docs/audits/upstream-options.md).
+The audit lists all command options, dispositions, aliases, positional arguments,
+approved omission reasons, sibling ownership and sized implementation units.
+The fixture and option scores remain separate so their denominators are visible.
+
+## Fixture comparison
 
 The five curated upstream fixtures cover an image, a Dockerfile, two local v2
 features, a Compose service from an image
@@ -76,4 +108,5 @@ derives from each workspace path; image tags are removed without force.
 Pulled base images and BuildKit cache remain available. Hard kills cannot run
 cleanup; use the unique label recorded in `run.log` to identify
 residue. Discovery regressions create stopped `alpine:3.20` containers through
-Docker, skip when Docker is unavailable, and retain the pulled base image. Logs contain fixture output and local paths; review before sharing.
+Docker, skip when Docker is unavailable, and retain the pulled base image.
+Logs contain fixture output and local paths; review before sharing.
