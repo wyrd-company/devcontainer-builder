@@ -22,6 +22,11 @@ func TestIntegrationScriptsInvokeUnifiedCLI(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	for _, name := range []string{"docker-cli-integration.sh", "integration-timeout.sh"} {
+		if _, err := os.ReadFile(filepath.Join(root, "scripts", name)); err != nil {
+			t.Fatal(err)
+		}
+	}
 	tools := t.TempDir()
 
 	stub := `#!/bin/sh
@@ -57,16 +62,34 @@ printf '{"outcome":"success"}\n'
 			if err != nil {
 				t.Fatal(err)
 			}
-			sawTest, sawGenerate := false, false
+			manifest, err := os.ReadFile(filepath.Join(root, "scripts", "cli-integration-shards.tsv"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			var wantShards, gotShards []string
+			for _, line := range strings.Split(string(manifest), "\n") {
+				if line == "" || strings.HasPrefix(line, "#") {
+					continue
+				}
+				_, pattern, ok := strings.Cut(line, "\t")
+				if !ok {
+					t.Fatalf("invalid shard row: %q", line)
+				}
+				wantShards = append(wantShards, pattern)
+			}
+			if len(wantShards) == 0 {
+				t.Fatal("no CLI shards")
+			}
+			sawTest, sawGenerate, sawEngine := false, false, false
 			for _, line := range strings.Split(strings.TrimSpace(string(data)), "\n\n") {
 				args := strings.Split(line, "\n")
-				if !slices.Contains(args, "./cmd/dcb") || slices.Contains(args, "./cmd/devcontainer-docker") {
+				if slices.Contains(args, "./cmd/devcontainer-docker") {
 					t.Fatalf("wrong CLI target: %q", args)
 				}
 				switch args[0] {
 				case "run":
 					sawGenerate = true
-					if !slices.Contains(args, "generate") || !slices.Contains(args, "--workspace-folder") || slices.Contains(args, "--workspace") {
+					if !slices.Contains(args, "./cmd/dcb") || !slices.Contains(args, "generate") || !slices.Contains(args, "--workspace-folder") || slices.Contains(args, "--workspace") {
 						t.Fatalf("wrong generation invocation: %q", args)
 					}
 				case "test":
@@ -74,21 +97,33 @@ printf '{"outcome":"success"}\n'
 					if !slices.Contains(args, "docker_integration") {
 						t.Fatalf("missing integration tag: %q", args)
 					}
-					if slices.Contains(args, "-run") {
-						t.Fatalf("integration suite must not narrow test coverage: %q", args)
-					}
-					if script == "docker-build-integration.sh" {
+					if slices.Contains(args, "./cmd/dcb") {
+						index := slices.Index(args, "-run")
+						if index < 0 || index+1 >= len(args) {
+							t.Fatalf("CLI shard missing selector: %q", args)
+						}
+						gotShards = append(gotShards, args[index+1])
+					} else if script == "docker-build-integration.sh" {
+						sawEngine = true
+						if slices.Contains(args, "-run") {
+							t.Fatalf("engine suite must not narrow test coverage: %q", args)
+						}
 						for _, target := range []string{"./pkg/builder", "./pkg/buildkit"} {
 							if !slices.Contains(args, target) {
 								t.Fatalf("missing integration target %s: %q", target, args)
 							}
 						}
+					} else {
+						t.Fatalf("wrong CLI target: %q", args)
 					}
 				default:
 					t.Fatalf("unexpected go invocation: %q", args)
 				}
 			}
-			if !sawTest || (script == "docker-build-integration.sh" && !sawGenerate) {
+			if !slices.Equal(gotShards, wantShards) {
+				t.Fatalf("CLI shards = %q, want all shards %q", gotShards, wantShards)
+			}
+			if !sawTest || (script == "docker-build-integration.sh" && (!sawGenerate || !sawEngine)) {
 				t.Fatalf("missing invocations: %s", data)
 			}
 		})

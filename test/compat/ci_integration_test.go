@@ -18,9 +18,16 @@ func TestCIIntegrationRunner(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, suite := range []string{"all", "remote", "classic"} {
-		for _, scenario := range []string{"success", "failure", "wrong-store"} {
-			if scenario == "wrong-store" && suite != "classic" {
+	// Register shell dependencies with Go's test cache; bash reads them outside
+	// the test process, so execution alone does not invalidate cached results.
+	for _, name := range []string{"ci-integration.sh", "docker-cli-integration.sh", "integration-timeout.sh"} {
+		if _, err := os.ReadFile(filepath.Join(filepath.Dir(script), name)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, suite := range []string{"all", "cli", "cli-users", "cli-unknown", "remote", "classic"} {
+		for _, scenario := range []string{"success", "failure", "wrong-store", "list-failure", "empty-list"} {
+			if ((scenario == "list-failure" || scenario == "empty-list") && suite != "all") || (scenario == "wrong-store" && suite != "classic") || (suite == "cli-unknown" && scenario != "success") {
 				continue
 			}
 			fail := scenario == "failure"
@@ -48,7 +55,13 @@ exec) echo "$TEST_DRIVER" ;;
 esac
 `)
 				write("go", `#!/bin/sh
-printf '%s\n' "$*" > "$RECORD_DIR/go"
+if [ "$1" = list ]; then
+  if [ "$LIST_SCENARIO" = list-failure ]; then exit 29; fi
+  if [ "$LIST_SCENARIO" = empty-list ]; then exit 0; fi
+  printf '%s\n' github.com/wyrd-company/devcontainer-builder/cmd/dcb github.com/wyrd-company/devcontainer-builder/pkg/builder
+  exit 0
+fi
+printf '%s\n' "$*" >> "$RECORD_DIR/go"
 printf '%s\n' "${BUILDKIT_HOST-unset}" > "$RECORD_DIR/host"
 printf '%s\n' "$DOCKER_CONFIG" > "$RECORD_DIR/config-path"
 printf '%s\n' "${DOCKER_HOST-unset}|${DOCKER_TLS_VERIFY-unset}|${DOCKER_CERT_PATH-unset}" > "$RECORD_DIR/engine-env"
@@ -81,10 +94,24 @@ exit "$GO_EXIT"
 					code = "23"
 				}
 				t.Setenv("GO_EXIT", code)
+				t.Setenv("LIST_SCENARIO", scenario)
 				cmd := exec.Command("bash", script, suite)
 				cmd.Dir = dir
 				out, runErr := cmd.CombinedOutput()
-				if scenario == "wrong-store" {
+				if scenario == "list-failure" || scenario == "empty-list" {
+					wantCode := 1
+					if scenario == "list-failure" {
+						wantCode = 29
+					}
+					if exit, ok := runErr.(*exec.ExitError); !ok || exit.ExitCode() != wantCode {
+						t.Fatalf("bad package list accepted: %v\n%s", runErr, out)
+					}
+					if _, err := os.Stat(filepath.Join(dir, "go")); !os.IsNotExist(err) {
+						t.Fatal("tests ran after bad package list")
+					}
+					return
+				}
+				if scenario == "wrong-store" || suite == "cli-unknown" {
 					if exit, ok := runErr.(*exec.ExitError); !ok || exit.ExitCode() != 1 {
 						t.Fatalf("wrong store accepted: %v\n%s", runErr, out)
 					}
@@ -94,6 +121,15 @@ exit "$GO_EXIT"
 					}
 				} else if runErr != nil {
 					t.Fatalf("runner: %v\n%s", runErr, out)
+				}
+				if suite == "cli-unknown" {
+					if !strings.Contains(string(out), "Unknown CLI Docker shard") {
+						t.Fatalf("unknown shard: %s", out)
+					}
+					if _, err := os.Stat(filepath.Join(dir, "go")); !os.IsNotExist(err) {
+						t.Fatal("unknown shard ran tests")
+					}
+					return
 				}
 				read := func(name string) string {
 					t.Helper()
@@ -137,9 +173,25 @@ exit "$GO_EXIT"
 				if _, err := os.Stat(filepath.Join(originalConfig, "config.json")); err != nil {
 					t.Fatalf("operator config removed: %v", err)
 				}
-				if suite == "all" {
-					if got := read("go"); got != "test -timeout 20m -v -tags docker_integration ./... -count=1" {
-						t.Fatalf("all-package invocation = %q", got)
+				if suite == "all" || strings.HasPrefix(suite, "cli") {
+					var want []string
+					if suite == "all" {
+						want = append(want, "test -timeout 20m -v -tags docker_integration github.com/wyrd-company/devcontainer-builder/pkg/builder -count=1")
+					}
+					// A failed command must stop before the next shard.
+					if !fail || suite != "all" {
+						for _, shard := range readCLIShards(t) {
+							if suite == "cli-users" && shard.name != "users" {
+								continue
+							}
+							want = append(want, "test -timeout 20m -v -tags docker_integration ./cmd/dcb -run "+shard.pattern.String()+" -count=1")
+							if fail {
+								break
+							}
+						}
+					}
+					if got := read("go"); got != strings.Join(want, "\n") {
+						t.Fatalf("shard invocations = %q, want %q", got, strings.Join(want, "\n"))
 					}
 					if got := read("host"); got != "unset" {
 						t.Fatalf("stock Docker inherited BUILDKIT_HOST = %q", got)

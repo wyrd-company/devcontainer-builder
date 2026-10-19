@@ -1,0 +1,9 @@
+# relationships:
+#   references: [docker-cli-integration, ../test/compat/cli_shards_test]
+# shard<TAB>anchored Go test-name expression
+build	^TestDockerBuildIntegration$
+host	^(TestDockerHostIntegration|TestDockerHostUpPullsMissingImage|TestDockerHostUpPullsPrivateImage|TestDockerConfigurationResultCLI)$
+compose	^(TestDockerComposeCLI|TestDockerLifecycleCLI|TestDockerComposeCLIDefaultWorkspaceFolder|TestDockerComposeCLIRemoteEnvScope)$
+features	^(TestFeatureInstallIntegration|TestDockerFeatureWiringCLI|TestMetadataPrebuiltCLIIntegration|TestMetadataImageOnlySkipPreservesHooks)$
+dotfiles	^(TestDotfilesUpAcceptance|TestDotfilesLifecycle|TestDotfilesFailureRetries|TestCreateRepoIgnoresInheritedRepository)$
+users	^(TestDockerRootEntrypointWithRemoteUser|TestGenerateRestoresLocalImageUser)$

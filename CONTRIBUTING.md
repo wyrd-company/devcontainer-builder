@@ -18,6 +18,13 @@ Optional upstream fixture tests run when the reference submodules are initialize
 `task docs:check` checks public Markdown and the documentation publishing manifest.
 Task lists the individual checks, tool installation, and reference setup verbs.
 
+CLI Docker tests run in name shards from `scripts/cli-integration-shards.tsv`.
+Use `task integration:cli` for all shards or `task integration:cli -- users` for
+one shard. The Docker, build, and host integration routes run every CLI shard.
+CI uses the same Docker route. Each shard has the shared 20-minute Go test
+budget. Add each new Docker test to exactly one shard; `task test` checks coverage.
+The test bodies stay in `cmd/dcb` so that test additions need no package move.
+
 Add a regression test for behavior changes. Keep reference submodules unchanged.
 The project uses Intentional for release notes; retain one initial-release intent
 until the first release. After that, include an intent for user-facing changes.

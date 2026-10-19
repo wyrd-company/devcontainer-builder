@@ -176,6 +176,10 @@ tasks:
     desc: Run every Docker integration suite on stock Docker
     cmds:
       - bash scripts/ci-integration.sh all
+  integration:cli:
+    desc: Run every CLI Docker shard (or one named by CLI_ARGS)
+    cmds:
+      - bash scripts/ci-integration.sh cli{{if .CLI_ARGS}}-{{.CLI_ARGS}}{{end}}
   integration:classic:
     desc: Run engine integration on a disposable classic-store Docker daemon
     cmds:

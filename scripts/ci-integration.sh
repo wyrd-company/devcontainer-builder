@@ -4,6 +4,7 @@
 set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/integration-timeout.sh"
 suite="$1"
+script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # Integration must not consume the operator's registry configuration.
 export DOCKER_CONFIG
 DOCKER_CONFIG=$(mktemp -d)
@@ -48,7 +49,23 @@ if [[ -n "$container" ]]; then
 fi
 case "$suite" in
   all)
-    go test -timeout "$integration_test_timeout" -v -tags docker_integration ./... -count=1 2>&1 | tee artifacts/docker-all-integration.log
+    # Keep the growing CLI suite out of the single-package timeout budget.
+    # A failed package listing must not become an empty successful gate.
+    packages=$(go list -tags docker_integration ./...)
+    other_packages=()
+    while IFS= read -r package; do
+      if [[ -n "$package" && "$package" != */cmd/dcb ]]; then
+        other_packages+=("$package")
+      fi
+    done <<< "$packages"
+    [[ ${#other_packages[@]} -gt 0 ]]
+    go test -timeout "$integration_test_timeout" -v -tags docker_integration "${other_packages[@]}" -count=1 2>&1 | tee artifacts/docker-all-integration.log
+    bash "$script_dir/docker-cli-integration.sh" all 2>&1 | tee artifacts/docker-cli-integration.log
+    ;;
+  cli|cli-*)
+    shard=${suite#cli-}
+    [[ "$suite" != cli ]] || shard=all
+    bash "$script_dir/docker-cli-integration.sh" "$shard" 2>&1 | tee "artifacts/docker-${suite}-integration.log"
     ;;
   classic)
     # Check the daemon variant, then address only that daemon for the tests.

@@ -8,4 +8,4 @@ artifact_dir="${DCB_ARTIFACT_DIR:-artifacts/docker-host-integration}"
 mkdir -p "${artifact_dir}"
 
 export DCB_ARTIFACT_DIR="${artifact_dir}"
-go test -timeout "$integration_test_timeout" -v -tags docker_integration ./cmd/dcb -count=1
+bash scripts/docker-cli-integration.sh all
