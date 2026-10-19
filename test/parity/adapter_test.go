@@ -4,12 +4,16 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"io"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/wyrd-company/devcontainer-builder/pkg/cli"
 )
 
 func TestAdapterUpOptionsSymmetric(t *testing.T) {
@@ -63,6 +67,16 @@ func TestAdapterUpOptionsSymmetric(t *testing.T) {
 					}
 					args = args[2:]
 				}
+				if side.name == "go" {
+					// Exercise Cobra with the emitted argv. A missing config stops
+					// execution before Docker while proving option parsing succeeded.
+					missing := filepath.Join(root, "missing.json")
+					var output bytes.Buffer
+					code := cli.Run(context.Background(), append(append([]string{}, args...), "--config", missing), "sample", nil, &output, io.Discard)
+					if code != 1 || !strings.Contains(output.String(), missing) {
+						t.Fatalf("dcb rejected emitted up options: code %d; %s", code, &output)
+					}
+				}
 				workspace := filepath.Join(r.temp, f.Name, side.name, r.workspaceName(f, side.name))
 				for i, arg := range args {
 					if arg == workspace {
@@ -74,7 +88,7 @@ func TestAdapterUpOptionsSymmetric(t *testing.T) {
 			if !reflect.DeepEqual(commands[0], commands[1]) {
 				t.Fatalf("up options differ: upstream %q; dcb %q", commands[0], commands[1])
 			}
-			expected := append([]string{"up", "--workspace-folder", "<workspace>", "--mount-workspace-git-root", "false"}, f.UpArgs...)
+			expected := append([]string{"up", "--workspace-folder", "<workspace>", "--mount-workspace-git-root=false"}, f.UpArgs...)
 			if !reflect.DeepEqual(commands[0], expected) {
 				t.Fatalf("up options = %q, want %q", commands[0], expected)
 			}

@@ -237,7 +237,7 @@ func (r *Runner) observe(ctx context.Context, a Adapter, f Fixture, side string)
 		return failedObservations(err)
 	}
 	// Keep copied fixtures isolated from the enclosing checkout on both sides.
-	args := append([]string{"--mount-workspace-git-root", "false"}, f.UpArgs...)
+	args := append([]string{"--mount-workspace-git-root=false"}, f.UpArgs...)
 	body, upErr := a.Up(ctx, r, workspace, args)
 	out := failedObservations(fmt.Errorf("container observation unavailable"))
 	v, jsonErr := resultJSON(body)

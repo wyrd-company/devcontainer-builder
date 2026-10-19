@@ -203,7 +203,7 @@ func TestFixtureUpArgsReachBothSides(t *testing.T) {
 	r := &Runner{root: root, temp: t.TempDir(), runID: "sample", env: os.Environ(), log: log}
 	recorder := &argsRecorder{}
 	r.observe(context.Background(), recorder, fixture, "go")
-	expected := append([]string{"--mount-workspace-git-root", "false"}, fixture.UpArgs...)
+	expected := append([]string{"--mount-workspace-git-root=false"}, fixture.UpArgs...)
 	if !reflect.DeepEqual(recorder.args, expected) {
 		t.Fatalf("observe passed %q, want %q", recorder.args, expected)
 	}

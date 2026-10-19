@@ -95,14 +95,16 @@ fixture that is not in `reference/cli`.
 
 The `additional-features` fixture runs the image fixture again and passes
 `--additional-features` with the published common-utils feature to both
-sides' `up`. The shared runner passes `--mount-workspace-git-root false` to both CLIs,
+sides' `up`. The shared runner passes `--mount-workspace-git-root=false` to both CLIs,
 followed by the fixture's extra `up` arguments. Both CLIs default to Git-root
 mounting. The harness explicitly disables it so each copied fixture mounts its
 own workspace instead of the enclosing checkout that holds `.tmp/`. This keeps
 the fixture's workspace paths and mount contents independent of that checkout.
 `TestAdapterUpOptionsSymmetric` records the actual subprocess arguments for every
 fixture without Docker or Node and compares the complete `up` argument lists,
-replacing only the two workspace paths.
+replacing only the two workspace paths. The captured dcb arguments also pass
+through its real command parser with a missing configuration, so parsing is
+checked without contacting Docker.
 
 Dimensions compare the CLI JSON result, image `devcontainer.metadata`, container
 environment, labels, mounts, user, working directory, lifecycle marker contents,
