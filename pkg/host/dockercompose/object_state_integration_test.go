@@ -468,13 +468,13 @@ func TestComposeObjectContainerRemovalFailureIntegration(t *testing.T) {
 	h := New(cli, Options{UserDataFolder: parent})
 	config := filepath.Join(workspace, ".devcontainer", "devcontainer.json")
 	writeNameFile(t, config, `{"dockerComposeFile":"compose.yml","service":"app"}`)
-	writeNameFile(t, filepath.Join(filepath.Dir(config), "compose.yml"), "services:\n  app:\n    image: alpine:3.20\n    secrets: [token]\nsecrets:\n  token:\n    content: synthetic-token\n")
+	writeNameFile(t, filepath.Join(filepath.Dir(config), "compose.yml"), "services:\n  app:\n    image: alpine:3.20\n    secrets: [token]\nsecrets:\n  token:\n    environment: SAMPLE_TOKEN\n")
 	dc, err := spec.Load(config)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = h.Remove(ctx, workspace) })
-	up, err := h.Up(ctx, UpRequest{Spec: dc, SpecPath: config, LocalWorkspace: workspace, LocalEnv: map[string]string{}, SkipLifecycle: true})
+	up, err := h.Up(ctx, UpRequest{Spec: dc, SpecPath: config, LocalWorkspace: workspace, LocalEnv: map[string]string{"SAMPLE_TOKEN": "synthetic-token"}, SkipLifecycle: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -553,4 +553,39 @@ func TestComposeObjectWorkspaceOwnershipIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 	assertObjectAbsent(t, roots[1])
+}
+
+func TestComposeObjectOwnershipCollisionIntegration(t *testing.T) {
+	ctx := context.Background()
+	cli := requireComposeDocker(t, ctx)
+	defer cli.Close()
+	for _, field := range []string{labelObjectRoot, LabelLocalFolder, LabelProject} {
+		t.Run(field, func(t *testing.T) {
+			parent, workspace := t.TempDir(), t.TempDir()
+			root, err := os.MkdirTemp(parent, "objects-")
+			if err != nil {
+				t.Fatal(err)
+			}
+			project := objectTestProject(workspace)
+			labels := map[string]string{labelObjectRoot: root, LabelLocalFolder: workspace, LabelProject: project}
+			labels[field] += "-other"
+			existing, err := cli.VolumeCreate(ctx, volume.CreateOptions{Name: "dcb-" + filepath.Base(root), Labels: labels})
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = cli.VolumeRemove(ctx, existing.Name, true) })
+			err = New(cli, Options{}).publishObjectOwnership(ctx, root, project, workspace)
+			if err == nil {
+				t.Fatal("adopted conflicting ownership")
+			}
+			actual, err := cli.VolumeInspect(ctx, existing.Name)
+			if err != nil || actual.Labels[field] != labels[field] {
+				t.Fatal("existing ownership changed")
+			}
+			entries, err := os.ReadDir(root)
+			if err != nil || len(entries) != 0 {
+				t.Fatal("payload published before ownership agreed")
+			}
+		})
+	}
 }

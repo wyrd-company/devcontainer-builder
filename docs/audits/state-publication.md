@@ -22,6 +22,8 @@ outside cleanup ownership.
 
 Before any payload is written, an unmounted Docker volume records the absolute
 private root, workspace, and Compose project in labels. Labels contain no payload.
+The returned volume must match the requested root, workspace and project; a
+name collision preserves the existing record and fails before any payload write.
 A cancelled allocation can leave an empty directory or an ownership record;
 `Remove` can discover a record without containers or source configuration.
 A process killed after payload creation leaves its record for workspace teardown.
@@ -63,6 +65,8 @@ Behavioral evidence is separate from option-registration coverage:
   deletion to Docker and proves that its failure preserves backing objects.
 - `TestObjectMaterializerErrorsDoNotDisclosePayload` proves local filesystem
   errors contain none of the individually injected payload spellings.
+- `TestComposeObjectOwnershipCollisionIntegration` proves that native Docker
+  creation cannot silently adopt another owner's existing record.
 - `TestComposeObjectOwnershipValidationIntegration` proves malformed deletion
   records preserve unowned files.
 - `TestObjectMaterializerPrivatePublication` proves bounded object filenames and

@@ -29,17 +29,30 @@ func (h *Host) allocateObjects(ctx context.Context, project, workspace string) (
 	if err != nil {
 		return "", fmt.Errorf("allocate compose objects: %w", err)
 	}
-	_, err = h.client.VolumeCreate(ctx, volume.CreateOptions{
-		Name:   "dcb-" + filepath.Base(root),
-		Labels: map[string]string{labelObjectRoot: root, LabelLocalFolder: workspace, LabelProject: project},
-	})
+	err = h.publishObjectOwnership(ctx, root, project, workspace)
 	if err != nil {
 		// A lost response can still mean the daemon recorded ownership. Keep that
 		// record for retry; no payload has been written into the directory yet.
 		_ = os.Remove(root)
-		return "", errorf("record materialized object ownership: %w", err)
+		return "", err
 	}
 	return root, nil
+}
+
+// VolumeCreate can return an existing volume. Do not write into a new root
+// unless the daemon returned the exact ownership we requested.
+func (h *Host) publishObjectOwnership(ctx context.Context, root, project, workspace string) error {
+	record, err := h.client.VolumeCreate(ctx, volume.CreateOptions{
+		Name:   "dcb-" + filepath.Base(root),
+		Labels: map[string]string{labelObjectRoot: root, LabelLocalFolder: workspace, LabelProject: project},
+	})
+	if err != nil {
+		return errorf("record materialized object ownership: %w", err)
+	}
+	if record.Name != "dcb-"+filepath.Base(root) || record.Labels[labelObjectRoot] != root || record.Labels[LabelLocalFolder] != workspace || record.Labels[LabelProject] != project {
+		return errorf("materialized object ownership collision")
+	}
+	return nil
 }
 
 func (h *Host) objectRecords(ctx context.Context, workspace string) ([]*volume.Volume, error) {
