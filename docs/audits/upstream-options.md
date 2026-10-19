@@ -28,8 +28,8 @@ The pinned `up` table has **44 explicit options**, plus inherited help/version.
 
 ## Dispositions
 
-- implemented: **57**.
-- implement: **180**.
+- implemented: **77**.
+- implement: **160**.
 - not applicable by design: **15**.
 - needs Bob's decision: **1**.
 
@@ -45,7 +45,7 @@ supports outdated reporting and template metadata.
 
 | Unit | Size | Option pairs | Scope and safety contract |
 | --- | --- | --- | --- |
-| sibling-unit | L | 37 | Additional features, dotfiles, default-user-env-probe and version flag. Apply across applicable commands. |
+| sibling-unit | S | 17 | default-user-env-probe on up, set-up, run-user-commands and exec, after Bob decides on the probe timeout. The version flag on commands dcb does not have yet comes with those commands. |
 | lifecycle | M | 7 | Lifecycle controls: skip-non-blocking-commands, prebuild, stop-for-personalization, expect-existing-container. |
 | mounts | L | 14 | Workspace mounts and container selection: mount, workspace-mount-consistency, mount-workspace-git-root, mount-git-worktree-common-dir, id-label; mount-workspace-git-root defaults to true; mount-git-worktree-common-dir defaults to false; additional mounts are explicit. |
 | environment | M | 5 | Remote environment and secrets: remote-env, secrets-file; lifecycle secret inputs are separate from configuration remoteEnv metadata. |
@@ -113,7 +113,7 @@ features, dotfiles, environment probing and version support.
 | Upstream option | dcb equivalent | Disposition | Unit | Reason / source |
 | --- | --- | --- | --- | --- |
 | --help | --help | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: yargs built-in help. |
-| --version | version command | implement | sibling-unit | Shared version flag; version command already returns the version. Source: devContainersSpecCLI.ts (.version). |
+| --version | --version | implemented | sibling-unit | Registered on every command; prints the version result in place of the command, as upstream. Source: devContainersSpecCLI.ts (.version). |
 
 ### build
 
@@ -135,14 +135,14 @@ features, dotfiles, environment probing and version support.
 | --push | --push | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: devContainersSpecCLI.ts:522. |
 | --label | --label | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: devContainersSpecCLI.ts:523. |
 | --output | --output (directory only) | implement | exporters | Flag exists, but accepts a local directory only; implement upstream exporter types/options through native BuildKit. Source: devContainersSpecCLI.ts:524. |
-| --additional-features | none | implement | sibling-unit | Add this option across applicable commands. Source: devContainersSpecCLI.ts:525. |
+| --additional-features | --additional-features | implemented | sibling-unit | Registered; configuration features come first and win for an equal key, as upstream. Source: devContainersSpecCLI.ts:525. |
 | --skip-feature-auto-mapping [hidden] | none | implement | feature-controls | Implement upstream feature identifier mapping plus its opt-out; current resolver is not evidence of mapping parity. Source: devContainersSpecCLI.ts:526. |
 | --skip-persisting-customizations-from-features [hidden] | none | implement | feature-controls | Add this upstream control to the corresponding handler. Source: devContainersSpecCLI.ts:527. |
 | --experimental-lockfile [hidden] | none | implement | lockfile | Add this upstream control to the corresponding handler. Source: devContainersSpecCLI.ts:528. |
 | --experimental-frozen-lockfile [hidden] | none | implement | lockfile | Add this upstream control to the corresponding handler. Source: devContainersSpecCLI.ts:529. |
 | --omit-syntax-directive [hidden] | none | implement | feature-controls | Add this upstream control to the corresponding handler. Source: devContainersSpecCLI.ts:530. |
 | --help | --help | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: yargs built-in help. |
-| --version | version command | implement | sibling-unit | Shared version flag; version command already returns the version. Source: devContainersSpecCLI.ts (.version). |
+| --version | --version | implemented | sibling-unit | Registered on every command; prints the version result in place of the command, as upstream. Source: devContainersSpecCLI.ts (.version). |
 
 ### exec
 
@@ -164,18 +164,18 @@ features, dotfiles, environment probing and version support.
 | --log-format | --log-format | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: devContainersSpecCLI.ts:1230. |
 | --terminal-columns | none | implement | terminal | Add this upstream control to the corresponding handler. Source: devContainersSpecCLI.ts:1231. |
 | --terminal-rows | none | implement | terminal | Add this upstream control to the corresponding handler. Source: devContainersSpecCLI.ts:1232. |
-| --default-user-env-probe | none | implement | sibling-unit | Add this option across applicable commands. Source: devContainersSpecCLI.ts:1233. |
+| --default-user-env-probe | none | implement | sibling-unit | Needs the upstream probe and its 10-second timeout, a new timeout mechanic that awaits Bob's decision. Source: devContainersSpecCLI.ts:1233. |
 | --remote-env | --remote-env | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: devContainersSpecCLI.ts:1234. |
 | --skip-feature-auto-mapping [hidden] | none | implement | feature-controls | Implement upstream feature identifier mapping plus its opt-out; current resolver is not evidence of mapping parity. Source: devContainersSpecCLI.ts:1235. |
 | --help | --help | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: yargs built-in help. |
-| --version | version command | implement | sibling-unit | Shared version flag; version command already returns the version. Source: devContainersSpecCLI.ts (.version). |
+| --version | --version | implemented | sibling-unit | Registered on every command; prints the version result in place of the command, as upstream. Source: devContainersSpecCLI.ts (.version). |
 
 ### features
 
 | Upstream option | dcb equivalent | Disposition | Unit | Reason / source |
 | --- | --- | --- | --- | --- |
 | --help | --help | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: yargs built-in help. |
-| --version | version command | implement | sibling-unit | Shared version flag; version command already returns the version. Source: devContainersSpecCLI.ts (.version). |
+| --version | --version | implemented | sibling-unit | Registered on every command; prints the version result in place of the command, as upstream. Source: devContainersSpecCLI.ts (.version). |
 
 ### features generate-docs
 
@@ -188,7 +188,7 @@ features, dotfiles, environment probing and version support.
 | --github-repo | none | implement | feature-docs | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: featuresCLI/generateDocs.ts:17. |
 | --log-level | none | implement | feature-docs | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: featuresCLI/generateDocs.ts:18. |
 | --help | none | implement | feature-docs | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: yargs built-in help. |
-| --version | version command | implement | sibling-unit | Shared version flag; version command already returns the version. Source: devContainersSpecCLI.ts (.version). |
+| --version | version command | implement | sibling-unit | dcb registers --version on every command; this command is not implemented yet. Source: devContainersSpecCLI.ts (.version). |
 
 ### features info
 
@@ -197,7 +197,7 @@ features, dotfiles, environment probing and version support.
 | --log-level | none | implement | feature-info | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: featuresCLI/info.ts:15. |
 | --output-format | none | implement | feature-info | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: featuresCLI/info.ts:16. |
 | --help | none | implement | feature-info | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: yargs built-in help. |
-| --version | version command | implement | sibling-unit | Shared version flag; version command already returns the version. Source: devContainersSpecCLI.ts (.version). |
+| --version | version command | implement | sibling-unit | dcb registers --version on every command; this command is not implemented yet. Source: devContainersSpecCLI.ts (.version). |
 
 ### features package
 
@@ -207,7 +207,7 @@ features, dotfiles, environment probing and version support.
 | --force-clean-output-folder (-f) | none | implement | feature-package | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: collectionCommonUtils/package.ts:17. |
 | --log-level | none | implement | feature-package | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: collectionCommonUtils/package.ts:18. |
 | --help | none | implement | feature-package | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: yargs built-in help. |
-| --version | version command | implement | sibling-unit | Shared version flag; version command already returns the version. Source: devContainersSpecCLI.ts (.version). |
+| --version | version command | implement | sibling-unit | dcb registers --version on every command; this command is not implemented yet. Source: devContainersSpecCLI.ts (.version). |
 
 ### features publish
 
@@ -217,7 +217,7 @@ features, dotfiles, environment probing and version support.
 | --namespace (-n) | none | implement | feature-publish | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: collectionCommonUtils/publish.ts:13. |
 | --log-level | none | implement | feature-publish | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: collectionCommonUtils/publish.ts:14. |
 | --help | none | implement | feature-publish | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: yargs built-in help. |
-| --version | version command | implement | sibling-unit | Shared version flag; version command already returns the version. Source: devContainersSpecCLI.ts (.version). |
+| --version | version command | implement | sibling-unit | dcb registers --version on every command; this command is not implemented yet. Source: devContainersSpecCLI.ts (.version). |
 
 ### features resolve-dependencies
 
@@ -226,7 +226,7 @@ features, dotfiles, environment probing and version support.
 | --log-level | none | implement | feature-dependencies | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: featuresCLI/resolveDependencies.ts:32. |
 | --workspace-folder | none | implement | feature-dependencies | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: featuresCLI/resolveDependencies.ts:33. |
 | --help | none | implement | feature-dependencies | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: yargs built-in help. |
-| --version | version command | implement | sibling-unit | Shared version flag; version command already returns the version. Source: devContainersSpecCLI.ts (.version). |
+| --version | version command | implement | sibling-unit | dcb registers --version on every command; this command is not implemented yet. Source: devContainersSpecCLI.ts (.version). |
 
 ### features test
 
@@ -246,7 +246,7 @@ features, dotfiles, environment probing and version support.
 | --preserve-test-containers | none | implement | feature-tests | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: featuresCLI/test.ts:25. |
 | --quiet (-q) | none | implement | feature-tests | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: featuresCLI/test.ts:26. |
 | --help | none | implement | feature-tests | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: yargs built-in help. |
-| --version | version command | implement | sibling-unit | Shared version flag; version command already returns the version. Source: devContainersSpecCLI.ts (.version). |
+| --version | version command | implement | sibling-unit | dcb registers --version on every command; this command is not implemented yet. Source: devContainersSpecCLI.ts (.version). |
 
 ### outdated
 
@@ -261,7 +261,7 @@ features, dotfiles, environment probing and version support.
 | --terminal-columns | none | implement | outdated | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: devContainersSpecCLI.ts:1125. |
 | --terminal-rows | none | implement | outdated | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: devContainersSpecCLI.ts:1126. |
 | --help | none | implement | outdated | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: yargs built-in help. |
-| --version | version command | implement | sibling-unit | Shared version flag; version command already returns the version. Source: devContainersSpecCLI.ts (.version). |
+| --version | version command | implement | sibling-unit | dcb registers --version on every command; this command is not implemented yet. Source: devContainersSpecCLI.ts (.version). |
 
 ### read-configuration
 
@@ -283,10 +283,10 @@ features, dotfiles, environment probing and version support.
 | --terminal-rows | none | implement | terminal | Add this upstream control to the corresponding handler. Source: devContainersSpecCLI.ts:973. |
 | --include-features-configuration | none | implement | configuration | Expose resolved feature configuration in the read-configuration result. Source: devContainersSpecCLI.ts:974. |
 | --include-merged-configuration | --include-merged-configuration | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: devContainersSpecCLI.ts:975. |
-| --additional-features | none | implement | sibling-unit | Add this option across applicable commands. Source: devContainersSpecCLI.ts:976. |
+| --additional-features | --additional-features | implemented | sibling-unit | Registered; contributes to the merged configuration only when no container exists, as upstream. Source: devContainersSpecCLI.ts:976. |
 | --skip-feature-auto-mapping [hidden] | none | implement | feature-controls | Implement upstream feature identifier mapping plus its opt-out; current resolver is not evidence of mapping parity. Source: devContainersSpecCLI.ts:977. |
 | --help | --help | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: yargs built-in help. |
-| --version | version command | implement | sibling-unit | Shared version flag; version command already returns the version. Source: devContainersSpecCLI.ts (.version). |
+| --version | --version | implemented | sibling-unit | Registered on every command; prints the version result in place of the command, as upstream. Source: devContainersSpecCLI.ts (.version). |
 
 ### run-user-commands
 
@@ -308,20 +308,20 @@ features, dotfiles, environment probing and version support.
 | --log-format | --log-format | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: devContainersSpecCLI.ts:766. |
 | --terminal-columns | none | implement | terminal | Add this upstream control to the corresponding handler. Source: devContainersSpecCLI.ts:767. |
 | --terminal-rows | none | implement | terminal | Add this upstream control to the corresponding handler. Source: devContainersSpecCLI.ts:768. |
-| --default-user-env-probe | none | implement | sibling-unit | Add this option across applicable commands. Source: devContainersSpecCLI.ts:769. |
+| --default-user-env-probe | none | implement | sibling-unit | Needs the upstream probe and its 10-second timeout, a new timeout mechanic that awaits Bob's decision. Source: devContainersSpecCLI.ts:769. |
 | --skip-non-blocking-commands | none | implement | lifecycle | Add this upstream control to the corresponding handler. Source: devContainersSpecCLI.ts:770. |
 | --prebuild | none | implement | lifecycle | Add this upstream control to the corresponding handler. Source: devContainersSpecCLI.ts:771. |
 | --stop-for-personalization | none | implement | lifecycle | Add this upstream control to the corresponding handler. Source: devContainersSpecCLI.ts:772. |
 | --remote-env | none | implement | environment | Add this upstream control to the corresponding handler. Source: devContainersSpecCLI.ts:773. |
 | --skip-feature-auto-mapping [hidden] | none | implement | feature-controls | Implement upstream feature identifier mapping plus its opt-out; current resolver is not evidence of mapping parity. Source: devContainersSpecCLI.ts:774. |
 | --skip-post-attach | --skip-post-attach | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: devContainersSpecCLI.ts:775. |
-| --dotfiles-repository | none | implement | sibling-unit | Add this option across applicable commands. Source: devContainersSpecCLI.ts:776. |
-| --dotfiles-install-command | none | implement | sibling-unit | Add this option across applicable commands. Source: devContainersSpecCLI.ts:777. |
-| --dotfiles-target-path | none | implement | sibling-unit | Add this option across applicable commands. Source: devContainersSpecCLI.ts:778. |
+| --dotfiles-repository | --dotfiles-repository | implemented | sibling-unit | Registered; installs after postCreateCommand once per container. A failed install warns and the next run retries. Source: devContainersSpecCLI.ts:776. |
+| --dotfiles-install-command | --dotfiles-install-command | implemented | sibling-unit | Registered; runs in the clone in place of the default install-script search. Source: devContainersSpecCLI.ts:777. |
+| --dotfiles-target-path | --dotfiles-target-path | implemented | sibling-unit | Registered; default ~/dotfiles. Source: devContainersSpecCLI.ts:778. |
 | --container-session-data-folder | none | implement | data-folders | Add this upstream control to the corresponding handler. Source: devContainersSpecCLI.ts:779. |
 | --secrets-file | none | implement | environment | Optional JSON secret inputs for lifecycle command environments; do not add these inputs to image metadata. Source: devContainersSpecCLI.ts:780. |
 | --help | --help | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: yargs built-in help. |
-| --version | version command | implement | sibling-unit | Shared version flag; version command already returns the version. Source: devContainersSpecCLI.ts (.version). |
+| --version | --version | implemented | sibling-unit | Registered on every command; prints the version result in place of the command, as upstream. Source: devContainersSpecCLI.ts (.version). |
 
 ### set-up
 
@@ -336,26 +336,26 @@ features, dotfiles, environment probing and version support.
 | --log-format | --log-format | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: devContainersSpecCLI.ts:346. |
 | --terminal-columns | none | implement | terminal | Add this upstream control to the corresponding handler. Source: devContainersSpecCLI.ts:347. |
 | --terminal-rows | none | implement | terminal | Add this upstream control to the corresponding handler. Source: devContainersSpecCLI.ts:348. |
-| --default-user-env-probe | none | implement | sibling-unit | Add this option across applicable commands. Source: devContainersSpecCLI.ts:349. |
+| --default-user-env-probe | none | implement | sibling-unit | Needs the upstream probe and its 10-second timeout, a new timeout mechanic that awaits Bob's decision. Source: devContainersSpecCLI.ts:349. |
 | --skip-post-create | --skip-post-create | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: devContainersSpecCLI.ts:350. |
 | --skip-non-blocking-commands | none | implement | lifecycle | Add this upstream control to the corresponding handler. Source: devContainersSpecCLI.ts:351. |
 | --user-data-folder | none | implement | data-folders | Add this upstream control to the corresponding handler. Source: devContainersSpecCLI.ts:352. |
 | --remote-env | none | implement | environment | Add this upstream control to the corresponding handler. Source: devContainersSpecCLI.ts:353. |
-| --dotfiles-repository | none | implement | sibling-unit | Add this option across applicable commands. Source: devContainersSpecCLI.ts:354. |
-| --dotfiles-install-command | none | implement | sibling-unit | Add this option across applicable commands. Source: devContainersSpecCLI.ts:355. |
-| --dotfiles-target-path | none | implement | sibling-unit | Add this option across applicable commands. Source: devContainersSpecCLI.ts:356. |
+| --dotfiles-repository | --dotfiles-repository | implemented | sibling-unit | Registered; installs after postCreateCommand once per container. A failed install warns and the next run retries. Source: devContainersSpecCLI.ts:354. |
+| --dotfiles-install-command | --dotfiles-install-command | implemented | sibling-unit | Registered; runs in the clone in place of the default install-script search. Source: devContainersSpecCLI.ts:355. |
+| --dotfiles-target-path | --dotfiles-target-path | implemented | sibling-unit | Registered; default ~/dotfiles. Source: devContainersSpecCLI.ts:356. |
 | --container-session-data-folder | none | implement | data-folders | Add this upstream control to the corresponding handler. Source: devContainersSpecCLI.ts:357. |
 | --include-configuration | none | implement | configuration | Add optional configuration to command results. Source: devContainersSpecCLI.ts:358. |
 | --include-merged-configuration | none | implement | configuration | Add optional merged configuration to this command result. Source: devContainersSpecCLI.ts:359. |
 | --help | --help | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: yargs built-in help. |
-| --version | version command | implement | sibling-unit | Shared version flag; version command already returns the version. Source: devContainersSpecCLI.ts (.version). |
+| --version | --version | implemented | sibling-unit | Registered on every command; prints the version result in place of the command, as upstream. Source: devContainersSpecCLI.ts (.version). |
 
 ### templates
 
 | Upstream option | dcb equivalent | Disposition | Unit | Reason / source |
 | --- | --- | --- | --- | --- |
 | --help | none | implement | templates | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: yargs built-in help. |
-| --version | version command | implement | sibling-unit | Shared version flag; version command already returns the version. Source: devContainersSpecCLI.ts (.version). |
+| --version | version command | implement | sibling-unit | dcb registers --version on every command; this command is not implemented yet. Source: devContainersSpecCLI.ts (.version). |
 
 ### templates apply
 
@@ -369,7 +369,7 @@ features, dotfiles, environment probing and version support.
 | --tmp-dir | none | implement | template-apply | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: templatesCLI/apply.ts:19. |
 | --omit-paths | none | implement | template-apply | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: templatesCLI/apply.ts:20. |
 | --help | none | implement | template-apply | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: yargs built-in help. |
-| --version | version command | implement | sibling-unit | Shared version flag; version command already returns the version. Source: devContainersSpecCLI.ts (.version). |
+| --version | version command | implement | sibling-unit | dcb registers --version on every command; this command is not implemented yet. Source: devContainersSpecCLI.ts (.version). |
 
 ### templates generate-docs
 
@@ -380,7 +380,7 @@ features, dotfiles, environment probing and version support.
 | --github-repo | none | implement | template-docs | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: templatesCLI/generateDocs.ts:15. |
 | --log-level | none | implement | template-docs | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: templatesCLI/generateDocs.ts:16. |
 | --help | none | implement | template-docs | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: yargs built-in help. |
-| --version | version command | implement | sibling-unit | Shared version flag; version command already returns the version. Source: devContainersSpecCLI.ts (.version). |
+| --version | version command | implement | sibling-unit | dcb registers --version on every command; this command is not implemented yet. Source: devContainersSpecCLI.ts (.version). |
 
 ### templates metadata
 
@@ -388,7 +388,7 @@ features, dotfiles, environment probing and version support.
 | --- | --- | --- | --- | --- |
 | --log-level | none | implement | template-metadata | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: templatesCLI/metadata.ts:13. |
 | --help | none | implement | template-metadata | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: yargs built-in help. |
-| --version | version command | implement | sibling-unit | Shared version flag; version command already returns the version. Source: devContainersSpecCLI.ts (.version). |
+| --version | version command | implement | sibling-unit | dcb registers --version on every command; this command is not implemented yet. Source: devContainersSpecCLI.ts (.version). |
 
 ### templates publish
 
@@ -398,7 +398,7 @@ features, dotfiles, environment probing and version support.
 | --namespace (-n) | none | implement | template-publish | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: collectionCommonUtils/publish.ts:13. |
 | --log-level | none | implement | template-publish | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: collectionCommonUtils/publish.ts:14. |
 | --help | none | implement | template-publish | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: yargs built-in help. |
-| --version | version command | implement | sibling-unit | Shared version flag; version command already returns the version. Source: devContainersSpecCLI.ts (.version). |
+| --version | version command | implement | sibling-unit | dcb registers --version on every command; this command is not implemented yet. Source: devContainersSpecCLI.ts (.version). |
 
 ### up
 
@@ -420,7 +420,7 @@ features, dotfiles, environment probing and version support.
 | --log-format | --log-format | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: devContainersSpecCLI.ts:115. |
 | --terminal-columns | none | implement | terminal | Add this upstream control to the corresponding handler. Source: devContainersSpecCLI.ts:116. |
 | --terminal-rows | none | implement | terminal | Add this upstream control to the corresponding handler. Source: devContainersSpecCLI.ts:117. |
-| --default-user-env-probe | none | implement | sibling-unit | Add this option across applicable commands. Source: devContainersSpecCLI.ts:118. |
+| --default-user-env-probe | none | implement | sibling-unit | Needs the upstream probe and its 10-second timeout, a new timeout mechanic that awaits Bob's decision. Source: devContainersSpecCLI.ts:118. |
 | --update-remote-user-uid-default | --update-remote-user-uid-default | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: devContainersSpecCLI.ts:119. |
 | --remove-existing-container | --remove-existing-container | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: devContainersSpecCLI.ts:120. |
 | --build-no-cache | --build-no-cache | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: devContainersSpecCLI.ts:121. |
@@ -434,12 +434,12 @@ features, dotfiles, environment probing and version support.
 | --cache-from | --cache-from | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: devContainersSpecCLI.ts:129. |
 | --cache-to | --cache-to | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: devContainersSpecCLI.ts:130. |
 | --buildkit | BuildKit through Engine API | not applicable by design | native-api | Approved native BuildKit requirement: the build contract requires native BuildKit; switching to the legacy Docker CLI builder is outside that contract. Source: devContainersSpecCLI.ts:131. |
-| --additional-features | none | implement | sibling-unit | Add this option across applicable commands. Source: devContainersSpecCLI.ts:132. |
+| --additional-features | --additional-features | implemented | sibling-unit | Registered; configuration features come first and win for an equal key, as upstream. Source: devContainersSpecCLI.ts:132. |
 | --skip-feature-auto-mapping [hidden] | none | implement | feature-controls | Implement upstream feature identifier mapping plus its opt-out; current resolver is not evidence of mapping parity. Source: devContainersSpecCLI.ts:133. |
 | --skip-post-attach | --skip-post-attach | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: devContainersSpecCLI.ts:134. |
-| --dotfiles-repository | none | implement | sibling-unit | Add this option across applicable commands. Source: devContainersSpecCLI.ts:135. |
-| --dotfiles-install-command | none | implement | sibling-unit | Add this option across applicable commands. Source: devContainersSpecCLI.ts:136. |
-| --dotfiles-target-path | none | implement | sibling-unit | Add this option across applicable commands. Source: devContainersSpecCLI.ts:137. |
+| --dotfiles-repository | --dotfiles-repository | implemented | sibling-unit | Registered; installs after postCreateCommand once per container. A failed install warns and the next run retries. Source: devContainersSpecCLI.ts:135. |
+| --dotfiles-install-command | --dotfiles-install-command | implemented | sibling-unit | Registered; runs in the clone in place of the default install-script search. Source: devContainersSpecCLI.ts:136. |
+| --dotfiles-target-path | --dotfiles-target-path | implemented | sibling-unit | Registered; default ~/dotfiles. Source: devContainersSpecCLI.ts:137. |
 | --container-session-data-folder | none | implement | data-folders | Add this upstream control to the corresponding handler. Source: devContainersSpecCLI.ts:138. |
 | --omit-config-remote-env-from-metadata [hidden] | none | implement | feature-controls | Default false, matching upstream: persist configuration remoteEnv in image metadata; enabling this option omits it. Source: devContainersSpecCLI.ts:139. |
 | --secrets-file | none | implement | environment | Optional JSON secret inputs for lifecycle command environments; do not add these inputs to image metadata. Source: devContainersSpecCLI.ts:140. |
@@ -449,7 +449,7 @@ features, dotfiles, environment probing and version support.
 | --include-configuration | none | implement | configuration | Add optional configuration to command results. Source: devContainersSpecCLI.ts:144. |
 | --include-merged-configuration | none | implement | configuration | Add optional merged configuration to this command result. Source: devContainersSpecCLI.ts:145. |
 | --help | --help | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: yargs built-in help. |
-| --version | version command | implement | sibling-unit | Shared version flag; version command already returns the version. Source: devContainersSpecCLI.ts (.version). |
+| --version | --version | implemented | sibling-unit | Registered on every command; prints the version result in place of the command, as upstream. Source: devContainersSpecCLI.ts (.version). |
 
 ### upgrade
 
@@ -464,4 +464,4 @@ features, dotfiles, environment probing and version support.
 | --feature (-f) [hidden] | none | implement | upgrade | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: upgradeCommand.ts:33. |
 | --target-version (-v) [hidden] | none | implement | upgrade | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: upgradeCommand.ts:34. |
 | --help | none | implement | upgrade | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: yargs built-in help. |
-| --version | version command | implement | sibling-unit | Shared version flag; version command already returns the version. Source: devContainersSpecCLI.ts (.version). |
+| --version | version command | implement | sibling-unit | dcb registers --version on every command; this command is not implemented yet. Source: devContainersSpecCLI.ts (.version). |
