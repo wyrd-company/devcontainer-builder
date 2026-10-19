@@ -262,13 +262,18 @@ func (a *application) findContainer(ctx context.Context, cli *dockerclient.Clien
 
 func (a *application) manageCommand(inspect bool) *cobra.Command {
 	var cfg configOptions
+	var selection mountOptions
 	name, short := "down", "Stop and remove the workspace devcontainer"
 	if inspect {
 		name, short = "inspect", "Inspect the workspace devcontainer"
 	}
 	cmd := &cobra.Command{Use: name, Short: short, Args: cobra.NoArgs}
 	cfg.flags(cmd)
+	selection.idLabelFlags(cmd)
 	cmd.RunE = func(cmd *cobra.Command, _ []string) error {
+		if err := selection.prepare(a); err != nil {
+			return err
+		}
 		dc, workspace, err := cfg.optionalLoad()
 		if err != nil {
 			return err
@@ -281,15 +286,19 @@ func (a *application) manageCommand(inspect bool) *cobra.Command {
 
 		// Container labels still identify Compose mode if the source config is gone.
 		if dc.Path == "" {
-			info, lookupErr := a.dockerHost(cli).Inspect(cmd.Context(), workspace)
+			id, lookupErr := a.findContainer(cmd.Context(), cli, dc, workspace, "")
 			if lookupErr != nil {
 				if !inspect && errors.Is(lookupErr, hostdocker.ErrContainerNotFound) {
 					return nil
 				}
 				return lookupErr
 			}
-			if info.Labels[dockercompose.LabelProject] != "" {
-				dc.Service = info.Labels[dockercompose.LabelService]
+			info, err := cli.ContainerInspect(cmd.Context(), id)
+			if err != nil {
+				return err
+			}
+			if info.Config != nil && info.Config.Labels[dockercompose.LabelProject] != "" {
+				dc.Service = info.Config.Labels[dockercompose.LabelService]
 			}
 		}
 		if !inspect {

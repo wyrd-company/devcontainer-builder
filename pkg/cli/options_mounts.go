@@ -45,11 +45,16 @@ type mountOptions struct {
 func (o *mountOptions) flags(cmd *cobra.Command) {
 	cmd.Flags().BoolVar(&o.gitRoot, "mount-workspace-git-root", true, "Mount the workspace using its Git root (=false mounts the workspace folder alone)")
 	cmd.Flags().BoolVar(&o.worktreeCommonDir, "mount-git-worktree-common-dir", false, "Mount the Git worktree common folder so Git works in the container; needs a worktree added with --relative-paths")
-	cmd.Flags().StringArrayVar(&o.idLabels, "id-label", nil, "Container id label NAME=VALUE (repeat): set on the container and used to select it, in place of the workspace labels")
+	o.idLabelFlags(cmd)
 	if cmd.Name() == "up" {
 		cmd.Flags().StringVar(&o.consistency, "workspace-mount-consistency", workspace.ConsistencyCached, "Workspace bind mount consistency on Docker Desktop: consistent, cached, or delegated")
 		cmd.Flags().StringArrayVar(&o.mounts, "mount", nil, "Additional mount type=<bind|volume>,source=<source>,target=<target>[,external=<true|false>] (repeat)")
 	}
+}
+
+// idLabelFlags also serves management commands, which do not place mounts.
+func (o *mountOptions) idLabelFlags(cmd *cobra.Command) {
+	cmd.Flags().StringArrayVar(&o.idLabels, "id-label", nil, "Container id label NAME=VALUE (repeat): select a container carrying every label")
 }
 
 // prepare validates the values and makes them the invocation's selection.

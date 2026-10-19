@@ -596,7 +596,7 @@ primary Compose service.
 | `--mount-git-worktree-common-dir` | `up`, `exec`, `read-configuration`, `run-user-commands` | `false` | For a linked worktree added with `git worktree add --relative-paths`, also mount the repository's common Git folder, so Git works in the container. Applies only with Git-root mounting. |
 | `--workspace-mount-consistency` | `up` | `cached` | `consistent`, `cached`, or `delegated`. On macOS and Windows hosts the workspace mount gets this consistency; Linux hosts ignore it, as upstream does. |
 | `--mount` | `up` | none | An additional mount, `type=<bind\|volume>,source=<source>,target=<target>[,external=<true\|false>]`. Repeat the flag for more mounts. `external=true` marks a Compose named volume as external. |
-| `--id-label` | `up`, `exec`, `read-configuration`, `run-user-commands` | none | A `name=value` label. Repeat the flag for more labels. |
+| `--id-label` | `up`, `exec`, `read-configuration`, `run-user-commands`, `down`, `inspect` | none | A `name=value` label. Repeat the flag for more labels. |
 
 The Git root is found from the files in the workspace's parent folders; `dcb`
 does not run `git`. `exec`, `run-user-commands`, `set-up`, and an `up` that
@@ -629,8 +629,9 @@ place of the workspace labels. A container qualifies only if it carries every
 given label.
 
 - `up` reuses a container with every label, or creates one with exactly these
-  labels and no workspace labels. `down` and `inspect` select by workspace, so
-  they do not find it.
+  labels and no workspace labels. `inspect --id-label` finds that container;
+  `down --id-label` removes only a container that carries every given label.
+  Both commands accept repeated labels and work without a configuration file.
 - `up --remove-existing-container` removes only a container that has every
   label. A container that has only some of the labels is not removed.
 
@@ -641,7 +642,8 @@ labels, as upstream does:
   reuses it whatever its labels are. The id labels are set only when `up`
   creates the primary container; a changed id label does not recreate it.
 - `up --remove-existing-container` and `down` remove the workspace's Compose
-  project. The project-conflict check still refuses a project that holds
+  project, even with `--id-label`; id labels do not widen or narrow removal.
+  The project-conflict check still refuses a project that holds
   another workspace's containers.
 - The id labels are added to the primary container beside the workspace labels,
   so the conflict check and workspace-scoped removal also cover it.

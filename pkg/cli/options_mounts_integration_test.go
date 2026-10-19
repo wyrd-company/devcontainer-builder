@@ -17,6 +17,7 @@ import (
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/api/types/mount"
+	"github.com/docker/docker/errdefs"
 	hostdocker "github.com/wyrd-company/devcontainer-builder/pkg/host/docker"
 )
 
@@ -58,7 +59,7 @@ func TestMountOptionsDockerIntegration(t *testing.T) {
 	volumeName := "dcb-mounts-" + unique
 	// Remove only what this test created: containers with its unique label or
 	// a workspace label below its folder (a defect may drop the id labels), and
-	// its named volume. down does not select id-labelled containers.
+	// its named volume.
 	t.Cleanup(func() {
 		list, _ := cli.ContainerList(ctx, container.ListOptions{All: true, Filters: filters.NewArgs(filters.Arg("label", mountsIDKey))})
 		owned, _ := cli.ContainerList(ctx, container.ListOptions{All: true, Filters: filters.NewArgs(filters.Arg("label", hostdocker.LabelLocalFolder))})
@@ -177,6 +178,64 @@ func TestMountOptionsDockerIntegration(t *testing.T) {
 			t.Fatalf("worktree exec=%q", out)
 		}
 	})
+}
+
+// Management must match every label even when no workspace configuration remains.
+func TestManageIDLabelsDockerIntegration(t *testing.T) {
+	cli, err := newDockerClient()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cli.Close()
+	ctx := context.Background()
+	workspace := t.TempDir()
+	sum := sha256.Sum256([]byte(workspace))
+	unique := fmt.Sprintf("%x", sum[:6])
+	labels := []string{"--id-label", mountsIDKey + "=" + unique, "--id-label", mountsRoleKey + "=managed"}
+	t.Cleanup(func() {
+		list, err := cli.ContainerList(ctx, container.ListOptions{All: true, Filters: filters.NewArgs(filters.Arg("label", mountsIDKey+"="+unique))})
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		for _, c := range list {
+			if err := cli.ContainerRemove(ctx, c.ID, container.RemoveOptions{Force: true, RemoveVolumes: true}); err != nil {
+				t.Error(err)
+			}
+		}
+	})
+	writeTestFile(t, filepath.Join(workspace, ".devcontainer.json"), `{"image":"alpine:3.20","updateRemoteUserUID":false}`)
+	up, _ := invoke(t, 0, append([]string{"up", "--workspace-folder", workspace, "--skip-post-create"}, labels...)...)
+	id := up["containerId"].(string)
+	decoy, err := cli.ContainerCreate(ctx, &container.Config{Image: "alpine:3.20", Cmd: []string{"sleep", "600"}, Labels: map[string]string{mountsIDKey: unique}}, nil, nil, nil, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A newer partial match must not hide the full match from inspect or down.
+	for _, args := range [][]string{{"--workspace-folder", workspace}, nil} {
+		t.Chdir(t.TempDir())
+		got, _ := invoke(t, 0, append(append([]string{"inspect"}, args...), labels...)...)
+		if got["containerId"] != id {
+			t.Fatalf("inspect=%v, want %s", got, id)
+		}
+	}
+	invoke(t, 0, append([]string{"down"}, labels...)...)
+	if _, err := cli.ContainerInspect(ctx, id); !errdefs.IsNotFound(err) {
+		t.Fatalf("selected container remains: %v", err)
+	}
+	if _, err := cli.ContainerInspect(ctx, decoy.ID); err != nil {
+		t.Fatalf("partial-label decoy removed: %v", err)
+	}
+	// With only the decoy left, down is a no-op and inspect reports absence.
+	invoke(t, 0, append([]string{"down"}, labels...)...)
+	invoke(t, 1, append([]string{"inspect"}, labels...)...)
+	if err := cli.ContainerRemove(ctx, decoy.ID, container.RemoveOptions{Force: true, RemoveVolumes: true}); err != nil {
+		t.Fatal(err)
+	}
+	remaining, err := cli.ContainerList(ctx, container.ListOptions{All: true, Filters: filters.NewArgs(filters.Arg("label", mountsIDKey+"="+unique))})
+	if err != nil || len(remaining) != 0 {
+		t.Fatalf("residue=%v err=%v", remaining, err)
+	}
 }
 
 // Compose keeps the ownership labels beside the id labels, so the project
