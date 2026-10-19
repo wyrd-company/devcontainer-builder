@@ -85,14 +85,19 @@ func (o configOptions) optionalLoad() (*spec.DevContainer, string, error) {
 func (a *application) readCommand() *cobra.Command {
 	var cfg configOptions
 	var includeMerged bool
-	var containerID string
+	var containerID, additionalFeatures string
 	cmd := &cobra.Command{Use: "read-configuration", Short: "Read and substitute devcontainer configuration", Args: cobra.NoArgs}
 	cfg.flags(cmd)
 	cmd.Flags().BoolVar(&includeMerged, "include-merged-configuration", false, "Include configuration merged with image and feature metadata")
 	cmd.Flags().StringVar(&containerID, "container-id", "", "Container metadata source for merged configuration")
+	cmd.Flags().StringVar(&additionalFeatures, "additional-features", "", "Additional features as JSON; they contribute to the merged configuration when no container exists")
 	cmd.RunE = func(cmd *cobra.Command, _ []string) error {
 		if cmd.Flags().Changed("container-id") && containerID == "" {
 			return usageError("--container-id must not be empty")
+		}
+		extra, err := parseAdditionalFeatures(additionalFeatures)
+		if err != nil {
+			return err
 		}
 		dc, workspace, err := cfg.load()
 		if err != nil {
@@ -103,7 +108,7 @@ func (a *application) readCommand() *cobra.Command {
 			return err
 		}
 		if includeMerged {
-			merged, err := a.mergedConfiguration(cmd.Context(), dc, workspace, containerID, configuration)
+			merged, err := a.mergedConfiguration(cmd.Context(), dc, workspace, containerID, configuration, extra)
 			if err != nil {
 				return err
 			}

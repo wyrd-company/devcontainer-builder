@@ -286,6 +286,11 @@ dcb up --workspace-folder . \
   --additional-features '{"ghcr.io/devcontainers/features/common-utils:2":{}}'
 ```
 
+`dcb read-configuration --include-merged-configuration` also takes
+`--additional-features`. As in the upstream CLI, the features add their
+metadata to `mergedConfiguration` only when the workspace has no container,
+and `mergedConfiguration.features` lists only the configuration's features.
+
 ### Inspect what a build uses
 
 `dcb generate` writes the Dockerfile and build context for a configuration,

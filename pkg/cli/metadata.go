@@ -18,7 +18,10 @@ import (
 	"github.com/wyrd-company/devcontainer-builder/pkg/substitute"
 )
 
-func (a *application) mergedConfiguration(ctx context.Context, dc *spec.DevContainer, workspace, id string, configuration map[string]any) (metadata.Merged, error) {
+// mergedConfiguration follows upstream: additional features contribute
+// metadata only when no container exists, and the merged features property
+// stays the configuration's own.
+func (a *application) mergedConfiguration(ctx context.Context, dc *spec.DevContainer, workspace, id string, configuration map[string]any, extra spec.OrderedMap) (metadata.Merged, error) {
 	// Reuse the loaded/substituted snapshot, including extension fields.
 	raw, err := json.Marshal(configuration)
 	if err != nil {
@@ -34,7 +37,7 @@ func (a *application) mergedConfiguration(ctx context.Context, dc *spec.DevConta
 		return metadata.Merged{}, err
 	}
 	defer cli.Close()
-	entries, labels, err := a.readMetadata(ctx, cli, &substituted, workspace, id)
+	entries, labels, err := a.readMetadata(ctx, cli, &substituted, workspace, id, extra)
 	if err != nil {
 		return metadata.Merged{}, err
 	}
@@ -46,7 +49,7 @@ func (a *application) mergedConfiguration(ctx context.Context, dc *spec.DevConta
 	return metadata.Merge(&substituted, entries), nil
 }
 
-func (a *application) readMetadata(ctx context.Context, cli *dockerclient.Client, dc *spec.DevContainer, workspace, id string) ([]metadata.Entry, map[string]string, error) {
+func (a *application) readMetadata(ctx context.Context, cli *dockerclient.Client, dc *spec.DevContainer, workspace, id string, extra spec.OrderedMap) ([]metadata.Entry, map[string]string, error) {
 	containerID, err := a.findContainer(ctx, cli, dc, workspace, id)
 	if err == nil {
 		info, err := cli.ContainerInspect(ctx, containerID)
@@ -71,7 +74,9 @@ func (a *application) readMetadata(ctx context.Context, cli *dockerclient.Client
 	if err != nil {
 		return nil, nil, err
 	}
-	resolved, cleanup, err := a.resolveFeatures(dc)
+	withExtra := *dc
+	withExtra.Features = dc.Features.WithAdditional(extra)
+	resolved, cleanup, err := a.resolveFeatures(&withExtra)
 	if err != nil {
 		return nil, nil, err
 	}

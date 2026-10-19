@@ -71,7 +71,8 @@ exporting an image. `--output` selects a filesystem export and cannot be
 combined with `--push` or `--load`. The result contains `cacheOnly: true`
 for a cache-only build, or `outputDir` for a filesystem export. `generate` returns `dockerfile` and `contextDir` paths.
 
-`build`, `generate`, and `up` take `--additional-features '<json>'`, an
+`build`, `generate`, `up`, and `read-configuration` take
+`--additional-features '<json>'`, an
 object in the form of the `features` property. Its features follow the
 configuration's; for a feature the configuration names, the configuration's
 options win. Invalid JSON exits `2`.

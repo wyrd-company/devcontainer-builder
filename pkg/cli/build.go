@@ -121,14 +121,11 @@ func (o *buildOptions) prepare(a *application, dc *spec.DevContainer, workspace 
 		return bo, usageError("--output cannot be combined with --push or --load")
 	}
 
-	if o.additionalFeatures != "" {
-		extra, err := spec.ParseFeatures([]byte(o.additionalFeatures))
-		if err != nil {
-			return bo, usageError("--additional-features: %v", err)
-		}
-		dc.Features = dc.Features.WithAdditional(extra)
+	extra, err := parseAdditionalFeatures(o.additionalFeatures)
+	if err != nil {
+		return bo, err
 	}
-	var err error
+	dc.Features = dc.Features.WithAdditional(extra)
 	if bo.BuildArgs, err = parsePairs(o.buildArgs); err != nil {
 		return bo, err
 	}
@@ -183,6 +180,19 @@ func (a *application) buildResult(bo builder.Options, images []string) {
 	default:
 		a.result["imageName"] = images
 	}
+}
+
+// parseAdditionalFeatures reads --additional-features. Empty means none, as
+// upstream treats an empty value.
+func parseAdditionalFeatures(raw string) (spec.OrderedMap, error) {
+	if raw == "" {
+		return spec.OrderedMap{}, nil
+	}
+	extra, err := spec.ParseFeatures([]byte(raw))
+	if err != nil {
+		return spec.OrderedMap{}, usageError("--additional-features: %v", err)
+	}
+	return extra, nil
 }
 
 func firstImage(images []string) string {
