@@ -126,10 +126,10 @@ func (o *buildOptions) prepare(a *application, dc *spec.DevContainer, workspace 
 		return bo, err
 	}
 	dc.Features = dc.Features.WithAdditional(extra)
-	if bo.BuildArgs, err = parsePairs(o.buildArgs); err != nil {
+	if bo.BuildArgs, err = parsePairs("build-arg", o.buildArgs); err != nil {
 		return bo, err
 	}
-	if bo.Labels, err = parsePairs(o.labels); err != nil {
+	if bo.Labels, err = parsePairs("label", o.labels); err != nil {
 		return bo, err
 	}
 	bo.Spec, bo.SpecPath, bo.Workspace = dc, dc.Path, workspace

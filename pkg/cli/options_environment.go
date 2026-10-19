@@ -34,19 +34,58 @@ func (o *environmentOptions) flags(cmd *cobra.Command, secrets bool) {
 	}
 }
 
-// load parses the flags. From here on, secret values are masked in stderr
-// and in the result.
+// load reads the secrets file before it validates --remote-env, so that the
+// mask covers every error after it.
 func (o *environmentOptions) load(a *application) (remote, secrets map[string]string, err error) {
-	remote, err = parsePairs(o.remoteEnv)
-	if err != nil {
-		return nil, nil, err
-	}
-	secrets, err = readSecretsFile(o.secretsFile)
+	secrets, err = a.secretsFile(o.secretsFile)
 	if err != nil {
 		return nil, nil, err
 	}
 	a.maskSecrets(secrets)
+	remote, err = parsePairs("remote-env", o.remoteEnv)
+	if err != nil {
+		return nil, nil, err
+	}
 	return remote, secrets, nil
+}
+
+type secretsFileRead struct {
+	secrets map[string]string
+	err     error
+}
+
+// prescanSecrets reads each --secrets-file in args and masks its values
+// before flag parsing, whose errors quote rejected values. It stops at "--".
+// A file that cannot be read is reported when the command loads its flag.
+func (a *application) prescanSecrets(args []string) {
+	for i, arg := range args {
+		path, ok := strings.CutPrefix(arg, "--secrets-file=")
+		switch {
+		case arg == "--":
+			return
+		case arg == "--secrets-file" && i+1 < len(args):
+			path, ok = args[i+1], true
+		}
+		if ok {
+			if secrets, err := a.secretsFile(path); err == nil {
+				a.maskSecrets(secrets)
+			}
+		}
+	}
+}
+
+// secretsFile reads each path once, so that a pipe such as /dev/stdin
+// works and the mask and the lifecycle use the same values.
+func (a *application) secretsFile(path string) (map[string]string, error) {
+	if read, ok := a.secretFiles[path]; ok {
+		return read.secrets, read.err
+	}
+	secrets, err := readSecretsFile(path)
+	if a.secretFiles == nil {
+		a.secretFiles = map[string]secretsFileRead{}
+	}
+	a.secretFiles[path] = secretsFileRead{secrets, err}
+	return secrets, err
 }
 
 // readSecretsFile reads upstream's secrets file: a JSON (with comments)

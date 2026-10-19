@@ -27,9 +27,7 @@ func newSecretMask(secrets map[string]string) *secretMask {
 	seen := map[string]bool{}
 	var spellings []string
 	for _, value := range secrets {
-		quoted := strconv.Quote(value)
-		encoded, _ := json.Marshal(value)
-		for _, s := range []string{value, quoted[1 : len(quoted)-1], string(encoded[1 : len(encoded)-1])} {
+		for _, s := range secretSpellings(value) {
 			if s != "" && !seen[s] {
 				seen[s] = true
 				spellings = append(spellings, s)
@@ -51,6 +49,12 @@ func newSecretMask(secrets map[string]string) *secretMask {
 		m.spellings = append(m.spellings, []byte(s))
 	}
 	return m
+}
+
+func secretSpellings(value string) []string {
+	quoted := strconv.Quote(value)
+	encoded, _ := json.Marshal(value)
+	return []string{value, quoted[1 : len(quoted)-1], string(encoded[1 : len(encoded)-1])}
 }
 
 // String masks a complete text.
@@ -138,9 +142,18 @@ func (m *secretMask) value(v any) any {
 	return v
 }
 
-// maskSecrets masks the values in stderr and the result from now on.
+// maskSecrets adds the values to the mask of stderr and the result.
 func (a *application) maskSecrets(secrets map[string]string) {
-	a.mask = newSecretMask(secrets)
+	if len(secrets) == 0 {
+		return
+	}
+	if a.secretValues == nil {
+		a.secretValues = map[string]string{}
+	}
+	for _, value := range secrets {
+		a.secretValues[value] = value
+	}
+	a.mask = newSecretMask(a.secretValues)
 	if a.logs != nil {
 		a.logs.setMask(a.mask)
 	}

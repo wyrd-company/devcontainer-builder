@@ -33,7 +33,7 @@ func (a *application) execCommand() *cobra.Command {
 		if cmd.Flags().Changed("container-id") && id == "" {
 			return usageError("--container-id must not be empty")
 		}
-		extra, err := parsePairs(remoteEnv)
+		extra, err := parsePairs("remote-env", remoteEnv)
 		if err != nil {
 			return err
 		}

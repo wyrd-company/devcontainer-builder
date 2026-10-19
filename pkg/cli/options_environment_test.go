@@ -81,18 +81,23 @@ func TestEnvironmentFlagSurface(t *testing.T) {
 	}
 }
 
-// Like exec, a --remote-env without a name is an invalid invocation. It is
-// rejected before Docker is reached.
+// A --remote-env without a name is an invalid invocation, rejected before
+// Docker is reached. The error names the flag and position, not the value.
 func TestRemoteEnvFormat(t *testing.T) {
 	t.Setenv("DOCKER_HOST", "unix://"+filepath.Join(t.TempDir(), "missing.sock"))
 	for _, args := range [][]string{
 		{"up"},
 		{"set-up", "--container-id", "sample"},
 		{"run-user-commands"},
+		{"exec", "--container-id", "sample"},
 	} {
 		for _, value := range []string{"SAMPLE", "=value"} {
-			result, _ := invoke(t, 2, append(args, "--remote-env", value)...)
-			if !strings.Contains(result["message"].(string), "expected KEY=VALUE") {
+			argv := append(append([]string(nil), args...), "--remote-env", value)
+			if args[0] == "exec" {
+				argv = append(argv, "--", "true")
+			}
+			result, _ := invoke(t, 2, argv...)
+			if result["message"] != "--remote-env value 1 must be KEY=VALUE" {
 				t.Errorf("%v --remote-env %q: %v", args, value, result)
 			}
 		}

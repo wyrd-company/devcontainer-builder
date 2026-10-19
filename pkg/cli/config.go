@@ -240,12 +240,14 @@ func resolveRemoteEnv(in map[string]any, ctx substitute.Context, containerEnv ma
 	return out
 }
 
-func parsePairs(values []string) (map[string]string, error) {
+// parsePairs reads repeated KEY=VALUE flag values. An error names the flag
+// and the value's position, never the value, which can hold a secret.
+func parsePairs(flag string, values []string) (map[string]string, error) {
 	out := map[string]string{}
-	for _, value := range values {
+	for i, value := range values {
 		key, val, ok := strings.Cut(value, "=")
 		if !ok || key == "" {
-			return nil, usageError("expected KEY=VALUE, got %q", value)
+			return nil, usageError("--%s value %d must be KEY=VALUE", flag, i+1)
 		}
 		out[key] = val
 	}

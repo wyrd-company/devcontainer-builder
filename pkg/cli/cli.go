@@ -37,6 +37,8 @@ type application struct {
 	running                bool
 	logs                   *logWriter
 	mask                   *secretMask
+	secretValues           map[string]string
+	secretFiles            map[string]secretsFileRead
 }
 
 type exitError struct {
@@ -59,6 +61,8 @@ var errVersionShown = errors.New("version shown")
 // Embedded skills are carried in the JSON result as strings.
 func Run(ctx context.Context, args []string, version string, stdin io.Reader, stdout, stderr io.Writer) int {
 	a := &application{version: version, stdin: stdin, stderr: stderr, stdout: stdout, result: map[string]any{}}
+	// Mask secrets before flag parsing, whose errors quote rejected values.
+	a.prescanSecrets(args)
 	root := a.command()
 	root.SetArgs(args)
 	cmd, err := root.ExecuteContextC(ctx)
@@ -162,7 +166,7 @@ func (a *application) command() *cobra.Command {
 			return usageError("invalid --log-level %q", a.logLevel)
 		}
 		a.userDataFolder = folderOption(cmd, "user-data-folder")
-		a.logs = &logWriter{dst: a.stderr, json: a.logFormat == "json"}
+		a.logs = &logWriter{dst: a.stderr, json: a.logFormat == "json", mask: a.mask}
 		return nil
 	}
 	root.AddCommand(a.buildCommand(false), a.buildCommand(true), a.upCommand(), a.execCommand(), a.readCommand(), a.lifecycleCommand("run-user-commands"), a.lifecycleCommand("set-up"), a.manageCommand(false), a.manageCommand(true), a.featuresCommand(), a.serverCommand(), a.skillsCommand())
