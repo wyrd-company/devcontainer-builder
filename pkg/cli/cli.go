@@ -99,7 +99,7 @@ func Run(ctx context.Context, args []string, version string, stdin io.Reader, st
 	}
 	if a.exportStdout {
 		if err != nil {
-			_, _ = fmt.Fprintln(a.stderr, err)
+			_, _ = fmt.Fprintln(a.stderr, a.mask.String(err.Error()))
 		}
 		return code
 	}
@@ -146,7 +146,7 @@ func (a *application) command() *cobra.Command {
 		if cmd.Parent() == nil {
 			help += "\nCommon configuration flags (on workspace commands):\n  --workspace-folder string  Local workspace folder (default .)\n  --config string            Explicit devcontainer.json path\n  --override-config string   Alternate content, with original relative paths\n"
 		}
-		if _, err := io.WriteString(a.stdout, help); err != nil {
+		if _, err := io.WriteString(a.stdout, a.mask.String(help)); err != nil {
 			a.outputErr = err
 		}
 	})

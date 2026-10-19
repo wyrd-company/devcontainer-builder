@@ -8,7 +8,9 @@ package cli
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
+	"net/url"
 	"sort"
 	"strconv"
 )
@@ -16,9 +18,10 @@ import (
 // secretMaskText replaces secret values, as upstream masks its log.
 const secretMaskText = "********"
 
-// secretMask replaces secret values in stderr and in the result. It masks
-// the raw value and its Go-quoted and JSON-escaped spellings, so that a
-// value quoted into an error is masked too.
+// secretMask replaces secret values on every output path. It masks each
+// spelling in which a value can be echoed: raw, Go-quoted, JSON-escaped,
+// standard and URL base64 with and without padding, and query and path
+// escaped.
 type secretMask struct{ spellings [][]byte }
 
 // newSecretMask returns nil when no value is nonempty. An empty value is
@@ -54,7 +57,11 @@ func newSecretMask(secrets map[string]string) *secretMask {
 func secretSpellings(value string) []string {
 	quoted := strconv.Quote(value)
 	encoded, _ := json.Marshal(value)
-	return []string{value, quoted[1 : len(quoted)-1], string(encoded[1 : len(encoded)-1])}
+	b := []byte(value)
+	return []string{value, quoted[1 : len(quoted)-1], string(encoded[1 : len(encoded)-1]),
+		base64.StdEncoding.EncodeToString(b), base64.RawStdEncoding.EncodeToString(b),
+		base64.URLEncoding.EncodeToString(b), base64.RawURLEncoding.EncodeToString(b),
+		url.QueryEscape(value), url.PathEscape(value)}
 }
 
 // String masks a complete text.

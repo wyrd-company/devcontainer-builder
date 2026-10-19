@@ -22,16 +22,34 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// sampleSecret holds characters whose quoted and JSON spellings differ from
-// the raw value.
-const sampleSecret = `sample"secret<7f3c>`
+// sampleSecret is chosen so that each of its leak spellings differs from the
+// others: it has a quote, a space, HTML-escaped characters, and bytes that
+// standard and URL base64 encode differently.
+const sampleSecret = `sample"secret <7f3c>?~`
 
-// leakSpellings are the forms in which a leaked value could appear.
+// leakSpellings are the forms in which a leaked value could appear. They are
+// computed here, independently of the mask, so that a spelling the mask
+// misses is found.
 func leakSpellings(value string) []string {
 	quoted := strconv.Quote(value)
 	encoded, _ := json.Marshal(value)
+	b := []byte(value)
 	return []string{value, quoted[1 : len(quoted)-1], string(encoded[1 : len(encoded)-1]),
-		base64.StdEncoding.EncodeToString([]byte(value)), url.QueryEscape(value), url.PathEscape(value)}
+		base64.StdEncoding.EncodeToString(b), base64.RawStdEncoding.EncodeToString(b),
+		base64.URLEncoding.EncodeToString(b), base64.RawURLEncoding.EncodeToString(b),
+		url.QueryEscape(value), url.PathEscape(value)}
+}
+
+// The sentinel's spellings must be distinct, or a test that injects one
+// spelling would also cover another by accident.
+func TestSampleSecretSpellingsDistinct(t *testing.T) {
+	seen := map[string]bool{}
+	for _, s := range leakSpellings(sampleSecret) {
+		if seen[s] {
+			t.Errorf("spelling %q repeats", s)
+		}
+		seen[s] = true
+	}
 }
 
 func assertNoSecret(t *testing.T, channel, text string) {
