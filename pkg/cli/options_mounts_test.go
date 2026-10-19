@@ -163,14 +163,23 @@ func TestWorkspaceMountConsistency(t *testing.T) {
 		if err := a.placeWorkspace(dc, app); err != nil {
 			t.Fatal(err)
 		}
-		return a.dockerMounts()
+		ws, extra, err := a.dockerMounts()
+		if err != nil {
+			t.Fatal(err)
+		}
+		return ws, extra
 	}
-	ws, extra := place("darwin", "delegated", "type=volume,source=cache,target=/cache,external=true", "type=bind,source=/host/data,target=/data")
+	ws, extra := place("darwin", "delegated", "type=volume,source=cache,target=/cache,external=true", "type=bind,source=/host/data,target=/data", "type=bind,source=relative/dir,target=/relative")
 	if *ws != (mount.Mount{Type: mount.TypeBind, Source: repo, Target: "/workspaces/repo", Consistency: "delegated"}) {
 		t.Fatalf("darwin workspace mount=%+v", ws)
 	}
-	want := []mount.Mount{{Type: mount.TypeVolume, Source: "cache", Target: "/cache"}, {Type: mount.TypeBind, Source: "/host/data", Target: "/data"}}
-	if len(extra) != 2 || extra[0] != want[0] || extra[1] != want[1] {
+	// A relative bind source resolves against the current directory.
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []mount.Mount{{Type: mount.TypeVolume, Source: "cache", Target: "/cache"}, {Type: mount.TypeBind, Source: "/host/data", Target: "/data"}, {Type: mount.TypeBind, Source: filepath.Join(cwd, "relative", "dir"), Target: "/relative"}}
+	if len(extra) != 3 || extra[0] != want[0] || extra[1] != want[1] || extra[2] != want[2] {
 		t.Fatalf("mounts=%+v", extra)
 	}
 	if ws, extra = place("linux", "delegated"); ws.Consistency != "" || len(extra) != 0 {

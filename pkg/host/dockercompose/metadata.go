@@ -5,6 +5,7 @@ package dockercompose
 
 import (
 	"maps"
+	"path/filepath"
 	"slices"
 	"strings"
 
@@ -83,13 +84,27 @@ func applyPrimaryMetadata(proj *types.Project, dc *spec.DevContainer, req UpRequ
 	for key, value := range env {
 		svc.Environment[key] = &value
 	}
-	// Additional mounts follow the metadata mounts, as in upstream's override file.
-	mounts := slices.Clone(dc.Mounts)
-	for _, m := range req.Mounts {
-		mounts = append(mounts, m)
+	type parsedMount struct {
+		vol      types.ServiceVolumeConfig
+		external bool
 	}
-	for _, raw := range mounts {
+	var mounts []parsedMount
+	for _, raw := range dc.Mounts {
 		vol, external := metadataVolume(raw)
+		mounts = append(mounts, parsedMount{vol, external})
+	}
+	// Additional mounts follow the metadata mounts, as in upstream's override
+	// file, where Compose resolves a relative bind source against the project
+	// folder.
+	for _, raw := range req.Mounts {
+		vol, external := metadataVolume(raw)
+		if vol.Type == types.VolumeTypeBind && vol.Source != "" && !filepath.IsAbs(vol.Source) {
+			vol.Source = filepath.Join(proj.WorkingDir, vol.Source)
+		}
+		mounts = append(mounts, parsedMount{vol, external})
+	}
+	for _, m := range mounts {
+		vol, external := m.vol, m.external
 		if vol.Target == "" {
 			continue
 		}

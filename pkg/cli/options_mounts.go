@@ -136,8 +136,10 @@ func declaresWorkspaceMount(dc *spec.DevContainer) bool {
 }
 
 // dockerMounts converts the placement and --mount values for the Docker host.
-// External applies to Compose volume declarations only, as upstream.
-func (a *application) dockerMounts() (*mount.Mount, []mount.Mount) {
+// External applies to Compose volume declarations only, as upstream. A
+// relative bind source resolves against the current directory, as the Docker
+// CLI that upstream calls resolves it.
+func (a *application) dockerMounts() (*mount.Mount, []mount.Mount, error) {
 	var ws *mount.Mount
 	var out []mount.Mount
 	bind := func(m *workspace.Mount) mount.Mount {
@@ -155,10 +157,18 @@ func (a *application) dockerMounts() (*mount.Mount, []mount.Mount) {
 	if a.mounts != nil {
 		for _, raw := range a.mounts.mounts {
 			parts := mountPattern.FindStringSubmatch(raw)
-			out = append(out, mount.Mount{Type: mount.Type(parts[1]), Source: parts[2], Target: parts[3]})
+			m := mount.Mount{Type: mount.Type(parts[1]), Source: parts[2], Target: parts[3]}
+			if m.Type == mount.TypeBind && !filepath.IsAbs(m.Source) {
+				abs, err := filepath.Abs(m.Source)
+				if err != nil {
+					return nil, nil, err
+				}
+				m.Source = abs
+			}
+			out = append(out, m)
 		}
 	}
-	return ws, out
+	return ws, out, nil
 }
 
 // composeMounts returns the --mount values for the Compose host.

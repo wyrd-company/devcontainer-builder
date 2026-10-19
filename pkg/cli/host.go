@@ -142,7 +142,10 @@ func (a *application) upCommand() *cobra.Command {
 			if a.placement != nil {
 				req.ContainerWorkspace = a.placement.WorkspaceFolder
 			}
-			req.WorkspaceMount, req.Mounts = a.dockerMounts()
+			req.WorkspaceMount, req.Mounts, err = a.dockerMounts()
+			if err != nil {
+				return err
+			}
 			res, err := a.dockerHost(cli).Up(cmd.Context(), req)
 			if err != nil {
 				return err

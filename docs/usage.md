@@ -550,10 +550,12 @@ existing container. Give them the values that `up` used. `read-configuration`
 returns the folder and mounts in its `workspace` object. A configuration that
 sets `workspaceFolder` keeps it; one that sets `workspaceMount` keeps its mount.
 
-`dcb` mounts no host path that is not in the configuration or in a flag.
-`--mount-workspace-git-root` exposes the Git root, which can hold more than the
-workspace folder; use `--mount-workspace-git-root=false` to keep the mount to
-the workspace folder.
+Apart from the workspace mount, `dcb` mounts no host path that is not in the
+configuration or in a flag. The default Git-root mount exposes the Git root,
+which can hold more than the workspace folder; use
+`--mount-workspace-git-root=false` to keep the mount to the workspace folder.
+A relative `--mount` bind source resolves against the current directory, or
+against the Compose project folder for a Compose configuration.
 
 ### Id labels
 

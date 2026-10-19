@@ -274,12 +274,13 @@ func TestComposeMetadataVolumeDeclarations(t *testing.T) {
 
 // Request mounts follow the metadata mounts and declare their named volumes.
 func TestComposeRequestMounts(t *testing.T) {
-	proj := &types.Project{Name: "sample-project", Services: types.Services{"app": {Image: "alpine"}}}
+	proj := &types.Project{Name: "sample-project", WorkingDir: "/project", Services: types.Services{"app": {Image: "alpine"}}}
 	dc := &spec.DevContainer{Service: "app", Mounts: []any{"type=bind,source=/host/data,target=/data"}}
 	req := UpRequest{Mounts: []string{
 		"type=volume,source=cache,target=/cache",
 		"type=volume,source=shared,target=/shared,external=true",
 		"type=bind,source=/host/extra,target=/data",
+		"type=bind,source=relative/dir,target=/relative",
 	}}
 	applyPrimaryMetadata(proj, dc, req, substitute.Context{})
 	got := proj.Services["app"].Volumes
@@ -287,6 +288,7 @@ func TestComposeRequestMounts(t *testing.T) {
 		{Type: "volume", Source: "cache", Target: "/cache"},
 		{Type: "volume", Source: "shared", Target: "/shared"},
 		{Type: "bind", Source: "/host/extra", Target: "/data"},
+		{Type: "bind", Source: "/project/relative/dir", Target: "/relative"},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("volumes=%+v", got)
