@@ -645,6 +645,8 @@ version 1 feature references by default. Explicit OCI references and local
 feature paths stay unchanged. The skip flag disables this mapping wherever
 features must be resolved; it does not change an existing container's features.
 Unmapped bare legacy identifiers fail as unsupported, matching upstream.
+The deprecated `gradle`, `maven`, and `jupyterlab` features are first folded
+into Java or Python feature options, including when identifier mapping is skipped.
 
 Configuration remoteEnv is persisted in metadata by default, matching upstream.
 The omit flag affects only the current configuration's metadata contribution.

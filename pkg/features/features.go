@@ -145,6 +145,10 @@ func (r *Resolver) ResolveWithLockfile(ctx context.Context, specFeatures spec.Or
 	if specFeatures.Len() == 0 {
 		return nil, nil
 	}
+	specFeatures, err := r.upgradeDeprecatedFeatureOptions(specFeatures)
+	if err != nil {
+		return nil, err
+	}
 	if err := os.MkdirAll(stagingDir, 0o755); err != nil {
 		return nil, err
 	}

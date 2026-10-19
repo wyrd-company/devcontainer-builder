@@ -106,7 +106,7 @@ func TestResolveFeatureAutoMapping(t *testing.T) {
 }
 
 func TestResolveRejectsBareLegacyIdentifiers(t *testing.T) {
-	for _, id := range []string{"sample", "node:1", "gradle", "maven", "jupyterlab"} {
+	for _, id := range []string{"sample", "node:1", "gradle:1", "Maven"} {
 		t.Run(id, func(t *testing.T) {
 			reg := newFakeRegistry(t)
 			r := reg.resolver()
