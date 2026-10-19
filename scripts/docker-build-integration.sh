@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+source "$(dirname "${BASH_SOURCE[0]}")/integration-timeout.sh"
 
 cd "$(git rev-parse --show-toplevel)"
 
@@ -16,4 +17,4 @@ go run ./cmd/dcb generate \
 find "${generate_dir}" -maxdepth 5 -type f | sort > "${artifact_dir}/generated-context-files.txt"
 
 export DCB_ARTIFACT_DIR="${artifact_dir}"
-go test -v -tags docker_integration ./cmd/dcb ./pkg/builder ./pkg/buildkit -count=1
+go test -timeout "$integration_test_timeout" -v -tags docker_integration ./cmd/dcb ./pkg/builder ./pkg/buildkit -count=1

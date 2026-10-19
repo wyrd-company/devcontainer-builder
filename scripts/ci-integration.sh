@@ -2,6 +2,7 @@
 # relationships:
 #   references: [taskfile]
 set -euo pipefail
+source "$(dirname "${BASH_SOURCE[0]}")/integration-timeout.sh"
 suite="$1"
 # Integration must not consume the operator's registry configuration.
 export DOCKER_CONFIG
@@ -47,7 +48,7 @@ if [[ -n "$container" ]]; then
 fi
 case "$suite" in
   all)
-    go test -v -tags docker_integration ./... -count=1 2>&1 | tee artifacts/docker-all-integration.log
+    go test -timeout "$integration_test_timeout" -v -tags docker_integration ./... -count=1 2>&1 | tee artifacts/docker-all-integration.log
     ;;
   classic)
     # Check the daemon variant, then address only that daemon for the tests.
@@ -59,11 +60,11 @@ case "$suite" in
     fi
     echo "Classic Docker image store: $driver"
     env -u DOCKER_TLS_VERIFY -u DOCKER_CERT_PATH DOCKER_HOST="$classic_host" \
-      go test -v -tags docker_integration ./pkg/buildkit ./pkg/builder \
+      go test -timeout "$integration_test_timeout" -v -tags docker_integration ./pkg/buildkit ./pkg/builder \
       -run 'TestDaemon.*Integration|TestEngineBuildIntegration' -count=1 2>&1 | tee artifacts/docker-classic-integration.log
     ;;
   remote)
-    go test -v -tags docker_integration ./pkg/builder -run TestEngineBuildIntegration -count=1 2>&1 | tee artifacts/docker-remote-integration.log
+    go test -timeout "$integration_test_timeout" -v -tags docker_integration ./pkg/builder -run TestEngineBuildIntegration -count=1 2>&1 | tee artifacts/docker-remote-integration.log
     ;;
   *)
     bash "scripts/docker-${suite}-integration.sh" 2>&1 | tee "artifacts/docker-${suite}-integration.log"

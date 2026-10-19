@@ -171,6 +171,7 @@ tasks:
         fi
       - pipx install --force rumdl==0.3.0
       - task: release:yaml-tool
+  # Docker suite scripts share the 20m per-package budget in integration-timeout.sh.
   integration:docker:
     desc: Run every Docker integration suite on stock Docker
     cmds:
