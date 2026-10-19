@@ -56,6 +56,15 @@ dcb down --workspace-folder .
 `dcb --help` lists the commands with examples. `dcb <command> --help` lists
 the flags of one command. Help is plain text.
 
+### Not yet supported
+
+These upstream command families are not yet supported:
+
+- [`outdated`](https://github.com/wyrd-company/devcontainer-builder/issues/20)
+- [`upgrade`](https://github.com/wyrd-company/devcontainer-builder/issues/21)
+- [Feature authoring commands under `features`](https://github.com/wyrd-company/devcontainer-builder/issues/22)
+- [`templates`](https://github.com/wyrd-company/devcontainer-builder/issues/23)
+
 ### Workspace flags
 
 Commands that read a configuration take these flags:

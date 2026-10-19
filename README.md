@@ -72,6 +72,15 @@ The [parity harness](test/parity) runs both CLIs on upstream fixtures and
 reports the share of results that match. Some upstream behavior is not yet
 matched. [Overview](https://wyrd.foo/docs/dcb/overview) lists the differences.
 
+### Not yet supported
+
+These upstream command families are not yet supported:
+
+- [`outdated`](https://github.com/wyrd-company/devcontainer-builder/issues/20)
+- [`upgrade`](https://github.com/wyrd-company/devcontainer-builder/issues/21)
+- [Feature authoring commands under `features`](https://github.com/wyrd-company/devcontainer-builder/issues/22)
+- [`templates`](https://github.com/wyrd-company/devcontainer-builder/issues/23)
+
 ## Go libraries
 
 The packages under [`pkg/`](pkg) build images, run containers on Docker or
