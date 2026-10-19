@@ -30,8 +30,8 @@ registration includes the three session-folder pairs awaiting probe-cache behavi
 
 ## Dispositions
 
-- implemented: **138**.
-- implement: **99**.
+- implemented: **147**.
+- implement: **90**.
 - not applicable by design: **15**.
 - needs Bob's decision: **1**.
 
@@ -138,11 +138,11 @@ features, dotfiles, environment probing and version support.
 | --label | --label | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: devContainersSpecCLI.ts:523. |
 | --output | --output | implemented | exporters | Buildx exporter specifications and short destinations through native BuildKit and the Engine API. Source: devContainersSpecCLI.ts:524. |
 | --additional-features | --additional-features | implemented | sibling-unit | Registered; configuration features come first and win for an equal key, as upstream. Source: devContainersSpecCLI.ts:525. |
-| --skip-feature-auto-mapping [hidden] | none | implement | feature-controls | Implement upstream feature identifier mapping plus its opt-out; current resolver is not evidence of mapping parity. Source: devContainersSpecCLI.ts:526. |
-| --skip-persisting-customizations-from-features [hidden] | none | implement | feature-controls | Add this upstream control to the corresponding handler. Source: devContainersSpecCLI.ts:527. |
+| --skip-feature-auto-mapping [hidden] | --skip-feature-auto-mapping | implemented | feature-controls | Registered hidden boolean, default false; resolver maps upstream legacy IDs unless enabled. Source: devContainersSpecCLI.ts:526. |
+| --skip-persisting-customizations-from-features [hidden] | --skip-persisting-customizations-from-features | implemented | feature-controls | Registered hidden boolean, default false; omits new feature customizations while preserving inherited and configuration metadata. Source: devContainersSpecCLI.ts:527. |
 | --experimental-lockfile [hidden] | --experimental-lockfile | implemented | lockfile | Digest-pinned resolution, integrity checks, frozen drift validation, and atomic publication after success. Source: devContainersSpecCLI.ts:528. |
 | --experimental-frozen-lockfile [hidden] | --experimental-frozen-lockfile | implemented | lockfile | Digest-pinned resolution, integrity checks, frozen drift validation, and atomic publication after success. Source: devContainersSpecCLI.ts:529. |
-| --omit-syntax-directive [hidden] | none | implement | feature-controls | Add this upstream control to the corresponding handler. Source: devContainersSpecCLI.ts:530. |
+| --omit-syntax-directive [hidden] | --omit-syntax-directive | implemented | feature-controls | Registered hidden boolean, default false; omits generated directives and filters authored syntax directives from Dockerfile frontend input. Source: devContainersSpecCLI.ts:530. |
 | --help | --help | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: yargs built-in help. |
 | --version | --version | implemented | sibling-unit | Registered on every command; prints the version result in place of the command, as upstream. Source: devContainersSpecCLI.ts (.version). |
 
@@ -168,7 +168,7 @@ features, dotfiles, environment probing and version support.
 | --terminal-rows | same name | implemented | terminal | Paired numeric dimensions size lifecycle and exec PTYs; zero leaves the size unset. Source: devContainersSpecCLI.ts:1232. |
 | --default-user-env-probe | none | implement | sibling-unit | Needs the upstream probe and its 10-second timeout, a new timeout mechanic that awaits Bob's decision. Source: devContainersSpecCLI.ts:1233. |
 | --remote-env | --remote-env | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: devContainersSpecCLI.ts:1234. |
-| --skip-feature-auto-mapping [hidden] | none | implement | feature-controls | Implement upstream feature identifier mapping plus its opt-out; current resolver is not evidence of mapping parity. Source: devContainersSpecCLI.ts:1235. |
+| --skip-feature-auto-mapping [hidden] | --skip-feature-auto-mapping | implemented | feature-controls | Registered hidden boolean, default false; resolver maps upstream legacy IDs unless enabled. Source: devContainersSpecCLI.ts:1235. |
 | --help | --help | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: yargs built-in help. |
 | --version | --version | implemented | sibling-unit | Registered on every command; prints the version result in place of the command, as upstream. Source: devContainersSpecCLI.ts (.version). |
 
@@ -286,7 +286,7 @@ features, dotfiles, environment probing and version support.
 | --include-features-configuration | --include-features-configuration | implemented | covered | Resolved feature sets, values and sources are included on request. Source: devContainersSpecCLI.ts:974. |
 | --include-merged-configuration | --include-merged-configuration | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: devContainersSpecCLI.ts:975. |
 | --additional-features | --additional-features | implemented | sibling-unit | Registered; contributes to the merged configuration only when no container exists, as upstream. Source: devContainersSpecCLI.ts:976. |
-| --skip-feature-auto-mapping [hidden] | none | implement | feature-controls | Implement upstream feature identifier mapping plus its opt-out; current resolver is not evidence of mapping parity. Source: devContainersSpecCLI.ts:977. |
+| --skip-feature-auto-mapping [hidden] | --skip-feature-auto-mapping | implemented | feature-controls | Registered hidden boolean, default false; resolver maps upstream legacy IDs unless enabled. Source: devContainersSpecCLI.ts:977. |
 | --help | --help | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: yargs built-in help. |
 | --version | --version | implemented | sibling-unit | Registered on every command; prints the version result in place of the command, as upstream. Source: devContainersSpecCLI.ts (.version). |
 
@@ -315,7 +315,7 @@ features, dotfiles, environment probing and version support.
 | --prebuild | --prebuild | implemented | covered | Stops after updateContentCommand and reruns that hook with a current marker. Docker and Compose behavior tests. Source: devContainersSpecCLI.ts:771. |
 | --stop-for-personalization | --stop-for-personalization | implemented | covered | Stops after dotfiles and before postStartCommand. Docker and Compose behavior tests. Source: devContainersSpecCLI.ts:772. |
 | --remote-env | --remote-env | implemented | environment | Registered; adds variables to lifecycle commands and the dotfiles install, below configuration remoteEnv, as upstream. Not stored. Source: devContainersSpecCLI.ts:773. |
-| --skip-feature-auto-mapping [hidden] | none | implement | feature-controls | Implement upstream feature identifier mapping plus its opt-out; current resolver is not evidence of mapping parity. Source: devContainersSpecCLI.ts:774. |
+| --skip-feature-auto-mapping [hidden] | --skip-feature-auto-mapping | implemented | feature-controls | Registered hidden boolean, default false; resolver maps upstream legacy IDs unless enabled. Source: devContainersSpecCLI.ts:774. |
 | --skip-post-attach | --skip-post-attach | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: devContainersSpecCLI.ts:775. |
 | --dotfiles-repository | --dotfiles-repository | implemented | sibling-unit | Registered; installs after postCreateCommand once per container. A failed install warns and the next run retries. Source: devContainersSpecCLI.ts:776. |
 | --dotfiles-install-command | --dotfiles-install-command | implemented | sibling-unit | Registered; runs in the clone in place of the default install-script search. Source: devContainersSpecCLI.ts:777. |
@@ -437,17 +437,17 @@ features, dotfiles, environment probing and version support.
 | --cache-to | --cache-to | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: devContainersSpecCLI.ts:130. |
 | --buildkit | BuildKit through Engine API | not applicable by design | native-api | Approved native BuildKit requirement: the build contract requires native BuildKit; switching to the legacy Docker CLI builder is outside that contract. Source: devContainersSpecCLI.ts:131. |
 | --additional-features | --additional-features | implemented | sibling-unit | Registered; configuration features come first and win for an equal key, as upstream. Source: devContainersSpecCLI.ts:132. |
-| --skip-feature-auto-mapping [hidden] | none | implement | feature-controls | Implement upstream feature identifier mapping plus its opt-out; current resolver is not evidence of mapping parity. Source: devContainersSpecCLI.ts:133. |
+| --skip-feature-auto-mapping [hidden] | --skip-feature-auto-mapping | implemented | feature-controls | Registered hidden boolean, default false; resolver maps upstream legacy IDs unless enabled. Source: devContainersSpecCLI.ts:133. |
 | --skip-post-attach | --skip-post-attach | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: devContainersSpecCLI.ts:134. |
 | --dotfiles-repository | --dotfiles-repository | implemented | sibling-unit | Registered; installs after postCreateCommand once per container. A failed install warns and the next run retries. Source: devContainersSpecCLI.ts:135. |
 | --dotfiles-install-command | --dotfiles-install-command | implemented | sibling-unit | Registered; runs in the clone in place of the default install-script search. Source: devContainersSpecCLI.ts:136. |
 | --dotfiles-target-path | --dotfiles-target-path | implemented | sibling-unit | Registered; default ~/dotfiles. Source: devContainersSpecCLI.ts:137. |
 | --container-session-data-folder | --container-session-data-folder | implement | data-folders | Registered; probe-cache behavior depends on the user environment probe backlog work and its timeout decision. Source: devContainersSpecCLI.ts:138. |
-| --omit-config-remote-env-from-metadata [hidden] | none | implement | feature-controls | Default false, matching upstream: persist configuration remoteEnv in image metadata; enabling this option omits it. Source: devContainersSpecCLI.ts:139. |
+| --omit-config-remote-env-from-metadata [hidden] | --omit-config-remote-env-from-metadata | implemented | feature-controls | Registered hidden boolean, default false; persists configuration remoteEnv by default and omits it when enabled; runtime remoteEnv stays available. Source: devContainersSpecCLI.ts:139. |
 | --secrets-file | --secrets-file | implemented | environment | Registered; secret variables for lifecycle commands and the dotfiles install, above remoteEnv. Not stored; masked in stderr and the result. Source: devContainersSpecCLI.ts:140. |
 | --experimental-lockfile [hidden] | --experimental-lockfile | implemented | lockfile | Digest-pinned resolution, integrity checks, frozen drift validation, and atomic publication after success. Source: devContainersSpecCLI.ts:141. |
 | --experimental-frozen-lockfile [hidden] | --experimental-frozen-lockfile | implemented | lockfile | Digest-pinned resolution, integrity checks, frozen drift validation, and atomic publication after success. Source: devContainersSpecCLI.ts:142. |
-| --omit-syntax-directive [hidden] | none | implement | feature-controls | Add this upstream control to the corresponding handler. Source: devContainersSpecCLI.ts:143. |
+| --omit-syntax-directive [hidden] | --omit-syntax-directive | implemented | feature-controls | Registered hidden boolean, default false; omits generated directives and filters authored syntax directives from Dockerfile frontend input. Source: devContainersSpecCLI.ts:143. |
 | --include-configuration | --include-configuration | implemented | covered | Configuration snapshot is included on request. Source: devContainersSpecCLI.ts:144. |
 | --include-merged-configuration | --include-merged-configuration | implemented | covered | Merged configuration snapshot is included on request. Source: devContainersSpecCLI.ts:145. |
 | --help | --help | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: yargs built-in help. |

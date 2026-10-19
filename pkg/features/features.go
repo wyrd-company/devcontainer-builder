@@ -107,6 +107,8 @@ type Resolved struct {
 
 // Resolver pulls and stages features.
 type Resolver struct {
+	// SkipAutoMapping leaves legacy shorthand identifiers unchanged.
+	SkipAutoMapping bool
 	// CacheDir, if non-empty, is used to cache pulled OCI artifacts
 	// keyed by digest. Otherwise resolution always re-fetches.
 	CacheDir string
@@ -265,7 +267,7 @@ func (r *Resolver) resolveOne(ctx context.Context, source string, opts map[strin
 		return r.resolveTarball(ctx, source, opts, dir, safeID, integrity)
 	}
 
-	ref, err := oci.ParseReference(source)
+	ref, err := oci.ParseReference(r.featureIdentifier(source))
 	if err != nil {
 		return nil, fmt.Errorf("not a local path and not a valid OCI ref: %w", err)
 	}

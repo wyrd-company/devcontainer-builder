@@ -120,19 +120,39 @@ func FromConfig(dc *spec.DevContainer) Entry {
 	}
 }
 
+// CollectOptions controls newly persisted contributions, preserving inherited entries.
+type CollectOptions struct {
+	// SkipFeatureCustomizations omits only newly referenced feature customizations.
+	SkipFeatureCustomizations bool
+	// OmitConfigRemoteEnv omits only the current config's remoteEnv contribution.
+	OmitConfigRemoteEnv bool
+}
+
 // Collect appends feature entries in install order, then the config entry.
 // Feature containerEnv is image ENV, rather than label metadata, in upstream.
 func Collect(base []Entry, resolved []features.Resolved, dc *spec.DevContainer) []Entry {
+	return CollectWithOptions(base, resolved, dc, CollectOptions{})
+}
+
+// CollectWithOptions filters only the new feature and config contributions.
+func CollectWithOptions(base []Entry, resolved []features.Resolved, dc *spec.DevContainer, opts CollectOptions) []Entry {
 	entries := append([]Entry(nil), base...)
 	for _, f := range resolved {
 		m := f.Metadata
+		if opts.SkipFeatureCustomizations {
+			m.Customizations = nil
+		}
 		entries = append(entries, Entry{ID: f.Source, Init: m.Init, Privileged: m.Privileged,
 			CapAdd: m.CapAdd, SecurityOpt: m.SecurityOpt, Entrypoint: m.Entrypoint,
 			Mounts: m.Mounts, Customizations: m.Customizations, OnCreate: m.OnCreateCommand,
 			UpdateContent: m.UpdateContent, PostCreate: m.PostCreateCommand,
 			PostStart: m.PostStartCommand, PostAttach: m.PostAttachCommand})
 	}
-	return appendNonEmpty(entries, FromConfig(dc))
+	entry := FromConfig(dc)
+	if opts.OmitConfigRemoteEnv {
+		entry.RemoteEnv = nil
+	}
+	return appendNonEmpty(entries, entry)
 }
 
 // Update appends only the properties upstream permits to change on an existing

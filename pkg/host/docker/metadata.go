@@ -40,7 +40,7 @@ func imageMetadataEntries(req UpRequest, labels map[string]string, logf func(str
 	if req.ImageBuilt && len(entries) > 0 {
 		return entries
 	}
-	return metadata.Collect(entries, req.Features, req.Spec)
+	return metadata.CollectWithOptions(entries, req.Features, req.Spec, metadata.CollectOptions{OmitConfigRemoteEnv: req.OmitConfigRemoteEnvFromMetadata})
 }
 
 func runtimePlan(req UpRequest, entries []metadata.Entry, ctx substitute.Context, containerEnv map[string]string) []lifecycle.Phase {

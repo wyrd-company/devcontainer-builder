@@ -299,7 +299,7 @@ func mergeImageConfig(base []byte, g GraphInputs, labels map[string]string, p oc
 	}
 	img.Config.Env = envSlice(envIndex)
 
-	entries := metadata.Collect(metadata.Read(img.Config.Labels, nil), g.Features, g.Spec)
+	entries := metadata.CollectWithOptions(metadata.Read(img.Config.Labels, nil), g.Features, g.Spec, g.Metadata)
 	value, err := metadata.Encode(entries)
 	if err != nil {
 		return nil, err

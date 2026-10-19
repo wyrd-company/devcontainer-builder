@@ -30,6 +30,7 @@ func (a *application) resolveFeatures(dc *spec.DevContainer) ([]features.Resolve
 	cleanup := func() { _ = os.RemoveAll(dir) }
 	resolver := features.New()
 	resolver.Logger = a.logf
+	resolver.SkipAutoMapping = a.skipFeatureAutoMapping
 	state, err := a.featureLockfile(dc, lockfileOptions{})
 	if err != nil {
 		cleanup()

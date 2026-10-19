@@ -171,3 +171,13 @@ checked against their recorded digest. The file is `devcontainer-lock.json`
 next to the configuration, or `.devcontainer-lock.json` for a dot-prefixed
 configuration. Publication is atomic and follows successful command completion.
 `read-configuration --include-features-configuration` uses the same pins.
+
+Upstream feature controls are hidden and default to false.
+`--skip-feature-auto-mapping` on `build`, `up`, `exec`, `read-configuration`,
+and `run-user-commands` disables legacy feature identifier mapping.
+`build --skip-persisting-customizations-from-features` omits referenced feature
+customizations from image metadata. Configuration and inherited customizations
+remain. `up --omit-config-remote-env-from-metadata` omits configuration remoteEnv
+from new metadata labels; remoteEnv persists by default and remains available to
+runtime commands. `build --omit-syntax-directive` and `up --omit-syntax-directive`
+ignore authored syntax directives and omit generated directives.

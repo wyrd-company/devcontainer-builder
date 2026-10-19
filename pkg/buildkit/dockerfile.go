@@ -20,6 +20,8 @@ import (
 // as the rest of the LLB graph so no docker round-trip is required, or
 // a standalone image (SolveDockerfile).
 type DockerfileBuild struct {
+	// OmitSyntaxDirective removes syntax directives from the frontend input.
+	OmitSyntaxDirective bool
 	// ContextDir is the host directory exposed to the dockerfile
 	// frontend as its build context.
 	ContextDir string
@@ -96,6 +98,16 @@ func addDockerfileMounts(mounts map[string]fsutil.FS, b *DockerfileBuild) error 
 		return fmt.Errorf("dockerfile dir %s: %w", dfDir, err)
 	}
 	mounts[dockerfileContextLocal] = ctxFS
+	if b.OmitSyntaxDirective {
+		filename := b.Filename
+		if filename == "" {
+			filename = "Dockerfile"
+		}
+		dfFS, err = omitSyntaxFS(dfFS, filename)
+		if err != nil {
+			return fmt.Errorf("omit Dockerfile syntax: %w", err)
+		}
+	}
 	mounts[dockerfileDockerfileLocal] = dfFS
 	return nil
 }

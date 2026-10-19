@@ -28,6 +28,7 @@ type application struct {
 	userDataFolder         string
 	terminalSize           *[2]uint
 	lockfile               *features.LockfileState
+	skipFeatureAutoMapping bool
 	version                string
 	stdin                  io.Reader
 	stderr                 io.Writer
@@ -185,6 +186,7 @@ func (a *application) command() *cobra.Command {
 	root.AddCommand(a.buildCommand(false), a.buildCommand(true), a.upCommand(), a.execCommand(), a.readCommand(), a.lifecycleCommand("run-user-commands"), a.lifecycleCommand("set-up"), a.manageCommand(false), a.manageCommand(true), a.featuresCommand(), a.serverCommand(), a.skillsCommand())
 	root.AddCommand(&cobra.Command{Use: "version", Short: "Print the dcb version", Args: cobra.NoArgs, RunE: printVersion})
 	a.terminalFlags(root)
+	a.featureControlFlags(root)
 	wrapActions(root, a)
 	versionBeforeArgs(root, &showVersion)
 	return root

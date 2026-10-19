@@ -123,6 +123,7 @@ func (a *application) upCommand() *cobra.Command {
 		if dc.Mode() == spec.ModeCompose {
 			req := composeUpRequest(dc, workspace, image, built, skip)
 			req.GPUAvailability = gpu
+			req.OmitConfigRemoteEnvFromMetadata = bo.Metadata.OmitConfigRemoteEnv
 			req.AllowProjectConflict = allowProjectConflict
 			req.ContainerDataFolder = folderOption(cmd, "container-data-folder")
 			req.Dotfiles = dotfiles.Dotfiles
@@ -138,7 +139,7 @@ func (a *application) upCommand() *cobra.Command {
 			id = res.PrimaryContainerID
 			a.result["composeProjectName"] = res.ProjectName
 		} else {
-			req := hostdocker.UpRequest{Spec: dc, SpecPath: dc.Path, LocalWorkspace: workspace, Image: image, ImageBuilt: built != nil, SkipLifecycle: skip.postCreate, SkipPostAttach: skip.postAttach, Features: resolved, LocalEnv: envMap(), RemoteUserUIDUpdate: uid, GPUAvailability: gpu, ContainerDataFolder: folderOption(cmd, "container-data-folder"), Dotfiles: dotfiles.Dotfiles, Lifecycle: controls.LifecycleControls, RemoteEnv: remoteEnv, Secrets: secrets, IDLabels: a.idLabels}
+			req := hostdocker.UpRequest{OmitConfigRemoteEnvFromMetadata: bo.Metadata.OmitConfigRemoteEnv, Spec: dc, SpecPath: dc.Path, LocalWorkspace: workspace, Image: image, ImageBuilt: built != nil, SkipLifecycle: skip.postCreate, SkipPostAttach: skip.postAttach, Features: resolved, LocalEnv: envMap(), RemoteUserUIDUpdate: uid, GPUAvailability: gpu, ContainerDataFolder: folderOption(cmd, "container-data-folder"), Dotfiles: dotfiles.Dotfiles, Lifecycle: controls.LifecycleControls, RemoteEnv: remoteEnv, Secrets: secrets, IDLabels: a.idLabels}
 			if a.placement != nil {
 				req.ContainerWorkspace = a.placement.WorkspaceFolder
 			}

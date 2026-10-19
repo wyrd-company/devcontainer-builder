@@ -16,6 +16,7 @@ import (
 
 // BuildServiceImagesInputs feeds BuildServiceImages.
 type BuildServiceImagesInputs struct {
+	OmitSyntaxDirective bool
 	// Project is the loaded compose project. Required.
 	Project *types.Project
 	// Services restricts the build to the named services. When empty,
@@ -215,12 +216,13 @@ func serviceBuild(
 	}
 
 	build := buildkit.DockerfileBuild{
-		ContextDir:    contextDir,
-		DockerfileDir: filepath.Dir(df),
-		Filename:      filepath.Base(df),
-		Target:        bc.Target,
-		BuildArgs:     args,
-		Labels:        labels,
+		OmitSyntaxDirective: in.OmitSyntaxDirective,
+		ContextDir:          contextDir,
+		DockerfileDir:       filepath.Dir(df),
+		Filename:            filepath.Base(df),
+		Target:              bc.Target,
+		BuildArgs:           args,
+		Labels:              labels,
 	}
 	opt := buildkit.SolveOptions{
 		Address:      in.BuildKitAddress,

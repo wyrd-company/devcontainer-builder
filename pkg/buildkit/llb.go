@@ -23,6 +23,7 @@ import (
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 
 	"github.com/wyrd-company/devcontainer-builder/pkg/features"
+	"github.com/wyrd-company/devcontainer-builder/pkg/metadata"
 	dcplatform "github.com/wyrd-company/devcontainer-builder/pkg/platform"
 	"github.com/wyrd-company/devcontainer-builder/pkg/spec"
 	"github.com/wyrd-company/devcontainer-builder/pkg/vscode"
@@ -31,7 +32,8 @@ import (
 // GraphInputs collects every piece of information the LLB authoring
 // routine needs.
 type GraphInputs struct {
-	Spec *spec.DevContainer
+	Spec     *spec.DevContainer
+	Metadata metadata.CollectOptions
 	// BaseImage names the FROM image. Ignored when BaseState is set.
 	BaseImage string
 	// BaseState, when non-nil, is used as the starting llb.State instead

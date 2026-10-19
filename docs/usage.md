@@ -627,3 +627,35 @@ the container that carries every given label. When `--workspace-folder`,
 `--config`, and `--override-config` are all absent, they read no
 configuration, as upstream does. The configuration in the current directory is
 not used.
+
+## Feature controls
+
+These upstream compatibility controls are hidden from command help. All default
+to `false`.
+
+| Option | Commands | Effect when enabled |
+| --- | --- | --- |
+| `--skip-feature-auto-mapping` | `build`, `exec`, `read-configuration`, `run-user-commands`, `up` | Leave legacy feature identifiers unchanged during resolution |
+| `--skip-persisting-customizations-from-features` | `build` | Omit referenced feature customizations from new image metadata |
+| `--omit-config-remote-env-from-metadata` | `up` | Omit the current configuration's remoteEnv from new metadata labels |
+| `--omit-syntax-directive` | `build`, `up` | Omit generated Dockerfile syntax directives and ignore authored syntax directives during builds |
+
+Legacy identifiers such as `node`, `golang`, and `common` map to upstream's
+version 1 feature references by default. Explicit OCI references and local
+feature paths stay unchanged. The skip flag disables this mapping wherever
+features must be resolved; it does not change an existing container's features.
+
+Configuration remoteEnv is persisted in metadata by default, matching upstream.
+The omit flag affects only the current configuration's metadata contribution.
+Runtime commands still receive configured remoteEnv values. Inherited metadata
+stays intact. The customization control also preserves inherited and
+configuration customizations, and features still install.
+
+Syntax omission uses Docker's bundled Dockerfile frontend. It preserves the
+build context, other parser directives, and the authored Dockerfile on disk.
+
+```bash
+dcb read-configuration --workspace-folder . --include-features-configuration --skip-feature-auto-mapping
+dcb build --workspace-folder . --skip-persisting-customizations-from-features --omit-syntax-directive
+dcb up --workspace-folder . --omit-config-remote-env-from-metadata
+```

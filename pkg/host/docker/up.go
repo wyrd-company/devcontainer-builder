@@ -30,6 +30,8 @@ type UpRequest struct {
 	ContainerDataFolder string
 	// GPUAvailability controls implicit hostRequirements.gpu requests. Empty means detect.
 	GPUAvailability string
+	// OmitConfigRemoteEnvFromMetadata omits the current config remoteEnv from new labels.
+	OmitConfigRemoteEnvFromMetadata bool
 	// Spec is the parsed devcontainer.json. Required.
 	Spec *spec.DevContainer
 	// SpecPath is the host-side path the spec was loaded from. Stored
@@ -193,7 +195,11 @@ func (h *Host) Up(ctx context.Context, req UpRequest) (*UpResult, error) {
 			labels = img.Config.Labels
 		}
 		entries = imageMetadataEntries(req, labels, h.logf)
-		dc, req.entrypoints, err = runtimeMetadata(req.Spec, entries, subCtx)
+		runtimeEntries := entries
+		if req.OmitConfigRemoteEnvFromMetadata {
+			runtimeEntries = metadata.Update(entries, req.Spec)
+		}
+		dc, req.entrypoints, err = runtimeMetadata(req.Spec, runtimeEntries, subCtx)
 		if err != nil {
 			return nil, err
 		}

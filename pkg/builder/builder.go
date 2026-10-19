@@ -25,6 +25,7 @@ import (
 	"github.com/wyrd-company/devcontainer-builder/pkg/buildkit"
 	"github.com/wyrd-company/devcontainer-builder/pkg/dockerfile"
 	"github.com/wyrd-company/devcontainer-builder/pkg/features"
+	"github.com/wyrd-company/devcontainer-builder/pkg/metadata"
 	"github.com/wyrd-company/devcontainer-builder/pkg/platform"
 	"github.com/wyrd-company/devcontainer-builder/pkg/spec"
 	"github.com/wyrd-company/devcontainer-builder/pkg/vscode"
@@ -92,6 +93,13 @@ type Options struct {
 
 	// SkipFeatures disables feature resolution and installation.
 	SkipFeatures bool
+	// SkipFeatureAutoMapping disables upstream's legacy feature ID mapping.
+	SkipFeatureAutoMapping bool
+	// Metadata controls only newly persisted feature/config contributions.
+	Metadata metadata.CollectOptions
+	// OmitSyntaxDirective ignores authored Dockerfile syntax directives and
+	// omits the directive from the generated inspection Dockerfile.
+	OmitSyntaxDirective bool
 	// InstallVSCodeServer stages the VS Code server into the image.
 	// Off by default: editors that attach install their own server.
 	InstallVSCodeServer bool
@@ -230,6 +238,7 @@ func (b *Builder) prepareBuildContext(ctx context.Context, opts Options, logf fu
 	if !opts.SkipFeatures && dc.Features.Len() > 0 {
 		featStaging := filepath.Join(ctxDir, "_features")
 		b.Resolver.Logger = logf
+		b.Resolver.SkipAutoMapping = opts.SkipFeatureAutoMapping
 		var lock *features.Lockfile
 		if opts.FeatureLockfile != nil {
 			lock = opts.FeatureLockfile.Lockfile
@@ -274,6 +283,8 @@ func (b *Builder) prepareBuildContext(ctx context.Context, opts Options, logf fu
 	df, err = dockerfile.Generate(dockerfile.Inputs{
 		Spec:                    dc,
 		BaseMetadata:            baseMetadata,
+		Metadata:                opts.Metadata,
+		OmitSyntaxDirective:     opts.OmitSyntaxDirective,
 		BaseImage:               wrapperBase,
 		Features:                resolved,
 		FeaturesContextDir:      "_features",
@@ -331,6 +342,7 @@ func (b *Builder) runBuildKit(ctx context.Context, opts Options, ctxDir string,
 	bspec := buildkit.BuildSpec{
 		Graph: buildkit.GraphInputs{
 			Spec:                  dc,
+			Metadata:              opts.Metadata,
 			BaseImage:             baseImage,
 			Features:              resolved,
 			VSCodeServer:          sr,
@@ -376,10 +388,11 @@ func prepareBaseImage(dc *spec.DevContainer, opts Options) (string, *buildkit.Do
 	}
 
 	upstream := &buildkit.DockerfileBuild{
-		ContextDir:    upstreamCtx,
-		DockerfileDir: filepath.Dir(dfPath),
-		Filename:      filepath.Base(dfPath),
-		BuildArgs:     mergeArgs(buildArgsFromSpec(dc), opts.BuildArgs),
+		OmitSyntaxDirective: opts.OmitSyntaxDirective,
+		ContextDir:          upstreamCtx,
+		DockerfileDir:       filepath.Dir(dfPath),
+		Filename:            filepath.Base(dfPath),
+		BuildArgs:           mergeArgs(buildArgsFromSpec(dc), opts.BuildArgs),
 	}
 	if dc.Build != nil && dc.Build.Target != "" {
 		upstream.Target = dc.Build.Target

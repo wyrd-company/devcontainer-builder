@@ -110,17 +110,18 @@ func BuildPrimaryImage(ctx context.Context, in BuildPrimaryInputs) (*BuildPrimar
 	composeBuilt := false
 	if primary.Build != nil {
 		bsi, err := BuildServiceImages(ctx, BuildServiceImagesInputs{
-			Project:         proj,
-			Services:        []string{in.Spec.Service},
-			BuildKitAddress: in.BuilderOptions.BuildKitAddress,
-			Docker:          in.BuilderOptions.Docker,
-			Platforms:       in.BuilderOptions.Platforms,
-			NoCache:         in.BuilderOptions.NoCache,
-			Pull:            in.BuilderOptions.Pull,
-			Progress:        in.BuilderOptions.Progress,
-			Stdout:          in.BuilderOptions.Stdout,
-			Stderr:          in.BuilderOptions.Stderr,
-			Logger:          in.BuilderOptions.Logger,
+			Project:             proj,
+			OmitSyntaxDirective: in.BuilderOptions.OmitSyntaxDirective,
+			Services:            []string{in.Spec.Service},
+			BuildKitAddress:     in.BuilderOptions.BuildKitAddress,
+			Docker:              in.BuilderOptions.Docker,
+			Platforms:           in.BuilderOptions.Platforms,
+			NoCache:             in.BuilderOptions.NoCache,
+			Pull:                in.BuilderOptions.Pull,
+			Progress:            in.BuilderOptions.Progress,
+			Stdout:              in.BuilderOptions.Stdout,
+			Stderr:              in.BuilderOptions.Stderr,
+			Logger:              in.BuilderOptions.Logger,
 		})
 		if err != nil {
 			return nil, err

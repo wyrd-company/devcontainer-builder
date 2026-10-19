@@ -21,3 +21,5 @@ Lifecycle commands take a remote environment and a secrets file; dcb masks secre
 Workspace mounts follow upstream: the workspace's Git root is mounted by default, a linked worktree's common Git folder can be mounted, additional bind and volume mounts can be added, and id labels select the container.
 
 Feature lockfiles pin remote features and dependencies, verify integrity, and support frozen builds with atomic publication after success.
+
+Hidden upstream feature controls support legacy identifier mapping, feature customization persistence, configuration remoteEnv metadata omission, and Dockerfile syntax omission. RemoteEnv metadata persists by default.

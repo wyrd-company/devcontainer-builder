@@ -58,6 +58,7 @@ func (b *Builder) Generate(ctx context.Context, opts Options) (*Result, error) {
 	var resolved []features.Resolved
 	if !opts.SkipFeatures && dc.Features.Len() > 0 {
 		b.Resolver.Logger = logf
+		b.Resolver.SkipAutoMapping = opts.SkipFeatureAutoMapping
 		var lock *features.Lockfile
 		if opts.FeatureLockfile != nil {
 			lock = opts.FeatureLockfile.Lockfile
@@ -98,6 +99,8 @@ func (b *Builder) Generate(ctx context.Context, opts Options) (*Result, error) {
 	df, err := dockerfile.Generate(dockerfile.Inputs{
 		Spec:                    dc,
 		BaseMetadata:            baseMetadata,
+		Metadata:                opts.Metadata,
+		OmitSyntaxDirective:     opts.OmitSyntaxDirective,
 		BaseImage:               baseImage,
 		Features:                resolved,
 		FeaturesContextDir:      "_features",

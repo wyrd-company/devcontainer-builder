@@ -26,6 +26,7 @@ type buildOptions struct {
 
 func (o *buildOptions) flags(cmd *cobra.Command, generate bool) {
 	o.cfg.flags(cmd)
+	o.featureControlFlags(cmd)
 	f := cmd.Flags()
 
 	if !generate {
