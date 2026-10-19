@@ -638,9 +638,9 @@ the workspace, these commands calculate the folder from the flags, as
 `read-configuration` does. `read-configuration`
 returns the folder and mounts in its `workspace` object. A configuration that
 sets `workspaceMount` keeps its mount. A configuration that sets
-`workspaceFolder` without `workspaceMount` gets the workspace folder mounted at
-that folder, and the Git-root and worktree flags do not change it. Upstream
-mounts the workspace or its Git root at `/workspaces/<name>` in that case.
+`workspaceFolder` without `workspaceMount` keeps that folder and mounts the
+workspace or its Git root at `/workspaces/<name>`, according to the Git-root
+and worktree flags. Set `workspaceMount` to mount at a specific target.
 
 Apart from the workspace mount, `dcb` mounts no host path that is not in the
 configuration or in a flag. The default Git-root mount exposes the Git root,

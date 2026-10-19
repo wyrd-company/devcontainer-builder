@@ -130,13 +130,24 @@ func TestReadConfigurationWorkspaceGitRoot(t *testing.T) {
 	if ws, _ = workspace(); ws["workspaceFolder"] != "/src" || ws["workspaceMount"] != "type=bind,source=/host/custom,target=/src" {
 		t.Fatalf("configured workspace=%v", ws)
 	}
-	// A workspaceFolder without workspaceMount gets the workspace folder
-	// mounted there, as dcb did before Git-root mounting.
+	// A configured folder does not change the generated mount target.
 	writeTestFile(t, filepath.Join(app, ".devcontainer.json"), `{"image":"alpine:3.20","workspaceFolder":"/src/${localWorkspaceFolderBasename}"}`)
-	for _, args := range [][]string{nil, {"--mount-git-worktree-common-dir"}} {
-		if ws, _ = workspace(args...); ws["workspaceFolder"] != "/src/app" || ws["workspaceMount"] != "type=bind,source="+app+",target=/src/app" || ws["additionalMountString"] != nil {
-			t.Fatalf("configured folder %v=%v", args, ws)
-		}
+	for _, tc := range []struct {
+		name, source, target string
+		args                 []string
+	}{
+		{"git root default", repo, "/workspaces/repo", nil},
+		{"git root explicit", repo, "/workspaces/repo", []string{"--mount-workspace-git-root=true"}},
+		{"workspace only", app, "/workspaces/app", []string{"--mount-workspace-git-root=false"}},
+		{"common dir enabled", repo, "/workspaces/repo", []string{"--mount-git-worktree-common-dir"}},
+		{"common dir without git root", app, "/workspaces/app", []string{"--mount-workspace-git-root=false", "--mount-git-worktree-common-dir"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ws, _ := workspace(tc.args...)
+			if ws["workspaceFolder"] != "/src/app" || ws["workspaceMount"] != "type=bind,source="+tc.source+",target="+tc.target || ws["additionalMountString"] != nil {
+				t.Fatalf("configured folder %v=%v", tc.args, ws)
+			}
+		})
 	}
 	writeTestFile(t, filepath.Join(app, ".devcontainer.json"), `{"image":"alpine:3.20","workspaceMount":"type=bind,source=/host/custom,target=/src"}`)
 	if ws, _ = workspace(); ws["workspaceFolder"] != "/workspaces/repo/app" || ws["workspaceMount"] != "type=bind,source=/host/custom,target=/src" {
@@ -144,9 +155,20 @@ func TestReadConfigurationWorkspaceGitRoot(t *testing.T) {
 	}
 	// Compose files own the mounts; there is no derived workspace mount.
 	writeTestFile(t, filepath.Join(app, "compose.yml"), "services:\n  app:\n    image: alpine:3.20\n")
-	writeTestFile(t, filepath.Join(app, ".devcontainer.json"), `{"dockerComposeFile":"compose.yml","service":"app"}`)
-	if ws, _ = workspace(); ws["workspaceFolder"] != "/" || ws["workspaceMount"] != nil {
-		t.Fatalf("compose workspace=%v", ws)
+	for _, folder := range []string{"", "/src/app"} {
+		config := `{"dockerComposeFile":"compose.yml","service":"app"}`
+		wantFolder := "/"
+		if folder != "" {
+			config = `{"dockerComposeFile":"compose.yml","service":"app","workspaceFolder":"/src/app"}`
+			wantFolder = folder
+		}
+		writeTestFile(t, filepath.Join(app, ".devcontainer.json"), config)
+		for _, args := range [][]string{nil, {"--mount-workspace-git-root=false"}, {"--mount-git-worktree-common-dir"}} {
+			ws, _ := workspace(args...)
+			if ws["workspaceFolder"] != wantFolder || ws["workspaceMount"] != nil || ws["additionalMountString"] != nil {
+				t.Fatalf("compose folder %q flags %v workspace=%v", folder, args, ws)
+			}
+		}
 	}
 
 	// A linked worktree beside the repository mounts the common Git folder.
@@ -165,6 +187,29 @@ func TestReadConfigurationWorkspaceGitRoot(t *testing.T) {
 	result, _ = invoke(t, 0, "read-configuration", "--workspace-folder", tree)
 	if ws = result["workspace"].(map[string]any); ws["additionalMountString"] != nil || ws["workspaceMount"] != "type=bind,source="+tree+",target=/workspaces/topic" {
 		t.Fatalf("worktree without the flag=%v", ws)
+	}
+	writeTestFile(t, filepath.Join(tree, ".devcontainer.json"), `{"image":"alpine:3.20","workspaceFolder":"/src"}`)
+	for _, tc := range []struct {
+		args   []string
+		common bool
+	}{
+		{nil, false},
+		{[]string{"--mount-git-worktree-common-dir"}, true},
+		{[]string{"--mount-workspace-git-root=false", "--mount-git-worktree-common-dir"}, false},
+	} {
+		args := append([]string{"read-configuration", "--workspace-folder", tree}, tc.args...)
+		result, _ := invoke(t, 0, args...)
+		ws := result["workspace"].(map[string]any)
+		if ws["workspaceFolder"] != "/src" || ws["workspaceMount"] != "type=bind,source="+tree+",target=/workspaces/topic" {
+			t.Fatalf("configured worktree folder %v=%v", tc.args, ws)
+		}
+		wantCommon := any(nil)
+		if tc.common {
+			wantCommon = "type=bind,source=" + filepath.Join(repo, ".git") + ",target=/workspaces/repo/.git"
+		}
+		if ws["additionalMountString"] != wantCommon {
+			t.Fatalf("configured worktree common mount %v=%v", tc.args, ws)
+		}
 	}
 }
 

@@ -363,6 +363,7 @@ func hostPrepareWorkspace(t *testing.T, imageRef string) string {
   "name": "docker-host",
   "image": %q,
   "workspaceFolder": "/workspaces/docker-host",
+  "workspaceMount": "type=bind,source=${localWorkspaceFolder},target=/workspaces/docker-host",
   "updateRemoteUserUID": false,
   "containerEnv": {
     "BASE_ENV": "container-value",

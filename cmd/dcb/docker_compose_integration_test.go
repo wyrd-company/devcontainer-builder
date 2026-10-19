@@ -143,7 +143,7 @@ func TestDockerLifecycleCLI(t *testing.T) {
 	hostEnsureImage(t, context.Background(), cli, "alpine:3.20")
 	workspace := hostPrepareWorkspace(t, "alpine:3.20")
 	config := filepath.Join(workspace, ".devcontainer", "devcontainer.json")
-	if err := os.WriteFile(config, []byte(`{"image":"alpine:3.20","workspaceFolder":"/workspace","onCreateCommand":"echo create >> /tmp/hooks","postAttachCommand":"echo attach >> /tmp/hooks"}`), 0o644); err != nil {
+	if err := os.WriteFile(config, []byte(`{"image":"alpine:3.20","workspaceFolder":"/workspace","workspaceMount":"type=bind,source=${localWorkspaceFolder},target=/workspace","onCreateCommand":"echo create >> /tmp/hooks","postAttachCommand":"echo attach >> /tmp/hooks"}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	bin := hostBuildBinary(t)
