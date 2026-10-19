@@ -46,6 +46,7 @@ func (a *application) lifecycleCommand(name string) *cobra.Command {
 	var skip skipOptions
 	var controls lifecycleOptions
 	var dotfiles dotfilesOptions
+	var configuration configurationOptions
 	short := "Run lifecycle commands in an existing devcontainer"
 	if name == "set-up" {
 		short = "Set up an existing container with devcontainer lifecycle commands"
@@ -55,6 +56,9 @@ func (a *application) lifecycleCommand(name string) *cobra.Command {
 	skip.flags(cmd)
 	controls.flags(cmd)
 	dotfiles.flags(cmd)
+	if name == "set-up" {
+		configuration.flags(cmd)
+	}
 	cmd.Flags().StringVar(&id, "container-id", "", "Target an existing container by ID")
 	if name == "set-up" {
 		_ = cmd.MarkFlagRequired("container-id")
@@ -84,6 +88,7 @@ func (a *application) lifecycleCommand(name string) *cobra.Command {
 		if err != nil {
 			return err
 		}
+		originalConfig := dc
 		dc = effectiveContainerConfig(dc, info.Config.Labels)
 		dc.RemoteUser = substitute.Substitute(substitutionContext(dc, workspace, info.Config.Labels), dc.RemoteUser)
 		if dc.RemoteUser == "" {
@@ -122,6 +127,9 @@ func (a *application) lifecycleCommand(name string) *cobra.Command {
 			return err
 		}
 		a.result["phasesRun"] = phaseResults(result.RanPhases())
+		if err := configuration.result(a, cmd, cli, originalConfig, workspace, containerID); err != nil {
+			return err
+		}
 		return a.containerResult(cmd.Context(), cli, dc, workspace, containerID)
 	}
 	return cmd

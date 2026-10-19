@@ -79,8 +79,12 @@ type Resolved struct {
 	Source string
 	// Reference is the parsed OCI reference, if Source was an OCI ref.
 	Reference *oci.Reference
+	// Manifest is the resolved OCI manifest used for configuration reporting.
+	Manifest *oci.Manifest
 	// Options as supplied in devcontainer.json (raw JSON values).
 	Options map[string]any
+	// Value is the original option value, including scalar shorthand.
+	Value any
 	// Metadata loaded from the feature's devcontainer-feature.json.
 	Metadata Metadata
 	// Dir is the on-disk directory containing the feature contents
@@ -175,6 +179,7 @@ func (r *Resolver) Resolve(specFeatures spec.OrderedMap, override []string, stag
 			// feature declares that option.
 			resolved.Options = nil
 		}
+		resolved.Value = optionsValue
 		n := &node{res: *resolved, options: options, optionsValue: optionsValue}
 		if existing := findNode(nodes, n.equals); existing != nil {
 			link(item.parent, existing)
@@ -265,7 +270,7 @@ func (r *Resolver) resolveOne(source string, opts map[string]any, options, stagi
 	}
 	sum := sha256.Sum256(rawManifest)
 	return &Resolved{
-		Source: source, Reference: &ref, Options: opts, Metadata: meta, Dir: dir, SafeID: safeID,
+		Source: source, Reference: &ref, Manifest: manifest, Options: opts, Metadata: meta, Dir: dir, SafeID: safeID,
 		Digest: "sha256:" + hex.EncodeToString(sum[:]),
 	}, nil
 }

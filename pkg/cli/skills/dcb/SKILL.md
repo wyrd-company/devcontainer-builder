@@ -116,3 +116,9 @@ as the remote user; the container needs `git`. A failed install still gives a
 lists bundled skills; `dcb skills dcb` prints this skill in the result's `skills[].content`.
 `dcb skills install --dir .agents/skills` writes `dcb/SKILL.md` below the
 chosen directory.
+
+`up` and `set-up` accept `--include-configuration` and
+`--include-merged-configuration` to add configuration snapshots to their results.
+Both default to false. `read-configuration --include-features-configuration`
+adds resolved feature metadata, values and sources as `featuresConfiguration`
+when features exist.

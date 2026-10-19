@@ -152,3 +152,15 @@ func TestResolve_InstallsAfterOtherNamespaceIsNotFetched(t *testing.T) {
 		}
 	}
 }
+
+func TestResolve_PreservesConfigurationReportingInputs(t *testing.T) {
+	reg := newFakeRegistry(t)
+	reg.publish("collection/sample", "1", `{"id":"sample","version":"1.0.0"}`, "")
+	got, err := reg.resolver().Resolve(userFeatures(reg.host()+"/collection/sample:1", `true`), nil, filepath.Join(t.TempDir(), "stage"), t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0].Manifest == nil || got[0].Manifest.SchemaVersion != 2 || len(got[0].Manifest.Layers) != 1 || got[0].Value != true || got[0].Digest == "" {
+		t.Fatalf("resolved=%+v", got)
+	}
+}

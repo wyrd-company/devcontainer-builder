@@ -95,7 +95,7 @@ Other result fields by command:
 | `run-user-commands`, `set-up` | `phasesRun`, and the `up` fields |
 | `build` | `imageName`; `cacheOnly` or `outputDir` when the image is not loaded or pushed |
 | `generate` | `dockerfile`, `contextDir` |
-| `read-configuration` | `configuration`, `workspace`; `mergedConfiguration` with `--include-merged-configuration` |
+| `read-configuration` | `configuration`, `workspace`; `mergedConfiguration` with `--include-merged-configuration`; `featuresConfiguration` with `--include-features-configuration` |
 | `features` | `features` |
 | `server` | `commit`, `quality`, `path`, `url`, `bytes` |
 | `skills` | `skills`; `installed` for `skills install` |
@@ -318,6 +318,28 @@ dcb up --workspace-folder . \
 `--additional-features`. As in the upstream CLI, the features add their
 metadata to `mergedConfiguration` only when the workspace has no container,
 and `mergedConfiguration.features` lists only the configuration's features.
+
+### Configuration results
+
+`up` and `set-up` accept `--include-configuration` and
+`--include-merged-configuration`. Both default to false. Enable either flag to
+add `configuration` or `mergedConfiguration` to the success result. Configuration
+values include workspace and container environment substitutions. The merged
+result includes image and feature metadata, with collected lifecycle commands.
+Lifecycle secrets are separate from these configuration snapshots.
+
+```bash
+dcb up --workspace-folder . --include-configuration --include-merged-configuration
+dcb set-up --workspace-folder . --container-id sample-container --include-configuration
+dcb read-configuration --workspace-folder . --include-features-configuration
+```
+
+`read-configuration --include-features-configuration` resolves declared features,
+additional features and their dependencies in installation order. Its optional
+`featuresConfiguration` result contains `featureSets` with feature metadata,
+option values and source information, plus the temporary staging `dstFolder`.
+The field is omitted when there are no features. Temporary staging paths are
+informational; use `dcb features --out ./staged-features` to retain feature files.
 
 ### Inspect what a build uses
 

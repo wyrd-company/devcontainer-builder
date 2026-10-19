@@ -84,10 +84,11 @@ func (o configOptions) optionalLoad() (*spec.DevContainer, string, error) {
 
 func (a *application) readCommand() *cobra.Command {
 	var cfg configOptions
-	var includeMerged bool
+	var includeMerged, includeFeatures bool
 	var containerID, additionalFeatures string
 	cmd := &cobra.Command{Use: "read-configuration", Short: "Read and substitute devcontainer configuration", Args: cobra.NoArgs}
 	cfg.flags(cmd)
+	cmd.Flags().BoolVar(&includeFeatures, "include-features-configuration", false, "Include resolved features configuration")
 	cmd.Flags().BoolVar(&includeMerged, "include-merged-configuration", false, "Include configuration merged with image and feature metadata")
 	cmd.Flags().StringVar(&containerID, "container-id", "", "Container metadata source for merged configuration")
 	cmd.Flags().StringVar(&additionalFeatures, "additional-features", "", "Additional features as JSON; they contribute to the merged configuration when no container exists")
@@ -106,6 +107,19 @@ func (a *application) readCommand() *cobra.Command {
 		configuration, err := readConfiguration(dc, workspace)
 		if err != nil {
 			return err
+		}
+		if includeFeatures {
+			configuration, err = a.featureConfigurationSnapshot(cmd, dc, workspace, containerID, configuration)
+			if err != nil {
+				return err
+			}
+			features, err := a.featuresConfiguration(dc, configuration, extra)
+			if err != nil {
+				return err
+			}
+			if features != nil {
+				a.result["featuresConfiguration"] = features
+			}
 		}
 		if includeMerged {
 			merged, err := a.mergedConfiguration(cmd.Context(), dc, workspace, containerID, configuration, extra)

@@ -40,12 +40,14 @@ func (a *application) upCommand() *cobra.Command {
 	var skip skipOptions
 	var controls lifecycleOptions
 	var dotfiles dotfilesOptions
+	var configuration configurationOptions
 	var remove, allowProjectConflict bool
 	cmd := &cobra.Command{Use: "up", Short: "Build, create, start, and run lifecycle commands", Args: cobra.NoArgs}
 	opts.flags(cmd, false)
 	skip.flags(cmd)
 	controls.flags(cmd)
 	dotfiles.flags(cmd)
+	configuration.flags(cmd)
 	cmd.Flags().BoolVar(&remove, "remove-existing-container", false, "Remove the workspace container before creating it")
 	cmd.Flags().BoolVar(&allowProjectConflict, "allow-project-conflict", false, "Allow Compose up to reuse or recreate another workspace's project containers")
 	cmd.Flags().BoolVar(&opts.options.NoCache, "build-no-cache", false, "Disable build cache (upstream up flag)")
@@ -117,6 +119,9 @@ func (a *application) upCommand() *cobra.Command {
 				return err
 			}
 			id = res.ContainerID
+		}
+		if err := configuration.result(a, cmd, cli, dc, workspace, id); err != nil {
+			return err
 		}
 		return a.containerResult(cmd.Context(), cli, dc, workspace, id)
 	}

@@ -28,8 +28,8 @@ The pinned `up` table has **44 explicit options**, plus inherited help/version.
 
 ## Dispositions
 
-- implemented: **84**.
-- implement: **153**.
+- implemented: **89**.
+- implement: **148**.
 - not applicable by design: **15**.
 - needs Bob's decision: **1**.
 
@@ -281,7 +281,7 @@ features, dotfiles, environment probing and version support.
 | --log-format | --log-format | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: devContainersSpecCLI.ts:971. |
 | --terminal-columns | none | implement | terminal | Add this upstream control to the corresponding handler. Source: devContainersSpecCLI.ts:972. |
 | --terminal-rows | none | implement | terminal | Add this upstream control to the corresponding handler. Source: devContainersSpecCLI.ts:973. |
-| --include-features-configuration | none | implement | configuration | Expose resolved feature configuration in the read-configuration result. Source: devContainersSpecCLI.ts:974. |
+| --include-features-configuration | --include-features-configuration | implemented | covered | Resolved feature sets, values and sources are included on request. Source: devContainersSpecCLI.ts:974. |
 | --include-merged-configuration | --include-merged-configuration | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: devContainersSpecCLI.ts:975. |
 | --additional-features | --additional-features | implemented | sibling-unit | Registered; contributes to the merged configuration only when no container exists, as upstream. Source: devContainersSpecCLI.ts:976. |
 | --skip-feature-auto-mapping [hidden] | none | implement | feature-controls | Implement upstream feature identifier mapping plus its opt-out; current resolver is not evidence of mapping parity. Source: devContainersSpecCLI.ts:977. |
@@ -345,8 +345,8 @@ features, dotfiles, environment probing and version support.
 | --dotfiles-install-command | --dotfiles-install-command | implemented | sibling-unit | Registered; runs in the clone in place of the default install-script search. Source: devContainersSpecCLI.ts:355. |
 | --dotfiles-target-path | --dotfiles-target-path | implemented | sibling-unit | Registered; default ~/dotfiles. Source: devContainersSpecCLI.ts:356. |
 | --container-session-data-folder | none | implement | data-folders | Add this upstream control to the corresponding handler. Source: devContainersSpecCLI.ts:357. |
-| --include-configuration | none | implement | configuration | Add optional configuration to command results. Source: devContainersSpecCLI.ts:358. |
-| --include-merged-configuration | none | implement | configuration | Add optional merged configuration to this command result. Source: devContainersSpecCLI.ts:359. |
+| --include-configuration | --include-configuration | implemented | covered | Configuration snapshot is included on request. Source: devContainersSpecCLI.ts:358. |
+| --include-merged-configuration | --include-merged-configuration | implemented | covered | Merged configuration snapshot is included on request. Source: devContainersSpecCLI.ts:359. |
 | --help | --help | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: yargs built-in help. |
 | --version | --version | implemented | sibling-unit | Registered on every command; prints the version result in place of the command, as upstream. Source: devContainersSpecCLI.ts (.version). |
 
@@ -446,8 +446,8 @@ features, dotfiles, environment probing and version support.
 | --experimental-lockfile [hidden] | none | implement | lockfile | Add this upstream control to the corresponding handler. Source: devContainersSpecCLI.ts:141. |
 | --experimental-frozen-lockfile [hidden] | none | implement | lockfile | Add this upstream control to the corresponding handler. Source: devContainersSpecCLI.ts:142. |
 | --omit-syntax-directive [hidden] | none | implement | feature-controls | Add this upstream control to the corresponding handler. Source: devContainersSpecCLI.ts:143. |
-| --include-configuration | none | implement | configuration | Add optional configuration to command results. Source: devContainersSpecCLI.ts:144. |
-| --include-merged-configuration | none | implement | configuration | Add optional merged configuration to this command result. Source: devContainersSpecCLI.ts:145. |
+| --include-configuration | --include-configuration | implemented | covered | Configuration snapshot is included on request. Source: devContainersSpecCLI.ts:144. |
+| --include-merged-configuration | --include-merged-configuration | implemented | covered | Merged configuration snapshot is included on request. Source: devContainersSpecCLI.ts:145. |
 | --help | --help | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: yargs built-in help. |
 | --version | --version | implemented | sibling-unit | Registered on every command; prints the version result in place of the command, as upstream. Source: devContainersSpecCLI.ts (.version). |
 
