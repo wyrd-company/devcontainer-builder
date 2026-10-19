@@ -75,6 +75,9 @@ func (f gitFixture) execer() *fakeExecer {
 		cmd.Dir = f.home
 		cmd.Env = f.env
 		out, err := cmd.CombinedOutput()
+		if req.Stderr != nil {
+			_, _ = req.Stderr.Write(out)
+		}
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			return &ExecResult{ExitCode: exitErr.ExitCode(), Stdout: out}, nil
 		}
@@ -140,7 +143,7 @@ func (f gitFixture) assertPublished(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(f.home, ".devcontainer", ".dotfilesMarker")); err != nil {
 		t.Errorf("marker: %v", err)
 	}
-	if staged, _ := filepath.Glob(filepath.Join(f.home, "dotfiles.clone.*")); len(staged) != 0 {
+	if staged, _ := filepath.Glob(filepath.Join(f.home, ".dotfiles.clone.*")); len(staged) != 0 {
 		t.Errorf("staging folders remain: %v", staged)
 	}
 }
@@ -155,7 +158,7 @@ func TestDotfilesConcurrentCloneNeverUsesPartialClone(t *testing.T) {
 		if _, err := os.Stat(filepath.Join(f.home, "dotfiles")); !os.IsNotExist(err) {
 			t.Fatalf("target exists during the first clone: %v", err)
 		}
-		if staged, _ := filepath.Glob(filepath.Join(f.home, "dotfiles.clone.*", ".git")); len(staged) != 1 {
+		if staged, _ := filepath.Glob(filepath.Join(f.home, ".dotfiles.clone.*", ".git")); len(staged) != 1 {
 			t.Fatalf("partial clone not staged: %v", staged)
 		}
 	}

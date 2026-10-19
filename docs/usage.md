@@ -228,7 +228,7 @@ dcb up --workspace-folder . \
 | --- | --- |
 | `--dotfiles-repository` | A Git URL or a path in the container. A value such as `example-owner/dotfiles`, without `:` and not starting with `/`, `./`, or `../`, is a GitHub repository. |
 | `--dotfiles-install-command` | The command to run in the clone. Without it, `dcb` runs the first of `install.sh`, `install`, `bootstrap.sh`, `bootstrap`, `script/bootstrap`, `setup.sh`, `setup`, and `script/setup`. Without any of them, it links the repository's dot files into the home folder. |
-| `--dotfiles-target-path` | The clone location. The default is `~/dotfiles`. |
+| `--dotfiles-target-path` | The clone location. The default is `~/dotfiles`. The container shell expands it, and a relative path starts at the container's working folder. A path that resolves to `/` or to the home folder is refused: the install fails with a warning. |
 
 The clone and the install command run in the container as the remote user,
 with the remote environment, so the container needs `git`. `dcb` clones

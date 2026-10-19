@@ -60,10 +60,33 @@ func (d Dotfiles) repositoryURL() string {
 	return d.Repository
 }
 
+// dotfilesPathFunction prints its argument as a clean absolute path: relative
+// to the working folder, without ".", ".." or empty segments.
+const dotfilesPathFunction = `dotfiles_path() {
+	case "$1" in /*) ;; *) set -- "$PWD/$1" ;; esac
+	clean=
+	saved_ifs=$IFS
+	IFS=/
+	set -f
+	for segment in $1
+	do
+		case "$segment" in
+		''|.) ;;
+		..) clean=${clean%/*} ;;
+		*) clean="$clean/$segment" ;;
+		esac
+	done
+	set +f
+	IFS=$saved_ifs
+	printf '%s\n' "${clean:-/}"
+}
+`
+
 // script is upstream's install script without its marker line, with a staged
-// clone. Values are interpolated unquoted as upstream does, so that "~" in
-// the target expands. A missing git is a failure here; upstream reports it
-// and exits 0.
+// clone. The target is assigned unquoted, so that the shell expands it as
+// upstream does ("~", variables), and is then made a clean absolute path.
+// The script refuses "/" and the home folder, which a clone would replace.
+// A missing git is a failure here; upstream reports it and exits 0.
 func (d Dotfiles) script() string {
 	target := d.TargetPath
 	if target == "" {
@@ -75,25 +98,34 @@ func (d Dotfiles) script() string {
 		header += " via '" + d.InstallCommand + "'"
 	}
 	fmt.Fprintf(&b, "%s\ncommand -v git >/dev/null 2>&1 || { echo git not found; exit 127; }\n", header)
-	// The clone goes to a folder unique to this run and is renamed into place
-	// only when complete, so no run reads another run's partial clone. mv -T
-	// does not replace a published clone; this run then uses that one.
-	fmt.Fprintf(&b, `if [ ! -e %[1]s ]
+	b.WriteString(dotfilesPathFunction)
+	fmt.Fprintf(&b, `target=%s
+target=$(dotfiles_path "$target")
+if [ "$target" = / ] || [ "$target" = "$(dotfiles_path "${HOME:-/}")" ]
 then
-	stage=%[1]s.clone.$$
+	echo "The dotfiles target path $target is / or the home folder; use a folder inside it." >&2
+	exit 2
+fi
+`, target)
+	// The clone goes to a sibling folder unique to this run and is renamed
+	// into place only when complete, so no run reads another run's partial
+	// clone. mv -T does not replace a published clone; this run then uses it.
+	fmt.Fprintf(&b, `if [ ! -e "$target" ]
+then
+	stage="${target%%/*}/.${target##*/}.clone.$$"
 	rm -rf "$stage"
-	git clone --depth 1 %[2]s "$stage" || { code=$?; rm -rf "$stage"; exit $code; }
-	if ! mv -T "$stage" %[1]s 2>/dev/null
+	git clone --depth 1 %s "$stage" || { code=$?; rm -rf "$stage"; exit $code; }
+	if ! mv -T "$stage" "$target" 2>/dev/null
 	then
 		rm -rf "$stage"
-		[ -e %[1]s ] || exit 1
+		[ -e "$target" ] || exit 1
 		echo Using the dotfiles clone that another run published
 	fi
 fi
-`, target, d.repositoryURL())
+`, d.repositoryURL())
 	if d.InstallCommand != "" {
 		cmd := d.InstallCommand
-		fmt.Fprintf(&b, "echo Setting current directory to '%s'\ncd %s || exit $?\n\n", target, target)
+		b.WriteString("echo Setting current directory to \"'$target'\"\ncd \"$target\" || exit $?\n\n")
 		fmt.Fprintf(&b, `if [ -f "./%[1]s" ]
 then
 	if [ ! -x "./%[1]s" ]
@@ -122,8 +154,8 @@ fi
 `, cmd)
 		return b.String()
 	}
-	fmt.Fprintf(&b, "echo Setting current directory to %s\ncd %s || exit $?\n", target, target)
-	fmt.Fprintf(&b, `for f in %[2]s
+	b.WriteString("echo Setting current directory to \"$target\"\ncd \"$target\" || exit $?\n")
+	fmt.Fprintf(&b, `for f in %s
 do
 	if [ -e $f ]
 	then
@@ -133,7 +165,7 @@ do
 done
 if [ -z "$installCommand" ]
 then
-	dotfiles=$(ls -d %[1]s/.* 2>/dev/null | grep -v -E '/(.|..|.git)$')
+	dotfiles=$(ls -d "$target"/.* 2>/dev/null | grep -v -E '/(.|..|.git)$')
 	if [ ! -z "$dotfiles" ]
 	then
 		echo Linking dotfiles: $dotfiles
@@ -144,15 +176,15 @@ then
 else
 	if [ ! -x "$installCommand" ]
 	then
-	   echo Setting '%[1]s'/"$installCommand" as executable
+	   echo Setting "$target"/"$installCommand" as executable
 	   chmod +x "$installCommand"
 	fi
 
-	echo Executing command '%[1]s'/"$installCommand"...
+	echo Executing command "$target"/"$installCommand"...
 
 	./"$installCommand"
 fi
-`, target, strings.Join(dotfilesInstallScripts, " "))
+`, strings.Join(dotfilesInstallScripts, " "))
 	return b.String()
 }
 
