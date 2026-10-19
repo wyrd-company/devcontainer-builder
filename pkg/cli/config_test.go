@@ -117,7 +117,7 @@ func TestRemoteWorkspaceFolder(t *testing.T) {
 		{"compose without workdir", compose, inspected(""), "/"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := remoteWorkspaceFolder(tc.dc, "/host/sample", tc.info); got != tc.want {
+			if got := (&application{}).remoteWorkspaceFolder(tc.dc, "/host/sample", tc.info); got != tc.want {
 				t.Fatalf("remoteWorkspaceFolder = %q, want %q", got, tc.want)
 			}
 		})

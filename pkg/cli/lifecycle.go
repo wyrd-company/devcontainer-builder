@@ -96,7 +96,7 @@ func (a *application) lifecycleCommand(name string) *cobra.Command {
 		}
 		originalConfig := dc
 		dc = effectiveContainerConfig(dc, info.Config.Labels)
-		dc.RemoteUser = substitute.Substitute(substitutionContext(dc, workspace, info.Config.Labels), dc.RemoteUser)
+		dc.RemoteUser = substitute.Substitute(a.substitutionContext(dc, workspace, info.Config.Labels), dc.RemoteUser)
 		if dc.RemoteUser == "" {
 			dc.RemoteUser = info.Config.User
 		}
@@ -121,11 +121,11 @@ func (a *application) lifecycleCommand(name string) *cobra.Command {
 				plan = append(plan, phase)
 			}
 		}
-		sub := substitutionContext(dc, workspace, info.Config.Labels)
+		sub := a.substitutionContext(dc, workspace, info.Config.Labels)
 		for i := range plan {
 			plan[i].Command = resolveCommand(plan[i].Command, sub, env)
 		}
-		rt := runner.Runtime{User: dc.RemoteUser, Workdir: containerWorkspace(dc, workspace), Env: runner.LifecycleEnv(remoteEnv, resolveRemoteEnv(dc.UpdateRemoteEnv, sub, env), secrets), CreatedAt: info.Created, StartedAt: info.State.StartedAt, UserDataFolder: lifecycle.UserDataFolder(home, folderOption(cmd, "container-data-folder")), Dotfiles: dotfiles.forRun(skip)}
+		rt := runner.Runtime{User: dc.RemoteUser, Workdir: a.containerWorkspace(dc, workspace), Env: runner.LifecycleEnv(remoteEnv, resolveRemoteEnv(dc.UpdateRemoteEnv, sub, env), secrets), CreatedAt: info.Created, StartedAt: info.State.StartedAt, UserDataFolder: lifecycle.UserDataFolder(home, folderOption(cmd, "container-data-folder")), Dotfiles: dotfiles.forRun(skip)}
 		rt.Lifecycle = controls.LifecycleControls
 		rt.Lifecycle.WaitFor = dc.WaitFor
 		result, err := runner.RunWithResult(cmd.Context(), execer, plan, rt, runner.Options{TerminalSize: a.terminalSize, Logger: a.logf, Stdout: a.logs, Stderr: a.logs})

@@ -136,7 +136,7 @@ func (a *application) featureConfigurationSnapshot(cmd *cobra.Command, dc *spec.
 	if err := json.Unmarshal(dc.Raw, &raw); err != nil {
 		return nil, err
 	}
-	sub := substitutionContext(dc, workspace, labels)
+	sub := a.substitutionContext(dc, workspace, labels)
 	result := transformConfiguration(raw, func(s string) string {
 		return substitute.ContainerSubstitute(substitute.ContainerContext{ContainerEnv: env}, substitute.Substitute(sub, s))
 	}).(map[string]any)

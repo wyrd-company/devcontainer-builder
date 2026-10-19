@@ -44,7 +44,7 @@ func (o configurationOptions) result(a *application, cmd *cobra.Command, cli *do
 			}
 		}
 	}
-	sub := substitutionContext(dc, workspace, labels)
+	sub := a.substitutionContext(dc, workspace, labels)
 	resolve := func(s string) string {
 		return substitute.ContainerSubstitute(substitute.ContainerContext{ContainerEnv: env}, substitute.Substitute(sub, s))
 	}

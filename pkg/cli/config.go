@@ -105,7 +105,7 @@ func (a *application) readCommand() *cobra.Command {
 		if err != nil {
 			return err
 		}
-		configuration, err := readConfiguration(dc, workspace)
+		configuration, err := a.readConfiguration(dc, workspace)
 		if err != nil {
 			return err
 		}
@@ -130,7 +130,7 @@ func (a *application) readCommand() *cobra.Command {
 			a.result["mergedConfiguration"] = merged
 		}
 		a.result["configuration"] = configuration
-		a.result["workspace"] = map[string]string{"workspaceFolder": containerWorkspace(dc, workspace)}
+		a.result["workspace"] = map[string]string{"workspaceFolder": a.containerWorkspace(dc, workspace)}
 		return nil
 	}
 	return cmd
@@ -138,12 +138,12 @@ func (a *application) readCommand() *cobra.Command {
 
 // readConfiguration supplies the loaded snapshot for ordinary and merged output.
 // Keep the raw map so fields unknown to the Go model survive read-configuration.
-func readConfiguration(dc *spec.DevContainer, workspace string) (map[string]any, error) {
+func (a *application) readConfiguration(dc *spec.DevContainer, workspace string) (map[string]any, error) {
 	var raw map[string]any
 	if err := json.Unmarshal(dc.Raw, &raw); err != nil {
 		return nil, err
 	}
-	ctx := substitutionContext(dc, workspace, nil)
+	ctx := a.substitutionContext(dc, workspace, nil)
 	result := substituteValues(raw, ctx).(map[string]any)
 	result["configFilePath"] = dc.Path
 	return result, nil
@@ -173,9 +173,9 @@ func substituteValues(value any, ctx substitute.Context) any {
 // remoteWorkspaceFolder is the folder reported and used for exec. With a
 // configuration it follows upstream and never reads the container's working
 // directory. Without a configuration, the workspace bind mount is the record.
-func remoteWorkspaceFolder(dc *spec.DevContainer, workspace string, info container.InspectResponse) string {
+func (a *application) remoteWorkspaceFolder(dc *spec.DevContainer, workspace string, info container.InspectResponse) string {
 	if dc.WorkspaceFolder != "" || dc.Path != "" || info.Config == nil {
-		return containerWorkspace(dc, workspace)
+		return a.containerWorkspace(dc, workspace)
 	}
 	if local := info.Config.Labels[hostdocker.LabelLocalFolder]; local != "" {
 		for _, m := range info.Mounts {
@@ -187,10 +187,10 @@ func remoteWorkspaceFolder(dc *spec.DevContainer, workspace string, info contain
 	if info.Config.WorkingDir != "" {
 		return info.Config.WorkingDir
 	}
-	return containerWorkspace(dc, workspace)
+	return a.containerWorkspace(dc, workspace)
 }
 
-func containerWorkspace(dc *spec.DevContainer, workspace string) string {
+func (a *application) containerWorkspace(dc *spec.DevContainer, workspace string) string {
 	folder := dc.WorkspaceFolder
 	if folder == "" && dc.Mode() == spec.ModeCompose {
 		// As upstream getRemoteWorkspaceFolder for Compose configurations.
@@ -201,7 +201,7 @@ func containerWorkspace(dc *spec.DevContainer, workspace string) string {
 	return substitute.Substitute(substitute.Context{LocalWorkspaceFolder: workspace, LocalEnv: envMap()}, folder)
 }
 
-func substitutionContext(dc *spec.DevContainer, workspace string, labels map[string]string) substitute.Context {
+func (a *application) substitutionContext(dc *spec.DevContainer, workspace string, labels map[string]string) substitute.Context {
 	// Only discovery labels participate in the devcontainer identity. Runtime
 	// labels, including metadata and Compose state, must not change that identity.
 	idLabels := map[string]string{"devcontainer.local_folder": workspace}
@@ -213,7 +213,7 @@ func substitutionContext(dc *spec.DevContainer, workspace string, labels map[str
 			idLabels[key] = value
 		}
 	}
-	return substitute.Context{LocalWorkspaceFolder: workspace, ContainerWorkspaceFolder: containerWorkspace(dc, workspace), LocalEnv: envMap(), IDLabels: idLabels}
+	return substitute.Context{LocalWorkspaceFolder: workspace, ContainerWorkspaceFolder: a.containerWorkspace(dc, workspace), LocalEnv: envMap(), IDLabels: idLabels}
 }
 
 func envMap() map[string]string {

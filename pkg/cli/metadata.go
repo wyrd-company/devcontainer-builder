@@ -41,7 +41,7 @@ func (a *application) mergedConfiguration(ctx context.Context, dc *spec.DevConta
 	if err != nil {
 		return metadata.Merged{}, err
 	}
-	sub := substitutionContext(&substituted, workspace, labels)
+	sub := a.substitutionContext(&substituted, workspace, labels)
 	entries, err = metadata.Substitute(entries, func(s string) string { return substitute.Substitute(sub, s) })
 	if err != nil {
 		return metadata.Merged{}, err

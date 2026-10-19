@@ -166,7 +166,7 @@ func (a *application) containerResult(ctx context.Context, cli *dockerclient.Cli
 		labels = info.Config.Labels
 	}
 	dc = effectiveContainerConfig(dc, labels)
-	user := substitute.Substitute(substitutionContext(dc, workspace, labels), dc.RemoteUser)
+	user := substitute.Substitute(a.substitutionContext(dc, workspace, labels), dc.RemoteUser)
 	if user == "" && info.Config != nil {
 		user = info.Config.User
 	}
@@ -175,7 +175,7 @@ func (a *application) containerResult(ctx context.Context, cli *dockerclient.Cli
 	}
 	a.result["containerId"] = id
 	a.result["remoteUser"] = user
-	a.result["remoteWorkspaceFolder"] = remoteWorkspaceFolder(dc, workspace, info)
+	a.result["remoteWorkspaceFolder"] = a.remoteWorkspaceFolder(dc, workspace, info)
 	return nil
 }
 

@@ -66,16 +66,16 @@ func (a *application) execCommand() *cobra.Command {
 				return fmt.Errorf("detect container env: %w", err)
 			}
 		}
-		execEnv := resolveRemoteEnv(dc.UpdateRemoteEnv, substitutionContext(dc, workspace, labels), env)
+		execEnv := resolveRemoteEnv(dc.UpdateRemoteEnv, a.substitutionContext(dc, workspace, labels), env)
 		for k, v := range extra {
 			execEnv[k] = v
 		}
 		if user == "" {
-			user = substitute.Substitute(substitutionContext(dc, workspace, labels), dc.RemoteUser)
+			user = substitute.Substitute(a.substitutionContext(dc, workspace, labels), dc.RemoteUser)
 		}
 		wd := workdir
 		if wd == "" {
-			wd = remoteWorkspaceFolder(dc, workspace, info)
+			wd = a.remoteWorkspaceFolder(dc, workspace, info)
 		}
 		a.execStarted = true
 		res, err := a.execute(cmd.Context(), cli, dc, hostdocker.ExecRequest{ContainerID: containerID, TTY: tty, TerminalSize: a.terminalSize, Cmd: args, User: user, WorkDir: wd, Env: execEnv, Stdin: a.stdin, Stdout: a.stdout, Stderr: a.stderr})

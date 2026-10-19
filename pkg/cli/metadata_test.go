@@ -172,8 +172,9 @@ func TestMetadataBaseSpecCompose(t *testing.T) {
 
 func TestMetadataDoesNotChangeDevcontainerID(t *testing.T) {
 	dc := &spec.DevContainer{Path: "/workspace/devcontainer.json"}
-	before := substitutionContext(dc, "/workspace", nil)
-	after := substitutionContext(dc, "/workspace", map[string]string{"devcontainer.local_folder": "/workspace", "devcontainer.config_file": dc.Path, metadata.Label: `[{"postCreateCommand":"echo ${devcontainerId}"}]`, "com.docker.compose.project": "sample"})
+	app := &application{}
+	before := app.substitutionContext(dc, "/workspace", nil)
+	after := app.substitutionContext(dc, "/workspace", map[string]string{"devcontainer.local_folder": "/workspace", "devcontainer.config_file": dc.Path, metadata.Label: `[{"postCreateCommand":"echo ${devcontainerId}"}]`, "com.docker.compose.project": "sample"})
 	if a, b := substitute.Substitute(before, "${devcontainerId}"), substitute.Substitute(after, "${devcontainerId}"); a == "" || a != b {
 		t.Fatalf("identity changed: %q != %q", a, b)
 	}
