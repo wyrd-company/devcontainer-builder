@@ -26,6 +26,8 @@ import (
 	"github.com/wyrd-company/devcontainer-builder/internal/dockertest"
 	"github.com/wyrd-company/devcontainer-builder/pkg/builder"
 	"github.com/wyrd-company/devcontainer-builder/pkg/spec"
+
+	"github.com/wyrd-company/devcontainer-builder/internal/testgit"
 )
 
 func TestDockerComposeIntegration(t *testing.T) {
@@ -643,7 +645,9 @@ func requireBindableComposePath(t *testing.T, ctx context.Context, cli *dockercl
 
 func repoRoot(t *testing.T) string {
 	t.Helper()
-	out, err := exec.Command("git", "rev-parse", "--show-toplevel").Output()
+	cmd := exec.Command("git", "rev-parse", "--show-toplevel")
+	cmd.Env = testgit.Env()
+	out, err := cmd.Output()
 	if err != nil {
 		t.Fatalf("git rev-parse --show-toplevel: %v", err)
 	}
@@ -703,4 +707,13 @@ func writeArtifact(t *testing.T, name string, data []byte) {
 	if err := os.WriteFile(path, data, 0o644); err != nil {
 		t.Logf("write artifact %s: %v", path, err)
 	}
+}
+
+func TestRepoRootIgnoresInheritedRepository(t *testing.T) {
+	want := repoRoot(t)
+	testgit.AssertIsolated(t, func() {
+		if got := repoRoot(t); got != want {
+			t.Fatalf("repository root = %q, want %q", got, want)
+		}
+	})
 }

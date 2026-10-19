@@ -8,6 +8,8 @@ import (
 	"strings"
 	"syscall"
 	"testing"
+
+	"github.com/wyrd-company/devcontainer-builder/internal/testgit"
 )
 
 // gitSSHWrapper serves git over a test SSH command. Each invocation takes the
@@ -55,8 +57,7 @@ func newGitFixture(t *testing.T, plan string) gitFixture {
 	if err := syscall.Mkfifo(f.gate, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	f.env = append(os.Environ(), "HOME="+f.home, "GIT_SSH_COMMAND="+wrapper, "GIT_SSH_VARIANT=ssh", "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_NOSYSTEM=1",
-		"GIT_AUTHOR_NAME=Example", "GIT_AUTHOR_EMAIL=example@example.invalid", "GIT_COMMITTER_NAME=Example", "GIT_COMMITTER_EMAIL=example@example.invalid",
+	f.env = append(testgit.Env(), "HOME="+f.home, "GIT_SSH_COMMAND="+wrapper, "GIT_SSH_VARIANT=ssh",
 		"PLAN="+plan, "PLAN_COUNT="+filepath.Join(root, "plan-count"), "GATE="+f.gate)
 	for _, args := range [][]string{{"-C", src, "init", "-q", "-b", "main"}, {"-C", src, "add", "."}, {"-C", src, "commit", "-q", "-m", "dotfiles"}, {"clone", "-q", "--bare", src, f.repo}} {
 		cmd := exec.Command("git", args...)
@@ -219,5 +220,15 @@ func TestDotfilesConcurrentCloneNeverUsesPartialClone(t *testing.T) {
 		if n := f.installerRuns(); n != 2 {
 			t.Fatalf("installer ran %d times, want 2 (both runs checked the marker before either wrote it)", n)
 		}
+	})
+}
+
+func TestGitFixtureIgnoresInheritedRepository(t *testing.T) {
+	testgit.AssertIsolated(t, func() {
+		f := newGitFixture(t, "serve")
+		if got := f.run(t); got != DotfilesInstalled {
+			t.Fatalf("fixture install = %q", got)
+		}
+		f.assertPublished(t)
 	})
 }

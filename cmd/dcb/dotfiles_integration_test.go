@@ -16,6 +16,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/wyrd-company/devcontainer-builder/internal/testgit"
 )
 
 // The dotfiles repository is a bare repository that the test creates in the
@@ -91,8 +93,7 @@ func (f dotfilesFixture) createRepo(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	env := append(os.Environ(), "GIT_AUTHOR_NAME=Example", "GIT_AUTHOR_EMAIL=example@example.invalid",
-		"GIT_COMMITTER_NAME=Example", "GIT_COMMITTER_EMAIL=example@example.invalid", "GIT_CONFIG_GLOBAL=/dev/null")
+	env := testgit.Env()
 	for _, args := range [][]string{
 		{"-C", src, "init", "-q", "-b", "main"},
 		{"-C", src, "add", "."},
@@ -244,4 +245,21 @@ func TestDotfilesFailureRetries(t *testing.T) {
 	if got := strings.TrimSpace(string(out)); got != "default\nretried" {
 		t.Fatalf("retry on the next up: %q", got)
 	}
+}
+
+func TestCreateRepoIgnoresInheritedRepository(t *testing.T) {
+	testgit.AssertIsolated(t, func() {
+		workspace := t.TempDir()
+		if err := os.Mkdir(filepath.Join(workspace, "dotfiles-source"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		f := dotfilesFixture{workspace: workspace}
+		f.createRepo(t)
+		cmd := exec.Command("git", "--git-dir="+filepath.Join(workspace, "dotfiles-source", "repo.git"), "show", "HEAD:install.sh")
+		cmd.Env = testgit.Env()
+		out, err := cmd.CombinedOutput()
+		if err != nil || string(out) != dotfilesInstallScripts["install.sh"] {
+			t.Fatalf("fixture repository script = %q: %v", out, err)
+		}
+	})
 }

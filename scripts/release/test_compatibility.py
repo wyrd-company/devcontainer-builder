@@ -12,6 +12,18 @@ from unittest.mock import patch
 from test_release import ROOT, VERSION, yaml_file
 
 
+def git_env():
+    return {
+        **{key: value for key, value in os.environ.items() if not key.startswith("GIT_")},
+        "GIT_AUTHOR_NAME": "Example",
+        "GIT_AUTHOR_EMAIL": "example@example.invalid",
+        "GIT_COMMITTER_NAME": "Example",
+        "GIT_COMMITTER_EMAIL": "example@example.invalid",
+        "GIT_CONFIG_GLOBAL": "/dev/null",
+        "GIT_CONFIG_NOSYSTEM": "1",
+    }
+
+
 class CompatibilityTests(unittest.TestCase):
     def assert_publisher_pins(self, gate_pin, action_pin):
         self.assertRegex(action_pin, r"^[a-f0-9]{40}$")
@@ -113,14 +125,46 @@ class CompatibilityTests(unittest.TestCase):
     def test_compatibility_runs_complete_local_contract_and_rejects_wrong_checkout(
         self,
     ):
-        with tempfile.TemporaryDirectory() as directory:
+        directory = self.enterContext(tempfile.TemporaryDirectory())
+        with self.subTest("inherited Git repository"):
             root = Path(directory)
+            sentinel = root / "sentinel"
+            subprocess.run(
+                ["git", "init", "--quiet", str(sentinel)], check=True, env=git_env()
+            )
+            (sentinel / "example.txt").write_text("sentinel\n")
+            for args in [["add", "."], ["commit", "--quiet", "-m", "Sentinel"]]:
+                subprocess.run(
+                    ["git", "-C", str(sentinel), *args], check=True, env=git_env()
+                )
+
+            def snapshot():
+                return {
+                    str(p.relative_to(sentinel)): p.read_bytes()
+                    for p in sentinel.rglob("*") if p.is_file()
+                }
+
+            before = snapshot()
+
+            def assert_sentinel_unchanged():
+                self.assertEqual(before, snapshot(), "sentinel repository changed")
+
+            # Cleanup checks the sentinel even if fixture setup or the script fails.
+            self.addCleanup(assert_sentinel_unchanged)
+            overrides = patch.dict(
+                os.environ,
+                {"GIT_DIR": str(sentinel / ".git"), "GIT_WORK_TREE": str(sentinel)},
+            )
+            overrides.start()
+            self.addCleanup(overrides.stop)
             publisher = root / "publisher"
             (publisher / "scripts").mkdir(parents=True)
             (publisher / "config").mkdir()
             (publisher / "config/products.json").write_text("{}")
             (publisher / "pubkey.gpg").write_text("example public key")
-            subprocess.run(["git", "init", "--quiet", str(publisher)], check=True)
+            subprocess.run(
+                ["git", "init", "--quiet", str(publisher)], check=True, env=git_env()
+            )
             subprocess.run(
                 [
                     "git",
@@ -137,9 +181,11 @@ class CompatibilityTests(unittest.TestCase):
                     "Fixture",
                 ],
                 check=True,
+                env=git_env(),
             )
             commit = subprocess.check_output(
-                ["git", "-C", str(publisher), "rev-parse", "HEAD"], text=True
+                ["git", "-C", str(publisher), "rev-parse", "HEAD"],
+                text=True, env=git_env(),
             ).strip()
             (publisher / "scripts/repository.py").write_text("""import json, os, sys
 from pathlib import Path
@@ -164,10 +210,6 @@ elif command == 'validate-queue' and os.environ.get('REJECT_QUEUE'):
             env = {
                 **os.environ,
                 "CALL_LOG": str(log),
-                "GIT_AUTHOR_NAME": "Example",
-                "GIT_AUTHOR_EMAIL": "example@example.invalid",
-                "GIT_COMMITTER_NAME": "Example",
-                "GIT_COMMITTER_EMAIL": "example@example.invalid",
             }
             command = [
                 "bash",
@@ -180,6 +222,13 @@ elif command == 'validate-queue' and os.environ.get('REJECT_QUEUE'):
             ]
             result = subprocess.run(command, env=env, capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)
+            assert_sentinel_unchanged()
+            inbox = next((root / "output").glob("contract.*/inbox"))
+            subject = subprocess.check_output(
+                ["git", "-C", str(inbox), "log", "-1", "--format=%s"],
+                env=git_env(), text=True,
+            ).strip()
+            self.assertEqual(subject, "Add package release manifest")
             calls = [json.loads(line) for line in log.read_text().splitlines()]
             self.assertEqual(
                 [c[0] for c in calls],
