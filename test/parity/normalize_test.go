@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -163,13 +164,50 @@ func TestUpstreamInvocationBindsVersion(t *testing.T) {
 	}
 	defer log.Close()
 	r := &Runner{root: t.TempDir(), runID: "sample", env: os.Environ(), log: log}
-	body, err := (UpstreamAdapter{Version: "0.87.0"}).Up(context.Background(), r, "/workspace")
+	body, err := (UpstreamAdapter{Version: "0.87.0"}).Up(context.Background(), r, "/workspace", []string{"--additional-features", "{}"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(body), "--yes\n@devcontainers/cli@0.87.0\nup\n") {
+	if !strings.Contains(string(body), "--yes\n@devcontainers/cli@0.87.0\nup\n") || !strings.HasSuffix(string(body), "--mount-workspace-git-root\nfalse\n--additional-features\n{}\n") {
 		t.Fatalf("unbound invocation: %s", body)
 	}
+}
+
+// The harness hands a fixture's up arguments to the adapter; the adapter
+// invocation tests check that each side places them on its command line.
+func TestFixtureUpArgsReachBothSides(t *testing.T) {
+	var fixture Fixture
+	for _, f := range fixtures {
+		if f.Name == "additional-features" {
+			fixture = f
+		}
+	}
+	if len(fixture.UpArgs) != 2 || fixture.UpArgs[0] != "--additional-features" {
+		t.Fatalf("additional-features fixture args = %q", fixture.UpArgs)
+	}
+	log, err := os.CreateTemp(t.TempDir(), "log")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer log.Close()
+	root, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := &Runner{root: root, temp: t.TempDir(), runID: "sample", env: os.Environ(), log: log}
+	recorder := &argsRecorder{}
+	r.observe(context.Background(), recorder, fixture, "go")
+	if !reflect.DeepEqual(recorder.args, fixture.UpArgs) {
+		t.Fatalf("observe passed %q, want %q", recorder.args, fixture.UpArgs)
+	}
+}
+
+type argsRecorder struct{ args []string }
+
+func (*argsRecorder) Name() string { return "argument recorder" }
+func (a *argsRecorder) Up(_ context.Context, _ *Runner, _ string, args []string) ([]byte, error) {
+	a.args = args
+	return nil, fmt.Errorf("recorded")
 }
 
 func TestCleanupRequiresExactOwnership(t *testing.T) {
@@ -421,7 +459,7 @@ func TestDCBAdapterNativeInvocation(t *testing.T) {
 	}
 	defer log.Close()
 	r := &Runner{root: t.TempDir(), runID: "sample", env: append(os.Environ(), "PARITY_ADAPTER_CALLS="+calls), log: log}
-	if _, err := (DCBAdapter{Binary: script}).Up(context.Background(), r, "/workspace"); err != nil {
+	if _, err := (DCBAdapter{Binary: script}).Up(context.Background(), r, "/workspace", []string{"--additional-features", "{}"}); err != nil {
 		t.Fatal(err)
 	}
 	body, err := os.ReadFile(calls)
@@ -433,8 +471,9 @@ func TestDCBAdapterNativeInvocation(t *testing.T) {
 		t.Fatal("obsolete flag or opt-in server flag sent to native CLI")
 	}
 	// Upstream up has no --image-name or --label; either makes dcb build a
-	// derived image that an image-only configuration does not need.
-	if args != "up\n--workspace-folder\n/workspace\n" {
+	// derived image that an image-only configuration does not need. Only the
+	// fixture's own up arguments follow the workspace.
+	if args != "up\n--workspace-folder\n/workspace\n--additional-features\n{}\n" {
 		t.Fatalf("dcb up received options upstream up does not: %q", args)
 	}
 }
@@ -464,7 +503,7 @@ func TestDCBAdapterResultBoundary(t *testing.T) {
 			}
 			defer log.Close()
 			r := &Runner{root: dir, runID: "sample", env: append(os.Environ(), "PARITY_RESULT="+tc.body, "PARITY_EXIT="+tc.exit), log: log}
-			body, err := (DCBAdapter{Binary: script}).Up(context.Background(), r, "/workspace")
+			body, err := (DCBAdapter{Binary: script}).Up(context.Background(), r, "/workspace", nil)
 			if (err != nil) != tc.fail {
 				t.Fatalf("adapter error=%v, want failure=%v", err, tc.fail)
 			}

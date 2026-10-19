@@ -24,14 +24,17 @@ const discoveryLabel = "devcontainer.parity.fixture-side"
 type Fixture struct {
 	Name, Path, Config string
 	Markers, Effects   []string
+	// UpArgs are passed to both sides' up after the workspace.
+	UpArgs []string
 }
 
 var fixtures = []Fixture{
-	{"image", "src/test/configs/image", ".devcontainer.json", []string{"/postCreateCommand.txt"}, nil},
-	{"dockerfile", "src/test/configs/dockerfile-without-features", ".devcontainer.json", []string{"/postCreateCommand.txt"}, nil},
-	{"features", "src/test/container-features/configs/dockerfile-with-v2-local-features-config-inside-dev-container-folder", ".devcontainer/devcontainer.json", nil, []string{"/usr/local/bin/hello", "/usr/local/bin/color"}},
-	{"compose", "src/test/configs/compose-image-without-features-minimal", ".devcontainer/devcontainer.json", []string{"/postCreateCommand.txt"}, nil},
-	{"remote-user", "src/test/configs/image-with-git-feature", ".devcontainer.json", nil, nil},
+	{"image", "src/test/configs/image", ".devcontainer.json", []string{"/postCreateCommand.txt"}, nil, nil},
+	{"dockerfile", "src/test/configs/dockerfile-without-features", ".devcontainer.json", []string{"/postCreateCommand.txt"}, nil, nil},
+	{"features", "src/test/container-features/configs/dockerfile-with-v2-local-features-config-inside-dev-container-folder", ".devcontainer/devcontainer.json", nil, []string{"/usr/local/bin/hello", "/usr/local/bin/color"}, nil},
+	{"compose", "src/test/configs/compose-image-without-features-minimal", ".devcontainer/devcontainer.json", []string{"/postCreateCommand.txt"}, nil, nil},
+	{"remote-user", "src/test/configs/image-with-git-feature", ".devcontainer.json", nil, nil, nil},
+	{"additional-features", "src/test/configs/image", ".devcontainer.json", []string{"/postCreateCommand.txt"}, nil, []string{"--additional-features", `{"ghcr.io/devcontainers/features/common-utils:2":{}}`}},
 }
 
 // composeLabelsFile is appended to a Compose configuration's files, so that
@@ -216,7 +219,7 @@ func (r *Runner) observe(ctx context.Context, a Adapter, f Fixture, side string)
 	if err != nil {
 		return failedObservations(err)
 	}
-	body, upErr := a.Up(ctx, r, workspace)
+	body, upErr := a.Up(ctx, r, workspace, f.UpArgs)
 	out := failedObservations(fmt.Errorf("container observation unavailable"))
 	v, jsonErr := resultJSON(body)
 	if upErr != nil {

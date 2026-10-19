@@ -74,6 +74,11 @@ host Docker configuration are copied. Every subprocess receives a private
 `DOCKER_CONFIG` containing only `{}` and no inherited `DOCKER_AUTH_CONFIG`.
 Daemon connection variables remain available.
 
+The `additional-features` fixture runs the image fixture again and passes
+`--additional-features` with the published common-utils feature to both
+sides' `up`. A fixture's extra `up` arguments follow the workspace on both
+command lines.
+
 Dimensions compare the CLI JSON result, image `devcontainer.metadata`, container
 environment, labels, mounts, user, working directory, lifecycle marker contents,
 and generated feature executables (contents, executable permission and output).

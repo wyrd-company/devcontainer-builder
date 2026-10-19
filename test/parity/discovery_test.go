@@ -25,7 +25,7 @@ type discoveryAdapter struct {
 }
 
 func (*discoveryAdapter) Name() string { return "discovery regression" }
-func (a *discoveryAdapter) Up(ctx context.Context, r *Runner, workspace string) ([]byte, error) {
+func (a *discoveryAdapter) Up(ctx context.Context, r *Runner, workspace string, _ []string) ([]byte, error) {
 	if a.id == "" {
 		body, err := os.ReadFile(filepath.Join(workspace, ".devcontainer.json"))
 		if err != nil {
