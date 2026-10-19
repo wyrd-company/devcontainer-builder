@@ -69,6 +69,9 @@ type aliasLookup func(id string) ([]string, error)
 // are neither local paths nor registry references (legacy bare ids) match
 // nothing, so ok is false.
 func parseSourceRef(id, localBaseDir string) (sourceRef, bool) {
+	if strings.HasPrefix(id, "https://") {
+		return sourceRef{local: true, resource: id}, true
+	}
 	if isLocalSource(id) {
 		p, err := localSourcePath(id, localBaseDir)
 		if err != nil {

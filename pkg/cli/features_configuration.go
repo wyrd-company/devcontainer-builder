@@ -42,6 +42,9 @@ func (a *application) featuresConfiguration(dc *spec.DevContainer, configuration
 	sets := make([]any, 0, len(resolved))
 	for i, f := range resolved {
 		id := filepath.Base(f.Source)
+		if f.Tarball != "" {
+			id = f.Metadata.ID
+		}
 		if f.Reference != nil {
 			id = filepath.Base(f.Reference.Repository)
 		}
@@ -72,7 +75,11 @@ func resolvedFeatureSet(f features.Resolved, i int, configDir string) (map[strin
 	}
 	id := filepath.Base(f.Source)
 	source := map[string]any{"type": "file-path", "userFeatureId": f.Source}
-	if f.Reference == nil {
+	if f.Tarball != "" {
+		id = f.Metadata.ID
+		source["type"], source["tarballUri"] = "direct-tarball", f.Tarball
+		feature["name"] = f.Source
+	} else if f.Reference == nil {
 		path := f.Source
 		if !filepath.IsAbs(path) {
 			path = filepath.Join(configDir, path)

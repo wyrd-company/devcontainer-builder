@@ -48,6 +48,9 @@ type Options struct {
 	// local feature references. Empty means the devcontainer.json
 	// directory.
 	FeatureBaseDir string
+	// FeatureLockfile is the invocation's lockfile snapshot. The caller publishes
+	// it after the complete command succeeds, including up's lifecycle work.
+	FeatureLockfile *features.LockfileState
 
 	// Tags applied to the produced image.
 	Tags []string
@@ -227,12 +230,19 @@ func (b *Builder) prepareBuildContext(ctx context.Context, opts Options, logf fu
 	if !opts.SkipFeatures && dc.Features.Len() > 0 {
 		featStaging := filepath.Join(ctxDir, "_features")
 		b.Resolver.Logger = logf
-		resolved, err = b.Resolver.Resolve(dc.Features, dc.OverrideFeature, featStaging, featureBaseDir(dc, opts))
+		var lock *features.Lockfile
+		if opts.FeatureLockfile != nil {
+			lock = opts.FeatureLockfile.Lockfile
+		}
+		resolved, err = b.Resolver.ResolveWithLockfile(ctx, dc.Features, dc.OverrideFeature, featStaging, featureBaseDir(dc, opts), lock)
 		if err != nil {
 			err = fmt.Errorf("features: %w", err)
 			return
 		}
 		logf("resolved %d feature(s)", len(resolved))
+		if err = opts.FeatureLockfile.Prepare(resolved); err != nil {
+			return
+		}
 	}
 
 	if opts.InstallVSCodeServer {

@@ -21,6 +21,7 @@ type buildOptions struct {
 	options            builder.Options
 	buildArgs, labels  []string
 	additionalFeatures string
+	lockfile           lockfileOptions
 }
 
 func (o *buildOptions) flags(cmd *cobra.Command, generate bool) {
@@ -28,6 +29,7 @@ func (o *buildOptions) flags(cmd *cobra.Command, generate bool) {
 	f := cmd.Flags()
 
 	if !generate {
+		o.lockfile.flags(cmd)
 		f.StringArrayVar(&o.options.Tags, "image-name", nil, "Image name (repeat for multiple names)")
 		f.StringVar(&o.options.BuildKitAddress, "buildkit-addr", "", "Separate BuildKit address (default: BUILDKIT_HOST, then Docker Engine)")
 		f.StringVar(&o.options.Progress, "progress", "plain", "Build progress: auto, plain, tty, rawjson")
@@ -126,6 +128,12 @@ func (o *buildOptions) prepare(a *application, dc *spec.DevContainer, workspace 
 		return bo, err
 	}
 	dc.Features = dc.Features.WithAdditional(extra)
+	if !bo.SkipFeatures {
+		bo.FeatureLockfile, err = a.featureLockfile(dc, o.lockfile)
+		if err != nil {
+			return bo, err
+		}
+	}
 	if bo.BuildArgs, err = parsePairs("build-arg", o.buildArgs); err != nil {
 		return bo, err
 	}

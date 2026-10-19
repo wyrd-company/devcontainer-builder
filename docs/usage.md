@@ -72,6 +72,37 @@ created. `exec`, `run-user-commands`, `set-up`, and `read-configuration` also
 take `--container-id` to select a container directly. `--id-label` selects by
 other labels; see [Id labels](#id-labels).
 
+## Feature lockfiles
+
+`build` and `up` accept the hidden boolean flags `--experimental-lockfile` and
+`--experimental-frozen-lockfile`. Both default to false.
+
+```bash
+dcb build --workspace-folder . --experimental-lockfile
+dcb up --workspace-folder . --experimental-frozen-lockfile
+```
+
+When features exist, `--experimental-lockfile` creates `devcontainer-lock.json`
+next to the configuration. A dot-prefixed configuration such as
+`.devcontainer.json` uses `.devcontainer-lock.json`. An existing lockfile,
+including an empty initialization marker, updates by default after success.
+The file records remote feature versions, resolved references, integrity digests,
+and hard dependencies. Local features are omitted.
+
+Resolution uses the existing integrity digest to pin OCI features, including
+transitive dependencies. HTTPS feature archives must match their recorded
+archive digest. `read-configuration --include-features-configuration` uses the
+same pins and reports the resolved digest in each feature set.
+
+Frozen mode fails if the file is missing or the resolved feature graph differs.
+Whitespace changes do not count as drift. Frozen mode never writes, including
+when both flags are set. To resolve a newer version of the same reference,
+remove its lock entry before running a write-enabled build.
+
+Publication uses a complete temporary file beside the destination, then an
+atomic rename, only after the command succeeds. A failed or cancelled build or
+lifecycle command leaves the existing lockfile unchanged.
+
 ## Results
 
 Every command writes exactly one JSON object on one line to stdout, except

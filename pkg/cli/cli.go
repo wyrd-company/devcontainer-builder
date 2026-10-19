@@ -19,6 +19,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"github.com/wyrd-company/devcontainer-builder/pkg/features"
 	"github.com/wyrd-company/devcontainer-builder/pkg/host/dockercompose"
 	"github.com/wyrd-company/devcontainer-builder/pkg/workspace"
 )
@@ -26,6 +27,7 @@ import (
 type application struct {
 	userDataFolder         string
 	terminalSize           *[2]uint
+	lockfile               *features.LockfileState
 	version                string
 	stdin                  io.Reader
 	stderr                 io.Writer
@@ -76,6 +78,9 @@ func Run(ctx context.Context, args []string, version string, stdin io.Reader, st
 	cmd, err := root.ExecuteContextC(ctx)
 	if errors.Is(err, errVersionShown) {
 		err = nil
+	}
+	if err == nil {
+		err = a.lockfile.Publish(ctx)
 	}
 	if a.logs != nil {
 		_ = a.logs.Flush()

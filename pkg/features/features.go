@@ -22,6 +22,7 @@ package features
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -96,6 +97,8 @@ type Resolved struct {
 	// Digest is the manifest digest of an OCI feature. Empty for local
 	// features.
 	Digest string
+	// Tarball is the direct HTTPS archive URL. Digest hashes its archive bytes.
+	Tarball string
 
 	// localPath is the absolute source path of a local feature.
 	localPath string
@@ -129,6 +132,13 @@ func (r *Resolver) logf(format string, args ...any) {
 // feature references are resolved relative to localBaseDir when they are not
 // absolute. The returned slice is in install order.
 func (r *Resolver) Resolve(specFeatures spec.OrderedMap, override []string, stagingDir, localBaseDir string) ([]Resolved, error) {
+	return r.ResolveWithLockfile(context.Background(), specFeatures, override, stagingDir, localBaseDir, nil)
+}
+
+// ResolveWithLockfile uses the supplied immutable snapshot for root features
+// and transitive dependencies. A lock entry's integrity pins the original
+// repository; its resolved URL is descriptive, never a redirect authority.
+func (r *Resolver) ResolveWithLockfile(ctx context.Context, specFeatures spec.OrderedMap, override []string, stagingDir, localBaseDir string, lock *Lockfile) ([]Resolved, error) {
 	if specFeatures.Len() == 0 {
 		return nil, nil
 	}
@@ -156,6 +166,9 @@ func (r *Resolver) Resolve(specFeatures spec.OrderedMap, override []string, stag
 		}
 	}
 	for len(worklist) > 0 {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		item := worklist[0]
 		worklist = worklist[1:]
 		options, optionsValue := decodeOptions(item.raw)
@@ -170,7 +183,11 @@ func (r *Resolver) Resolve(specFeatures spec.OrderedMap, override []string, stag
 		if err != nil {
 			return nil, fmt.Errorf("feature %s: %w", item.source, err)
 		}
-		resolved, err := r.resolveOne(item.source, opts, options, stagingDir, localBaseDir)
+		integrity := ""
+		if lock != nil {
+			integrity = lock.Features[item.source].Integrity
+		}
+		resolved, err := r.resolveOne(ctx, item.source, opts, options, stagingDir, localBaseDir, integrity)
 		if err != nil {
 			return nil, fmt.Errorf("feature %s: %w", item.source, err)
 		}
@@ -221,7 +238,7 @@ func findNode(nodes []*node, match func(*node) bool) *node {
 	return nil
 }
 
-func (r *Resolver) resolveOne(source string, opts map[string]any, options, stagingDir, localBaseDir string) (*Resolved, error) {
+func (r *Resolver) resolveOne(ctx context.Context, source string, opts map[string]any, options, stagingDir, localBaseDir, integrity string) (*Resolved, error) {
 	// The same feature may be installed more than once with different
 	// options (via dependsOn), so the staging directory is keyed by both.
 	safeID := safeIdent(source, options)
@@ -243,15 +260,27 @@ func (r *Resolver) resolveOne(source string, opts map[string]any, options, stagi
 			Source: source, Options: opts, Metadata: meta, Dir: dir, SafeID: safeID, localPath: abs,
 		}, nil
 	}
+	if strings.HasPrefix(source, "https://") {
+		return r.resolveTarball(ctx, source, opts, dir, safeID, integrity)
+	}
 
 	ref, err := oci.ParseReference(source)
 	if err != nil {
 		return nil, fmt.Errorf("not a local path and not a valid OCI ref: %w", err)
 	}
-	r.logf("pulling feature %s", ref)
-	manifest, rawManifest, err := r.OCI.FetchManifest(ref)
+	pullRef := ref
+	if integrity != "" {
+		pullRef.Tag, pullRef.Digest = "", integrity
+	}
+	r.logf("pulling feature %s", pullRef)
+	manifest, rawManifest, err := r.OCI.FetchManifest(pullRef)
 	if err != nil {
 		return nil, err
+	}
+	sum := sha256.Sum256(rawManifest)
+	digest := "sha256:" + hex.EncodeToString(sum[:])
+	if pullRef.Digest != "" && digest != pullRef.Digest {
+		return nil, fmt.Errorf("feature manifest does not match its digest")
 	}
 	if len(manifest.Layers) == 0 {
 		return nil, fmt.Errorf("feature manifest has no layers")
@@ -268,10 +297,9 @@ func (r *Resolver) resolveOne(source string, opts map[string]any, options, stagi
 	if err != nil {
 		return nil, err
 	}
-	sum := sha256.Sum256(rawManifest)
 	return &Resolved{
 		Source: source, Reference: &ref, Manifest: manifest, Options: opts, Metadata: meta, Dir: dir, SafeID: safeID,
-		Digest: "sha256:" + hex.EncodeToString(sum[:]),
+		Digest: digest,
 	}, nil
 }
 

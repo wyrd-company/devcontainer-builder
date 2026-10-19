@@ -7,6 +7,7 @@
 package cli
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 
@@ -29,7 +30,15 @@ func (a *application) resolveFeatures(dc *spec.DevContainer) ([]features.Resolve
 	cleanup := func() { _ = os.RemoveAll(dir) }
 	resolver := features.New()
 	resolver.Logger = a.logf
-	resolved, err := resolver.Resolve(dc.Features, dc.OverrideFeature, dir, filepath.Dir(dc.Path))
+	state, err := a.featureLockfile(dc, lockfileOptions{})
+	if err != nil {
+		cleanup()
+		return nil, nil, err
+	}
+	resolved, err := resolver.ResolveWithLockfile(context.Background(), dc.Features, dc.OverrideFeature, dir, filepath.Dir(dc.Path), state.Lockfile)
+	if err == nil {
+		err = state.Prepare(resolved)
+	}
 	if err != nil {
 		cleanup()
 		return nil, nil, err
@@ -44,7 +53,7 @@ func (a *application) featuresCommand() *cobra.Command {
 	cfg.flags(cmd)
 	cmd.Flags().StringVar(&out, "out", "", "Feature staging directory (required)")
 	_ = cmd.MarkFlagRequired("out")
-	cmd.RunE = func(_ *cobra.Command, _ []string) error {
+	cmd.RunE = func(cmd *cobra.Command, _ []string) error {
 		if out == "" {
 			return usageError("--out must not be empty")
 		}
@@ -54,8 +63,19 @@ func (a *application) featuresCommand() *cobra.Command {
 		}
 		resolver := features.New()
 		resolver.Logger = a.logf
-		resolved, err := resolver.Resolve(dc.Features, dc.OverrideFeature, out, filepath.Dir(dc.Path))
+		state, err := a.featureLockfile(dc, lockfileOptions{})
 		if err != nil {
+			return err
+		}
+		var lock *features.Lockfile
+		if state != nil {
+			lock = state.Lockfile
+		}
+		resolved, err := resolver.ResolveWithLockfile(cmd.Context(), dc.Features, dc.OverrideFeature, out, filepath.Dir(dc.Path), lock)
+		if err != nil {
+			return err
+		}
+		if err := state.Prepare(resolved); err != nil {
 			return err
 		}
 		staged := make([]map[string]string, 0, len(resolved))

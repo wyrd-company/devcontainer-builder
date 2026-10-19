@@ -19,3 +19,5 @@ Paired terminal dimension flags size lifecycle and exec pseudo-terminals in sing
 Lifecycle commands take a remote environment and a secrets file; dcb masks secret values in its output and does not store them.
 
 Workspace mounts follow upstream: the workspace's Git root is mounted by default, a linked worktree's common Git folder can be mounted, additional bind and volume mounts can be added, and id labels select the container.
+
+Feature lockfiles pin remote features and dependencies, verify integrity, and support frozen builds with atomic publication after success.

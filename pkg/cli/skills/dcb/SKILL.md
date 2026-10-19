@@ -161,3 +161,13 @@ probe caches have no current writer.
 value leaves the explicit size unset. Lifecycle output uses the selected PTY
 size. For `exec`, use `--tty` to allocate a terminal; dimensions alone preserve
 piped output.
+
+`build` and `up` accept the hidden booleans `--experimental-lockfile` and
+`--experimental-frozen-lockfile` (both default false). The first creates a
+feature lockfile; existing lockfiles update by default after success. Frozen
+mode requires an unchanged lockfile and never writes. OCI features and their
+dependencies resolve by the recorded integrity digest; HTTPS archives are
+checked against their recorded digest. The file is `devcontainer-lock.json`
+next to the configuration, or `.devcontainer-lock.json` for a dot-prefixed
+configuration. Publication is atomic and follows successful command completion.
+`read-configuration --include-features-configuration` uses the same pins.
