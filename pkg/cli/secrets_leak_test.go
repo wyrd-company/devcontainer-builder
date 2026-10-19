@@ -126,3 +126,56 @@ func TestPrescanStopsAtArgumentBoundary(t *testing.T) {
 		t.Fatal("the pre-scan read a file named after --")
 	}
 }
+
+// load installs the mask before it validates --remote-env, so that a caller
+// without the pre-scan is covered too.
+func TestEnvironmentLoadMasksBeforeValidation(t *testing.T) {
+	_, _, secrets := secretsFixture(t)
+	a := &application{}
+	o := environmentOptions{remoteEnv: []string{sampleSecret}, secretsFile: secrets}
+	if _, _, err := o.load(a); err == nil {
+		t.Fatal("malformed --remote-env accepted")
+	}
+	if a.mask.String(sampleSecret) != secretMaskText {
+		t.Fatal("load returned the --remote-env error before it installed the mask")
+	}
+}
+
+// Every --secrets-file the pre-scan reads adds to the mask; a later file
+// does not replace an earlier one.
+func TestPrescanMasksEveryFile(t *testing.T) {
+	_, _, first := secretsFixture(t)
+	second := writeSecretsFile(t, `{"OTHER": "sample-other-value"}`)
+	code, stdout, stderr := runCLI("up", "--secrets-file", first, "--secrets-file", second, "--skip-post-create="+sampleSecret)
+	if code != 2 || !strings.Contains(stdout, secretMaskText) {
+		t.Errorf("exit %d, want 2 and a masked parse error: %s", code, stdout)
+	}
+	assertNoSecret(t, "stdout", stdout)
+	assertNoSecret(t, "stderr", stderr)
+}
+
+// The log writer is created after the pre-scan and starts with its mask, so
+// a diagnostic before the command loads its flags is masked too.
+func TestLogWriterStartsWithPrescanMask(t *testing.T) {
+	_, _, secrets := secretsFixture(t)
+	var stderr bytes.Buffer
+	a := &application{stdout: &bytes.Buffer{}, stderr: &stderr, result: map[string]any{}}
+	a.prescanSecrets([]string{"up", "--secrets-file", secrets})
+	root := a.command()
+	if err := root.PersistentPreRunE(root, nil); err != nil {
+		t.Fatal(err)
+	}
+	a.diagnostic("info", "early "+sampleSecret)
+	if !strings.Contains(stderr.String(), "early "+secretMaskText) {
+		t.Fatalf("early diagnostic %q is not masked", stderr.String())
+	}
+}
+
+// Help text is an output path too.
+func TestHelpIsMasked(t *testing.T) {
+	path := writeSecretsFile(t, `{"SAMPLE": "lifecycle commands"}`)
+	code, stdout, _ := runCLI("up", "--secrets-file", path, "--help")
+	if code != 0 || strings.Contains(stdout, "lifecycle commands") || !strings.Contains(stdout, secretMaskText) {
+		t.Fatalf("exit %d, help not masked:\n%s", code, stdout)
+	}
+}
