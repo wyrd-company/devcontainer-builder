@@ -18,7 +18,12 @@ import (
 
 // Exercise the real command through Up's merged image metadata and the Engine
 // create boundary; stop there so no lifecycle shell is needed in the fake.
-func TestGPUAvailabilityEngineRequests(t *testing.T) {
+func TestGPUAvailabilityEngineRequests(t *testing.T) { testGPUAvailabilityEngineRequests(t, false) }
+func TestComposeGPUAvailabilityEngineRequests(t *testing.T) {
+	testGPUAvailabilityEngineRequests(t, true)
+}
+
+func testGPUAvailabilityEngineRequests(t *testing.T, compose bool) {
 	for _, tc := range []struct {
 		name, mode, requirement, runtime, runArgs string
 		wantInfo, wantGPU, infoError, createError bool
@@ -36,6 +41,7 @@ func TestGPUAvailabilityEngineRequests(t *testing.T) {
 		{name: "optional", requirement: `"optional"`, runtime: "nvidia-container-runtime", wantInfo: true, wantGPU: true},
 		{name: "optional-absent", requirement: `"optional"`, wantInfo: true},
 		{name: "object", requirement: `{"cores":2,"memory":"4gb"}`, runtime: "nvidia-container-runtime", wantInfo: true, wantGPU: true},
+		{name: "gpus-selection", mode: "none", requirement: `true`, runArgs: `["--gpus","device=GPU-example"]`, wantGPU: true},
 		{name: "explicit-selection", mode: "all", requirement: `true`, runArgs: `["--gpus","device=GPU-example"]`, wantGPU: true},
 		{name: "none-explicit-selection", mode: "none", requirement: `true`, runArgs: `["--gpus","device=GPU-example"]`, wantGPU: true},
 		{name: "detection-fails", requirement: `true`, wantInfo: true, infoError: true},
@@ -43,6 +49,18 @@ func TestGPUAvailabilityEngineRequests(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			workspace := t.TempDir()
 			cfg := `{"image":"alpine:3.20"`
+			if compose {
+				cfg = `{"dockerComposeFile":"compose.yml","service":"app"`
+				content := "name: sample\nservices:\n  app:\n    image: alpine:3.20\n    network_mode: host\n"
+				if tc.name == "gpus-selection" {
+					content += "    gpus:\n      - driver: nvidia\n        device_ids: [GPU-example]\n"
+				} else if tc.runArgs != "" {
+					content += "    deploy:\n      resources:\n        reservations:\n          devices:\n            - capabilities: [gpu]\n              device_ids: [GPU-example]\n"
+				}
+				if err := os.WriteFile(filepath.Join(workspace, "compose.yml"), []byte(content), 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
 			if tc.runArgs != "" {
 				cfg += `,"runArgs":` + tc.runArgs
 			}
@@ -125,6 +143,9 @@ func TestGPUAvailabilityEngineRequests(t *testing.T) {
 				if tc.runArgs != "" {
 					req.Count = 0
 					req.DeviceIDs = []string{"GPU-example"}
+					if compose && tc.name == "gpus-selection" {
+						req.Driver = "nvidia"
+					}
 				}
 				want = []container.DeviceRequest{req}
 			}

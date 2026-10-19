@@ -24,6 +24,8 @@ import (
 // (typically via pkg/features) and optionally supplies a derived image from
 // BuildPrimaryImage. Otherwise the primary Compose service selects the image.
 type UpRequest struct {
+	// GPUAvailability controls implicit hostRequirements.gpu reservations. Empty means detect.
+	GPUAvailability string
 	// Spec is the parsed devcontainer.json (must be in compose mode).
 	Spec *spec.DevContainer
 	// SpecPath is the host-side path the spec was loaded from. Used
@@ -199,6 +201,9 @@ func (h *Host) Up(ctx context.Context, req UpRequest) (*UpResult, error) {
 			return nil, err
 		}
 		dc = merged.DevContainer
+		if err := h.applyGPUAvailability(ctx, proj, dc, req.GPUAvailability); err != nil {
+			return nil, err
+		}
 		applyPrimaryMetadata(proj, dc, req, subCtx)
 		primary.Spec, primary.Entrypoints = dc, merged.Entrypoints
 		primary.OverrideCommand = dc.OverrideCommand == nil || *dc.OverrideCommand

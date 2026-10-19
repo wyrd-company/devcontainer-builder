@@ -108,6 +108,7 @@ func (a *application) upCommand() *cobra.Command {
 		var id string
 		if dc.Mode() == spec.ModeCompose {
 			req := composeUpRequest(dc, workspace, image, built, skip)
+			req.GPUAvailability = gpu
 			req.AllowProjectConflict = allowProjectConflict
 			req.Dotfiles = dotfiles.Dotfiles
 			req.Lifecycle = controls.LifecycleControls

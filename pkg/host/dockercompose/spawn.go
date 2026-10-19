@@ -109,6 +109,7 @@ func translateService(
 		Sysctls:        svc.Sysctls,
 		Tmpfs:          tmpfsList(svc.Tmpfs),
 	}
+	host.DeviceRequests = composeDeviceRequests(svc)
 	if svc.Restart != "" {
 		host.RestartPolicy = container.RestartPolicy{Name: container.RestartPolicyMode(svc.Restart)}
 	}

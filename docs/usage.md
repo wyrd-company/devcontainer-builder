@@ -421,5 +421,8 @@ Without support, creation continues; a required GPU produces a warning.
 `--gpu-availability all` requests GPUs without detection when the configuration
 requires them. Docker rejects creation if it cannot satisfy the request.
 `--gpu-availability none` suppresses automatic GPU requests. Explicit GPU selection
-in `runArgs` is preserved in every mode. Compose GPU selection stays in the
-Compose service definition. Detection uses the Engine API without a host command.
+in `runArgs` is preserved in every mode. For Compose, dcb adds a
+`deploy.resources.reservations.devices` GPU reservation to the primary service
+under the same availability rules. Explicit Compose GPU reservations and `gpus`
+selection take precedence and are preserved in every mode. Detection uses the
+Engine API without a host command.

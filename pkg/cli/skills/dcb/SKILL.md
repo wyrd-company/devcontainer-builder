@@ -91,7 +91,8 @@ options win. Invalid JSON exits `2`.
 `up --gpu-availability detect` checks the Engine NVIDIA runtime when
 `hostRequirements.gpu` requests GPUs. `all` requests all GPUs without detection;
 `none` skips automatic requests. Explicit `runArgs` GPU selection is preserved.
-Compose GPU selection stays in its service definition.
+Compose adds a primary-service GPU device reservation under the same rules;
+explicit service GPU reservations and `gpus` selection take precedence.
 
 `up --skip-post-create` skips all lifecycle commands;
 `--skip-post-attach` skips only postAttachCommand. Use

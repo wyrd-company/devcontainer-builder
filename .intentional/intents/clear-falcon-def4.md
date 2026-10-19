@@ -10,4 +10,4 @@ Configuration result controls include optional configuration, merged metadata, a
 
 Build output accepts buildx exporter specifications for filesystem, image archive, image-store, and registry exports through native APIs.
 
-GPU availability controls honor host GPU requirements through Docker Engine runtime detection and device requests.
+GPU availability controls honor single-container and Compose host GPU requirements through Docker Engine runtime detection and device requests.

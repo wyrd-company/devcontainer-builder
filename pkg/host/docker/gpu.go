@@ -1,45 +1,22 @@
 // relationships:
-//   references: [up, ../../../reference/cli/src/spec-node/utils]
+//   references: [up, ../gpu/availability]
 
 package docker
 
 import (
 	"context"
-	"fmt"
-	"strings"
-
 	"github.com/docker/docker/api/types/container"
+	"github.com/wyrd-company/devcontainer-builder/pkg/host/gpu"
 	"github.com/wyrd-company/devcontainer-builder/pkg/spec"
 )
 
-// applyGPUAvailability adds the implicit host requirement after explicit runArgs
-// have been parsed. Explicit device selection always remains authoritative.
 func (h *Host) applyGPUAvailability(ctx context.Context, dc *spec.DevContainer, mode string, host *container.HostConfig) error {
-	if mode == "" {
-		mode = "detect"
+	requested, err := gpu.Requested(ctx, h.client, dc.HostRequirements["gpu"], mode, len(host.DeviceRequests) > 0, h.logf)
+	if err != nil {
+		return err
 	}
-	switch mode {
-	case "all", "detect", "none":
-	default:
-		return errorf("GPU availability must be all, detect, or none")
-	}
-	gpu := dc.HostRequirements["gpu"]
-	if gpu == nil || gpu == false || gpu == "" || len(host.DeviceRequests) > 0 {
-		return nil
-	}
-	available := mode == "all"
-	if mode == "detect" {
-		info, err := h.client.Info(ctx)
-		if err != nil {
-			return errorf("detect GPU support: %w", err)
-		}
-		// Match upstream's search of the complete formatted runtime record.
-		available = strings.Contains(fmt.Sprint(info.Runtimes["nvidia"]), "nvidia-container-runtime")
-	}
-	if available {
+	if requested {
 		host.DeviceRequests = append(host.DeviceRequests, container.DeviceRequest{Count: -1, Capabilities: [][]string{{"gpu"}}})
-	} else if gpu != "optional" {
-		h.logf("warning: No GPU support found yet a GPU was required - consider marking it as optional")
 	}
 	return nil
 }

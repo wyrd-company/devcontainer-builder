@@ -28,8 +28,8 @@ The pinned `up` table has **44 explicit options**, plus inherited help/version.
 
 ## Dispositions
 
-- implemented: **90**.
-- implement: **147**.
+- implemented: **91**.
+- implement: **146**.
 - not applicable by design: **15**.
 - needs Bob's decision: **1**.
 
@@ -54,7 +54,7 @@ supports outdated reporting and template metadata.
 | lockfile | L | 4 | Feature lockfiles: experimental-lockfile, experimental-frozen-lockfile. |
 | feature-controls | M | 9 | Feature mapping and metadata controls: skip-feature-auto-mapping, skip-persisting-customizations-from-features, omit-config-remote-env-from-metadata, omit-syntax-directive; persist remoteEnv in metadata by default; omit-config-remote-env-from-metadata defaults to false and omits it when enabled. |
 | configuration | M | 5 | Configuration result controls: include-configuration, include-merged-configuration, include-features-configuration. |
-| gpu | M | 1 | Implemented: all/detect/none with Engine runtime detection and device requests; explicit GPU selection is preserved. |
+| gpu | M | 1 | Implemented: all/detect/none with Engine runtime detection and device requests, including Compose GPU reservations; explicit GPU selection is preserved. |
 | exporters | M | 1 | Build exporter specifications: output. |
 | outdated | M | 9 | Outdated feature reporting. |
 | upgrade | L | 7 | Feature upgrades and lockfile updates. |
@@ -410,7 +410,7 @@ features, dotfiles, environment probing and version support.
 | --container-system-data-folder | none | implement | data-folders | Add this upstream control to the corresponding handler. Source: devContainersSpecCLI.ts:105. |
 | --workspace-folder | --workspace-folder | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: devContainersSpecCLI.ts:106. |
 | --workspace-mount-consistency | none | implement | mounts | Add this upstream control to the corresponding handler. Source: devContainersSpecCLI.ts:107. |
-| --gpu-availability | --gpu-availability | implemented | gpu | Default detect, matching upstream; all/detect/none use Engine runtime detection and device requests; explicit GPU selection is preserved. Source: devContainersSpecCLI.ts:108. |
+| --gpu-availability | --gpu-availability | implemented | gpu | Default detect, matching upstream; all/detect/none use Engine runtime detection and device requests, including Compose GPU reservations; explicit GPU selection is preserved. Source: devContainersSpecCLI.ts:108. |
 | --mount-workspace-git-root | none | implement | mounts | Default true, matching upstream; mount the workspace Git root unless disabled. Source: devContainersSpecCLI.ts:109. |
 | --mount-git-worktree-common-dir | none | implement | mounts | Default false, matching upstream; mount the Git worktree common directory only when enabled. Source: devContainersSpecCLI.ts:110. |
 | --id-label | none | implement | mounts | Add this upstream control to the corresponding handler. Source: devContainersSpecCLI.ts:111. |
