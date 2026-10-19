@@ -208,6 +208,20 @@ func TestMountOptionsComposeDockerIntegration(t *testing.T) {
 	if m, ok := findMount(info, "/data"); !ok || m.Name != project+"_data" {
 		t.Fatalf("volume mount=%+v", m)
 	}
+	// Compose up selects by project and service, as upstream: a changed id
+	// label reuses the primary and leaves its labels as created.
+	changed, _ := invoke(t, 0, append([]string{"up", "--skip-post-create", "--mount", "type=volume,source=data,target=/data"}, append(args, "--id-label", mountsIDKey+"="+unique, "--id-label", mountsRoleKey+"=changed")...)...)
+	if changed["containerId"] != result["containerId"] {
+		t.Fatalf("changed id label recreated the primary: %v", changed)
+	}
+	if again, err := cli.ContainerInspect(ctx, info.ID); err != nil || again.Config.Labels[mountsRoleKey] != "compose" {
+		t.Fatalf("primary labels after changed id label=%v err=%v", again.Config.Labels, err)
+	}
+	// Removal replaces the workspace's project container.
+	replaced, _ := invoke(t, 0, append(append([]string{"up", "--skip-post-create", "--remove-existing-container", "--mount", "type=volume,source=data,target=/data"}, args...), labels...)...)
+	if replaced["containerId"] == result["containerId"] {
+		t.Fatalf("--remove-existing-container kept the primary: %v", replaced)
+	}
 	t.Chdir(t.TempDir())
 	if got := execOutput(t, append(labels, "--", "pwd")...); got != "/root" {
 		t.Fatalf("label-only exec pwd=%q", got)
