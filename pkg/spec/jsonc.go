@@ -83,7 +83,8 @@ func removeTrailingCommas(in []byte) []byte {
 				}
 				i++
 			}
-			out = append(out, in[start:i+1]...)
+			// An unterminated string runs to the end of the input.
+			out = append(out, in[start:min(i+1, len(in))]...)
 			continue
 		}
 		if c == ',' {

@@ -59,3 +59,17 @@ func TestStripJSONC_StringWithEscapedQuote(t *testing.T) {
 		t.Fatalf("escaped quote string altered: %s", got)
 	}
 }
+
+// An unterminated string is kept as it is, so that the JSON decoder reports
+// the syntax error.
+func TestStripJSONC_UnterminatedString(t *testing.T) {
+	for _, in := range []string{`{"x": "a`, `{"x": "a\`, `{"x": "a, }`} {
+		if got := string(StripJSONC([]byte(in))); got != in {
+			t.Errorf("StripJSONC(%q) = %q", in, got)
+		}
+		var v any
+		if err := UnmarshalJSONC([]byte(in), &v); err == nil {
+			t.Errorf("UnmarshalJSONC(%q) accepted an unterminated string", in)
+		}
+	}
+}
