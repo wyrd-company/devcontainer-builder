@@ -23,10 +23,12 @@ func (a *application) execCommand() *cobra.Command {
 	var id, user, workdir string
 	var remoteEnv []string
 	var tty bool
+	var probe userEnvProbeOptions
 	cmd := &cobra.Command{Use: "exec [flags] <command> [args...]", Short: "Run a command in the devcontainer; pass through its stdout and stderr", Args: cobra.MinimumNArgs(1)}
 	// Match upstream exec halt-at-non-option (devContainersSpecCLI.ts:58-64).
 	cmd.Flags().SetInterspersed(false)
 	cfg.flags(cmd)
+	probe.flags(cmd)
 	mounts.flags(cmd)
 	cmd.Flags().BoolVar(&tty, "tty", false, "Allocate a pseudo-terminal for the container command")
 	cmd.Flags().StringVar(&id, "container-id", "", "Target an existing container by ID")
@@ -36,6 +38,9 @@ func (a *application) execCommand() *cobra.Command {
 	cmd.RunE = func(cmd *cobra.Command, args []string) error {
 		if cmd.Flags().Changed("container-id") && id == "" {
 			return usageError("--container-id must not be empty")
+		}
+		if err := probe.validate(); err != nil {
+			return err
 		}
 		extra, err := parsePairs("remote-env", remoteEnv)
 		if err != nil {
@@ -82,10 +87,20 @@ func (a *application) execCommand() *cobra.Command {
 			}
 		}
 		configEnv := resolveRemoteEnv(dc.UpdateRemoteEnv, a.substitutionContext(dc, workspace, labels), env)
-		execEnv := runner.LifecycleEnv(extra, configEnv, nil)
 		if user == "" {
 			user = substitute.Substitute(a.substitutionContext(dc, workspace, labels), dc.RemoteUser)
 		}
+		probeEnv := env
+		if probeEnv == nil {
+			probeEnv = map[string]string{}
+			for _, pair := range info.Config.Env {
+				if key, value, ok := strings.Cut(pair, "="); ok {
+					probeEnv[key] = value
+				}
+			}
+		}
+		probed := runner.ProbeUserEnv(cmd.Context(), a.execer(cli, dc, containerID), dc.UserEnvProbe, probe.mode, user, probeEnv, a.logf)
+		execEnv := runner.LifecycleEnv(probed, extra, configEnv, nil)
 		wd := workdir
 		if wd == "" {
 			wd = a.remoteWorkspaceFolder(dc, workspace, info)

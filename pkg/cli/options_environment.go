@@ -25,9 +25,11 @@ import (
 type environmentOptions struct {
 	remoteEnv   []string
 	secretsFile string
+	probe       userEnvProbeOptions
 }
 
 func (o *environmentOptions) flags(cmd *cobra.Command, secrets bool) {
+	o.probe.flags(cmd)
 	cmd.Flags().StringArrayVar(&o.remoteEnv, "remote-env", nil, "Remote environment KEY=VALUE for lifecycle commands and dotfiles (repeat)")
 	if secrets {
 		cmd.Flags().StringVar(&o.secretsFile, "secrets-file", "", "JSON file of secret environment variables for lifecycle commands and dotfiles")
@@ -42,6 +44,9 @@ func (o *environmentOptions) load(a *application) (remote, secrets map[string]st
 		return nil, nil, err
 	}
 	a.maskSecrets(secrets)
+	if err = o.probe.validate(); err != nil {
+		return nil, nil, err
+	}
 	remote, err = parsePairs("remote-env", o.remoteEnv)
 	if err != nil {
 		return nil, nil, err

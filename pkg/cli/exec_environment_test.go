@@ -47,7 +47,7 @@ func TestExecRemoteEnvPrecedence(t *testing.T) {
 	t.Setenv("DOCKER_API_VERSION", "1.47")
 	t.Setenv("DOCKER_TLS_VERIFY", "")
 	t.Setenv("DOCKER_CERT_PATH", "")
-	code, _, stderr := runCLI("exec", "--workspace-folder", workspace, "--container-id", "sample", "--remote-workspace-folder", "/", "--remote-env", "SAMPLE=cli", "--remote-env", "EMPTY=cli", "--remote-env", "CLI_ONLY=extra", "--", "true")
+	code, _, stderr := runCLI("exec", "--workspace-folder", workspace, "--container-id", "sample", "--default-user-env-probe", "none", "--remote-workspace-folder", "/", "--remote-env", "SAMPLE=cli", "--remote-env", "EMPTY=cli", "--remote-env", "CLI_ONLY=extra", "--", "true")
 	if code != 1 || got == nil || !strings.Contains(stderr, "sample captured exec") {
 		t.Fatalf("exec did not reach capture: code=%d request=%+v stderr=%s", code, got, stderr)
 	}

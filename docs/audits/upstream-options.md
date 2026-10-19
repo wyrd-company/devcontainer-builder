@@ -25,13 +25,13 @@ including inherited help/version on each command. It records short aliases but
 scores each canonical long option once. It never subtracts omissions. Registration
 coverage is distinct from behavior parity and does not use these dispositions.
 The pinned `up` table has **44 explicit options**, plus inherited help/version.
-Registered option coverage is **150/253 (59.29%)**;
+Registered option coverage is **154/253 (60.87%)**;
 registration includes the three session-folder pairs awaiting probe-cache behavior.
 
 ## Dispositions
 
-- implemented: **147**.
-- implement: **90**.
+- implemented: **151**.
+- implement: **86**.
 - not applicable by design: **15**.
 - needs Bob's decision: **1**.
 
@@ -47,11 +47,11 @@ supports outdated reporting and template metadata.
 
 | Unit | Size | Option pairs | Scope and safety contract |
 | --- | --- | --- | --- |
-| sibling-unit | S | 17 | default-user-env-probe on up, set-up, run-user-commands and exec, after Bob decides on the probe timeout. The version flag on commands dcb does not have yet comes with those commands. |
+| sibling-unit | S | 17 | default-user-env-probe on up, set-up, run-user-commands and exec uses the shell probe with the approved 10-second timeout. The version flag on commands dcb does not have yet comes with those commands. |
 | lifecycle | M | 7 | Lifecycle controls: skip-non-blocking-commands, prebuild, stop-for-personalization, expect-existing-container. |
 | mounts | L | 14 | Workspace mounts and container selection: mount, workspace-mount-consistency, mount-workspace-git-root, mount-git-worktree-common-dir, id-label; mount-workspace-git-root defaults to true; mount-git-worktree-common-dir defaults to false; additional mounts are explicit. |
 | environment | M | 5 | Remote environment and secrets: remote-env, secrets-file; lifecycle secret inputs are separate from configuration remoteEnv metadata. |
-| data-folders | M | 17 | Registration: all folder options. Behavior: host staging, Compose object materialization/cleanup, and container markers are routed; see [state publication](state-publication.md). Session probe-cache behavior depends on user environment probe support and its timeout decision. System patch markers have no current writer. |
+| data-folders | M | 17 | Registration: all folder options. Behavior: host staging, Compose object materialization/cleanup, and container markers are routed; see [state publication](state-publication.md). Session probe-cache persistence is not implemented. System patch markers have no current writer. |
 | terminal | S | 10 | Terminal dimensions: terminal-columns, terminal-rows. |
 | lockfile | L | 4 | Feature lockfiles: experimental-lockfile, experimental-frozen-lockfile. |
 | feature-controls | M | 9 | Feature mapping and metadata controls: skip-feature-auto-mapping, skip-persisting-customizations-from-features, omit-config-remote-env-from-metadata, omit-syntax-directive; persist remoteEnv in metadata by default; omit-config-remote-env-from-metadata defaults to false and omits it when enabled. |
@@ -167,7 +167,7 @@ features, dotfiles, environment probing and version support.
 | --log-format | --log-format | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: devContainersSpecCLI.ts:1230. |
 | --terminal-columns | same name | implemented | terminal | Paired numeric dimensions size lifecycle and exec PTYs; zero leaves the size unset. Source: devContainersSpecCLI.ts:1231. |
 | --terminal-rows | same name | implemented | terminal | Paired numeric dimensions size lifecycle and exec PTYs; zero leaves the size unset. Source: devContainersSpecCLI.ts:1232. |
-| --default-user-env-probe | none | implement | sibling-unit | Needs the upstream probe and its 10-second timeout, a new timeout mechanic that awaits Bob's decision. Source: devContainersSpecCLI.ts:1233. |
+| --default-user-env-probe | --default-user-env-probe | implemented | sibling-unit | Defaults to loginInteractiveShell; configuration userEnvProbe wins. Shell environment precedes remoteEnv; after 10 seconds warns and continues with an empty probe result. Source: devContainersSpecCLI.ts:1233. |
 | --remote-env | --remote-env | implemented | covered | Adds variables to the exec environment, below configuration remoteEnv, as upstream. Source: devContainersSpecCLI.ts:1234; injectHeadless.ts:355. |
 | --skip-feature-auto-mapping [hidden] | --skip-feature-auto-mapping | implemented | feature-controls | Registered hidden boolean, default false; resolver maps upstream legacy IDs unless enabled. Source: devContainersSpecCLI.ts:1235. |
 | --help | --help | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: yargs built-in help. |
@@ -316,7 +316,7 @@ when markers skip commands. Source: `injectHeadless.ts:364-410` and
 | --log-format | --log-format | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: devContainersSpecCLI.ts:766. |
 | --terminal-columns | same name | implemented | terminal | Paired numeric dimensions size lifecycle and exec PTYs; zero leaves the size unset. Source: devContainersSpecCLI.ts:767. |
 | --terminal-rows | same name | implemented | terminal | Paired numeric dimensions size lifecycle and exec PTYs; zero leaves the size unset. Source: devContainersSpecCLI.ts:768. |
-| --default-user-env-probe | none | implement | sibling-unit | Needs the upstream probe and its 10-second timeout, a new timeout mechanic that awaits Bob's decision. Source: devContainersSpecCLI.ts:769. |
+| --default-user-env-probe | --default-user-env-probe | implemented | sibling-unit | Defaults to loginInteractiveShell; configuration userEnvProbe wins. Shell environment precedes remoteEnv; after 10 seconds warns and continues with an empty probe result. Source: devContainersSpecCLI.ts:769. |
 | --skip-non-blocking-commands | --skip-non-blocking-commands | implemented | covered | Stops after merged waitFor (default updateContentCommand), without background continuation. Docker and Compose behavior tests. Source: devContainersSpecCLI.ts:770. |
 | --prebuild | --prebuild | implemented | covered | Stops after updateContentCommand and reruns that hook with a current marker. Docker and Compose behavior tests. Source: devContainersSpecCLI.ts:771. |
 | --stop-for-personalization | --stop-for-personalization | implemented | covered | Stops after dotfiles and before postStartCommand. Docker and Compose behavior tests. Source: devContainersSpecCLI.ts:772. |
@@ -326,7 +326,7 @@ when markers skip commands. Source: `injectHeadless.ts:364-410` and
 | --dotfiles-repository | --dotfiles-repository | implemented | sibling-unit | Registered; installs after postCreateCommand once per container. A failed install warns and the next run retries. Source: devContainersSpecCLI.ts:776. |
 | --dotfiles-install-command | --dotfiles-install-command | implemented | sibling-unit | Registered; runs in the clone in place of the default install-script search. Source: devContainersSpecCLI.ts:777. |
 | --dotfiles-target-path | --dotfiles-target-path | implemented | sibling-unit | Registered; default ~/dotfiles. Source: devContainersSpecCLI.ts:778. |
-| --container-session-data-folder | --container-session-data-folder | implement | data-folders | Registered; probe-cache behavior depends on the user environment probe backlog work and its timeout decision. Source: devContainersSpecCLI.ts:779. |
+| --container-session-data-folder | --container-session-data-folder | implement | data-folders | Registered; persistence of the shell probe cache in this folder is not implemented. Source: devContainersSpecCLI.ts:779. |
 | --secrets-file | --secrets-file | implemented | environment | Registered; secret variables for lifecycle commands and the dotfiles install, above remoteEnv. Not stored; masked in stderr and the result. Source: devContainersSpecCLI.ts:780. |
 | --help | --help | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: yargs built-in help. |
 | --version | --version | implemented | sibling-unit | Registered on every command; prints the version result in place of the command, as upstream. Source: devContainersSpecCLI.ts (.version). |
@@ -344,7 +344,7 @@ when markers skip commands. Source: `injectHeadless.ts:364-410` and
 | --log-format | --log-format | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: devContainersSpecCLI.ts:346. |
 | --terminal-columns | same name | implemented | terminal | Paired numeric dimensions size lifecycle and exec PTYs; zero leaves the size unset. Source: devContainersSpecCLI.ts:347. |
 | --terminal-rows | same name | implemented | terminal | Paired numeric dimensions size lifecycle and exec PTYs; zero leaves the size unset. Source: devContainersSpecCLI.ts:348. |
-| --default-user-env-probe | none | implement | sibling-unit | Needs the upstream probe and its 10-second timeout, a new timeout mechanic that awaits Bob's decision. Source: devContainersSpecCLI.ts:349. |
+| --default-user-env-probe | --default-user-env-probe | implemented | sibling-unit | Defaults to loginInteractiveShell; configuration userEnvProbe wins. Shell environment precedes remoteEnv; after 10 seconds warns and continues with an empty probe result. Source: devContainersSpecCLI.ts:349. |
 | --skip-post-create | --skip-post-create | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: devContainersSpecCLI.ts:350. |
 | --skip-non-blocking-commands | --skip-non-blocking-commands | implemented | covered | Stops after merged waitFor (default updateContentCommand), without background continuation. Docker and Compose behavior tests. Source: devContainersSpecCLI.ts:351. |
 | --user-data-folder | --user-data-folder | implemented | data-folders | Private host feature/build staging and Compose object materialization honor this folder; existing contents are preserved. Source: devContainersSpecCLI.ts:352. |
@@ -352,7 +352,7 @@ when markers skip commands. Source: `injectHeadless.ts:364-410` and
 | --dotfiles-repository | --dotfiles-repository | implemented | sibling-unit | Registered; installs after postCreateCommand once per container. A failed install warns and the next run retries. Source: devContainersSpecCLI.ts:354. |
 | --dotfiles-install-command | --dotfiles-install-command | implemented | sibling-unit | Registered; runs in the clone in place of the default install-script search. Source: devContainersSpecCLI.ts:355. |
 | --dotfiles-target-path | --dotfiles-target-path | implemented | sibling-unit | Registered; default ~/dotfiles. Source: devContainersSpecCLI.ts:356. |
-| --container-session-data-folder | --container-session-data-folder | implement | data-folders | Registered; probe-cache behavior depends on the user environment probe backlog work and its timeout decision. Source: devContainersSpecCLI.ts:357. |
+| --container-session-data-folder | --container-session-data-folder | implement | data-folders | Registered; persistence of the shell probe cache in this folder is not implemented. Source: devContainersSpecCLI.ts:357. |
 | --include-configuration | --include-configuration | implemented | covered | Configuration snapshot is included on request. Source: devContainersSpecCLI.ts:358. |
 | --include-merged-configuration | --include-merged-configuration | implemented | covered | Merged configuration snapshot is included on request. Source: devContainersSpecCLI.ts:359. |
 | --help | --help | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: yargs built-in help. |
@@ -428,7 +428,7 @@ when markers skip commands. Source: `injectHeadless.ts:364-410` and
 | --log-format | --log-format | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: devContainersSpecCLI.ts:115. |
 | --terminal-columns | same name | implemented | terminal | Paired numeric dimensions size lifecycle and exec PTYs; zero leaves the size unset. Source: devContainersSpecCLI.ts:116. |
 | --terminal-rows | same name | implemented | terminal | Paired numeric dimensions size lifecycle and exec PTYs; zero leaves the size unset. Source: devContainersSpecCLI.ts:117. |
-| --default-user-env-probe | none | implement | sibling-unit | Needs the upstream probe and its 10-second timeout, a new timeout mechanic that awaits Bob's decision. Source: devContainersSpecCLI.ts:118. |
+| --default-user-env-probe | --default-user-env-probe | implemented | sibling-unit | Defaults to loginInteractiveShell; configuration userEnvProbe wins. Shell environment precedes remoteEnv; after 10 seconds warns and continues with an empty probe result. Source: devContainersSpecCLI.ts:118. |
 | --update-remote-user-uid-default | --update-remote-user-uid-default | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: devContainersSpecCLI.ts:119. |
 | --remove-existing-container | --remove-existing-container | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: devContainersSpecCLI.ts:120. |
 | --build-no-cache | --build-no-cache | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: devContainersSpecCLI.ts:121. |
@@ -448,7 +448,7 @@ when markers skip commands. Source: `injectHeadless.ts:364-410` and
 | --dotfiles-repository | --dotfiles-repository | implemented | sibling-unit | Registered; installs after postCreateCommand once per container. A failed install warns and the next run retries. Source: devContainersSpecCLI.ts:135. |
 | --dotfiles-install-command | --dotfiles-install-command | implemented | sibling-unit | Registered; runs in the clone in place of the default install-script search. Source: devContainersSpecCLI.ts:136. |
 | --dotfiles-target-path | --dotfiles-target-path | implemented | sibling-unit | Registered; default ~/dotfiles. Source: devContainersSpecCLI.ts:137. |
-| --container-session-data-folder | --container-session-data-folder | implement | data-folders | Registered; probe-cache behavior depends on the user environment probe backlog work and its timeout decision. Source: devContainersSpecCLI.ts:138. |
+| --container-session-data-folder | --container-session-data-folder | implement | data-folders | Registered; persistence of the shell probe cache in this folder is not implemented. Source: devContainersSpecCLI.ts:138. |
 | --omit-config-remote-env-from-metadata [hidden] | --omit-config-remote-env-from-metadata | implemented | feature-controls | Registered hidden boolean, default false; persists configuration remoteEnv by default and omits it when enabled; runtime remoteEnv stays available. Source: devContainersSpecCLI.ts:139. |
 | --secrets-file | --secrets-file | implemented | environment | Registered; secret variables for lifecycle commands and the dotfiles install, above remoteEnv. Not stored; masked in stderr and the result. Source: devContainersSpecCLI.ts:140. |
 | --experimental-lockfile [hidden] | --experimental-lockfile | implemented | lockfile | Digest-pinned resolution, integrity checks, frozen drift validation, and atomic publication after success. Source: devContainersSpecCLI.ts:141. |

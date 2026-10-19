@@ -24,9 +24,9 @@ import (
 //     runner uses this for lifecycle command output, where the user
 //     wants to see progress live).
 //
-// The runner does not retry, time out, or cancel beyond ctx — those
-// are the embedder's responsibility, applied through the supplied
-// context.
+// Exec must release its connection and stream readers before returning on
+// context cancellation. ProbeUserEnv cancels its exec after the upstream
+// 10-second limit; lifecycle commands use the caller's context without a limit.
 type Execer interface {
 	Exec(ctx context.Context, req ExecRequest) (*ExecResult, error)
 }

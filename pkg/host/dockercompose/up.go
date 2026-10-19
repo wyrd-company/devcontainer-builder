@@ -62,6 +62,8 @@ type UpRequest struct {
 	// and the dotfiles install (upstream --remote-env). The configuration's
 	// remoteEnv wins for the same name, as upstream. It is not stored.
 	RemoteEnv map[string]string
+	// DefaultUserEnvProbe selects the shell probe when userEnvProbe is not configured.
+	DefaultUserEnvProbe string
 	// Secrets are secret environment variables for lifecycle commands and
 	// the dotfiles install (upstream --secrets-file). They win over every
 	// other layer and are never stored in container configuration, labels
@@ -534,7 +536,8 @@ func (h *Host) runLifecycle(
 		containerEnv = map[string]string{}
 	}
 	dc = substituteContainerEnv(dc, containerEnv)
-	mergedEnv := runner.LifecycleEnv(req.RemoteEnv, stringMap(dc.UpdateRemoteEnv), req.Secrets)
+	probed := runner.ProbeUserEnv(ctx, execer, dc.UserEnvProbe, req.DefaultUserEnvProbe, dc.RemoteUser, containerEnv, h.logf)
+	mergedEnv := runner.LifecycleEnv(probed, req.RemoteEnv, stringMap(dc.UpdateRemoteEnv), req.Secrets)
 
 	plan := runtimePlan(req, entries, subCtx, containerEnv)
 	rt := runner.Runtime{

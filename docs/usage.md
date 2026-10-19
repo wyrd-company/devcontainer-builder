@@ -727,3 +727,10 @@ dcb read-configuration --workspace-folder . --include-features-configuration --s
 dcb build --workspace-folder . --skip-persisting-customizations-from-features --omit-syntax-directive
 dcb up --workspace-folder . --omit-config-remote-env-from-metadata
 ```
+
+`up`, `set-up`, `run-user-commands`, and `exec` use
+`--default-user-env-probe=loginInteractiveShell`. Select `none`,
+`interactiveShell`, or `loginShell` to change the default. Configuration
+`userEnvProbe` takes precedence. The probe reads the container user's shell
+environment before applying remote environment values. If shell startup takes
+more than 10 seconds, dcb warns and continues with no probed environment.

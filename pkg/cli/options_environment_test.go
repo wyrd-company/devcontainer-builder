@@ -127,6 +127,7 @@ func TestRemoteEnvFormat(t *testing.T) {
 func TestEnvironmentLoad(t *testing.T) {
 	a := &application{logs: &logWriter{dst: &bytes.Buffer{}}}
 	o := environmentOptions{
+		probe:       userEnvProbeOptions{mode: "loginInteractiveShell"},
 		remoteEnv:   []string{"SAMPLE_A=one=two", "SAMPLE_B=", "SAMPLE_A=three"},
 		secretsFile: writeSecretsFile(t, `{"SAMPLE_SECRET": "`+strings.ReplaceAll(sampleSecret, `"`, `\"`)+`"}`),
 	}

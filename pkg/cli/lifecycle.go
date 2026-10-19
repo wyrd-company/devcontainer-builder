@@ -144,7 +144,8 @@ func (a *application) lifecycleCommand(name string) *cobra.Command {
 			// No workspace folder: the user's home folder, as upstream.
 			workdir = home
 		}
-		rt := runner.Runtime{User: dc.RemoteUser, Workdir: workdir, Env: runner.LifecycleEnv(remoteEnv, resolveRemoteEnv(dc.UpdateRemoteEnv, sub, env), secrets), CreatedAt: info.Created, StartedAt: info.State.StartedAt, UserDataFolder: lifecycle.UserDataFolder(home, folderOption(cmd, "container-data-folder")), Dotfiles: dotfiles.forRun(skip)}
+		probed := runner.ProbeUserEnv(cmd.Context(), execer, dc.UserEnvProbe, environment.probe.mode, dc.RemoteUser, env, a.logf)
+		rt := runner.Runtime{User: dc.RemoteUser, Workdir: workdir, Env: runner.LifecycleEnv(probed, remoteEnv, resolveRemoteEnv(dc.UpdateRemoteEnv, sub, env), secrets), CreatedAt: info.Created, StartedAt: info.State.StartedAt, UserDataFolder: lifecycle.UserDataFolder(home, folderOption(cmd, "container-data-folder")), Dotfiles: dotfiles.forRun(skip)}
 		rt.Lifecycle = controls.LifecycleControls
 		rt.Lifecycle.WaitFor = dc.WaitFor
 		result, err := runner.RunWithResult(cmd.Context(), execer, plan, rt, runner.Options{TerminalSize: a.terminalSize, Logger: a.logf, Stdout: a.logs, Stderr: a.logs})

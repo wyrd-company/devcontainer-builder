@@ -109,7 +109,16 @@ func (h *Host) Exec(ctx context.Context, req ExecRequest) (*ExecResult, error) {
 		}()
 	}
 
-	if err := <-errCh; err != nil && err != io.EOF {
+	// A canceled probe must release its attach and stream reader before returning.
+	var streamErr error
+	select {
+	case streamErr = <-errCh:
+	case <-ctx.Done():
+		attachResp.Close()
+		<-errCh
+		return nil, ctx.Err()
+	}
+	if err := streamErr; err != nil && err != io.EOF {
 		return nil, errorf("exec stream: %w", err)
 	}
 
