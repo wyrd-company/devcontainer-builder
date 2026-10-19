@@ -27,6 +27,9 @@ func AssertIsolated(t *testing.T, fixture func()) {
 		}
 	}
 	run("init", "-q", "-b", "main")
+	// Background maintenance creates transient lock files after commit returns.
+	// The sentinel must stay idle while its complete contents are compared.
+	run("config", "maintenance.auto", "false")
 	if err := os.WriteFile(filepath.Join(root, "example.txt"), []byte("sentinel\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
