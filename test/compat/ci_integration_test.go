@@ -138,7 +138,7 @@ exit "$GO_EXIT"
 					t.Fatalf("operator config removed: %v", err)
 				}
 				if suite == "all" {
-					if got := read("go"); got != "test -v -tags docker_integration ./... -count=1" {
+					if got := read("go"); got != "test -timeout 20m -v -tags docker_integration ./... -count=1" {
 						t.Fatalf("all-package invocation = %q", got)
 					}
 					if got := read("host"); got != "unset" {
@@ -148,7 +148,7 @@ exit "$GO_EXIT"
 						t.Fatalf("stock Docker launched a helper: %v", err)
 					}
 				} else if suite == "classic" {
-					if got := read("go"); got != "test -v -tags docker_integration ./pkg/buildkit ./pkg/builder -run TestDaemon.*Integration|TestEngineBuildIntegration -count=1" {
+					if got := read("go"); got != "test -timeout 20m -v -tags docker_integration ./pkg/buildkit ./pkg/builder -run TestDaemon.*Integration|TestEngineBuildIntegration -count=1" {
 						t.Fatalf("classic invocation = %q", got)
 					}
 					if got := read("host"); got != "unset" {
@@ -170,7 +170,7 @@ exit "$GO_EXIT"
 						}
 					}
 				} else {
-					if got := read("go"); got != "test -v -tags docker_integration ./pkg/builder -run TestEngineBuildIntegration -count=1" {
+					if got := read("go"); got != "test -timeout 20m -v -tags docker_integration ./pkg/builder -run TestEngineBuildIntegration -count=1" {
 						t.Fatalf("remote invocation = %q", got)
 					}
 					if got := read("host"); got != "tcp://127.0.0.1:1234" {
