@@ -76,6 +76,9 @@ func TestRealDockerConfigIsolation(t *testing.T) {
 		t.Skip("docker CLI absent")
 	}
 	t.Setenv("DOCKER_CONTEXT", "")
+	// DOCKER_HOST takes precedence over currentContext in the Docker CLI.
+	// Let the adversarial config select its context for this config-only probe.
+	t.Setenv("DOCKER_HOST", "")
 	host := t.TempDir()
 	os.WriteFile(filepath.Join(host, "config.json"), []byte(`{"currentContext":"parity-untrusted","credsStore":"untrusted-helper"}`), 0600)
 	t.Setenv("DOCKER_CONFIG", host)
