@@ -13,8 +13,10 @@ parent is `$TMPDIR/dcb-compose`. The allocator normalizes the parent before
 creating `objects-*` directories. Each run owns a separate directory; none is a
 cache or a reusable completion marker.
 
-File sources pass through without copying. Environment and inline sources write
-mode `0400` files below the private directory's `configs` or `secrets` child.
+File sources pass through without copying. Inline configs and environment-backed
+configs/secrets write mode `0400` files below the private directory's `configs`
+or `secrets` child. The materializer also handles in-memory secret content, but
+the pinned Compose loader schema rejects authored secret `content:`.
 The containing run directory is mode `0700`. External and driver sources retain
 their existing unsupported-source errors. UID/GID/mode overrides retain the
 standalone bind-mount behavior. Source files and unrelated parent contents are

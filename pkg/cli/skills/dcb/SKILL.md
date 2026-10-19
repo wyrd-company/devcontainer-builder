@@ -161,7 +161,7 @@ also work when Docker is unreachable.
 Use `--user-data-folder` on build, exec, read-configuration, run-user-commands,
 set-up, and up to place private feature/build staging inside a selected host
 folder. Explicit `--work-dir` overrides build staging. Existing contents stay
-intact. Compose up also stores inline/environment configs and secrets there
+intact. Compose up also stores inline configs and environment-backed configs/secrets there
 (default: `$TMPDIR/dcb-compose`). Down discovers their private directories from
 Docker ownership records without repeating the folder option or supplying the
 source configuration. It removes materialized copies, preserves file-backed

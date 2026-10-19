@@ -536,8 +536,8 @@ and build staging use a unique private directory inside this folder. Explicit
 these folders are preserved. Feature configuration results retain their staging
 paths; temporary metadata staging is removed after use.
 
-Compose `up` also writes inline and environment-backed configs and secrets in a
-private directory inside `--user-data-folder`. Without this option it uses
+Compose `up` also writes inline configs and environment-backed configs/secrets
+in a private directory inside `--user-data-folder`. Without this option it uses
 `$TMPDIR/dcb-compose`. File-backed sources are mounted directly and preserved.
 An unmounted Docker volume records each private directory's ownership, without
 secret values. `down` discovers these records without the creation-time folder

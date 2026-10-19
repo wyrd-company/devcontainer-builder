@@ -86,7 +86,8 @@
 //     Docker volume labels record ownership before any payload write. Remove
 //     discovers and cleans these directories without the original options or
 //     source configuration; cleanup failures retain ownership for retry.
-//   - `content:` writes the literal value to the same private directory.
+//   - Config `content:` writes the literal value to the same private directory.
+//     The pinned Compose loader schema does not accept secret `content:`.
 //   - `external: true` is rejected — the package doesn't speak swarm.
 //   - `driver:` is rejected — only file/env/content sources work.
 //
