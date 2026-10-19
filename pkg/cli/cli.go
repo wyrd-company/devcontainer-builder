@@ -75,7 +75,7 @@ func Run(ctx context.Context, args []string, version string, stdin io.Reader, st
 	// Mask secrets before flag parsing, whose errors quote rejected values.
 	a.prescanSecrets(args)
 	root := a.command()
-	root.SetArgs(args)
+	root.SetArgs(booleanOptionArgs(root, args))
 	cmd, err := root.ExecuteContextC(ctx)
 	if errors.Is(err, errVersionShown) {
 		err = nil

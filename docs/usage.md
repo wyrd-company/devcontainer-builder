@@ -56,6 +56,11 @@ dcb down --workspace-folder .
 `dcb --help` lists the commands with examples. `dcb <command> --help` lists
 the flags of one command. Help is plain text.
 
+Boolean flags accept `--flag`, `--flag=true`, `--flag=false`, `--flag true`,
+and `--flag false`. Separated values must be lowercase `true` or `false`;
+other tokens remain positional arguments. As upstream, `--no-<flag>` does
+not negate a flag. Arguments after `--` pass through unchanged.
+
 ### Not yet supported
 
 These upstream command families are not yet supported:
