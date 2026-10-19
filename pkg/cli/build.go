@@ -17,9 +17,10 @@ import (
 )
 
 type buildOptions struct {
-	cfg               configOptions
-	options           builder.Options
-	buildArgs, labels []string
+	cfg                configOptions
+	options            builder.Options
+	buildArgs, labels  []string
+	additionalFeatures string
 }
 
 func (o *buildOptions) flags(cmd *cobra.Command, generate bool) {
@@ -35,6 +36,7 @@ func (o *buildOptions) flags(cmd *cobra.Command, generate bool) {
 	f.StringSliceVar(&o.options.Platforms, "platform", nil, "Target platform(s), for example linux/amd64")
 	f.StringVar(&o.options.WorkDir, "work-dir", "", "Staged build directory (default: temporary)")
 	f.BoolVar(&o.options.SkipFeatures, "skip-features", false, "Skip feature resolution and installation")
+	f.StringVar(&o.additionalFeatures, "additional-features", "", "Additional features as JSON in the devcontainer.json features form; configuration features win for an equal key")
 	f.BoolVar(&o.options.InstallVSCodeServer, "vscode-server", false, "Stage VS Code server in the image")
 	f.StringVar((*string)(&o.options.VSCode.Quality), "vscode-quality", "stable", "VS Code server channel: stable or insider")
 	f.StringVar(&o.options.VSCode.Commit, "vscode-commit", "", "VS Code server commit (default: latest)")
@@ -119,6 +121,13 @@ func (o *buildOptions) prepare(a *application, dc *spec.DevContainer, workspace 
 		return bo, usageError("--output cannot be combined with --push or --load")
 	}
 
+	if o.additionalFeatures != "" {
+		extra, err := spec.ParseFeatures([]byte(o.additionalFeatures))
+		if err != nil {
+			return bo, usageError("--additional-features: %v", err)
+		}
+		dc.Features = dc.Features.WithAdditional(extra)
+	}
 	var err error
 	if bo.BuildArgs, err = parsePairs(o.buildArgs); err != nil {
 		return bo, err

@@ -243,12 +243,19 @@ dcb build --workspace-folder . \
 | `--no-cache` | Disables the build cache. |
 | `--pull` | Always pulls referenced images. |
 | `--skip-features` | Builds without the configuration's features. |
+| `--additional-features` | More features as JSON in the form of the configuration's `features` property. They follow the configuration's features. For a feature the configuration already names, the configuration's options are used. Invalid JSON is an invalid invocation. |
 | `--vscode-server` | Installs the VS Code server into the image. See [VS Code server](/docs/dcb/configuration#vs-code-server). |
 | `--progress` | Build progress format: `plain` (the default), `auto`, `tty`, or `rawjson`. |
 | `--buildkit-addr` | Uses a separate BuildKit. See [Docker and BuildKit](/docs/dcb/configuration#docker-and-buildkit). |
 
 `dcb up` takes the same build flags except the export flags, and uses
-`--build-no-cache` in place of `--no-cache`.
+`--build-no-cache` in place of `--no-cache`. For example, add a feature to a
+configuration without editing it:
+
+```bash
+dcb up --workspace-folder . \
+  --additional-features '{"ghcr.io/devcontainers/features/common-utils:2":{}}'
+```
 
 ### Inspect what a build uses
 

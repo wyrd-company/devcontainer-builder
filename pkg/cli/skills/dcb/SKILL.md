@@ -71,6 +71,11 @@ exporting an image. `--output` selects a filesystem export and cannot be
 combined with `--push` or `--load`. The result contains `cacheOnly: true`
 for a cache-only build, or `outputDir` for a filesystem export. `generate` returns `dockerfile` and `contextDir` paths.
 
+`build`, `generate`, and `up` take `--additional-features '<json>'`, an
+object in the form of the `features` property. Its features follow the
+configuration's; for a feature the configuration names, the configuration's
+options win. Invalid JSON exits `2`.
+
 `up` uses `--build-no-cache` to disable build cache. Export flags `--push`,
 `--load`, and `--output`, and `--no-cache`, belong to `build`.
 `up --update-remote-user-uid-default on` remaps unless the configuration sets
