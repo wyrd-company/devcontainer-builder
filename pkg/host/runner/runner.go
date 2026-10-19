@@ -89,6 +89,10 @@ type Runtime struct {
 	// per-hook marker files. Use lifecycle.UserDataFolder(homeDir, "")
 	// to get the default.
 	UserDataFolder string
+	// Dotfiles, when its Repository is set, installs the user's dotfiles
+	// after postCreateCommand, once per container. Leave it zero when
+	// lifecycle commands are skipped, as upstream does.
+	Dotfiles Dotfiles
 }
 
 // Options configure logging and default output streams.
@@ -115,6 +119,8 @@ type PhaseResult struct {
 // RunResult is the structured result of a lifecycle run.
 type RunResult struct {
 	Phases []PhaseResult
+	// Dotfiles reports the dotfiles step; a failure there is not an error.
+	Dotfiles DotfilesOutcome
 }
 
 // RanPhases returns only phases whose lifecycle command actually executed.
@@ -146,7 +152,13 @@ func RunWithResult(ctx context.Context, execer Execer, plan []lifecycle.Phase, r
 	// Like upstream, a hook's marker is checked once; the decision covers
 	// every command of that hook.
 	decided := map[lifecycle.Hook]bool{}
+	// Upstream installs dotfiles after postCreateCommand, before postStart.
+	dotfilesPending := rt.Dotfiles.Repository != ""
 	for _, p := range plan {
+		if dotfilesPending && (p.Hook == lifecycle.HookPostStart || p.Hook == lifecycle.HookPostAttach) {
+			result.Dotfiles = installDotfiles(ctx, execer, rt, opts)
+			dotfilesPending = false
+		}
 		doRun, ok := decided[p.Hook]
 		if !ok {
 			var err error
@@ -161,6 +173,9 @@ func RunWithResult(ctx context.Context, execer Execer, plan []lifecycle.Phase, r
 			return result, fmt.Errorf("%s [%s]: %w", p.Hook, p.Origin.Source, err)
 		}
 		result.Phases = append(result.Phases, PhaseResult{Phase: p, Ran: ran})
+	}
+	if dotfilesPending {
+		result.Dotfiles = installDotfiles(ctx, execer, rt, opts)
 	}
 	return result, nil
 }
