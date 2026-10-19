@@ -7,16 +7,16 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/spf13/cobra"
-	hostdocker "github.com/wyrd-company/devcontainer-builder/pkg/host/docker"
-	"github.com/wyrd-company/devcontainer-builder/pkg/host/dockercompose"
-	"github.com/wyrd-company/devcontainer-builder/pkg/substitute"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"github.com/spf13/cobra"
 	"github.com/wyrd-company/devcontainer-builder/pkg/features"
+	hostdocker "github.com/wyrd-company/devcontainer-builder/pkg/host/docker"
+	"github.com/wyrd-company/devcontainer-builder/pkg/host/dockercompose"
 	"github.com/wyrd-company/devcontainer-builder/pkg/spec"
+	"github.com/wyrd-company/devcontainer-builder/pkg/substitute"
 )
 
 // featuresConfiguration projects the resolved feature graph into upstream's
@@ -36,14 +36,24 @@ func (a *application) featuresConfiguration(dc *spec.DevContainer, configuration
 	if err != nil {
 		return nil, err
 	}
-	defer cleanup()
 	if len(resolved) == 0 {
 		return nil, nil
 	}
 	sets := make([]any, 0, len(resolved))
 	for i, f := range resolved {
+		id := filepath.Base(f.Source)
+		if f.Reference != nil {
+			id = filepath.Base(f.Reference.Repository)
+		}
+		target := filepath.Join(filepath.Dir(f.Dir), fmt.Sprintf("%s_%d", id, i))
+		if err := os.Rename(f.Dir, target); err != nil {
+			cleanup()
+			return nil, err
+		}
+		f.Dir = target
 		set, err := resolvedFeatureSet(f, i, filepath.Dir(dc.Path))
 		if err != nil {
+			cleanup()
 			return nil, err
 		}
 		sets = append(sets, set)

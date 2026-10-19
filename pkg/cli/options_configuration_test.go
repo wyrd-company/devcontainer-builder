@@ -143,6 +143,7 @@ func TestReadFeaturesConfiguration(t *testing.T) {
 	if !ok {
 		t.Fatalf("result=%v", result)
 	}
+	t.Cleanup(func() { _ = os.RemoveAll(config["dstFolder"].(string)) })
 	sets := config["featureSets"].([]any)
 	if len(sets) != 3 {
 		t.Fatalf("sets=%v", sets)
@@ -153,6 +154,13 @@ func TestReadFeaturesConfiguration(t *testing.T) {
 		source := set["sourceInformation"].(map[string]any)
 		feature := set["features"].([]any)[0].(map[string]any)
 		id := source["userFeatureId"].(string)
+		cache := feature["cachePath"].(string)
+		if cache != filepath.Join(config["dstFolder"].(string), feature["consecutiveId"].(string)) {
+			t.Fatalf("cache path disagrees with staging: %v", feature)
+		}
+		if _, err := os.Stat(filepath.Join(cache, "devcontainer-feature.json")); err != nil {
+			t.Fatalf("returned feature files were not retained: %v", err)
+		}
 		seen[id] = true
 		if source["type"] != "file-path" || source["resolvedFilePath"] != filepath.Join(workspace, strings.TrimPrefix(id, "./")) || set["internalVersion"] != "2" || feature["included"] != true || feature["licenseURL"] != "https://example.invalid/license" {
 			t.Fatalf("set=%v", set)
@@ -174,6 +182,7 @@ func TestReadFeaturesConfiguration(t *testing.T) {
 		t.Fatal(err)
 	}
 	existing, _ := invoke(t, 0, append(base, "--include-features-configuration", "--container-id", "sample-container")...)
+	t.Cleanup(func() { _ = os.RemoveAll(existing["featuresConfiguration"].(map[string]any)["dstFolder"].(string)) })
 	existingFeature := existing["featuresConfiguration"].(map[string]any)["featureSets"].([]any)[0].(map[string]any)["features"].([]any)[0].(map[string]any)
 	if existingFeature["value"].(map[string]any)["marker"] != "container-value" {
 		t.Fatal(existingFeature)

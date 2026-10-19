@@ -338,8 +338,9 @@ dcb read-configuration --workspace-folder . --include-features-configuration
 additional features and their dependencies in installation order. Its optional
 `featuresConfiguration` result contains `featureSets` with feature metadata,
 option values and source information, plus the temporary staging `dstFolder`.
-The field is omitted when there are no features. Temporary staging paths are
-informational; use `dcb features --out ./staged-features` to retain feature files.
+The field is omitted when there are no features. Resolved files remain in the
+reported staging paths. Use `dcb features --out ./staged-features` to choose a
+staging location.
 
 ### Inspect what a build uses
 
