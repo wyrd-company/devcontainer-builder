@@ -56,8 +56,18 @@ func AssertIsolated(t *testing.T, fixture func()) {
 	}
 	before := snapshot()
 	t.Cleanup(func() {
-		if !reflect.DeepEqual(before, snapshot()) {
-			t.Error("sentinel repository changed (config, HEAD, refs, index or worktree)")
+		after := snapshot()
+		if !reflect.DeepEqual(before, after) {
+			for path, body := range before {
+				if got, ok := after[path]; !ok || body != got {
+					t.Errorf("sentinel repository changed existing file: %s", path)
+				}
+			}
+			for path := range after {
+				if _, ok := before[path]; !ok {
+					t.Errorf("sentinel repository added file: %s", path)
+				}
+			}
 		}
 	})
 	t.Setenv("GIT_DIR", filepath.Join(root, ".git"))
