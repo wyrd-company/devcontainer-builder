@@ -26,6 +26,7 @@ func TestGPUAvailabilityEngineRequests(t *testing.T) {
 		{name: "config-requirement", requirement: `true`, runtime: "nvidia-container-runtime", wantInfo: true, wantGPU: true},
 		{name: "default-present", requirement: `true`, runtime: "/usr/bin/nvidia-container-runtime", wantInfo: true, wantGPU: true},
 		{name: "detect-absent", mode: "detect", requirement: `true`, wantInfo: true},
+		{name: "runtime-arguments", requirement: `true`, runtime: "runtime-wrapper", wantInfo: true, wantGPU: true},
 		{name: "detect-other-runtime", mode: "detect", requirement: `true`, runtime: "runc", wantInfo: true},
 		{name: "all", mode: "all", requirement: `true`, wantGPU: true},
 		{name: "all-engine-rejects", mode: "all", requirement: `true`, wantGPU: true, createError: true},
@@ -71,7 +72,11 @@ func TestGPUAvailabilityEngineRequests(t *testing.T) {
 						http.Error(w, `{"message":"unavailable"}`, 500)
 						return
 					}
-					_ = json.NewEncoder(w).Encode(map[string]any{"Runtimes": map[string]any{"nvidia": map[string]any{"path": tc.runtime}}})
+					record := map[string]any{"path": tc.runtime}
+					if tc.name == "runtime-arguments" {
+						record["runtimeArgs"] = []string{"nvidia-container-runtime"}
+					}
+					_ = json.NewEncoder(w).Encode(map[string]any{"Runtimes": map[string]any{"nvidia": record}})
 				case strings.HasSuffix(r.URL.Path, "/containers/create"):
 					createCalls++
 					var body struct{ HostConfig container.HostConfig }

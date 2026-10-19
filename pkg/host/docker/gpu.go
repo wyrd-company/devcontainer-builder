@@ -5,6 +5,7 @@ package docker
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"github.com/docker/docker/api/types/container"
@@ -32,7 +33,8 @@ func (h *Host) applyGPUAvailability(ctx context.Context, dc *spec.DevContainer, 
 		if err != nil {
 			return errorf("detect GPU support: %w", err)
 		}
-		available = strings.Contains(info.Runtimes["nvidia"].Path, "nvidia-container-runtime")
+		// Match upstream's search of the complete formatted runtime record.
+		available = strings.Contains(fmt.Sprint(info.Runtimes["nvidia"]), "nvidia-container-runtime")
 	}
 	if available {
 		host.DeviceRequests = append(host.DeviceRequests, container.DeviceRequest{Count: -1, Capabilities: [][]string{{"gpu"}}})
