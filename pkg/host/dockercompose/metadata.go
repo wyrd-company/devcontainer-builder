@@ -23,12 +23,23 @@ func imageMetadataEntries(req UpRequest, labels map[string]string, logf func(str
 	if req.ImageBuilt && len(entries) > 0 {
 		return entries
 	}
-	return metadata.CollectWithOptions(entries, req.Features, req.Spec, metadata.CollectOptions{OmitConfigRemoteEnv: req.OmitConfigRemoteEnvFromMetadata})
+	entries = metadata.CollectWithOptions(entries, req.Features, req.Spec, metadata.CollectOptions{OmitConfigRemoteEnv: req.OmitConfigRemoteEnvFromMetadata})
+	// Upstream adds [] on the direct-image path. Built images inherit their
+	// labels instead; nil tells the container writer to add no label.
+	if entries == nil && !req.ImageBuilt {
+		return []metadata.Entry{}
+	}
+	return entries
 }
 
 // setPrimaryMetadata makes captured metadata part of the service shape before
 // config hashing and container creation. Lifecycle-only changes cause drift.
 func setPrimaryMetadata(proj *types.Project, service string, entries []metadata.Entry) error {
+	// Built images inherit their label. Direct images write an explicit []
+	// unless the native Compose service builds from a Dockerfile.
+	if entries == nil || len(entries) == 0 && proj.Services[service].Build != nil {
+		return nil
+	}
 	value, err := metadata.Encode(entries)
 	if err != nil {
 		return errorf("encode container metadata: %w", err)

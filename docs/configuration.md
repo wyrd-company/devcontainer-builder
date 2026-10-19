@@ -66,8 +66,11 @@ entrypoint that keeps the container running.
 ## Image metadata
 
 `dcb build` and `dcb up` write the `devcontainer.metadata` label on the image
-they build, as upstream does. The label is a list of entries in order: the
-entries of the base image's own label, one entry for each feature in install
+they build when metadata entries are present, as upstream does. Empty metadata
+adds no image label. A container created directly from an image receives `[]`
+when it has no metadata entries; a Dockerfile build inherits its image label.
+The label is a list of entries in order: the entries of the base image's own
+label, one entry for each feature in install
 order, and one for the configuration. An entry records lifecycle commands,
 mounts, capabilities, security options, `init`, `privileged`, entrypoints,
 environment, users, and customizations.

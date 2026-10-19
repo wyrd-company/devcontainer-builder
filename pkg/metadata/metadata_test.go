@@ -288,3 +288,25 @@ func TestGPURequirementsBranches(t *testing.T) {
 		})
 	}
 }
+
+func TestDockerfileLabelEmptyMetadata(t *testing.T) {
+	for _, entries := range [][]Entry{nil, {}} {
+		value, err := DockerfileLabel(entries)
+		if err != nil || value != "" {
+			t.Fatalf("label=%q err=%v", value, err)
+		}
+	}
+}
+
+func TestReadAbsentMetadata(t *testing.T) {
+	for _, labels := range []map[string]string{nil, {}, {"sample.label": "keep"}} {
+		logged := false
+		entries := Read(labels, func(string, ...any) { logged = true })
+		if len(entries) != 0 || logged {
+			t.Fatalf("entries=%v logged=%v", entries, logged)
+		}
+		if len(Collect(entries, nil, &spec.DevContainer{})) != 0 {
+			t.Fatal("absent base metadata is not empty")
+		}
+	}
+}

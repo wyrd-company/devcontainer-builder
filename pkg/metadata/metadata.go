@@ -93,7 +93,11 @@ func Encode(entries []Entry) (string, error) {
 }
 
 // DockerfileLabel escapes a label value for a double-quoted Dockerfile LABEL.
+// Empty metadata adds no instruction, preserving the base image labels.
 func DockerfileLabel(entries []Entry) (string, error) {
+	if len(entries) == 0 {
+		return "", nil
+	}
 	value, err := Encode(entries)
 	if err != nil {
 		return "", err

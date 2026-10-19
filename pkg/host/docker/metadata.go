@@ -40,7 +40,13 @@ func imageMetadataEntries(req UpRequest, labels map[string]string, logf func(str
 	if req.ImageBuilt && len(entries) > 0 {
 		return entries
 	}
-	return metadata.CollectWithOptions(entries, req.Features, req.Spec, metadata.CollectOptions{OmitConfigRemoteEnv: req.OmitConfigRemoteEnvFromMetadata})
+	entries = metadata.CollectWithOptions(entries, req.Features, req.Spec, metadata.CollectOptions{OmitConfigRemoteEnv: req.OmitConfigRemoteEnvFromMetadata})
+	// Upstream adds [] on the direct-image path. Built images inherit their
+	// labels instead; nil tells the container writer to add no label.
+	if entries == nil && !req.ImageBuilt {
+		return []metadata.Entry{}
+	}
+	return entries
 }
 
 func runtimePlan(req UpRequest, entries []metadata.Entry, ctx substitute.Context, containerEnv map[string]string) []lifecycle.Phase {

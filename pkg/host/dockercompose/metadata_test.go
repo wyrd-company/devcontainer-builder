@@ -304,3 +304,45 @@ func TestComposeRequestMounts(t *testing.T) {
 		t.Fatalf("plain volumes=%+v declarations=%+v", v, plain.Volumes)
 	}
 }
+
+func TestComposeEmptyMetadataByImagePath(t *testing.T) {
+	for _, built := range []bool{false, true} {
+		t.Run(map[bool]string{false: "direct-image", true: "built-image"}[built], func(t *testing.T) {
+			proj := &types.Project{Services: types.Services{"app": {Image: "alpine", Labels: types.Labels{"sample.label": "keep"}}}}
+			before := serviceConfigHash(proj.Services["app"])
+			entries := imageMetadataEntries(UpRequest{Spec: &spec.DevContainer{}, ImageBuilt: built}, nil, func(string, ...any) { t.Fatal("absent metadata logged an error") })
+			if len(entries) != 0 {
+				t.Fatal(entries)
+			}
+			if err := setPrimaryMetadata(proj, "app", entries); err != nil {
+				t.Fatal(err)
+			}
+			svc := proj.Services["app"]
+			value, present := svc.Labels[metadata.Label]
+			if built && present || !built && (!present || value != "[]") {
+				t.Fatalf("metadata label=%q present=%v built=%v", value, present, built)
+			}
+			if built && serviceConfigHash(svc) != before {
+				t.Fatal("absent metadata changed the service hash")
+			}
+			if svc.Labels["sample.label"] != "keep" {
+				t.Fatal(svc.Labels)
+			}
+		})
+	}
+}
+
+func TestComposeDockerfileEmptyMetadata(t *testing.T) {
+	proj := &types.Project{Services: types.Services{"app": {Image: "alpine", Build: &types.BuildConfig{Context: "."}}}}
+	before := serviceConfigHash(proj.Services["app"])
+	entries := imageMetadataEntries(UpRequest{Spec: &spec.DevContainer{}}, nil, nil)
+	if err := setPrimaryMetadata(proj, "app", entries); err != nil {
+		t.Fatal(err)
+	}
+	if value, present := proj.Services["app"].Labels[metadata.Label]; present {
+		t.Fatalf("metadata label=%q", value)
+	}
+	if serviceConfigHash(proj.Services["app"]) != before {
+		t.Fatal("absent metadata changed the service hash")
+	}
+}

@@ -148,3 +148,34 @@ func TestMergeImageConfig_MetadataPreservesBaseAndInstallOrder(t *testing.T) {
 		t.Fatalf("entries=%+v", entries)
 	}
 }
+
+func TestMergeImageConfigEmptyMetadata(t *testing.T) {
+	for _, baseLabel := range []string{"", "[]"} {
+		t.Run("base="+baseLabel, func(t *testing.T) {
+			base := dockerspec.DockerOCIImage{}
+			base.Config.Labels = map[string]string{"sample.label": "keep"}
+			if baseLabel != "" {
+				base.Config.Labels[metadata.Label] = baseLabel
+			}
+			raw, err := json.Marshal(base)
+			if err != nil {
+				t.Fatal(err)
+			}
+			out, err := mergeImageConfig(raw, GraphInputs{Spec: &spec.DevContainer{}}, map[string]string{"sample.added": "keep"}, ocispecs.Platform{OS: "linux", Architecture: "amd64"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			var got dockerspec.DockerOCIImage
+			if err := json.Unmarshal(out, &got); err != nil {
+				t.Fatal(err)
+			}
+			value, present := got.Config.Labels[metadata.Label]
+			if present != (baseLabel != "") || value != baseLabel {
+				t.Fatalf("metadata label=%q present=%v; want inherited %q", value, present, baseLabel)
+			}
+			if got.Config.Labels["sample.label"] != "keep" || got.Config.Labels["sample.added"] != "keep" {
+				t.Fatal(got.Config.Labels)
+			}
+		})
+	}
+}

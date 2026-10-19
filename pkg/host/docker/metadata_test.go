@@ -159,3 +159,24 @@ func TestFeatureContainerEnvRetainsSpecPrecedence(t *testing.T) {
 		t.Fatalf("env=%v", got)
 	}
 }
+
+func TestCreateEmptyMetadataByImagePath(t *testing.T) {
+	for _, built := range []bool{false, true} {
+		t.Run(map[bool]string{false: "direct-image", true: "built-image"}[built], func(t *testing.T) {
+			h, created := fakeDaemon(t, `{}`)
+			dc := &spec.DevContainer{Image: "alpine"}
+			req := UpRequest{Spec: dc, Image: "alpine", ImageBuilt: built}
+			req.metadataEntries = imageMetadataEntries(req, nil, func(string, ...any) { t.Fatal("absent metadata logged an error") })
+			if len(req.metadataEntries) != 0 {
+				t.Fatal(req.metadataEntries)
+			}
+			if _, err := h.create(context.Background(), dc, req, "/workspace"); err != nil {
+				t.Fatal(err)
+			}
+			value, present := created.Labels[metadata.Label]
+			if built && present || !built && (!present || value != "[]") {
+				t.Fatalf("metadata label=%q present=%v built=%v", value, present, built)
+			}
+		})
+	}
+}
