@@ -57,6 +57,15 @@ type UpRequest struct {
 	Dotfiles runner.Dotfiles
 	// Lifecycle selects lifecycle stop points and prebuild behavior.
 	Lifecycle runner.LifecycleControls
+	// RemoteEnv is the caller's remote environment for lifecycle commands
+	// and the dotfiles install (upstream --remote-env). The configuration's
+	// remoteEnv wins for the same name, as upstream. It is not stored.
+	RemoteEnv map[string]string
+	// Secrets are secret environment variables for lifecycle commands and
+	// the dotfiles install (upstream --secrets-file). They win over every
+	// other layer and are never stored in container configuration, labels
+	// or files.
+	Secrets map[string]string
 	// Features as resolved by pkg/features. Their containerEnv and
 	// lifecycle commands are merged into the primary service.
 	Features []features.Resolved
@@ -521,7 +530,7 @@ func (h *Host) runLifecycle(
 		containerEnv = map[string]string{}
 	}
 	dc = substituteContainerEnv(dc, containerEnv)
-	mergedEnv := stringMap(dc.UpdateRemoteEnv)
+	mergedEnv := runner.LifecycleEnv(req.RemoteEnv, stringMap(dc.UpdateRemoteEnv), req.Secrets)
 
 	plan := runtimePlan(req, entries, subCtx, containerEnv)
 	rt := runner.Runtime{

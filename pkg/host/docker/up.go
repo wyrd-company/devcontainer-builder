@@ -57,6 +57,15 @@ type UpRequest struct {
 	Dotfiles runner.Dotfiles
 	// Lifecycle selects lifecycle stop points and prebuild behavior.
 	Lifecycle runner.LifecycleControls
+	// RemoteEnv is the caller's remote environment for lifecycle commands
+	// and the dotfiles install (upstream --remote-env). The configuration's
+	// remoteEnv wins for the same name, as upstream. It is not stored.
+	RemoteEnv map[string]string
+	// Secrets are secret environment variables for lifecycle commands and
+	// the dotfiles install (upstream --secrets-file). They win over every
+	// other layer and are never stored in container configuration, labels
+	// or files.
+	Secrets map[string]string
 	// metadataEntries carries the complete raw list to container creation.
 	metadataEntries []metadata.Entry
 	entrypoints     []string
@@ -244,7 +253,7 @@ func (h *Host) Up(ctx context.Context, req UpRequest) (*UpResult, error) {
 	}
 	// Second-phase substitution: ${containerEnv:VAR}.
 	dc = substituteContainerEnv(dc, containerEnv)
-	mergedEnv := mergeStringMaps(stringMap(dc.UpdateRemoteEnv), nil)
+	mergedEnv := runner.LifecycleEnv(req.RemoteEnv, stringMap(dc.UpdateRemoteEnv), req.Secrets)
 
 	plan := runtimePlan(req, entries, subCtx, containerEnv)
 	rt := runner.Runtime{
@@ -363,17 +372,6 @@ func containerSubstituteCommand(ctx substitute.ContainerContext, c spec.Command)
 		for k, v := range c.Parallel {
 			out.Parallel[k] = containerSubstituteCommand(ctx, v)
 		}
-	}
-	return out
-}
-
-func mergeStringMaps(a, b map[string]string) map[string]string {
-	out := make(map[string]string, len(a)+len(b))
-	for k, v := range a {
-		out[k] = v
-	}
-	for k, v := range b {
-		out[k] = v
 	}
 	return out
 }
