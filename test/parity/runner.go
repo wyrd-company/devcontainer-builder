@@ -236,7 +236,9 @@ func (r *Runner) observe(ctx context.Context, a Adapter, f Fixture, side string)
 	if err != nil {
 		return failedObservations(err)
 	}
-	body, upErr := a.Up(ctx, r, workspace, f.UpArgs)
+	// Keep copied fixtures isolated from the enclosing checkout on both sides.
+	args := append([]string{"--mount-workspace-git-root", "false"}, f.UpArgs...)
+	body, upErr := a.Up(ctx, r, workspace, args)
 	out := failedObservations(fmt.Errorf("container observation unavailable"))
 	v, jsonErr := resultJSON(body)
 	if upErr != nil {
