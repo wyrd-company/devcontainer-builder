@@ -112,6 +112,7 @@ func TestRemoteWorkspaceFolder(t *testing.T) {
 		{"single uses the container's workspace mount", single, inspected("/srv", workspaceMount), "/mounted"},
 		{"single Git root mount", single, inspected("/srv", container.MountPoint{Type: mount.TypeBind, Source: "/host", Destination: "/workspaces/host"}), "/workspaces/host/sample"},
 		{"single configured folder wins over the mount", &spec.DevContainer{Path: single.Path, WorkspaceFolder: "/sample"}, inspected("/srv", workspaceMount), "/sample"},
+		{"workspace label names the mounted folder", &spec.DevContainer{}, inspected("/srv", otherMount, workspaceMount), "/mounted"},
 		{"single configured folder", &spec.DevContainer{Path: single.Path, WorkspaceFolder: "/sample"}, inspected("/srv"), "/sample"},
 		{"compose ignores service workdir", compose, inspected("/srv", workspaceMount), "/"},
 		{"compose configured folder", &spec.DevContainer{Path: compose.Path, DockerComposeFile: compose.DockerComposeFile, Service: "app", WorkspaceFolder: "/sample"}, inspected("/srv"), "/sample"},
@@ -120,7 +121,12 @@ func TestRemoteWorkspaceFolder(t *testing.T) {
 		{"compose without workdir", compose, inspected(""), "/"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := (&application{}).remoteWorkspaceFolder(tc.dc, "/host/sample", tc.info); got != tc.want {
+			local := "/host/sample"
+			if tc.name == "workspace label names the mounted folder" {
+				// A container selected by ID from another folder: its label decides.
+				local = "/host/elsewhere"
+			}
+			if got := (&application{}).remoteWorkspaceFolder(tc.dc, local, tc.info); got != tc.want {
 				t.Fatalf("remoteWorkspaceFolder = %q, want %q", got, tc.want)
 			}
 		})
