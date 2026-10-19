@@ -249,7 +249,9 @@ stdout.
 
 `exec` runs as the configured `remoteUser` with `remoteEnv` applied. Use
 `--user`, `--remote-env KEY=VALUE`, and `--remote-workspace-folder` to change
-the user, environment, and working directory for one command.
+the user, environment, and working directory for one command. Configuration
+`remoteEnv` replaces a `--remote-env` value with the same name, as upstream.
+Values set only by `--remote-env` are added to the command environment.
 
 A command can also exit with `1`. To tell this apart from an operation
 failure, look for the `dcb` error diagnostic on stderr. In text mode

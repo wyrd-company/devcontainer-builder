@@ -168,7 +168,7 @@ features, dotfiles, environment probing and version support.
 | --terminal-columns | same name | implemented | terminal | Paired numeric dimensions size lifecycle and exec PTYs; zero leaves the size unset. Source: devContainersSpecCLI.ts:1231. |
 | --terminal-rows | same name | implemented | terminal | Paired numeric dimensions size lifecycle and exec PTYs; zero leaves the size unset. Source: devContainersSpecCLI.ts:1232. |
 | --default-user-env-probe | none | implement | sibling-unit | Needs the upstream probe and its 10-second timeout, a new timeout mechanic that awaits Bob's decision. Source: devContainersSpecCLI.ts:1233. |
-| --remote-env | --remote-env | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: devContainersSpecCLI.ts:1234. |
+| --remote-env | --remote-env | implemented | covered | Adds variables to the exec environment, below configuration remoteEnv, as upstream. Source: devContainersSpecCLI.ts:1234; injectHeadless.ts:355. |
 | --skip-feature-auto-mapping [hidden] | --skip-feature-auto-mapping | implemented | feature-controls | Registered hidden boolean, default false; resolver maps upstream legacy IDs unless enabled. Source: devContainersSpecCLI.ts:1235. |
 | --help | --help | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: yargs built-in help. |
 | --version | --version | implemented | sibling-unit | Registered on every command; prints the version result in place of the command, as upstream. Source: devContainersSpecCLI.ts (.version). |

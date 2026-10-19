@@ -54,6 +54,9 @@ dcb inspect --workspace-folder .
 dcb down --workspace-folder .
 ```
 
+For `exec`, configuration `remoteEnv` wins over a `--remote-env KEY=VALUE`
+with the same name, as upstream. Values set only by the flag are added.
+
 `up` returns `containerId`, `remoteUser`, and `remoteWorkspaceFolder`.
 Image, Dockerfile, and Compose configurations select the library host
 without invoking another container CLI. Docker connection settings use the

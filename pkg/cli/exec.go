@@ -81,10 +81,8 @@ func (a *application) execCommand() *cobra.Command {
 				return fmt.Errorf("detect container env: %w", err)
 			}
 		}
-		execEnv := resolveRemoteEnv(dc.UpdateRemoteEnv, a.substitutionContext(dc, workspace, labels), env)
-		for k, v := range extra {
-			execEnv[k] = v
-		}
+		configEnv := resolveRemoteEnv(dc.UpdateRemoteEnv, a.substitutionContext(dc, workspace, labels), env)
+		execEnv := runner.LifecycleEnv(extra, configEnv, nil)
 		if user == "" {
 			user = substitute.Substitute(a.substitutionContext(dc, workspace, labels), dc.RemoteUser)
 		}
