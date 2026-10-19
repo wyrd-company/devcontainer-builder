@@ -3,6 +3,7 @@ package dockercompose
 import (
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -222,12 +223,19 @@ func TestObjectMaterializerErrorsDoNotDisclosePayload(t *testing.T) {
 	raw := "synthetic +/\"\\ value"
 	quoted, _ := json.Marshal(raw)
 	spellings := []string{raw, string(quoted), base64.StdEncoding.EncodeToString([]byte(raw)), base64.RawStdEncoding.EncodeToString([]byte(raw)), base64.URLEncoding.EncodeToString([]byte(raw)), base64.RawURLEncoding.EncodeToString([]byte(raw)), url.QueryEscape(raw), url.PathEscape(raw)}
-	for _, payload := range spellings {
+	for i, payload := range spellings {
 		for _, kind := range []string{"configs", "secrets"} {
 			for _, source := range []string{"content", "environment"} {
-				t.Run(kind+"/"+source+"/"+base64.RawURLEncoding.EncodeToString([]byte(payload)), func(t *testing.T) {
+				// TempDir includes the test name on some Go versions. Keep payloads
+				// out of paths so filesystem diagnostics cannot echo the fixture name.
+				t.Run(fmt.Sprintf("%s/%s/spelling-%d", kind, source, i), func(t *testing.T) {
 					parent := t.TempDir()
 					blocked := filepath.Join(parent, "blocked")
+					for _, spelling := range spellings {
+						if strings.Contains(blocked, spelling) {
+							t.Fatal("test path contains payload")
+						}
+					}
 					if err := os.WriteFile(blocked, []byte("sentinel"), 0600); err != nil {
 						t.Fatal(err)
 					}
