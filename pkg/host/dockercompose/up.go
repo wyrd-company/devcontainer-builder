@@ -222,11 +222,7 @@ func (h *Host) Up(ctx context.Context, req UpRequest) (*UpResult, error) {
 			imageLabels = img.Config.Labels
 		}
 		entries = imageMetadataEntries(req, imageLabels, h.logf)
-		runtimeEntries := entries
-		if req.OmitConfigRemoteEnvFromMetadata {
-			runtimeEntries = metadata.Update(entries, req.Spec)
-		}
-		merged, err := runtimeMetadata(req.Spec, runtimeEntries, subCtx)
+		merged, err := runtimeMetadata(req.Spec, entries, subCtx)
 		if err != nil {
 			return nil, err
 		}
