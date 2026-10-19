@@ -641,17 +641,25 @@ labels, as upstream does:
 - `up` finds the primary container by its Compose project and service, and
   reuses it whatever its labels are. The id labels are set only when `up`
   creates the primary container; a changed id label does not recreate it.
-- `up --remove-existing-container` and `down` remove the workspace's Compose
-  project, even with `--id-label`; id labels do not widen or narrow removal.
+- `up --remove-existing-container` and `down` with a loaded Compose configuration
+  remove the workspace's Compose project, even with `--id-label`; id labels do
+  not widen or narrow that removal.
   The project-conflict check still refuses a project that holds
   another workspace's containers.
 - The id labels are added to the primary container beside the workspace labels,
   so the conflict check and workspace-scoped removal also cover it.
 
-In both modes, `exec`, `read-configuration`, and `run-user-commands` select
-the container that carries every given label. When `--workspace-folder`,
-`--config`, and `--override-config` are all absent, they read no
-configuration, as upstream does. The configuration in the current directory is
+With id labels and no loaded configuration, `down` selects a container by every
+label. If it is a Compose primary, `down` removes the project named by that
+container's project label, using its workspace label for the project-conflict
+check. The primary must carry a workspace ownership label; otherwise `down`
+fails. The current folder never supplies the project to remove.
+
+In both modes, `inspect`, `exec`, `read-configuration`, and
+`run-user-commands` select the container that carries every given label.
+When these commands or `down` use `--id-label` without `--workspace-folder`,
+`--config`, or `--override-config`, they read no configuration. This follows
+upstream's label-only selection. The configuration in the current directory is
 not used.
 
 ## Feature controls

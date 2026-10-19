@@ -274,7 +274,11 @@ func (a *application) manageCommand(inspect bool) *cobra.Command {
 		if err := selection.prepare(a); err != nil {
 			return err
 		}
-		dc, workspace, err := cfg.optionalLoad()
+		load := cfg.optionalLoad
+		if a.selectsByLabels(cmd) {
+			load = a.labelSelectedConfig
+		}
+		dc, workspace, err := load()
 		if err != nil {
 			return err
 		}
@@ -299,6 +303,11 @@ func (a *application) manageCommand(inspect bool) *cobra.Command {
 			}
 			if info.Config != nil && info.Config.Labels[dockercompose.LabelProject] != "" {
 				dc.Service = info.Config.Labels[dockercompose.LabelService]
+				if !inspect && len(a.idLabels) > 0 {
+					// A label-selected primary owns its project identity. The
+					// current folder is not a teardown selector.
+					return a.composeHost(cli).RemoveProject(cmd.Context(), info.Config.Labels[dockercompose.LabelProject], info.Config.Labels[dockercompose.LabelLocalFolder])
+				}
 			}
 		}
 		if !inspect {

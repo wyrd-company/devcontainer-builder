@@ -180,6 +180,26 @@ func (h *Host) Remove(ctx context.Context, localWorkspace string) error {
 	if err != nil {
 		return err
 	}
+	return h.removeProject(ctx, projectName, containers)
+}
+
+// RemoveProject tears down an explicitly selected project, using its persisted
+// workspace ownership label to keep the same conflict refusal as Remove.
+func (h *Host) RemoveProject(ctx context.Context, projectName, localWorkspace string) error {
+	if projectName == "" || localWorkspace == "" {
+		return errorf("remove selected project requires project and workspace labels")
+	}
+	containers, err := h.listProjectContainers(ctx, projectName)
+	if err != nil {
+		return err
+	}
+	if conflict := projectConflict(projectName, localWorkspace, containers); conflict != nil {
+		return conflict
+	}
+	return h.removeProject(ctx, projectName, containers)
+}
+
+func (h *Host) removeProject(ctx context.Context, projectName string, containers []container.Summary) error {
 	// Stop and removal consume the same validated set of container IDs.
 	if err := h.stopContainers(ctx, containers); err != nil {
 		// best-effort; container removal forces below
