@@ -8,8 +8,9 @@ set -euo pipefail
 
 source "$(dirname "${BASH_SOURCE[0]}")/git-env.sh"
 
-# Fixed fixture identity and configuration apply only to the temporary inbox.
-git() {
+# Operator checkout reads retain ordinary Git configuration after isolation.
+# Fixed fixture identity and configuration apply only to temporary inbox commands.
+inbox_git() {
   git_env env GIT_AUTHOR_NAME=Example GIT_AUTHOR_EMAIL=example@example.invalid \
     GIT_COMMITTER_NAME=Example GIT_COMMITTER_EMAIL=example@example.invalid \
     GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 git "$@"
@@ -50,12 +51,10 @@ stage="$output/stage"
 aur="$output/aur"
 mkdir -p "$inbox" "$stage" "$aur"
 
-python3 "$repository_script" validate "$manifest"
-git init --quiet --initial-branch=release-manifests "$inbox"
-git -C "$inbox" config user.name "Package Contract Test"
-git -C "$inbox" config user.email "package-contract@example.invalid"
-git -C "$inbox" commit --quiet --allow-empty -m "Initialize package inbox"
-submission="$(python3 "$repository_script" submit "$manifest" "$inbox")"
+git_env python3 "$repository_script" validate "$manifest"
+inbox_git init --quiet --initial-branch=release-manifests "$inbox"
+inbox_git -C "$inbox" commit --quiet --allow-empty -m "Initialize package inbox"
+submission="$(git_env python3 "$repository_script" submit "$manifest" "$inbox")"
 IFS=$'\t' read -r state submitted_path <<<"$submission"
 if [[ "$state" != "created" ]]; then
   echo "publisher did not create a new immutable inbox manifest" >&2
@@ -65,13 +64,13 @@ if [[ ! "$submitted_path" =~ ^releases/dcb/[0-9]+\.[0-9]+\.[0-9]+\.json$ ]]; the
   echo "publisher returned an unexpected immutable inbox path: $submitted_path" >&2
   exit 2
 fi
-git -C "$inbox" add -- "$submitted_path"
-git -C "$inbox" commit --quiet -m "Add package release manifest"
-inbox_commit="$(git -C "$inbox" rev-parse HEAD)"
+inbox_git -C "$inbox" add -- "$submitted_path"
+inbox_git -C "$inbox" commit --quiet -m "Add package release manifest"
+inbox_commit="$(inbox_git -C "$inbox" rev-parse HEAD)"
 submitted_manifest="$inbox/$submitted_path"
-python3 "$repository_script" validate-queue \
+git_env python3 "$repository_script" validate-queue \
   "$inbox" "$inbox_commit" "$submitted_path" "$allowlist"
-python3 "$repository_script" stage "$submitted_manifest" "$artifacts" "$stage" "$public_key"
-python3 "$repository_script" render-aur "$submitted_manifest" "$aur" --artifacts "$artifacts"
+git_env python3 "$repository_script" stage "$submitted_manifest" "$artifacts" "$stage" "$public_key"
+git_env python3 "$repository_script" render-aur "$submitted_manifest" "$aur" --artifacts "$artifacts"
 test -s "$stage/.new-rpms"
 test -s "$aur/PKGBUILD"

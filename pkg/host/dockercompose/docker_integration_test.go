@@ -24,10 +24,9 @@ import (
 	dockerclient "github.com/docker/docker/client"
 
 	"github.com/wyrd-company/devcontainer-builder/internal/dockertest"
+	"github.com/wyrd-company/devcontainer-builder/internal/testgit"
 	"github.com/wyrd-company/devcontainer-builder/pkg/builder"
 	"github.com/wyrd-company/devcontainer-builder/pkg/spec"
-
-	"github.com/wyrd-company/devcontainer-builder/internal/testgit"
 )
 
 func TestDockerComposeIntegration(t *testing.T) {

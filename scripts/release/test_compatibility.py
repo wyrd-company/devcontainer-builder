@@ -177,17 +177,32 @@ class CompatibilityTests(unittest.TestCase):
                 ["git", "-C", str(publisher), "rev-parse", "HEAD"],
                 text=True, env=git_env(fixture=True),
             ).strip()
-            (publisher / "scripts/repository.py").write_text("""import json, os, sys
+            (publisher / "scripts/repository.py").write_text("""import json, os, subprocess, sys
 from pathlib import Path
 with open(os.environ['CALL_LOG'], 'a') as out:
     out.write(json.dumps(sys.argv[1:]) + '\\n')
+with open(os.environ['PUBLISHER_ENV_LOG'], 'a') as out:
+    out.write(json.dumps(list(os.environ)) + '\\n')
 command = sys.argv[1]
+if command in ('submit', 'validate-queue'):
+    inbox = sys.argv[3] if command == 'submit' else sys.argv[2]
+    def git(*args):
+        return subprocess.check_output(['git', '-C', inbox, *args], text=True).strip()
+    observation = {'command': command, 'repository': git('rev-parse', '--show-toplevel'),
+                   'head': git('rev-parse', 'HEAD')}
+    if command == 'validate-queue':
+        manifest = subprocess.run(['git', '-C', inbox, 'show', sys.argv[3] + ':' + sys.argv[4]],
+                                  capture_output=True, text=True)
+        observation['manifest'] = manifest.stdout
+        observation['manifest_status'] = manifest.returncode
+    with open(os.environ['PUBLISHER_READ_LOG'], 'a') as out:
+        out.write(json.dumps(observation) + '\\n')
 if command == 'submit':
     reply = os.environ.get('SUBMISSION', 'created\t' + 'releases/dcb/1.2.3.json')
     relative = reply.split('\t')[1]
     target = Path(sys.argv[3]) / relative
     target.parent.mkdir(parents=True)
-    target.write_text('{}')
+    target.write_text(Path(sys.argv[2]).read_text())
     print(reply)
 elif command == 'stage' and os.environ.get('SKIP_OUTPUT') != 'stage':
     (Path(sys.argv[4]) / '.new-rpms').write_text('example.rpm')
@@ -196,24 +211,62 @@ elif command == 'render-aur' and os.environ.get('SKIP_OUTPUT') != 'aur':
 elif command == 'validate-queue' and os.environ.get('REJECT_QUEUE'):
     sys.exit(1)
 """)
+            (root / "manifest.json").write_text('{"example": "release"}\n')
+            reads = root / "git-reads"
             log = root / "calls"
             env = {
                 **os.environ,
                 "CALL_LOG": str(log),
+                "PUBLISHER_READ_LOG": str(reads),
+                "PUBLISHER_ENV_LOG": str(root / "publisher-env"),
             }
             command = [
                 "bash",
                 str(ROOT / "scripts/release/compatibility.sh"),
                 str(publisher),
                 commit,
-                "manifest.json",
+                str(root / "manifest.json"),
                 "assets",
                 str(root / "output"),
             ]
             result = subprocess.run(command, env=env, capture_output=True, text=True)
+            self.assertTrue(reads.exists(), result.stderr)
+            inbox = next((root / "output").glob("contract.*/inbox"))
+            observations = [json.loads(line) for line in reads.read_text().splitlines()]
+            for observation in observations:
+                self.assertEqual(
+                    observation["repository"], str(inbox),
+                    observation["command"] + " read wrong repository: "
+                    + json.dumps(observations),
+                )
+                revision = "HEAD^" if observation["command"] == "submit" else "HEAD"
+                actual = subprocess.check_output(
+                    ["git", "-C", str(inbox), "rev-parse", revision],
+                    env=git_env(fixture=True), text=True,
+                ).strip()
+                self.assertEqual(observation["head"], actual, observation["command"])
+            self.assertEqual(
+                [o["command"] for o in observations], ["submit", "validate-queue"]
+            )
+            self.assertEqual(observations[1]["manifest_status"], 0)
+            self.assertEqual(
+                observations[1]["manifest"], (root / "manifest.json").read_text()
+            )
             self.assertEqual(result.returncode, 0, result.stderr)
             assert_sentinel_unchanged()
-            inbox = next((root / "output").glob("contract.*/inbox"))
+            commit_count = subprocess.check_output(
+                ["git", "-C", str(inbox), "rev-list", "--count", "HEAD"],
+                env=git_env(fixture=True), text=True,
+            )
+            self.assertEqual(int(commit_count), 2)
+            identities = subprocess.check_output(
+                ["git", "-C", str(inbox), "log", "--format=%an <%ae>|%cn <%ce>"],
+                env=git_env(fixture=True), text=True,
+            ).splitlines()
+            self.assertEqual(
+                identities,
+                ["Example <example@example.invalid>|Example <example@example.invalid>"] * 2,
+            )
             subject = subprocess.check_output(
                 ["git", "-C", str(inbox), "log", "-1", "--format=%s"],
                 env=git_env(fixture=True), text=True,
@@ -224,6 +277,17 @@ elif command == 'validate-queue' and os.environ.get('REJECT_QUEUE'):
                 [c[0] for c in calls],
                 ["validate", "submit", "validate-queue", "stage", "render-aur"],
             )
+            environments = [
+                json.loads(line)
+                for line in (root / "publisher-env").read_text().splitlines()
+            ]
+            self.assertEqual(len(environments), len(calls))
+            for call, environment in zip(calls, environments):
+                self.assertFalse(
+                    any(name.startswith("GIT_") for name in environment),
+                    call[0] + " inherited Git overrides",
+                )
+            self.assertEqual(calls[2][2], observations[1]["head"])
             self.assertEqual(calls[2][-1], str(publisher / "config/products.json"))
             self.assertEqual(calls[2][3], "releases/dcb/1.2.3.json")
             for file in [
