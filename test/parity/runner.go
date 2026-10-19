@@ -292,7 +292,18 @@ func (r *Runner) observe(ctx context.Context, a Adapter, f Fixture, side string)
 		mounts = append(mounts, n.Value(map[string]any{"type": m.Type, "source": m.Source, "destination": m.Destination, "mode": m.Mode, "rw": m.RW}))
 	}
 	out["mounts"] = Observation{Value: unordered(mounts)}
-	out["user"] = Observation{Value: c.Config.User}
+	user := Observation{Info: map[string]string{"rawUser": c.Config.User}}
+	uid, uidErr := r.command(ctx, "docker", "exec", id, "id", "-u")
+	gid, gidErr := r.command(ctx, "docker", "exec", id, "id", "-g")
+	switch {
+	case uidErr != nil:
+		user.Error = uidErr.Error()
+	case gidErr != nil:
+		user.Error = gidErr.Error()
+	default:
+		user.Value = map[string]string{"uid": strings.TrimSpace(string(uid)), "gid": strings.TrimSpace(string(gid))}
+	}
+	out["user"] = user
 	out["workdir"] = Observation{Value: n.Value(c.Config.WorkingDir)}
 	image, err := r.command(ctx, "docker", "image", "inspect", c.Image, "--format", "{{json .Config.Labels}}")
 	if err == nil {

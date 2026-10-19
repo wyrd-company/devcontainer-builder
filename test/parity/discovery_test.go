@@ -14,14 +14,16 @@ import (
 	"testing"
 )
 
-// This adapter creates a real stopped container from the prepared runtime
+// This adapter creates a real running container from the prepared runtime
 // arguments. Observation still crosses the real Docker discovery/inspect boundary.
 type discoveryAdapter struct {
-	t      *testing.T
-	folder string
-	value  string
-	id     string
-	failUp bool
+	t       *testing.T
+	folder  string
+	value   string
+	id      string
+	failUp  bool
+	user    string
+	stopped bool
 }
 
 func (*discoveryAdapter) Name() string { return "discovery regression" }
@@ -43,7 +45,10 @@ func (a *discoveryAdapter) Up(ctx context.Context, r *Runner, workspace string, 
 			}
 			args = append(args, "--label", "devcontainer.local_folder="+folder)
 		}
-		args = append(args, "--env", "VALUE="+a.value, "--env", "WORKSPACE_FOLDER=/workspaces/"+filepath.Base(workspace), "alpine:3.20", "true")
+		if a.user != "" {
+			args = append(args, "--user", a.user)
+		}
+		args = append(args, "--env", "VALUE="+a.value, "--env", "WORKSPACE_FOLDER=/workspaces/"+filepath.Base(workspace), "alpine:3.20", "sleep", "infinity")
 		body, err = r.command(ctx, "docker", args...)
 		if err != nil {
 			return nil, err
@@ -64,6 +69,11 @@ func (a *discoveryAdapter) Up(ctx context.Context, r *Runner, workspace string, 
 				a.t.Error(err)
 			}
 		})
+		if !a.stopped {
+			if _, err := r.command(ctx, "docker", "start", id); err != nil {
+				return nil, err
+			}
+		}
 	}
 	if a.failUp {
 		return nil, fmt.Errorf("simulated lifecycle failure after container creation")

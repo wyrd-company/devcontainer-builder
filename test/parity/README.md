@@ -86,6 +86,13 @@ Lifecycle probes read `/postCreateCommand.txt`; feature probes run `hello` and
 `color`. Fixtures with no applicable probes produce empty maps. Observations
 still inspect an existing container after a lifecycle failure.
 
+The `user` dimension compares the effective UID and primary GID measured with
+`docker exec <container> id -u` and `id -g`, using the container's default user.
+It does not use the remote user or override the execution user. Each user
+observation retains the inspected `Config.User` string in `info.rawUser`,
+including an empty string; this information does not affect the score. An
+unavailable user probe counts as a failure, even if both sides fail.
+
 Normalization replaces observed container/image IDs, hostnames, temporary
 workspace paths and the workspace folder name. Result timestamps are ignored.
 Environment and label maps and mount sets are unordered; metadata and command
@@ -112,6 +119,6 @@ name or project contains that run prefix, and the `dcb-<hash>:latest` tag dcb
 derives from each workspace path; image tags are removed without force.
 Pulled base images and BuildKit cache remain available. Hard kills cannot run
 cleanup; use the unique label recorded in `run.log` to identify
-residue. Discovery regressions create stopped `alpine:3.20` containers through
+residue. Discovery regressions create running `alpine:3.20` containers through
 Docker, skip when Docker is unavailable, and retain the pulled base image.
 Logs contain fixture output and local paths; review before sharing.

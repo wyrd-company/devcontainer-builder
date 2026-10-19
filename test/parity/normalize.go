@@ -46,8 +46,9 @@ func (n Normalizer) Value(v any) any {
 }
 
 type Observation struct {
-	Value any    `json:"value,omitempty"`
-	Error string `json:"error,omitempty"`
+	Value any               `json:"value,omitempty"`
+	Error string            `json:"error,omitempty"`
+	Info  map[string]string `json:"info,omitempty"`
 }
 type Dimension struct {
 	Pass     bool        `json:"pass"`
