@@ -88,6 +88,11 @@ options win. Invalid JSON exits `2`.
 `never` disables remapping. Linux remaps by default. macOS requires explicit
 `--update-remote-user-uid-default on`, even with `updateRemoteUserUID: true`.
 
+`up --gpu-availability detect` checks the Engine NVIDIA runtime when
+`hostRequirements.gpu` requests GPUs. `all` requests all GPUs without detection;
+`none` skips automatic requests. Explicit `runArgs` GPU selection is preserved.
+Compose GPU selection stays in its service definition.
+
 `up --skip-post-create` skips all lifecycle commands;
 `--skip-post-attach` skips only postAttachCommand. Use
 `run-user-commands` to run lifecycle commands in an existing devcontainer.

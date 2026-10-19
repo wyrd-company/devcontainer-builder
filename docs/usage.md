@@ -410,3 +410,16 @@ in the JSON result; local exports also return `outputDir`.
 
 Output files are opened when the exporter writes them. Existing output files can
 be replaced, as with buildx. Local exports use BuildKit's directory merge behavior.
+
+## GPU availability
+
+`dcb up --gpu-availability detect` checks the Docker Engine NVIDIA runtime when
+`hostRequirements.gpu` is true, `"optional"`, or an object. The default is `detect`.
+When support is found, dcb requests all GPUs through Engine device requests.
+Without support, creation continues; a required GPU produces a warning.
+
+`--gpu-availability all` requests GPUs without detection when the configuration
+requires them. Docker rejects creation if it cannot satisfy the request.
+`--gpu-availability none` suppresses automatic GPU requests. Explicit GPU selection
+in `runArgs` is preserved in every mode. Compose GPU selection stays in the
+Compose service definition. Detection uses the Engine API without a host command.

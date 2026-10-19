@@ -46,6 +46,7 @@ func (a *application) upCommand() *cobra.Command {
 	opts.flags(cmd, false)
 	skip.flags(cmd)
 	controls.flags(cmd)
+	gpuAvailabilityFlag(cmd)
 	dotfiles.flags(cmd)
 	configuration.flags(cmd)
 	cmd.Flags().BoolVar(&remove, "remove-existing-container", false, "Remove the workspace container before creating it")
@@ -53,6 +54,10 @@ func (a *application) upCommand() *cobra.Command {
 	cmd.Flags().BoolVar(&opts.options.NoCache, "build-no-cache", false, "Disable build cache (upstream up flag)")
 	cmd.Flags().String("update-remote-user-uid-default", "on", "Remote user UID update default: on, off, or never (Linux default on; macOS requires explicit on; single-container mode)")
 	cmd.RunE = func(cmd *cobra.Command, _ []string) error {
+		gpu, err := resolveGPUAvailability(cmd)
+		if err != nil {
+			return err
+		}
 		dc, workspace, err := opts.cfg.load()
 		if err != nil {
 			return err
@@ -114,7 +119,7 @@ func (a *application) upCommand() *cobra.Command {
 			id = res.PrimaryContainerID
 			a.result["composeProjectName"] = res.ProjectName
 		} else {
-			res, err := a.dockerHost(cli).Up(cmd.Context(), hostdocker.UpRequest{Spec: dc, SpecPath: dc.Path, LocalWorkspace: workspace, Image: image, ImageBuilt: built != nil, SkipLifecycle: skip.postCreate, SkipPostAttach: skip.postAttach, Features: resolved, LocalEnv: envMap(), RemoteUserUIDUpdate: uid, Dotfiles: dotfiles.Dotfiles, Lifecycle: controls.LifecycleControls})
+			res, err := a.dockerHost(cli).Up(cmd.Context(), hostdocker.UpRequest{Spec: dc, SpecPath: dc.Path, LocalWorkspace: workspace, Image: image, ImageBuilt: built != nil, SkipLifecycle: skip.postCreate, SkipPostAttach: skip.postAttach, Features: resolved, LocalEnv: envMap(), RemoteUserUIDUpdate: uid, GPUAvailability: gpu, Dotfiles: dotfiles.Dotfiles, Lifecycle: controls.LifecycleControls})
 			if err != nil {
 				return err
 			}

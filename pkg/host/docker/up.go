@@ -24,6 +24,8 @@ import (
 // CLI's responsibility, kept out of the package so a service or
 // operator can supply a curated environment.
 type UpRequest struct {
+	// GPUAvailability controls implicit hostRequirements.gpu requests. Empty means detect.
+	GPUAvailability string
 	// Spec is the parsed devcontainer.json. Required.
 	Spec *spec.DevContainer
 	// SpecPath is the host-side path the spec was loaded from. Stored
@@ -290,6 +292,9 @@ func (h *Host) create(
 	}
 	if err != nil {
 		return "", errorf("build container config: %w", err)
+	}
+	if err := h.applyGPUAvailability(ctx, dc, req.GPUAvailability, host); err != nil {
+		return "", err
 	}
 	if !overrideCommand(dc) && (len(req.entrypoints) > 0 || len(featureEntrypoints(req.Features)) > 0) {
 		img, err := h.client.ImageInspect(ctx, req.Image)

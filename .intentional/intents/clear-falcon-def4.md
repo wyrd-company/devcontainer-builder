@@ -9,3 +9,5 @@ Lifecycle controls support waitFor stop points, prebuild reruns, personalization
 Configuration result controls include optional configuration, merged metadata, and resolved feature configuration.
 
 Build output accepts buildx exporter specifications for filesystem, image archive, image-store, and registry exports through native APIs.
+
+GPU availability controls honor host GPU requirements through Docker Engine runtime detection and device requests.
