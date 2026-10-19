@@ -124,9 +124,10 @@ func (h *Host) removeRetiredObjects(ctx context.Context, previous []*volume.Volu
 }
 
 func objectRootMounted(root string, containers []container.Summary) bool {
+	root = resolvedObjectPath(root)
 	for _, c := range containers {
 		for _, m := range c.Mounts {
-			source := filepath.Clean(m.Source)
+			source := resolvedObjectPath(m.Source)
 			if source == root || strings.HasPrefix(source, root+string(filepath.Separator)) || strings.HasPrefix(root, strings.TrimSuffix(source, string(filepath.Separator))+string(filepath.Separator)) {
 				return true
 			}
@@ -144,4 +145,14 @@ func objectRecordsForProject(records []*volume.Volume, project string) []*volume
 		}
 	}
 	return owned
+}
+
+// Docker retains the requested spelling of a bind source, including symlinks.
+// Resolve paths visible on this host so aliases cannot hide an active consumer;
+// daemon-only paths retain their normalized spelling.
+func resolvedObjectPath(path string) string {
+	if resolved, err := filepath.EvalSymlinks(path); err == nil {
+		return resolved
+	}
+	return filepath.Clean(path)
 }

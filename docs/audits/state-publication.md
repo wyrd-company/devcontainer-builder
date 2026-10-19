@@ -50,6 +50,7 @@ Before `Up` changes containers, it snapshots this workspace/project's ownership
 records that existing project containers mount. After successful bring-up and
 lifecycle commands, it removes only snapshot roots that no container mounts.
 The consumer check includes stopped containers and containers outside the project.
+It resolves host-visible symlink aliases before comparing object and mount paths.
 A reused service can keep an older shared root. Unmounted records are excluded
 from this retirement snapshot so an in-flight producer's files are preserved.
 File cleanup and record deletion use the same validation and retry path as

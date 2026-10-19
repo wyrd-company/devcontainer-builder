@@ -28,10 +28,17 @@ func TestComposeObjectRecreateCleanupIntegration(t *testing.T) {
 	cli := requireComposeDocker(t, ctx)
 	defer cli.Close()
 	dockertest.EnsureImage(t, ctx, cli, "alpine:3.20")
-	for _, scenario := range []string{"recreated", "reused-service", "external-directory", "external-parent", "external-file-stopped", "prefix-neighbor", "ownership", "selected-project", "unmounted-producer", "cleanup-error", "consumer-error"} {
+	for _, scenario := range []string{"recreated", "recreated-symlink-parent", "reused-service", "external-directory", "external-symlink", "external-parent", "external-file-stopped", "prefix-neighbor", "ownership", "selected-project", "unmounted-producer", "cleanup-error", "consumer-error"} {
 		t.Run(scenario, func(t *testing.T) {
 			workspace := prepareComposeWorkspace(t)
 			parent := t.TempDir()
+			if scenario == "recreated-symlink-parent" {
+				alias := filepath.Join(t.TempDir(), "alias")
+				if err := os.Symlink(parent, alias); err != nil {
+					t.Fatal(err)
+				}
+				parent = alias
+			}
 			h := New(cli, Options{UserDataFolder: parent, StopTimeout: time.Second})
 			project := objectTestProject(workspace)
 			config := filepath.Join(workspace, ".devcontainer", "devcontainer.json")
@@ -99,6 +106,13 @@ func TestComposeObjectRecreateCleanupIntegration(t *testing.T) {
 			holder := ""
 			if strings.HasPrefix(scenario, "external-") || scenario == "prefix-neighbor" || scenario == "cleanup-error" {
 				mounts := []mount.Mount{{Type: mount.TypeBind, Source: oldRoot, Target: "/held", ReadOnly: true}}
+				if scenario == "external-symlink" {
+					alias := filepath.Join(t.TempDir(), "alias")
+					if err := os.Symlink(oldRoot, alias); err != nil {
+						t.Fatal(err)
+					}
+					mounts[0].Source = alias
+				}
 				if scenario == "external-parent" {
 					mounts[0].Source = parent
 				}
