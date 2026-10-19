@@ -74,7 +74,8 @@ take `--container-id` to select a container directly.
 ## Results
 
 Every command writes exactly one JSON object on one line to stdout, except
-help and a valid `exec` invocation. An invalid invocation, including one of
+help, a valid `exec` invocation, and archive exports to stdout (see
+[Build exporters](#build-exporters)). An invalid invocation, including one of
 `exec`, writes a JSON error result and exits with `2`. The `outcome` field is
 `success` or `error`. An error result also has `message` and `description`:
 
@@ -93,7 +94,7 @@ Other result fields by command:
 | `up` | `containerId`, `remoteUser`, `remoteWorkspaceFolder`; `composeProjectName` for a Compose configuration |
 | `inspect` | `container`, and the `up` fields |
 | `run-user-commands`, `set-up` | `phasesRun`, and the `up` fields |
-| `build` | `imageName`; `cacheOnly` or `outputDir` when the image is not loaded or pushed |
+| `build` | `imageName`; `cacheOnly` for cache builds; `output` for explicit exports, plus `outputDir` for local exports |
 | `generate` | `dockerfile`, `contextDir` |
 | `read-configuration` | `configuration`, `workspace`; `mergedConfiguration` with `--include-merged-configuration`; `featuresConfiguration` with `--include-features-configuration` |
 | `features` | `features` |
@@ -292,7 +293,7 @@ dcb build --workspace-folder . \
 | `--image-name` | An image name. Repeat for more names. |
 | `--push` | Pushes the image to its registry. |
 | `--load` | Loads the image into Docker. This is the default when there is no `--push` or `--output`. `--load=false` builds into the cache only. |
-| `--output` | Exports the image filesystem into a local directory. It cannot be combined with `--push` or `--load`. |
+| `--output` | A buildx exporter specification or local directory. See [Build exporters](#build-exporters). It cannot be combined with `--push` or `--load`. |
 | `--platform` | A target platform, such as `linux/arm64`. Docker cannot load a multi-platform image; use `--push` or `--output`. |
 | `--build-arg` | A Dockerfile build argument, `KEY=VALUE`. |
 | `--label` | An image label, `KEY=VALUE`. |
@@ -372,3 +373,40 @@ dcb skills install --dir .agents/skills
 `dcb skills dcb` returns the skill text in the result's `skills[].content`.
 `dcb skills install` writes `dcb/SKILL.md` below the directory given with
 `--dir`. The default is `.agents/skills`.
+
+## Build exporters
+
+`dcb build --output` accepts a short directory path or a CSV exporter specification.
+Quote an attribute that contains commas, for example
+`'type=image,"name=example.test/sample:one,example.test/sample:two"'`.
+Exporter attributes pass to BuildKit. Available exporters and attributes depend
+on its worker and the Docker image store.
+
+| Value | Result |
+| --- | --- |
+| `results` or `type=local,dest=results` | Image filesystem in a local directory |
+| `type=tar,dest=result.tar` | Image filesystem as a tar archive |
+| `type=oci,dest=image.tar` | OCI image archive |
+| `type=oci,tar=false,dest=layout` | OCI image layout directory |
+| `type=docker,dest=image.tar` | Docker image archive through the Engine API on the Docker daemon |
+| `type=docker` | Load into Docker |
+| `type=image,name=example.test/sample:latest` | Export a named image |
+| `type=registry,name=example.test/sample:latest` | Push a named image, using existing registry credentials |
+| `type=image,name=example.test/sample:latest,push=true` | Push a named image, using existing registry credentials |
+| `type=cacheonly` | Keep the build result in the build cache |
+
+`--image-name` supplies the default image name when `name=` is absent.
+`type=registry` is shorthand for the image exporter with `push=true`.
+The Docker daemon path uses the Engine API for push and Docker archive export.
+A separate BuildKit uses its native exporters. The classic Docker image store
+does not provide the OCI exporter; use a worker that supports OCI export.
+
+`--output -` means a filesystem tar archive on stdout. `dest=-` also streams
+archives to stdout; omitted destinations stream tar and OCI archives to stdout.
+In these modes, stdout contains only archive bytes, with no JSON result line.
+Errors and progress go to stderr. `type=docker` without a destination loads into
+Docker and retains the JSON result line. Other explicit exports return `output`
+in the JSON result; local exports also return `outputDir`.
+
+Output files are opened when the exporter writes them. Existing output files can
+be replaced, as with buildx. Local exports use BuildKit's directory merge behavior.

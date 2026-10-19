@@ -161,7 +161,7 @@ func BuildPrimaryImage(ctx context.Context, in BuildPrimaryInputs) (*BuildPrimar
 		opts.Tags = append([]string(nil), opts.Tags...)
 		opts.Tags[0] = tag
 	}
-	if !in.SkipDefaultLoad && !opts.Push && opts.OutputDir == "" {
+	if !in.SkipDefaultLoad && !opts.Push && opts.OutputDir == "" && opts.Output == "" {
 		opts.Load = true
 	}
 
@@ -175,7 +175,7 @@ func BuildPrimaryImage(ctx context.Context, in BuildPrimaryInputs) (*BuildPrimar
 
 func needsDerivedImage(in BuildPrimaryInputs) bool {
 	o := in.BuilderOptions
-	return in.Spec.Features.Len() > 0 || o.InstallVSCodeServer || len(o.Tags) > 0 || in.Tag != "" || o.Push || o.OutputDir != "" || len(o.Labels) > 0 || len(o.Platforms) > 0 || o.Pull || o.NoCache || len(o.CacheFrom) > 0 || len(o.CacheTo) > 0
+	return in.Spec.Features.Len() > 0 || o.InstallVSCodeServer || len(o.Tags) > 0 || in.Tag != "" || o.Push || o.OutputDir != "" || o.Output != "" || len(o.Labels) > 0 || len(o.Platforms) > 0 || o.Pull || o.NoCache || len(o.CacheFrom) > 0 || len(o.CacheTo) > 0
 }
 
 // primaryBuildSpec retains all persistable config properties while selecting

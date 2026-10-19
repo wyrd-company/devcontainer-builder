@@ -27,6 +27,7 @@ func TestBuildPrimaryPreservesEachCustomization(t *testing.T) {
 		{"server", builder.Options{InstallVSCodeServer: true}},
 		{"push", builder.Options{Push: true}},
 		{"output", builder.Options{OutputDir: "output"}},
+		{"exporter", builder.Options{Output: "type=tar,dest=result.tar"}},
 		{"labels", builder.Options{Labels: map[string]string{"example": "value"}}},
 		{"platforms", builder.Options{Platforms: []string{"linux/arm64"}}},
 		{"pull", builder.Options{Pull: true}},

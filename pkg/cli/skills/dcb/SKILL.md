@@ -14,7 +14,8 @@ alternate content while relative paths stay based on `--config` (or the
 workspace configuration path). Flags can follow positional
 arguments. Put `--` before the container command's own flags.
 
-Invocations except help and exec emit one JSON object on one stdout line.
+Invocations except help and exec normally emit one JSON object on one stdout line.
+Archive exports to stdout emit only archive bytes.
 Check `outcome`: `success` or `error`. Errors include `message` and
 `description`. Invalid invocations exit 2 and retain this JSON error result,
 including invalid exec invocations. Other operation failures exit 1.
@@ -67,9 +68,12 @@ dcb server --out ./server --platform linux/amd64
 Use `--push` for registry export, `--platform` for target platforms,
 `--no-cache` to disable cache, and repeated `--cache-from` / `--cache-to`
 for cache settings. Use `build --load=false` to warm the build cache without
-exporting an image. `--output` selects a filesystem export and cannot be
+exporting an image. `--output` accepts a buildx exporter specification or directory
+and cannot be
 combined with `--push` or `--load`. The result contains `cacheOnly: true`
-for a cache-only build, or `outputDir` for a filesystem export. `generate` returns `dockerfile` and `contextDir` paths.
+for a cache-only build, or `output` for an exporter (`outputDir` also names a local
+destination). Archive exports to stdout omit the JSON result. `generate` returns
+`dockerfile` and `contextDir` paths.
 
 `build`, `generate`, `up`, and `read-configuration` take
 `--additional-features '<json>'`, an

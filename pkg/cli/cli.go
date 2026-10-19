@@ -28,6 +28,7 @@ type application struct {
 	stderr                 io.Writer
 	stdout                 io.Writer
 	helpShown, execStarted bool
+	exportStdout           bool
 	outputErr              error
 	logFormat, logLevel    string
 	result                 map[string]any
@@ -49,7 +50,8 @@ var errVersionShown = errors.New("version shown")
 
 // Run executes one invocation. Exit codes: 0 success, 1 operation failure,
 // 2 invalid invocation. Exec returns the container command's nonzero exit code.
-// Help is plain text. Exec emits no result after starting the child; operation
+// Help is plain text. Archive output to stdout emits no JSON result.
+// Exec emits no result after starting the child; operation
 // failures before the child use stderr and exit 1. Invalid invocations use JSON.
 // Embedded skills are carried in the JSON result as strings.
 func Run(ctx context.Context, args []string, version string, stdin io.Reader, stdout, stderr io.Writer) int {
@@ -88,6 +90,12 @@ func Run(ctx context.Context, args []string, version string, stdin io.Reader, st
 	if a.outputErr != nil {
 		return 1
 	}
+	if a.exportStdout {
+		if err != nil {
+			_, _ = fmt.Fprintln(a.stderr, err)
+		}
+		return code
+	}
 	if a.helpShown || a.execStarted {
 		return code
 	}
@@ -109,7 +117,7 @@ func (a *application) command() *cobra.Command {
 	printVersion := func(_ *cobra.Command, _ []string) error { a.result["version"] = a.version; return nil }
 	root := &cobra.Command{
 		Use: "dcb", Short: "Build and manage development containers",
-		Long:         "Build and manage development containers through the Docker Engine API.\n\nInvocations except help and exec write one JSON result line to stdout. Help is plain text.\nExec passes child stdout/stderr through unchanged without a result line; other logs and command output use stderr.\nExit codes: 0 success, 1 operation failure, 2 invalid invocation; exec propagates the command exit code.\nUse -- before a container command's own flags.",
+		Long:         "Build and manage development containers through the Docker Engine API.\n\nInvocations except help and exec normally write one JSON result line to stdout. Archive exports to stdout write only archive bytes. Help is plain text.\nExec passes child stdout/stderr through unchanged without a result line; other logs and command output use stderr.\nExit codes: 0 success, 1 operation failure, 2 invalid invocation; exec propagates the command exit code.\nUse -- before a container command's own flags.",
 		Example:      "  dcb up --workspace-folder .\n  dcb build --workspace-folder . --image-name example:dev\n  dcb exec --workspace-folder . -- sh -c 'id && pwd'\n  dcb read-configuration --workspace-folder .\n  dcb skills install --dir .agents/skills",
 		SilenceUsage: true, SilenceErrors: true,
 		Args: cobra.NoArgs,

@@ -28,8 +28,8 @@ The pinned `up` table has **44 explicit options**, plus inherited help/version.
 
 ## Dispositions
 
-- implemented: **89**.
-- implement: **148**.
+- implemented: **90**.
+- implement: **147**.
 - not applicable by design: **15**.
 - needs Bob's decision: **1**.
 
@@ -134,7 +134,7 @@ features, dotfiles, environment probing and version support.
 | --platform | --platform | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: devContainersSpecCLI.ts:521. |
 | --push | --push | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: devContainersSpecCLI.ts:522. |
 | --label | --label | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: devContainersSpecCLI.ts:523. |
-| --output | --output (directory only) | implement | exporters | Flag exists, but accepts a local directory only; implement upstream exporter types/options through native BuildKit. Source: devContainersSpecCLI.ts:524. |
+| --output | --output | implemented | exporters | Buildx exporter specifications and short destinations through native BuildKit and the Engine API. Source: devContainersSpecCLI.ts:524. |
 | --additional-features | --additional-features | implemented | sibling-unit | Registered; configuration features come first and win for an equal key, as upstream. Source: devContainersSpecCLI.ts:525. |
 | --skip-feature-auto-mapping [hidden] | none | implement | feature-controls | Implement upstream feature identifier mapping plus its opt-out; current resolver is not evidence of mapping parity. Source: devContainersSpecCLI.ts:526. |
 | --skip-persisting-customizations-from-features [hidden] | none | implement | feature-controls | Add this upstream control to the corresponding handler. Source: devContainersSpecCLI.ts:527. |

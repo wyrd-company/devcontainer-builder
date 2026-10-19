@@ -50,7 +50,7 @@ func (o *buildOptions) flags(cmd *cobra.Command, generate bool) {
 		}
 		f.BoolVar(&o.options.Pull, "pull", false, "Always pull referenced images")
 		if cmd.Name() != "up" {
-			f.StringVar(&o.options.OutputDir, "output", "", "Export image filesystem to a local directory")
+			o.exporterFlags(cmd)
 		}
 		f.StringArrayVar(&o.options.CacheFrom, "cache-from", nil, "Cache import spec (repeat)")
 		f.StringArrayVar(&o.options.CacheTo, "cache-to", nil, "Cache export spec (repeat)")
@@ -117,7 +117,7 @@ func (o *buildOptions) prepare(a *application, dc *spec.DevContainer, workspace 
 	if bo.Push && bo.Load {
 		return bo, usageError("--push and --load are mutually exclusive")
 	}
-	if bo.OutputDir != "" && (bo.Push || bo.Load) {
+	if (bo.Output != "" || bo.OutputDir != "") && (bo.Push || bo.Load) {
 		return bo, usageError("--output cannot be combined with --push or --load")
 	}
 
@@ -134,11 +134,15 @@ func (o *buildOptions) prepare(a *application, dc *spec.DevContainer, workspace 
 	}
 	bo.Spec, bo.SpecPath, bo.Workspace = dc, dc.Path, workspace
 	bo.Logger, bo.Stdout, bo.Stderr = a.logf, a.logs, a.logs
+	bo.OutputWriter = a.stdout
 	if len(bo.Tags) == 0 {
 		bo.Tags = []string{defaultImage(workspace)}
 	}
-	if !loadExplicit && !bo.Push && bo.OutputDir == "" {
+	if !loadExplicit && !bo.Push && bo.OutputDir == "" && bo.Output == "" {
 		bo.Load = true
+	}
+	if err := a.prepareExporter(bo.Output); err != nil {
+		return bo, err
 	}
 	return bo, nil
 }
@@ -173,6 +177,8 @@ func (a *application) buildImage(ctx context.Context, dc *spec.DevContainer, wor
 
 func (a *application) buildResult(bo builder.Options, images []string) {
 	switch {
+	case bo.Output != "":
+		a.exporterResult(bo.Output)
 	case bo.OutputDir != "":
 		a.result["outputDir"] = bo.OutputDir
 	case !bo.Load && !bo.Push:

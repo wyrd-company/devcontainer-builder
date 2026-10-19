@@ -78,6 +78,10 @@ type Options struct {
 	Pull bool
 	// Progress one of "auto" | "plain" | "tty" | "rawjson".
 	Progress string
+	// Output is a buildx exporter specification or a local destination path.
+	Output string
+	// OutputWriter receives archive output when dest is "-" or omitted.
+	OutputWriter io.Writer
 	// OutputDir, when non-empty, requests filesystem export to this
 	// path.
 	OutputDir string
@@ -290,6 +294,8 @@ func (b *Builder) runBuildKit(ctx context.Context, opts Options, ctxDir string,
 		Tags:             opts.Tags,
 		Push:             opts.Push,
 		Load:             opts.Load,
+		Output:           opts.Output,
+		OutputWriter:     opts.OutputWriter,
 		OutputDir:        opts.OutputDir,
 		CacheImports:     buildkit.ParseCacheRefs(mergeSlices(buildCacheFrom(dc), opts.CacheFrom)),
 		CacheExports:     buildkit.ParseCacheRefs(opts.CacheTo),

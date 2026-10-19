@@ -48,6 +48,10 @@ type SolveOptions struct {
 	// daemon; with the daemon's BuildKit it is also kept in the daemon's
 	// image store, from which the Engine API saves it.
 	LoadWriter io.Writer
+	// Output is a buildx exporter specification or a local destination path.
+	Output string
+	// OutputWriter receives archive output when dest is "-" or omitted.
+	OutputWriter io.Writer
 	// OutputDir, when non-empty, requests a "local" exporter writing
 	// the image filesystem to this directory.
 	OutputDir string

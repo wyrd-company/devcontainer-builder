@@ -41,6 +41,9 @@ func exportsFor(ctx context.Context, opt SolveOptions, conn *Connection, multi b
 	if opt.Push && opt.Load {
 		return nil, errors.New("--push and --load are mutually exclusive")
 	}
+	if opt.Output != "" {
+		return specifiedExport(ctx, opt, conn, multi)
+	}
 	name := strings.Join(opt.Tags, ",")
 	switch {
 	case opt.Push:
