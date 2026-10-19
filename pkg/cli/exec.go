@@ -78,7 +78,7 @@ func (a *application) execCommand() *cobra.Command {
 			wd = remoteWorkspaceFolder(dc, workspace, info)
 		}
 		a.execStarted = true
-		res, err := a.execute(cmd.Context(), cli, dc, hostdocker.ExecRequest{ContainerID: containerID, TTY: tty, Cmd: args, User: user, WorkDir: wd, Env: execEnv, Stdin: a.stdin, Stdout: a.stdout, Stderr: a.stderr})
+		res, err := a.execute(cmd.Context(), cli, dc, hostdocker.ExecRequest{ContainerID: containerID, TTY: tty, TerminalSize: a.terminalSize, Cmd: args, User: user, WorkDir: wd, Env: execEnv, Stdin: a.stdin, Stdout: a.stdout, Stderr: a.stderr})
 		if err != nil {
 			a.execStarted = false
 			return err

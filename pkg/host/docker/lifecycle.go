@@ -25,14 +25,16 @@ func (h *Host) Execer(containerID string) runner.Execer {
 
 func (a runnerExecer) Exec(ctx context.Context, req runner.ExecRequest) (*runner.ExecResult, error) {
 	res, err := a.host.Exec(ctx, ExecRequest{
-		ContainerID: a.containerID,
-		Cmd:         req.Cmd,
-		User:        req.User,
-		WorkDir:     req.WorkDir,
-		Env:         req.Env,
-		Stdin:       req.Stdin,
-		Stdout:      req.Stdout,
-		Stderr:      req.Stderr,
+		ContainerID:  a.containerID,
+		TTY:          req.TerminalSize != nil,
+		TerminalSize: req.TerminalSize,
+		Cmd:          req.Cmd,
+		User:         req.User,
+		WorkDir:      req.WorkDir,
+		Env:          req.Env,
+		Stdin:        req.Stdin,
+		Stdout:       req.Stdout,
+		Stderr:       req.Stderr,
 	})
 	if err != nil {
 		return nil, err

@@ -55,12 +55,13 @@ func execCommand(ctx context.Context, execer Execer, cmd spec.Command, rt Runtim
 
 func execOne(ctx context.Context, execer Execer, argv []string, rt Runtime, opts Options, name string) error {
 	res, err := execer.Exec(ctx, ExecRequest{
-		Cmd:     argv,
-		User:    rt.User,
-		WorkDir: rt.Workdir,
-		Env:     rt.Env,
-		Stdout:  opts.Stdout,
-		Stderr:  opts.Stderr,
+		TerminalSize: opts.TerminalSize,
+		Cmd:          argv,
+		User:         rt.User,
+		WorkDir:      rt.Workdir,
+		Env:          rt.Env,
+		Stdout:       opts.Stdout,
+		Stderr:       opts.Stderr,
 	})
 	if err != nil {
 		return err
@@ -118,10 +119,11 @@ func execNamed(ctx context.Context, execer Execer, name string, cmd spec.Command
 	// Capture output per-command to avoid interleaving, then flush
 	// under a banner. Mirrors upstream's printMode='off' behavior.
 	res, err := execer.Exec(ctx, ExecRequest{
-		Cmd:     argv,
-		User:    rt.User,
-		WorkDir: rt.Workdir,
-		Env:     rt.Env,
+		TerminalSize: opts.TerminalSize,
+		Cmd:          argv,
+		User:         rt.User,
+		WorkDir:      rt.Workdir,
+		Env:          rt.Env,
 	})
 	if err != nil {
 		return fmt.Errorf("%s: %w", name, err)

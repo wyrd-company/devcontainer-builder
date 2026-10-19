@@ -122,7 +122,7 @@ func (a *application) lifecycleCommand(name string) *cobra.Command {
 		rt := runner.Runtime{User: dc.RemoteUser, Workdir: containerWorkspace(dc, workspace), Env: resolveRemoteEnv(dc.UpdateRemoteEnv, sub, env), CreatedAt: info.Created, StartedAt: info.State.StartedAt, UserDataFolder: lifecycle.UserDataFolder(home, folderOption(cmd, "container-data-folder")), Dotfiles: dotfiles.forRun(skip)}
 		rt.Lifecycle = controls.LifecycleControls
 		rt.Lifecycle.WaitFor = dc.WaitFor
-		result, err := runner.RunWithResult(cmd.Context(), execer, plan, rt, runner.Options{Logger: a.logf, Stdout: a.logs, Stderr: a.logs})
+		result, err := runner.RunWithResult(cmd.Context(), execer, plan, rt, runner.Options{TerminalSize: a.terminalSize, Logger: a.logf, Stdout: a.logs, Stderr: a.logs})
 		if err != nil {
 			return err
 		}

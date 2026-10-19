@@ -30,8 +30,8 @@ registration includes the three session-folder pairs awaiting probe-cache behavi
 
 ## Dispositions
 
-- implemented: **105**.
-- implement: **132**.
+- implemented: **115**.
+- implement: **122**.
 - not applicable by design: **15**.
 - needs Bob's decision: **1**.
 
@@ -164,8 +164,8 @@ features, dotfiles, environment probing and version support.
 | --override-config | --override-config | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: devContainersSpecCLI.ts:1228. |
 | --log-level | --log-level | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: devContainersSpecCLI.ts:1229. |
 | --log-format | --log-format | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: devContainersSpecCLI.ts:1230. |
-| --terminal-columns | none | implement | terminal | Add this upstream control to the corresponding handler. Source: devContainersSpecCLI.ts:1231. |
-| --terminal-rows | none | implement | terminal | Add this upstream control to the corresponding handler. Source: devContainersSpecCLI.ts:1232. |
+| --terminal-columns | same name | implemented | terminal | Paired numeric dimensions size lifecycle and exec PTYs; zero leaves the size unset. Source: devContainersSpecCLI.ts:1231. |
+| --terminal-rows | same name | implemented | terminal | Paired numeric dimensions size lifecycle and exec PTYs; zero leaves the size unset. Source: devContainersSpecCLI.ts:1232. |
 | --default-user-env-probe | none | implement | sibling-unit | Needs the upstream probe and its 10-second timeout, a new timeout mechanic that awaits Bob's decision. Source: devContainersSpecCLI.ts:1233. |
 | --remote-env | --remote-env | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: devContainersSpecCLI.ts:1234. |
 | --skip-feature-auto-mapping [hidden] | none | implement | feature-controls | Implement upstream feature identifier mapping plus its opt-out; current resolver is not evidence of mapping parity. Source: devContainersSpecCLI.ts:1235. |
@@ -281,8 +281,8 @@ features, dotfiles, environment probing and version support.
 | --override-config | --override-config | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: devContainersSpecCLI.ts:969. |
 | --log-level | --log-level | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: devContainersSpecCLI.ts:970. |
 | --log-format | --log-format | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: devContainersSpecCLI.ts:971. |
-| --terminal-columns | none | implement | terminal | Add this upstream control to the corresponding handler. Source: devContainersSpecCLI.ts:972. |
-| --terminal-rows | none | implement | terminal | Add this upstream control to the corresponding handler. Source: devContainersSpecCLI.ts:973. |
+| --terminal-columns | same name | implemented | terminal | Paired numeric dimensions size lifecycle and exec PTYs; zero leaves the size unset. Source: devContainersSpecCLI.ts:972. |
+| --terminal-rows | same name | implemented | terminal | Paired numeric dimensions size lifecycle and exec PTYs; zero leaves the size unset. Source: devContainersSpecCLI.ts:973. |
 | --include-features-configuration | --include-features-configuration | implemented | covered | Resolved feature sets, values and sources are included on request. Source: devContainersSpecCLI.ts:974. |
 | --include-merged-configuration | --include-merged-configuration | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: devContainersSpecCLI.ts:975. |
 | --additional-features | --additional-features | implemented | sibling-unit | Registered; contributes to the merged configuration only when no container exists, as upstream. Source: devContainersSpecCLI.ts:976. |
@@ -308,8 +308,8 @@ features, dotfiles, environment probing and version support.
 | --override-config | --override-config | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: devContainersSpecCLI.ts:764. |
 | --log-level | --log-level | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: devContainersSpecCLI.ts:765. |
 | --log-format | --log-format | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: devContainersSpecCLI.ts:766. |
-| --terminal-columns | none | implement | terminal | Add this upstream control to the corresponding handler. Source: devContainersSpecCLI.ts:767. |
-| --terminal-rows | none | implement | terminal | Add this upstream control to the corresponding handler. Source: devContainersSpecCLI.ts:768. |
+| --terminal-columns | same name | implemented | terminal | Paired numeric dimensions size lifecycle and exec PTYs; zero leaves the size unset. Source: devContainersSpecCLI.ts:767. |
+| --terminal-rows | same name | implemented | terminal | Paired numeric dimensions size lifecycle and exec PTYs; zero leaves the size unset. Source: devContainersSpecCLI.ts:768. |
 | --default-user-env-probe | none | implement | sibling-unit | Needs the upstream probe and its 10-second timeout, a new timeout mechanic that awaits Bob's decision. Source: devContainersSpecCLI.ts:769. |
 | --skip-non-blocking-commands | --skip-non-blocking-commands | implemented | covered | Stops after merged waitFor (default updateContentCommand), without background continuation. Docker and Compose behavior tests. Source: devContainersSpecCLI.ts:770. |
 | --prebuild | --prebuild | implemented | covered | Stops after updateContentCommand and reruns that hook with a current marker. Docker and Compose behavior tests. Source: devContainersSpecCLI.ts:771. |
@@ -336,8 +336,8 @@ features, dotfiles, environment probing and version support.
 | --config | --config | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: devContainersSpecCLI.ts:344. |
 | --log-level | --log-level | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: devContainersSpecCLI.ts:345. |
 | --log-format | --log-format | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: devContainersSpecCLI.ts:346. |
-| --terminal-columns | none | implement | terminal | Add this upstream control to the corresponding handler. Source: devContainersSpecCLI.ts:347. |
-| --terminal-rows | none | implement | terminal | Add this upstream control to the corresponding handler. Source: devContainersSpecCLI.ts:348. |
+| --terminal-columns | same name | implemented | terminal | Paired numeric dimensions size lifecycle and exec PTYs; zero leaves the size unset. Source: devContainersSpecCLI.ts:347. |
+| --terminal-rows | same name | implemented | terminal | Paired numeric dimensions size lifecycle and exec PTYs; zero leaves the size unset. Source: devContainersSpecCLI.ts:348. |
 | --default-user-env-probe | none | implement | sibling-unit | Needs the upstream probe and its 10-second timeout, a new timeout mechanic that awaits Bob's decision. Source: devContainersSpecCLI.ts:349. |
 | --skip-post-create | --skip-post-create | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: devContainersSpecCLI.ts:350. |
 | --skip-non-blocking-commands | --skip-non-blocking-commands | implemented | covered | Stops after merged waitFor (default updateContentCommand), without background continuation. Docker and Compose behavior tests. Source: devContainersSpecCLI.ts:351. |
@@ -420,8 +420,8 @@ features, dotfiles, environment probing and version support.
 | --override-config | --override-config | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: devContainersSpecCLI.ts:113. |
 | --log-level | --log-level | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: devContainersSpecCLI.ts:114. |
 | --log-format | --log-format | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: devContainersSpecCLI.ts:115. |
-| --terminal-columns | none | implement | terminal | Add this upstream control to the corresponding handler. Source: devContainersSpecCLI.ts:116. |
-| --terminal-rows | none | implement | terminal | Add this upstream control to the corresponding handler. Source: devContainersSpecCLI.ts:117. |
+| --terminal-columns | same name | implemented | terminal | Paired numeric dimensions size lifecycle and exec PTYs; zero leaves the size unset. Source: devContainersSpecCLI.ts:116. |
+| --terminal-rows | same name | implemented | terminal | Paired numeric dimensions size lifecycle and exec PTYs; zero leaves the size unset. Source: devContainersSpecCLI.ts:117. |
 | --default-user-env-probe | none | implement | sibling-unit | Needs the upstream probe and its 10-second timeout, a new timeout mechanic that awaits Bob's decision. Source: devContainersSpecCLI.ts:118. |
 | --update-remote-user-uid-default | --update-remote-user-uid-default | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: devContainersSpecCLI.ts:119. |
 | --remove-existing-container | --remove-existing-container | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: devContainersSpecCLI.ts:120. |

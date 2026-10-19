@@ -13,3 +13,5 @@ Build output accepts buildx exporter specifications for filesystem, image archiv
 GPU availability controls honor single-container and Compose host GPU requirements through Docker Engine runtime detection and device requests.
 
 Data-folder options select host feature/build staging and container lifecycle/dotfiles marker locations.
+
+Paired terminal dimension flags size lifecycle and exec pseudo-terminals in single-container and Compose mode.

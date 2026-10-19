@@ -15,15 +15,17 @@ import (
 // docker host's so embedders moving between modes have one mental
 // model.
 type ExecRequest struct {
-	ContainerID string
-	Cmd         []string
-	User        string
-	WorkDir     string
-	Env         map[string]string
-	TTY         bool
-	Stdin       io.Reader
-	Stdout      io.Writer
-	Stderr      io.Writer
+	// TerminalSize sets the initial PTY size [rows, columns] when TTY is true.
+	TerminalSize *[2]uint
+	ContainerID  string
+	Cmd          []string
+	User         string
+	WorkDir      string
+	Env          map[string]string
+	TTY          bool
+	Stdin        io.Reader
+	Stdout       io.Writer
+	Stderr       io.Writer
 }
 
 // ExecResult mirrors docker host's: captured output is returned only
@@ -75,7 +77,8 @@ func (h *Host) Exec(ctx context.Context, req ExecRequest) (*ExecResult, error) {
 	}
 
 	attachResp, err := h.client.ContainerExecAttach(ctx, createResp.ID, container.ExecAttachOptions{
-		Tty: req.TTY,
+		Tty:         req.TTY,
+		ConsoleSize: req.TerminalSize,
 	})
 	if err != nil {
 		return nil, errorf("exec attach: %w", err)
@@ -141,14 +144,16 @@ func (h *Host) Execer(containerID string) runner.Execer {
 
 func (a runnerExecer) Exec(ctx context.Context, req runner.ExecRequest) (*runner.ExecResult, error) {
 	res, err := a.host.Exec(ctx, ExecRequest{
-		ContainerID: a.containerID,
-		Cmd:         req.Cmd,
-		User:        req.User,
-		WorkDir:     req.WorkDir,
-		Env:         req.Env,
-		Stdin:       req.Stdin,
-		Stdout:      req.Stdout,
-		Stderr:      req.Stderr,
+		ContainerID:  a.containerID,
+		TTY:          req.TerminalSize != nil,
+		TerminalSize: req.TerminalSize,
+		Cmd:          req.Cmd,
+		User:         req.User,
+		WorkDir:      req.WorkDir,
+		Env:          req.Env,
+		Stdin:        req.Stdin,
+		Stdout:       req.Stdout,
+		Stderr:       req.Stderr,
 	})
 	if err != nil {
 		return nil, err

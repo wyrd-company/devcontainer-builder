@@ -33,6 +33,8 @@ type Execer interface {
 
 // ExecRequest is the transport-agnostic exec call.
 type ExecRequest struct {
+	// TerminalSize allocates a lifecycle PTY of [rows, columns]; nil uses pipes.
+	TerminalSize *[2]uint
 	// Cmd is the argv passed to the container. Lifecycle string
 	// commands are wrapped with /bin/sh -c by the runner before they
 	// reach the Execer.
@@ -99,6 +101,8 @@ type Runtime struct {
 
 // Options configure logging and default output streams.
 type Options struct {
+	// TerminalSize supplies the lifecycle PTY size [rows, columns].
+	TerminalSize *[2]uint
 	// Logger receives informational messages ("running postCreate
 	// [from devcontainer.json]", "skipping ... marker up to date").
 	// nil discards.

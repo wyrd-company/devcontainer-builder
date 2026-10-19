@@ -43,6 +43,8 @@ var ErrPrimaryNotFound = errors.New("dockercompose host: primary service not fou
 
 // Options tunes a Host. All fields are optional.
 type Options struct {
+	// TerminalSize is the optional lifecycle PTY size [rows, columns].
+	TerminalSize *[2]uint
 	// Logger receives informational messages. nil discards.
 	Logger func(format string, args ...any)
 	// Stdout / Stderr default to nil. Lifecycle command output goes

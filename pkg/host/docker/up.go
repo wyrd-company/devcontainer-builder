@@ -261,9 +261,10 @@ func (h *Host) Up(ctx context.Context, req UpRequest) (*UpResult, error) {
 		rt.Lifecycle.WaitFor = dc.WaitFor
 	}
 	runResult, err := runner.RunWithResult(ctx, execer, plan, rt, runner.Options{
-		Logger: h.opts.Logger,
-		Stdout: h.opts.Stdout,
-		Stderr: h.opts.Stderr,
+		TerminalSize: h.opts.TerminalSize,
+		Logger:       h.opts.Logger,
+		Stdout:       h.opts.Stdout,
+		Stderr:       h.opts.Stderr,
 	})
 	if err != nil {
 		return res, err

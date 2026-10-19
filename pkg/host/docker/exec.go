@@ -13,7 +13,9 @@ import (
 
 // ExecRequest captures the inputs to a single docker exec call.
 type ExecRequest struct {
-	ContainerID string
+	// TerminalSize sets the initial PTY size [rows, columns] when TTY is true.
+	TerminalSize *[2]uint
+	ContainerID  string
 	// Cmd is the argv passed to the container. Caller is responsible
 	// for shell wrapping (string lifecycle commands wrap with /bin/sh -c
 	// before reaching here).
@@ -91,7 +93,8 @@ func (h *Host) Exec(ctx context.Context, req ExecRequest) (*ExecResult, error) {
 	}
 
 	attachResp, err := h.client.ContainerExecAttach(ctx, createResp.ID, container.ExecAttachOptions{
-		Tty: req.TTY,
+		Tty:         req.TTY,
+		ConsoleSize: req.TerminalSize,
 	})
 	if err != nil {
 		return nil, errorf("exec attach: %w", err)

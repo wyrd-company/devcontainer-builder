@@ -29,7 +29,7 @@ func newDockerClient() (*dockerclient.Client, error) {
 }
 
 func (a *application) dockerHost(cli *dockerclient.Client) *hostdocker.Host {
-	return hostdocker.New(cli, hostdocker.Options{Logger: a.logf, Stdout: a.logs, Stderr: a.logs, RegistryAuth: registryauth.FromEnvironment()})
+	return hostdocker.New(cli, hostdocker.Options{TerminalSize: a.terminalSize, Logger: a.logf, Stdout: a.logs, Stderr: a.logs, RegistryAuth: registryauth.FromEnvironment()})
 }
 func (a *application) composeHost(cli *dockerclient.Client) *dockercompose.Host {
 	return dockercompose.New(cli, dockercompose.Options{Logger: a.logf, Stdout: a.logs, Stderr: a.logs})
@@ -113,7 +113,7 @@ func (a *application) upCommand() *cobra.Command {
 			req.ContainerDataFolder = folderOption(cmd, "container-data-folder")
 			req.Dotfiles = dotfiles.Dotfiles
 			req.Lifecycle = controls.LifecycleControls
-			host := dockercompose.New(cli, dockercompose.Options{Logger: a.logf, Stdout: a.logs, Stderr: a.logs, NoRecreate: controls.expectExisting})
+			host := dockercompose.New(cli, dockercompose.Options{TerminalSize: a.terminalSize, Logger: a.logf, Stdout: a.logs, Stderr: a.logs, NoRecreate: controls.expectExisting})
 			res, err := host.Up(cmd.Context(), req)
 			if err != nil {
 				return err

@@ -143,3 +143,11 @@ for lifecycle/dotfiles markers (default: `.devcontainer` under the container
 user's home). Exec does not write markers. System and session folder flags are
 accepted on their upstream commands; system patch markers and user environment
 probe caches have no current writer.
+
+### Terminal dimensions
+
+`up`, `set-up`, `run-user-commands`, `read-configuration`, and `exec` accept
+`--terminal-columns` and `--terminal-rows` together. Both are numeric; a zero
+value leaves the explicit size unset. Lifecycle output uses the selected PTY
+size. For `exec`, use `--tty` to allocate a terminal; dimensions alone preserve
+piped output.

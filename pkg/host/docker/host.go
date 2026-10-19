@@ -45,6 +45,8 @@ var ErrContainerNotFound = errors.New("docker host: container not found")
 
 // Options tunes a Host. All fields are optional.
 type Options struct {
+	// TerminalSize is the optional lifecycle PTY size [rows, columns].
+	TerminalSize *[2]uint
 	// Logger receives informational messages. If nil, messages are
 	// discarded — appropriate for a service or operator that handles
 	// its own structured logging via context.

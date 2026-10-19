@@ -453,3 +453,30 @@ markers.
 `run-user-commands`, with no default. Probe caching depends on user environment
 probe support. These commands do not currently produce a probe cache or create
 the supplied session folder.
+
+## Terminal dimensions
+
+`up`, `set-up`, `run-user-commands`, `read-configuration`, and `exec` accept
+`--terminal-columns` and `--terminal-rows`. Both are numbers with no explicit
+size by default. Supply both flags together; a missing partner is a usage
+error (exit 2), including when the supplied value is zero. If either value is
+zero, the explicit size is not used.
+
+Lifecycle commands use the supplied size for their pseudo-terminals in both
+single-container and Compose mode, including named parallel commands. Internal
+environment and marker probes keep their ordinary streams. `read-configuration`
+accepts the same output settings without changing its configuration result.
+For `exec`, dimensions size an allocated terminal; use `--tty` to allocate it.
+Piped exec output retains separate stdout and stderr.
+
+```sh
+dcb up --workspace-folder . --terminal-columns 100 --terminal-rows 40
+dcb set-up --container-id sample --workspace-folder . \
+  --terminal-columns 100 --terminal-rows 40
+dcb run-user-commands --workspace-folder . \
+  --terminal-columns 100 --terminal-rows 40
+dcb read-configuration --workspace-folder . \
+  --terminal-columns 100 --terminal-rows 40
+dcb exec --workspace-folder . --tty \
+  --terminal-columns 100 --terminal-rows 40 -- sh
+```
