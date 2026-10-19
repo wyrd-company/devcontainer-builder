@@ -20,17 +20,31 @@ import (
 )
 
 // hostileDocker points DOCKER_HOST at an endpoint that answers every API
-// call with a 500 whose message is echo. It counts the calls it answers.
-func hostileDocker(t *testing.T, echo string) *atomic.Int32 {
+// call with a 500 that echoes echo. On the "json" channel the echo is the
+// error message. On the "text" channel it is a plain-text body, and the
+// version and server headers of every response carry it too. It counts the
+// calls it answers.
+func hostileDocker(t *testing.T, channel, echo string) *atomic.Int32 {
 	t.Helper()
 	var calls atomic.Int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		version := "1.51"
+		if channel == "text" {
+			version = echo
+			w.Header().Set("Server", echo)
+			w.Header().Set("Docker-Experimental", echo)
+		}
 		if strings.HasSuffix(r.URL.Path, "/_ping") {
-			w.Header().Set("API-Version", "1.51")
+			w.Header().Set("API-Version", version)
 			w.WriteHeader(http.StatusOK)
 			return
 		}
 		calls.Add(1)
+		if channel == "text" {
+			w.WriteHeader(http.StatusInternalServerError)
+			_, _ = w.Write([]byte(echo))
+			return
+		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
 		_ = json.NewEncoder(w).Encode(map[string]string{"message": echo})
@@ -42,31 +56,34 @@ func hostileDocker(t *testing.T, echo string) *atomic.Int32 {
 	return &calls
 }
 
-// A Docker endpoint can echo a secret in any spelling into its error text.
-// Each spelling is injected on its own, through both commands and both log
-// formats, and must reach output only as the mask.
+// A Docker endpoint can echo a secret in any spelling into its error text
+// and headers. Each spelling is injected on its own, on each channel,
+// through both commands and both log formats, and must reach output only as
+// the mask.
 func TestHostileDaemonEchoIsMasked(t *testing.T) {
 	for i, spelling := range leakSpellings(sampleSecret) {
-		for _, command := range []string{"up", "run-user-commands"} {
-			for _, format := range []string{"text", "json"} {
-				t.Run(fmt.Sprintf("%s/%s/spelling-%d", command, format, i), func(t *testing.T) {
-					calls := hostileDocker(t, "sample-prefix "+spelling+" sample-suffix")
-					dir, config, secrets := secretsFixture(t)
-					code, stdout, stderr := runCLI(command, "--log-format", format, "--log-level", "trace",
-						"--config", config, "--workspace-folder", dir, "--secrets-file", secrets)
-					if code != 1 || calls.Load() == 0 {
-						t.Fatalf("exit %d after %d daemon calls; the hostile endpoint was not reached\nstdout=%s\nstderr=%s", code, calls.Load(), stdout, stderr)
-					}
-					var result map[string]any
-					if err := json.Unmarshal([]byte(stdout), &result); err != nil {
-						t.Fatalf("result %q: %v", stdout, err)
-					}
-					if message, _ := result["message"].(string); !strings.Contains(message, "sample-prefix "+secretMaskText+" sample-suffix") {
-						t.Errorf("message %q lacks the masked daemon echo", message)
-					}
-					assertNoSecret(t, "stdout", stdout)
-					assertNoSecret(t, "stderr", stderr)
-				})
+		for _, channel := range []string{"json", "text"} {
+			for _, command := range []string{"up", "run-user-commands"} {
+				for _, format := range []string{"text", "json"} {
+					t.Run(fmt.Sprintf("%s/%s/%s/spelling-%d", channel, command, format, i), func(t *testing.T) {
+						calls := hostileDocker(t, channel, "sample-prefix "+spelling+" sample-suffix")
+						dir, config, secrets := secretsFixture(t)
+						code, stdout, stderr := runCLI(command, "--log-format", format, "--log-level", "trace",
+							"--config", config, "--workspace-folder", dir, "--secrets-file", secrets)
+						if code != 1 || calls.Load() == 0 {
+							t.Fatalf("exit %d after %d daemon calls; the hostile endpoint was not reached\nstdout=%s\nstderr=%s", code, calls.Load(), stdout, stderr)
+						}
+						var result map[string]any
+						if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+							t.Fatalf("result %q: %v", stdout, err)
+						}
+						if message, _ := result["message"].(string); !strings.Contains(message, "sample-prefix "+secretMaskText+" sample-suffix") {
+							t.Errorf("message %q lacks the masked daemon echo", message)
+						}
+						assertNoSecret(t, "stdout", stdout)
+						assertNoSecret(t, "stderr", stderr)
+					})
+				}
 			}
 		}
 	}
