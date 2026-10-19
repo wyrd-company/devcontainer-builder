@@ -63,7 +63,7 @@ Behavioral evidence is separate from option-registration coverage:
   container-visible values, down without the creation flag, malformed and absent
   configuration, cleanup failure/retry, idempotence, and parent sentinels.
 - `TestDockerComposeObjectSelectedConfigCLI` proves default Compose config cannot
-  swallow non-Compose or label-selected teardown, including after runtime cleanup.
+  swallow selected non-Compose teardown, including after runtime cleanup.
 - `TestComposeObjectRecreateCleanupIntegration` proves retired-root absence,
   shared and external consumer preservation, workspace/project isolation,
   in-flight producer preservation and cleanup/consumer lookup failures.
