@@ -502,6 +502,8 @@ does not provide the OCI exporter; use a worker that supports OCI export.
 `--output -` means a filesystem tar archive on stdout. `dest=-` also streams
 archives to stdout; omitted destinations stream tar and OCI archives to stdout.
 In these modes, stdout contains only archive bytes, with no JSON result line.
+Archive output to an interactive terminal is refused with exit code 2 and a JSON
+error result. Redirect stdout to a pipe or file, or set a file destination.
 Errors and progress go to stderr. `type=docker` without a destination loads into
 Docker and retains the JSON result line. Other explicit exports return `output`
 in the JSON result; local exports also return `outputDir`.

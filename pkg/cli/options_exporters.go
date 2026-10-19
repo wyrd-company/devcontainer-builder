@@ -4,6 +4,7 @@
 package cli
 
 import (
+	"github.com/containerd/console"
 	"github.com/spf13/cobra"
 	"github.com/wyrd-company/devcontainer-builder/pkg/buildkit"
 )
@@ -27,6 +28,15 @@ func (a *application) prepareExporter(raw string) error {
 	out, err := buildkit.ParseOutput(raw)
 	if err != nil {
 		return usageError("%v", err)
+	}
+	// Refuse before selecting raw stdout mode so invalid invocations retain
+	// the JSON error result. Buildx controller/pb/export.go uses the same check.
+	if out.ToStdout() {
+		if file, ok := a.stdout.(console.File); ok {
+			if _, err := console.ConsoleFromFile(file); err == nil {
+				return usageError("dest file is required for %s exporter. refusing to write to console", out.Type)
+			}
+		}
 	}
 	a.exportStdout = out.ToStdout()
 	return nil

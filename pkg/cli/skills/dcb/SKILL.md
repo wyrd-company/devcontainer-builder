@@ -15,7 +15,8 @@ workspace configuration path). Flags can follow positional
 arguments. Put `--` before the container command's own flags.
 
 Invocations except help and exec normally emit one JSON object on one stdout line.
-Archive exports to stdout emit only archive bytes.
+Archive exports to stdout emit only archive bytes. An interactive terminal is
+refused with exit code 2 and a JSON error result; use a pipe or file destination.
 Check `outcome`: `success` or `error`. Errors include `message` and
 `description`. Invalid invocations exit 2 and retain this JSON error result,
 including invalid exec invocations. Other operation failures exit 1.
