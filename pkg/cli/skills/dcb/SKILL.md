@@ -178,9 +178,12 @@ Run down after a failed or
 interrupted up to remove retained materialized copies.
 Use `--container-data-folder` on up, set-up, run-user-commands, and exec
 for lifecycle/dotfiles markers (default: `.devcontainer` under the container
-user's home). Exec does not write markers. System and session folder flags are
-accepted on their upstream commands; system patch markers and user environment
-probe caches have no current writer.
+user's home). Exec does not write markers. Use `--container-system-data-folder`
+(default: `/var/devcontainer`) for the root environment and profile patch
+markers on up and set-up. These patches run before lifecycle commands, including
+under `--skip-post-create`; skipped lifecycle commands do not probe the user's
+shell environment. Session folder flags are accepted on their upstream commands;
+probe-cache persistence is not implemented.
 
 ### Terminal dimensions
 

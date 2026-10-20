@@ -105,5 +105,8 @@ work; it is not covered by Compose teardown.
 
 Container lifecycle and dotfiles markers are container writers. Lifecycle hook
 markers retain upstream write-before-hook semantics. Dotfiles completion markers
-retain after-success publication. System patch markers and session probe caches
-have no current dcb writer. `Resolver.CacheDir` has no current cache reader/writer.
+retain after-success publication. On `up` and `set-up`, root system patch markers
+are created before the `/etc/environment` and `/etc/profile` edits, including
+under `--skip-post-create`. The selected container system data folder holds
+these markers. Session probe-cache persistence is not implemented.
+`Resolver.CacheDir` has no current cache reader/writer.
