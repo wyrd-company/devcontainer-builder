@@ -56,7 +56,7 @@ func TestDataFoldersDockerIntegration(t *testing.T) {
 					t.Fatalf("prepare dotfiles target: %+v %v", prep, err)
 				}
 				_, logs := invoke(t, 0, append(args, "--dotfiles-repository", "/tmp/source", "--dotfiles-target-path", "/tmp/existing", "--dotfiles-install-command", "install.sh")...)
-				check := "test -f " + quoteDataFolder(folder+"/.postCreateCommandMarker") + " && test -f " + quoteDataFolder(folder+"/.dotfilesMarker") + " && test ! -e /root/.devcontainer/.postCreateCommandMarker && test ! -e /tmp/system && test ! -e /tmp/session"
+				check := "test -f " + quoteDataFolder(folder+"/.postCreateCommandMarker") + " && test -f " + quoteDataFolder(folder+"/.dotfilesMarker") + " && test ! -e /root/.devcontainer/.postCreateCommandMarker && test -f /tmp/system/.patchEtcEnvironmentMarker && test -f /tmp/system/.patchEtcProfileMarker && test ! -e /tmp/session"
 				res, err := (&application{}).dockerHost(cli).Exec(context.Background(), hostdocker.ExecRequest{ContainerID: id, Cmd: []string{"/bin/sh", "-c", check}})
 				if err != nil || res.ExitCode != 0 {
 					t.Fatalf("%s %s marker not routed: %+v %v; logs=%s", mode, command, res, err, logs)
