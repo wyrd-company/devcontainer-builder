@@ -14,6 +14,14 @@ import (
 
 const DefaultUserEnvProbe = "loginInteractiveShell"
 
+// ProbeOptions identifies whether root execution and system configuration
+// changes are available. Docker and Compose provide both, as upstream's CLI.
+type ProbeOptions struct {
+	CanPatchSystemConfig bool
+	diagnosticAfter      time.Duration
+	timeout              time.Duration
+}
+
 func ValidUserEnvProbe(mode string) bool {
 	switch mode {
 	case "none", "loginInteractiveShell", "interactiveShell", "loginShell":
@@ -24,7 +32,13 @@ func ValidUserEnvProbe(mode string) bool {
 
 // ProbeUserEnv reads the user's shell environment inside the container. Configuration
 // wins over the caller's default. Failures are non-fatal, as in the upstream CLI.
-func ProbeUserEnv(ctx context.Context, execer Execer, configured, fallback, user string, containerEnv map[string]string, logf func(string, ...any)) map[string]string {
+func ProbeUserEnv(ctx context.Context, execer Execer, configured, fallback, user string, containerEnv map[string]string, logf func(string, ...any), options ProbeOptions) map[string]string {
+	if options.diagnosticAfter == 0 {
+		options.diagnosticAfter = 2 * time.Second
+	}
+	if options.timeout == 0 {
+		options.timeout = 10 * time.Second
+	}
 	mode := configured
 	if mode == "" {
 		mode = fallback
@@ -82,8 +96,8 @@ func ProbeUserEnv(ctx context.Context, execer Execer, configured, fallback, user
 			res, err := execer.Exec(probeCtx, ExecRequest{User: user, Cmd: argv})
 			done <- result{res, err}
 		}()
-		diagnostic := time.NewTimer(2 * time.Second)
-		limit := time.NewTimer(10 * time.Second)
+		diagnostic := time.NewTimer(options.diagnosticAfter)
+		limit := time.NewTimer(options.timeout)
 		var resultValue result
 	wait:
 		for {
@@ -133,7 +147,7 @@ func ProbeUserEnv(ctx context.Context, execer Execer, configured, fallback, user
 			}
 		}
 		delete(env, "PWD")
-		if env["PATH"] != "" && containerEnv["PATH"] != "" {
+		if !options.CanPatchSystemConfig && env["PATH"] != "" && containerEnv["PATH"] != "" {
 			env["PATH"] = mergePaths(env["PATH"], containerEnv["PATH"], root)
 		}
 		return env

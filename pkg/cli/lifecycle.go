@@ -122,6 +122,11 @@ func (a *application) lifecycleCommand(name string) *cobra.Command {
 			a.logf("warning: detect container env: %v", err)
 			env = map[string]string{}
 		}
+		if name == "set-up" {
+			if err := runner.PatchSystemEnv(cmd.Context(), execer, folderOption(cmd, "container-system-data-folder"), runner.EnvFromList(info.Config.Env)); err != nil {
+				return err
+			}
+		}
 		home, err := runner.DetectHome(cmd.Context(), execer, dc.RemoteUser)
 		if err != nil {
 			return err
@@ -144,7 +149,10 @@ func (a *application) lifecycleCommand(name string) *cobra.Command {
 			// No workspace folder: the user's home folder, as upstream.
 			workdir = home
 		}
-		probed := runner.ProbeUserEnv(cmd.Context(), execer, dc.UserEnvProbe, environment.probe.mode, dc.RemoteUser, env, a.logf)
+		var probed map[string]string
+		if !skip.postCreate {
+			probed = runner.ProbeUserEnv(cmd.Context(), execer, dc.UserEnvProbe, environment.probe.mode, dc.RemoteUser, runner.EnvFromList(info.Config.Env), a.logf, runner.ProbeOptions{CanPatchSystemConfig: true})
+		}
 		rt := runner.Runtime{User: dc.RemoteUser, Workdir: workdir, Env: runner.LifecycleEnv(probed, remoteEnv, resolveRemoteEnv(dc.UpdateRemoteEnv, sub, env), secrets), CreatedAt: info.Created, StartedAt: info.State.StartedAt, UserDataFolder: lifecycle.UserDataFolder(home, folderOption(cmd, "container-data-folder")), Dotfiles: dotfiles.forRun(skip)}
 		rt.Lifecycle = controls.LifecycleControls
 		rt.Lifecycle.WaitFor = dc.WaitFor

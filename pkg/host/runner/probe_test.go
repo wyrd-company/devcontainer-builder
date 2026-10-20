@@ -39,7 +39,7 @@ func TestUserEnvProbeModes(t *testing.T) {
 				}
 				return markedProbe(r, "SAMPLE=one=two\x00PWD=/wrong\x00PATH=/bin:/usr/bin\x00"), nil
 			})
-			got := ProbeUserEnv(context.Background(), f, tc.mode, "", "sample", map[string]string{"PATH": "/bin:/opt/bin:/sbin"}, nil)
+			got := ProbeUserEnv(context.Background(), f, tc.mode, "", "sample", map[string]string{"PATH": "/bin:/opt/bin:/sbin"}, nil, ProbeOptions{})
 			if tc.mode == "none" {
 				if calls != 0 || len(got) != 0 {
 					t.Fatal("none ran a probe")
@@ -77,7 +77,7 @@ func TestUserEnvProbeShellAndConfiguration(t *testing.T) {
 				}
 				return markedProbe(r, "SAMPLE=value\x00"), nil
 			})
-			got := ProbeUserEnv(context.Background(), f, tc.mode, "none", tc.user, map[string]string{"SHELL": tc.shell}, nil)
+			got := ProbeUserEnv(context.Background(), f, tc.mode, "none", tc.user, map[string]string{"SHELL": tc.shell}, nil, ProbeOptions{})
 			if got["SAMPLE"] != "value" {
 				t.Fatal(got)
 			}
@@ -108,7 +108,7 @@ func TestUserEnvProbeFallback(t *testing.T) {
 				}
 				return markedProbe(r, "SAMPLE=fallback\nPWD=/wrong\n"), nil
 			})
-			got := ProbeUserEnv(context.Background(), f, "", "loginShell", "root", nil, nil)
+			got := ProbeUserEnv(context.Background(), f, "", "loginShell", "root", nil, nil, ProbeOptions{})
 			if calls != 3 || !reflect.DeepEqual(got, map[string]string{"SAMPLE": "fallback"}) {
 				t.Fatalf("calls=%d env=%v", calls, got)
 			}
@@ -130,8 +130,8 @@ func TestUserEnvProbeTimeout(t *testing.T) {
 	})
 	var logs []string
 	start := time.Now()
-	got := ProbeUserEnv(context.Background(), f, "", "loginShell", "root", nil, func(f string, a ...any) { logs = append(logs, fmt.Sprintf(f, a...)) })
-	if elapsed := time.Since(start); elapsed < 10*time.Second || elapsed > 12*time.Second {
+	got := ProbeUserEnv(context.Background(), f, "", "loginShell", "root", nil, func(f string, a ...any) { logs = append(logs, fmt.Sprintf(f, a...)) }, ProbeOptions{diagnosticAfter: time.Millisecond, timeout: 20 * time.Millisecond})
+	if elapsed := time.Since(start); elapsed < 20*time.Millisecond || elapsed > time.Second {
 		t.Fatalf("timeout elapsed=%v", elapsed)
 	}
 	if got == nil || len(got) != 0 || calls != 2 {
@@ -173,8 +173,23 @@ func TestUserEnvProbeShellFailureDoesNotFallback(t *testing.T) {
 		}
 		return &ExecResult{ExitCode: 23}, nil
 	})
-	got := ProbeUserEnv(context.Background(), f, "loginShell", "", "root", nil, nil)
+	got := ProbeUserEnv(context.Background(), f, "loginShell", "", "root", nil, nil, ProbeOptions{})
 	if calls != 2 || len(got) != 0 {
 		t.Fatalf("failed shell retried: calls=%d env=%v", calls, got)
+	}
+}
+
+func TestUserEnvProbeSystemConfigSkipsPathMerge(t *testing.T) {
+	calls := 0
+	f := probeExecer(func(_ context.Context, r ExecRequest) (*ExecResult, error) {
+		calls++
+		if calls == 1 {
+			return &ExecResult{Stdout: []byte("/bin/sh\n1000\n")}, nil
+		}
+		return markedProbe(r, "PATH=/bin\x00"), nil
+	})
+	got := ProbeUserEnv(context.Background(), f, "loginShell", "", "sample", map[string]string{"PATH": "/opt/bin:/bin"}, nil, ProbeOptions{CanPatchSystemConfig: true})
+	if got["PATH"] != "/bin" {
+		t.Fatalf("system-config path merged: %v", got)
 	}
 }

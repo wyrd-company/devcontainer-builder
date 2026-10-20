@@ -25,6 +25,8 @@ import (
 type UpRequest struct {
 	// ContainerDataFolder selects lifecycle and dotfiles marker storage.
 	ContainerDataFolder string
+	// ContainerSystemDataFolder selects the upstream system patch marker folder.
+	ContainerSystemDataFolder string
 	// GPUAvailability controls implicit hostRequirements.gpu reservations. Empty means detect.
 	GPUAvailability string
 	// OmitConfigRemoteEnvFromMetadata omits the current config remoteEnv from new labels.
@@ -536,7 +538,17 @@ func (h *Host) runLifecycle(
 		containerEnv = map[string]string{}
 	}
 	dc = substituteContainerEnv(dc, containerEnv)
-	probed := runner.ProbeUserEnv(ctx, execer, dc.UserEnvProbe, req.DefaultUserEnvProbe, dc.RemoteUser, containerEnv, h.logf)
+	systemEnv := map[string]string{}
+	if inspect.Config != nil {
+		systemEnv = runner.EnvFromList(inspect.Config.Env)
+	}
+	if err := runner.PatchSystemEnv(ctx, execer, req.ContainerSystemDataFolder, systemEnv); err != nil {
+		return err
+	}
+	var probed map[string]string
+	if !req.SkipLifecycle {
+		probed = runner.ProbeUserEnv(ctx, execer, dc.UserEnvProbe, req.DefaultUserEnvProbe, dc.RemoteUser, systemEnv, h.logf, runner.ProbeOptions{CanPatchSystemConfig: true})
+	}
 	mergedEnv := runner.LifecycleEnv(probed, req.RemoteEnv, stringMap(dc.UpdateRemoteEnv), req.Secrets)
 
 	plan := runtimePlan(req, entries, subCtx, containerEnv)

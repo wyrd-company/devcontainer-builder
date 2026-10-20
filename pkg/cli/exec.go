@@ -90,16 +90,8 @@ func (a *application) execCommand() *cobra.Command {
 		if user == "" {
 			user = substitute.Substitute(a.substitutionContext(dc, workspace, labels), dc.RemoteUser)
 		}
-		probeEnv := env
-		if probeEnv == nil {
-			probeEnv = map[string]string{}
-			for _, pair := range info.Config.Env {
-				if key, value, ok := strings.Cut(pair, "="); ok {
-					probeEnv[key] = value
-				}
-			}
-		}
-		probed := runner.ProbeUserEnv(cmd.Context(), a.execer(cli, dc, containerID), dc.UserEnvProbe, probe.mode, user, probeEnv, a.logf)
+		probeEnv := runner.EnvFromList(info.Config.Env)
+		probed := runner.ProbeUserEnv(cmd.Context(), a.execer(cli, dc, containerID), dc.UserEnvProbe, probe.mode, user, probeEnv, a.logf, runner.ProbeOptions{CanPatchSystemConfig: true})
 		execEnv := runner.LifecycleEnv(probed, extra, configEnv, nil)
 		wd := workdir
 		if wd == "" {

@@ -6,8 +6,8 @@ package cli
 import "github.com/spf13/cobra"
 
 // dataFolderFlags registers exactly the upstream command-option pairs. Empty
-// values select upstream defaults; system and session folders have no writer
-// until system patching and user environment probing are implemented.
+// values select upstream defaults. System patch markers use the system folder;
+// persistence of session probe caches is not implemented.
 func dataFolderFlags(cmd *cobra.Command) {
 	switch cmd.Name() {
 	case "build", "exec", "read-configuration", "run-user-commands", "set-up", "up":
