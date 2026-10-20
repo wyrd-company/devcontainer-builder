@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/compose-spec/compose-go/v2/types"
+	"github.com/wyrd-company/devcontainer-builder/internal/dockerimage"
 )
 
 // wrapServiceCommand makes the keepalive script, which runs the feature
@@ -41,12 +42,12 @@ func (h *Host) wrapPrimaryCommand(ctx context.Context, proj *types.Project, in O
 	}
 	var imageEntrypoint, imageCmd []string
 	if svc.Entrypoint == nil || svc.Command == nil {
-		img, err := h.client.ImageInspect(ctx, svc.Image)
+		img, err := dockerimage.InspectConfig(ctx, h.client, svc.Image, svc.Platform, h.opts.RegistryAuth, h.stderrOr(nil))
 		if err != nil {
 			return errorf("inspect image %s: %w", svc.Image, err)
 		}
-		if img.Config != nil {
-			imageEntrypoint, imageCmd = img.Config.Entrypoint, img.Config.Cmd
+		if img != nil {
+			imageEntrypoint, imageCmd = img.Entrypoint, img.Cmd
 		}
 	}
 	wrapServiceCommand(&svc, in.Entrypoints, imageEntrypoint, imageCmd)

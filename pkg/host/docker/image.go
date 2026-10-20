@@ -1,12 +1,14 @@
+// relationships:
+//
+//	references: [../../../internal/dockerimage]
 package docker
 
 import (
 	"context"
-	"io"
 
-	imagetypes "github.com/docker/docker/api/types/image"
 	dockerclient "github.com/docker/docker/client"
-	"github.com/docker/docker/pkg/jsonmessage"
+
+	"github.com/wyrd-company/devcontainer-builder/internal/dockerimage"
 )
 
 // ensureImage pulls ref through the Engine API when the daemon does not
@@ -18,25 +20,9 @@ func (h *Host) ensureImage(ctx context.Context, ref string) error {
 	} else if !dockerclient.IsErrNotFound(err) {
 		return errorf("inspect image %s: %w", ref, err)
 	}
-	var auth string
-	if h.opts.RegistryAuth != nil {
-		var err error
-		if auth, err = h.opts.RegistryAuth.EngineAuth(ref); err != nil {
-			return errorf("pull image %s: %w", ref, err)
-		}
-	}
 	h.logf("pulling image %s", ref)
-	rc, err := h.client.ImagePull(ctx, ref, imagetypes.PullOptions{RegistryAuth: auth})
-	if err != nil {
-		return errorf("pull image %s: %w", ref, err)
-	}
-	defer rc.Close()
-	out := h.stderrOr(nil)
-	if out == nil {
-		out = io.Discard
-	}
-	if err := jsonmessage.DisplayJSONMessagesStream(rc, out, 0, false, nil); err != nil {
-		return errorf("pull image %s: %w", ref, err)
+	if err := dockerimage.Pull(ctx, h.client, ref, h.opts.RegistryAuth, h.stderrOr(nil)); err != nil {
+		return errorf("%w", err)
 	}
 	return nil
 }

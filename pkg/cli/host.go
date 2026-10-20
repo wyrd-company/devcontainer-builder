@@ -33,7 +33,7 @@ func (a *application) dockerHost(cli *dockerclient.Client) *hostdocker.Host {
 	return hostdocker.New(cli, hostdocker.Options{TerminalSize: a.terminalSize, Logger: a.logf, Stdout: a.logs, Stderr: a.logs, RegistryAuth: registryauth.FromEnvironment()})
 }
 func (a *application) composeHost(cli *dockerclient.Client) *dockercompose.Host {
-	return dockercompose.New(cli, dockercompose.Options{UserDataFolder: a.userDataFolder, Logger: a.logf, Stdout: a.logs, Stderr: a.logs})
+	return dockercompose.New(cli, dockercompose.Options{RegistryAuth: registryauth.FromEnvironment(), UserDataFolder: a.userDataFolder, Logger: a.logf, Stdout: a.logs, Stderr: a.logs})
 }
 
 func (a *application) upCommand() *cobra.Command {
@@ -134,7 +134,7 @@ func (a *application) upCommand() *cobra.Command {
 			req.DefaultUserEnvProbe = environment.probe.mode
 			req.Mounts = a.composeMounts()
 			req.IDLabels = a.idLabels
-			host := dockercompose.New(cli, dockercompose.Options{UserDataFolder: a.userDataFolder, TerminalSize: a.terminalSize, Logger: a.logf, Stdout: a.logs, Stderr: a.logs, NoRecreate: controls.expectExisting})
+			host := dockercompose.New(cli, dockercompose.Options{RegistryAuth: registryauth.FromEnvironment(), UserDataFolder: a.userDataFolder, TerminalSize: a.terminalSize, Logger: a.logf, Stdout: a.logs, Stderr: a.logs, NoRecreate: controls.expectExisting})
 			res, err := host.Up(cmd.Context(), req)
 			if err != nil {
 				return err

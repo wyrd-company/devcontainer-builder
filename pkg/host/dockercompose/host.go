@@ -43,6 +43,8 @@ var ErrPrimaryNotFound = errors.New("dockercompose host: primary service not fou
 
 // Options tunes a Host. All fields are optional.
 type Options struct {
+	// RegistryAuth supplies the same native pull credentials as the Docker host.
+	RegistryAuth interface{ EngineAuth(string) (string, error) }
 	// UserDataFolder selects the parent for private materialized configs/secrets.
 	UserDataFolder string
 	// TerminalSize is the optional lifecycle PTY size [rows, columns].

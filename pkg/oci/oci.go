@@ -177,9 +177,11 @@ func platformManifest(p Platform) childSelector {
 // reads.
 type ImageConfig struct {
 	Config struct {
-		Labels map[string]string `json:"Labels,omitempty"`
-		User   string            `json:"User,omitempty"`
-		Env    []string          `json:"Env,omitempty"`
+		Labels     map[string]string `json:"Labels,omitempty"`
+		Entrypoint []string          `json:"Entrypoint,omitempty"`
+		Cmd        []string          `json:"Cmd,omitempty"`
+		User       string            `json:"User,omitempty"`
+		Env        []string          `json:"Env,omitempty"`
 	} `json:"config"`
 }
 

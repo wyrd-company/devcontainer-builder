@@ -11,6 +11,7 @@ import (
 	"github.com/compose-spec/compose-go/v2/types"
 	"github.com/docker/docker/api/types/container"
 
+	"github.com/wyrd-company/devcontainer-builder/internal/dockerimage"
 	"github.com/wyrd-company/devcontainer-builder/pkg/features"
 	"github.com/wyrd-company/devcontainer-builder/pkg/host/runner"
 	"github.com/wyrd-company/devcontainer-builder/pkg/lifecycle"
@@ -221,13 +222,13 @@ func (h *Host) Up(ctx context.Context, req UpRequest) (*UpResult, error) {
 		// Read image metadata before deriving the runtime service. Keep the raw list
 		// separate so container labels retain unresolved substitutions and all hooks.
 		svc := proj.Services[req.Spec.Service]
-		img, err := h.client.ImageInspect(ctx, svc.Image)
+		img, err := dockerimage.InspectConfig(ctx, h.client, svc.Image, svc.Platform, h.opts.RegistryAuth, h.stderrOr(nil))
 		if err != nil {
 			return nil, errorf("inspect primary image metadata: %w", err)
 		}
 		var imageLabels map[string]string
-		if img.Config != nil {
-			imageLabels = img.Config.Labels
+		if img != nil {
+			imageLabels = img.Labels
 		}
 		entries = imageMetadataEntries(req, imageLabels, h.logf)
 		merged, err := runtimeMetadata(req.Spec, entries, subCtx)
@@ -397,6 +398,13 @@ func (h *Host) bringUp(
 		t, err := translateService(proj, svc, containerName, labels, netNames, volNames, materializer)
 		if err != nil {
 			return "", false, false, false, err
+		}
+		// Registry metadata lookup deliberately does not download layers. Ensure
+		// the primary image is local before creating its container.
+		if labels[LabelPrimary] == "true" {
+			if err := dockerimage.Ensure(ctx, h.client, svc.Image, h.opts.RegistryAuth, h.stderrOr(nil)); err != nil {
+				return "", false, false, false, err
+			}
 		}
 		resp, err := h.client.ContainerCreate(ctx, t.Config, t.HostConfig, t.NetConfig, nil, t.Name)
 		if err != nil {
