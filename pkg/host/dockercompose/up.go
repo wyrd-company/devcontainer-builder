@@ -399,9 +399,9 @@ func (h *Host) bringUp(
 		if err != nil {
 			return "", false, false, false, err
 		}
-		// Registry metadata lookup deliberately does not download layers. Ensure
-		// the primary image is local before creating its container.
-		if labels[LabelPrimary] == "true" {
+		// Image-only services need their layers before creation. The primary
+		// also loads any image whose metadata came only from the registry.
+		if labels[LabelPrimary] == "true" || (svc.Image != "" && svc.Build == nil) {
 			if err := dockerimage.Ensure(ctx, h.client, svc.Image, h.opts.RegistryAuth, h.stderrOr(nil)); err != nil {
 				return "", false, false, false, err
 			}
