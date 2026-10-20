@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/docker/docker/api/types/container"
@@ -125,7 +126,11 @@ func writeLifecycleResultConfig(t *testing.T, config map[string]any) string {
 func lifecycleResultEngine(t *testing.T, currentMarkers, fail bool) {
 	t.Helper()
 	exitCode := 0
+	attachStdin := false
+	var stateMu sync.Mutex
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		stateMu.Lock()
+		defer stateMu.Unlock()
 		w.Header().Set("Content-Type", "application/json")
 		switch {
 		case strings.HasSuffix(r.URL.Path, "/containers/sample-container/json"):
@@ -136,6 +141,7 @@ func lifecycleResultEngine(t *testing.T, currentMarkers, fail bool) {
 				t.Error(err)
 			}
 			script := strings.Join(request.Cmd, " ")
+			attachStdin = request.AttachStdin
 			exitCode = 0
 			if currentMarkers && strings.Contains(script, "ENOENT") {
 				exitCode = 1
@@ -156,6 +162,11 @@ func lifecycleResultEngine(t *testing.T, currentMarkers, fail bool) {
 			defer conn.Close()
 			_, _ = buf.WriteString("HTTP/1.1 101 UPGRADED\r\nContent-Type: application/vnd.docker.raw-stream\r\nConnection: Upgrade\r\nUpgrade: tcp\r\n\r\n")
 			_ = buf.Flush()
+			if attachStdin {
+				// Consume the hijacked stdin until CloseWrite, as the Engine does.
+				// Closing with unread patch input can reset the TCP connection.
+				_, _ = io.Copy(io.Discard, buf)
+			}
 		case strings.HasSuffix(r.URL.Path, "/exec/sample-exec/json"):
 			_ = json.NewEncoder(w).Encode(map[string]any{"ExitCode": exitCode})
 		default:
