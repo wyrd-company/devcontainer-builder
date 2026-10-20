@@ -15,9 +15,9 @@ jobs:
     timeout-minutes: 30
     permissions:
       contents: read
-    # Bob must merge the dcb entry, then set this and the submit action to one SHA.
+    # This pin and the submit action pin name one repo.wyrd.foo commit.
     env:
-      REPO_WYRD_FOO_PUBLISHER_COMMIT: PUBLISHER_COMMIT_UNSET
+      REPO_WYRD_FOO_PUBLISHER_COMMIT: 0fe7323712bfc5f109f947b8cb4ddab4f2d42017
       RELEASE_VERSION: ${{ github.ref_name }}
       PYTHONDONTWRITEBYTECODE: '1'
     steps:

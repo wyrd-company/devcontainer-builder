@@ -30,7 +30,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
-      REPO_WYRD_FOO_PUBLISHER_COMMIT: PUBLISHER_COMMIT_UNSET
+      REPO_WYRD_FOO_PUBLISHER_COMMIT: 0fe7323712bfc5f109f947b8cb4ddab4f2d42017
     permissions:
       contents: read
       actions: read
@@ -59,7 +59,7 @@ jobs:
       - run: task release:publisher-pin
         env:
           RELEASE_VERSION: ${{ steps.handoff.outputs.version }}
-      - uses: wyrd-company/repo.wyrd.foo/.github/actions/submit-release@b83f283412e576dcdb448a4b288ae781165b8c7c
+      - uses: wyrd-company/repo.wyrd.foo/.github/actions/submit-release@0fe7323712bfc5f109f947b8cb4ddab4f2d42017
         with:
           manifest: handoff/release-manifest.json
           app-client-id: ${{ secrets.REPO_WYRD_FOO_PUBLISHER_APP_ID }}
