@@ -1,7 +1,7 @@
 ---
 title: Configuration
 order: 4
-docs: true
+product: dcb
 relationships:
   references: [ usage ]
 ---

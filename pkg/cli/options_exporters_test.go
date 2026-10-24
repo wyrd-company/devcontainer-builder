@@ -58,7 +58,7 @@ func TestBuildExporterFlag(t *testing.T) {
 }
 
 func TestExporterDocumentation(t *testing.T) {
-	data, err := os.ReadFile("../../docs/usage.md")
+	data, err := os.ReadFile("../../docs/user/usage.md")
 	if err != nil {
 		t.Fatal(err)
 	}

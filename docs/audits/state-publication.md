@@ -1,6 +1,6 @@
 ---
 relationships:
-  references: [upstream-options, ../usage, ../../pkg/host/dockercompose/object_state, ../../pkg/host/dockercompose/objects]
+  references: [upstream-options, ../user/usage, ../../pkg/host/dockercompose/object_state, ../../pkg/host/dockercompose/objects]
 ---
 
 # Host state publication

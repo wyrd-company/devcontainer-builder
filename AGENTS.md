@@ -14,5 +14,6 @@ Reference repositories are read-only submodules. Do not edit them or update thei
 pinned commits as part of application changes. Generated build output and
 `go.sum` are owned by their generating tools.
 
-User documentation belongs in `docs/`; engineering artifacts belong in its typed
-subdirectories. Use README as the entry point.
+User documentation belongs in `docs/user/`, which wyrd.foo publishes. Engineering
+artifacts belong in the other typed subdirectories of `docs/`, which stay private.
+Use README as the entry point.
