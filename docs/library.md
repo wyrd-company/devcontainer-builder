@@ -25,7 +25,7 @@ a service or an operator can embed them.
 | `pkg/features` | Resolves features and their install order. |
 | `pkg/substitute` | Substitutes configuration variables. |
 | `pkg/workspace` | Places a workspace folder in a container: its Git root, a worktree's common Git folder, and the workspace folder. |
-| `pkg/registryauth` | Reads registry credentials from the Docker client configuration. |
+| `pkg/registryauth` | Reads registry credentials from the Docker client configuration, or holds credentials that the caller supplies. |
 
 Package documentation is on
 [pkg.go.dev](https://pkg.go.dev/github.com/wyrd-company/devcontainer-builder).
@@ -44,8 +44,8 @@ res, err := builder.New().Build(ctx, builder.Options{
 
 `Options.Docker` takes an existing Engine API client, and
 `Options.BuildKitAddress` selects a separate BuildKit. Builds read registry
-credentials from the Docker client configuration. See
-[Registry credentials](/docs/dcb/configuration#registry-credentials).
+credentials from the Docker client configuration unless
+`Options.RegistryAuth` is set. See [Registry credentials](#registry-credentials).
 
 ## Run a container
 
@@ -80,12 +80,56 @@ does not mask them: lifecycle output reaches `Options.Stdout` and
 writers if the output is shown or kept.
 
 `Up` pulls a missing image anonymously. To send registry credentials, set
-`docker.Options.RegistryAuth`, for example to `registryauth.FromEnvironment()`
-from `pkg/registryauth`, which reads the Docker client configuration.
+`docker.Options.RegistryAuth`. See [Registry credentials](#registry-credentials).
 
 `Up` is idempotent. It finds the workspace container by its labels, starts it
 if it is stopped, and runs only the lifecycle commands that the marker files
 show as not yet done.
+
+## Registry credentials
+
+One credential source can serve every registry request of a workspace:
+
+```go
+import "github.com/wyrd-company/devcontainer-builder/pkg/registryauth"
+
+auth := registryauth.FromEnvironment()
+
+// Image pulls.
+docker.New(cli, docker.Options{RegistryAuth: auth})
+// Image pulls and service builds.
+dockercompose.New(cli, dockercompose.Options{RegistryAuth: auth})
+// BuildKit pulls and pushes, feature downloads, and base image reads.
+builder.New().Build(ctx, builder.Options{RegistryAuth: auth})
+dockercompose.BuildPrimaryImage(ctx, dockercompose.BuildPrimaryInputs{
+    BuilderOptions: builder.Options{RegistryAuth: auth},
+})
+```
+
+| Source | Reads | Runs a credential helper |
+| --- | --- | --- |
+| `registryauth.FromEnvironment()`, `registryauth.New(dir)` | `DOCKER_AUTH_CONFIG`, then `config.json`, as the `docker` command does | Yes, for `credsStore` and `credHelpers` |
+| `registryauth.NewWithoutHelpers(dir)` | The same, in the same order | No |
+| `registryauth.Static{"ghcr.io": {...}}` | Nothing: the credentials that the caller gives | No |
+
+`NewWithoutHelpers` reads `DOCKER_AUTH_CONFIG` first, then the `auths` of
+`config.json`. A registry that `credsStore` or `credHelpers` gives to a helper
+fails with `registryauth.ErrHelpersDisabled`, as a failing helper fails; its
+`auths` entry is not used, because the `docker` command would not use it. The
+error stays a match for `errors.Is` in the errors of builds, feature downloads,
+and image pulls.
+
+`Static` holds credentials by registry host, such as `ghcr.io` or
+`127.0.0.1:5000`; the Docker Hub names `docker.io`, `index.docker.io`,
+`registry-1.docker.io`, and `https://index.docker.io/v1/` are one registry. A
+host that it does not hold is anonymous, so `registryauth.Static{}` is
+anonymous for every registry.
+
+When `builder.Options.RegistryAuth` is nil, BuildKit reads the Docker client
+configuration, and feature downloads and base image reads use the
+`Builder.Resolver.OCI` client. When `dockercompose.Options.RegistryAuth` gives
+only `EngineAuth`, service builds get credentials from its `EngineAuth` values,
+and never from the Docker client configuration.
 
 ## Project into Kubernetes
 

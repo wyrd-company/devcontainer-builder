@@ -125,6 +125,10 @@ directory, or in `~/.docker` when `DOCKER_CONFIG` is not set:
   `docker-credential-<name>` program from `PATH` to get the credentials.
 - `DOCKER_AUTH_CONFIG`, an environment variable that holds `auths` entries.
 
+Programs that use the Go packages can give their own credential source in
+place of this configuration. See
+[Go libraries](/docs/dcb/library#registry-credentials).
+
 These operations send the credentials:
 
 - `dcb up` pulls of an image that Docker does not have.
