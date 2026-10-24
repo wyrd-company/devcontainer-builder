@@ -18,9 +18,9 @@ OCI features, and runs the same lifecycle commands.
 - **Run.** `dcb up` builds the image when needed, then creates and starts the
   container and runs the lifecycle commands. `dcb exec` runs a command in it,
   and `dcb down` removes it.
-- **Read.** Every command writes one JSON result line to stdout, except help
-  and a valid `exec` invocation. Logs go to stderr. Exit codes separate
-  operation failures from invalid invocations.
+- **Read.** Every command writes one JSON result line to stdout, except help,
+  a valid `exec` invocation, and archive exports to stdout. Logs go to stderr.
+  Exit codes separate operation failures from invalid invocations.
 
 ## Relation to the Dev Container CLI
 
@@ -47,7 +47,7 @@ Differences from upstream:
 | --- | --- |
 | One static binary. | Node.js package. |
 | Builds through the Docker Engine API on the daemon's BuildKit. | Runs the `docker` and `docker buildx` commands. |
-| One JSON result line for every command except help and a valid `exec` invocation. | Output format varies by command. |
+| One JSON result line for every command except help, a valid `exec` invocation, and archive exports to stdout. | Output format varies by command. |
 | Docker only. | Docker, or Podman through `--docker-path`. |
 | Can install the VS Code server into the image at build time. | The editor installs the server when it attaches. |
 | Adds `down`, `inspect`, `generate`, `server`, and `skills`. | Adds `outdated`, `upgrade`, and `templates`. |

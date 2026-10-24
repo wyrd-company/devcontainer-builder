@@ -4,7 +4,7 @@
 `devcontainer.json`. It builds images on the Docker daemon's built-in BuildKit,
 and creates, starts, and runs lifecycle commands in containers through the
 Docker Engine API. Every command writes one JSON result line to stdout, except
-help and a valid `exec` invocation.
+help, a valid `exec` invocation, and archive exports to stdout.
 
 Documentation is at [wyrd.foo/docs/dcb](https://wyrd.foo/docs/dcb), published
 from [`docs/user/`](docs/user).
