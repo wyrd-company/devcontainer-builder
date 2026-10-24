@@ -32,8 +32,8 @@ products:
         Builds on the daemon's built-in BuildKit, with each feature as a
         separate cached step.
       - >-
-        Every command writes one JSON result line, so scripts and agents read
-        the outcome without parsing logs.
+        Commands write one JSON result line, except help and a valid exec, so
+        scripts and agents read the outcome without parsing logs.
       - >-
         Creates containers that carry the upstream labels, so upstream tools
         and editors find them.
@@ -41,8 +41,8 @@ products:
       - src: assets/up-exec-down.png
         caption: Bring up a container, run a command in it and remove it.
         alt: >-
-          Terminal output of dcb up, dcb exec and dcb down, each ending in a
-          JSON result line.
+          Terminal output of dcb up and dcb down, each ending in a JSON result
+          line, and of dcb exec, which prints the output of its command.
     kinds:
       - kind: cli
         install:
