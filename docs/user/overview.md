@@ -1,7 +1,7 @@
 ---
 title: Overview
 order: 1
-docs: true
+product: dcb
 relationships:
   references: [ install, usage, configuration, library ]
 ---

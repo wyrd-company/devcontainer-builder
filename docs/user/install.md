@@ -1,7 +1,7 @@
 ---
 title: Installation
 order: 2
-docs: true
+product: dcb
 install: true
 relationships:
   references: [ manifest ]
