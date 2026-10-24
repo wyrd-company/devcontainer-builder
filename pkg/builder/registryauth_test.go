@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -313,5 +314,19 @@ func TestSolveOptions_ForwardsRegistryAuth(t *testing.T) {
 	}
 	if got := solveOptions(Options{}, t.TempDir(), &spec.DevContainer{}); got.RegistryAuth != nil {
 		t.Fatalf("SolveOptions.RegistryAuth = %#v, want nil for the BuildKit default", got.RegistryAuth)
+	}
+}
+
+func TestGenerate_DisabledHelperErrorIsTyped(t *testing.T) {
+	reg := newPrivateRegistry(t)
+	log := markerHelperConfig(t, reg.host())
+	_, err := generateWith(t, reg.builder(), privateWorkspace(t, reg.host()), func(o *Options) {
+		o.RegistryAuth = registryauth.NewWithoutHelpers("")
+	})
+	if !errors.Is(err, registryauth.ErrHelpersDisabled) {
+		t.Fatalf("Generate: err = %v, want ErrHelpersDisabled", err)
+	}
+	if r := helperRequests(t, log); len(r) != 0 {
+		t.Fatalf("the marker helper was run for %v", r)
 	}
 }
