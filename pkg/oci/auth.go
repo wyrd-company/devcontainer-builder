@@ -78,7 +78,7 @@ func withCredentialError(err, credErr error) error {
 	if credErr == nil {
 		return err
 	}
-	return fmt.Errorf("%w (%v)", err, credErr)
+	return fmt.Errorf("%w (%w)", err, credErr)
 }
 
 // authorize answers a registry's WWW-Authenticate challenge with an

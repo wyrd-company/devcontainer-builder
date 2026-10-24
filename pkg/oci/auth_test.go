@@ -344,3 +344,13 @@ func TestWithAuth_NilClientUsesDefaults(t *testing.T) {
 		t.Fatalf("WithAuth on nil = %+v, want default HTTP and the source", c)
 	}
 }
+
+func TestFetchManifest_RefusalKeepsTheCredentialError(t *testing.T) {
+	reg := newAuthRegistry(t, basicChallenge, "Basic "+basicCredential("testuser", "testpassword"), nil)
+	sentinel := errors.New("synthetic credential source failure")
+	c, ref := reg.client(&staticAuth{err: sentinel})
+	_, _, err := c.FetchManifest(ref)
+	if !errors.Is(err, sentinel) {
+		t.Fatalf("FetchManifest: err = %v, want it to wrap the credential source's error", err)
+	}
+}
