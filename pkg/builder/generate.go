@@ -57,13 +57,11 @@ func (b *Builder) Generate(ctx context.Context, opts Options) (*Result, error) {
 
 	var resolved []features.Resolved
 	if !opts.SkipFeatures && dc.Features.Len() > 0 {
-		b.Resolver.Logger = logf
-		b.Resolver.SkipAutoMapping = opts.SkipFeatureAutoMapping
 		var lock *features.Lockfile
 		if opts.FeatureLockfile != nil {
 			lock = opts.FeatureLockfile.Lockfile
 		}
-		resolved, err = b.Resolver.ResolveWithLockfile(ctx, dc.Features, dc.OverrideFeature, filepath.Join(ctxDir, "_features"), featureBaseDir(dc, opts), lock)
+		resolved, err = b.resolver(opts, logf).ResolveWithLockfile(ctx, dc.Features, dc.OverrideFeature, filepath.Join(ctxDir, "_features"), featureBaseDir(dc, opts), lock)
 		if err != nil {
 			return nil, fmt.Errorf("features: %w", err)
 		}

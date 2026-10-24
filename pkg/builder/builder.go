@@ -26,6 +26,7 @@ import (
 	"github.com/wyrd-company/devcontainer-builder/pkg/dockerfile"
 	"github.com/wyrd-company/devcontainer-builder/pkg/features"
 	"github.com/wyrd-company/devcontainer-builder/pkg/metadata"
+	"github.com/wyrd-company/devcontainer-builder/pkg/oci"
 	"github.com/wyrd-company/devcontainer-builder/pkg/platform"
 	"github.com/wyrd-company/devcontainer-builder/pkg/spec"
 	"github.com/wyrd-company/devcontainer-builder/pkg/vscode"
@@ -65,6 +66,12 @@ type Options struct {
 	// Docker is the Engine API client used to reach the daemon. When
 	// nil, one is created from the standard DOCKER_* environment.
 	Docker *dockerclient.Client
+	// RegistryAuth supplies the registry credentials of the call: the
+	// BuildKit session and push, OCI feature downloads, and base image
+	// configuration reads. When nil, BuildKit reads the docker CLI's
+	// configuration (registryauth.FromEnvironment), and feature downloads
+	// and image configuration reads use the Builder's Resolver.OCI client.
+	RegistryAuth buildkit.RegistryAuth
 	// BuildArgs / Labels.
 	BuildArgs map[string]string
 	Labels    map[string]string
@@ -245,13 +252,11 @@ func (b *Builder) prepareBuildContext(ctx context.Context, opts Options, logf fu
 
 	if !opts.SkipFeatures && dc.Features.Len() > 0 {
 		featStaging := filepath.Join(ctxDir, "_features")
-		b.Resolver.Logger = logf
-		b.Resolver.SkipAutoMapping = opts.SkipFeatureAutoMapping
 		var lock *features.Lockfile
 		if opts.FeatureLockfile != nil {
 			lock = opts.FeatureLockfile.Lockfile
 		}
-		resolved, err = b.Resolver.ResolveWithLockfile(ctx, dc.Features, dc.OverrideFeature, featStaging, featureBaseDir(dc, opts), lock)
+		resolved, err = b.resolver(opts, logf).ResolveWithLockfile(ctx, dc.Features, dc.OverrideFeature, featStaging, featureBaseDir(dc, opts), lock)
 		if err != nil {
 			err = fmt.Errorf("features: %w", err)
 			return
@@ -323,26 +328,7 @@ func (b *Builder) runBuildKit(ctx context.Context, opts Options, ctxDir string,
 	resolved []features.Resolved, sr *vscode.Result,
 	logf func(string, ...any),
 ) error {
-	solveOpts := buildkit.SolveOptions{
-		Address:          opts.BuildKitAddress,
-		Docker:           opts.Docker,
-		LocalContextName: featuresLocalName,
-		LocalContextDir:  ctxDir,
-		Tags:             opts.Tags,
-		Push:             opts.Push,
-		Load:             opts.Load,
-		Output:           opts.Output,
-		OutputWriter:     opts.OutputWriter,
-		OutputDir:        opts.OutputDir,
-		CacheImports:     buildkit.ParseCacheRefs(mergeSlices(buildCacheFrom(dc), opts.CacheFrom)),
-		CacheExports:     buildkit.ParseCacheRefs(opts.CacheTo),
-		Platforms:        opts.Platforms,
-		NoCache:          opts.NoCache,
-		Pull:             opts.Pull,
-		Progress:         opts.Progress,
-		Stdout:           opts.Stdout,
-		Stderr:           opts.Stderr,
-	}
+	solveOpts := solveOptions(opts, ctxDir, dc)
 	if opts.Push && len(opts.Tags) == 0 {
 		return fmt.Errorf("--push requires at least one --tag")
 	}
@@ -364,6 +350,52 @@ func (b *Builder) runBuildKit(ctx context.Context, opts Options, ctxDir string,
 	}
 	_, err := buildkit.SolveDevcontainer(ctx, bspec, solveOpts)
 	return err
+}
+
+// solveOptions are the BuildKit options of a build whose staging context
+// is ctxDir.
+func solveOptions(opts Options, ctxDir string, dc *spec.DevContainer) buildkit.SolveOptions {
+	return buildkit.SolveOptions{
+		Address:          opts.BuildKitAddress,
+		Docker:           opts.Docker,
+		LocalContextName: featuresLocalName,
+		LocalContextDir:  ctxDir,
+		Tags:             opts.Tags,
+		Push:             opts.Push,
+		Load:             opts.Load,
+		Output:           opts.Output,
+		OutputWriter:     opts.OutputWriter,
+		OutputDir:        opts.OutputDir,
+		CacheImports:     buildkit.ParseCacheRefs(mergeSlices(buildCacheFrom(dc), opts.CacheFrom)),
+		CacheExports:     buildkit.ParseCacheRefs(opts.CacheTo),
+		Platforms:        opts.Platforms,
+		NoCache:          opts.NoCache,
+		Pull:             opts.Pull,
+		RegistryAuth:     opts.RegistryAuth,
+		Progress:         opts.Progress,
+		Stdout:           opts.Stdout,
+		Stderr:           opts.Stderr,
+	}
+}
+
+// resolver is the feature resolver of one call: a copy of b.Resolver, so
+// that the call's settings leave the Builder unchanged, with the call's
+// registry client.
+func (b *Builder) resolver(opts Options, logf func(string, ...any)) *features.Resolver {
+	r := *b.Resolver
+	r.Logger = logf
+	r.SkipAutoMapping = opts.SkipFeatureAutoMapping
+	r.OCI = b.registry(opts)
+	return &r
+}
+
+// registry is the OCI client of one call: b.Resolver.OCI, or a client
+// bound to opts.RegistryAuth when it is set.
+func (b *Builder) registry(opts Options) *oci.Client {
+	if opts.RegistryAuth == nil {
+		return b.Resolver.OCI
+	}
+	return b.Resolver.OCI.WithAuth(opts.RegistryAuth)
 }
 
 // buildKitEndpoint names the BuildKit a solve will use, for logging.

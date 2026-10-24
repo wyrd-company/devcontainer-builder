@@ -70,6 +70,7 @@ func (b *Builder) imageConfigResolver(ctx context.Context, opts Options) (func(s
 		opts.Docker = cli
 	}
 	p := primaryPlatform(opts.Platforms)
+	registry := b.registry(opts)
 	resolve := func(ref string) (*oci.ImageConfig, error) {
 		if ref == "scratch" {
 			return &oci.ImageConfig{}, nil
@@ -97,7 +98,7 @@ func (b *Builder) imageConfigResolver(ctx context.Context, opts Options) (func(s
 		if err != nil {
 			return nil, err
 		}
-		return b.Resolver.OCI.FetchImageConfig(parsed, oci.Platform{OS: p.OS, Architecture: p.Arch, Variant: p.Variant})
+		return registry.FetchImageConfig(parsed, oci.Platform{OS: p.OS, Architecture: p.Arch, Variant: p.Variant})
 	}
 	return resolve, closeEngine, nil
 }
