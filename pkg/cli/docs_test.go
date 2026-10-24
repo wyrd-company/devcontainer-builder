@@ -69,6 +69,32 @@ func TestDocumentedCommandsExist(t *testing.T) {
 	}
 }
 
+// TestResultLineRuleAgrees holds the exceptions to "one JSON result line" the
+// same in every public statement of the rule: help, a valid exec invocation and
+// archive exports to stdout.
+func TestResultLineRuleAgrees(t *testing.T) {
+	const prose = "except help, a valid `exec` invocation, and archive exports to stdout"
+	const manifest = "except help, a valid exec and archive exports to stdout,"
+	for _, tc := range []struct {
+		file, want string
+		count      int
+	}{
+		{"../../README.md", prose, 1},
+		{"../../docs/user/overview.md", prose, 2}, // the list and the comparison table
+		{"../../docs/user/usage.md", prose, 1},
+		{"../../docs/user/docs.yml", manifest, 2}, // the blurb and the highlight
+	} {
+		data, err := os.ReadFile(tc.file)
+		if err != nil {
+			t.Fatal(err)
+		}
+		text := strings.Join(strings.Fields(string(data)), " ")
+		if got := strings.Count(text, tc.want); got != tc.count {
+			t.Errorf("%s states the result-line exceptions %d times as %q, want %d", tc.file, got, tc.want, tc.count)
+		}
+	}
+}
+
 func TestCheckCommand(t *testing.T) {
 	root := (&application{}).command()
 	initHelp(root)

@@ -16,7 +16,8 @@ products:
       A single Go binary that builds devcontainer images on Docker's built-in
       BuildKit and creates, starts, and runs lifecycle commands in development
       containers through the Docker Engine API. Commands write one JSON result
-      line, so scripts and agents can read the outcome.
+      line, except help, a valid exec and archive exports to stdout, so scripts
+      and agents can read the outcome.
     status: preview
     category: Dev Containers
     order: 9
@@ -32,8 +33,9 @@ products:
         Builds on the daemon's built-in BuildKit, with each feature as a
         separate cached step.
       - >-
-        Commands write one JSON result line, except help and a valid exec, so
-        scripts and agents read the outcome without parsing logs.
+        Commands write one JSON result line, except help, a valid exec and
+        archive exports to stdout, so scripts and agents read the outcome
+        without parsing logs.
       - >-
         Creates containers that carry the upstream labels, so upstream tools
         and editors find them.
