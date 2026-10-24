@@ -267,14 +267,7 @@ func (h *Host) Up(ctx context.Context, req UpRequest) (*UpResult, error) {
 	// already baked into req.PrimaryImage by BuildPrimaryImage, so
 	// it's skipped here.
 	if !h.opts.SkipServiceBuild {
-		built, err := BuildServiceImages(ctx, BuildServiceImagesInputs{
-			Project: proj,
-			Skip:    []string{req.Spec.Service},
-			Docker:  h.client,
-			Stdout:  h.opts.Stdout,
-			Stderr:  h.opts.Stderr,
-			Logger:  h.opts.Logger,
-		})
+		built, err := BuildServiceImages(ctx, h.serviceBuilds(proj, req.Spec.Service))
 		if err != nil {
 			return nil, errorf("build services: %w", err)
 		}

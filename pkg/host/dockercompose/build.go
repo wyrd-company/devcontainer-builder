@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/compose-spec/compose-go/v2/types"
+
 	"github.com/wyrd-company/devcontainer-builder/pkg/builder"
 	"github.com/wyrd-company/devcontainer-builder/pkg/metadata"
 	"github.com/wyrd-company/devcontainer-builder/pkg/spec"
@@ -109,20 +111,7 @@ func BuildPrimaryImage(ctx context.Context, in BuildPrimaryInputs) (*BuildPrimar
 	baseImage := primary.Image
 	composeBuilt := false
 	if primary.Build != nil {
-		bsi, err := BuildServiceImages(ctx, BuildServiceImagesInputs{
-			Project:             proj,
-			OmitSyntaxDirective: in.BuilderOptions.OmitSyntaxDirective,
-			Services:            []string{in.Spec.Service},
-			BuildKitAddress:     in.BuilderOptions.BuildKitAddress,
-			Docker:              in.BuilderOptions.Docker,
-			Platforms:           in.BuilderOptions.Platforms,
-			NoCache:             in.BuilderOptions.NoCache,
-			Pull:                in.BuilderOptions.Pull,
-			Progress:            in.BuilderOptions.Progress,
-			Stdout:              in.BuilderOptions.Stdout,
-			Stderr:              in.BuilderOptions.Stderr,
-			Logger:              in.BuilderOptions.Logger,
-		})
+		bsi, err := BuildServiceImages(ctx, primaryServiceBuild(proj, in))
 		if err != nil {
 			return nil, err
 		}
@@ -172,6 +161,26 @@ func BuildPrimaryImage(ctx context.Context, in BuildPrimaryInputs) (*BuildPrimar
 		return &BuildPrimaryResult{Image: tag, BuildResult: res}, fmt.Errorf("build derived image: %w", err)
 	}
 	return &BuildPrimaryResult{Image: tag, Built: true, BuildResult: res}, nil
+}
+
+// primaryServiceBuild is the compose-side build of the primary service,
+// with the caller's builder options.
+func primaryServiceBuild(proj *types.Project, in BuildPrimaryInputs) BuildServiceImagesInputs {
+	return BuildServiceImagesInputs{
+		Project:             proj,
+		OmitSyntaxDirective: in.BuilderOptions.OmitSyntaxDirective,
+		Services:            []string{in.Spec.Service},
+		BuildKitAddress:     in.BuilderOptions.BuildKitAddress,
+		Docker:              in.BuilderOptions.Docker,
+		Platforms:           in.BuilderOptions.Platforms,
+		NoCache:             in.BuilderOptions.NoCache,
+		Pull:                in.BuilderOptions.Pull,
+		RegistryAuth:        in.BuilderOptions.RegistryAuth,
+		Progress:            in.BuilderOptions.Progress,
+		Stdout:              in.BuilderOptions.Stdout,
+		Stderr:              in.BuilderOptions.Stderr,
+		Logger:              in.BuilderOptions.Logger,
+	}
 }
 
 func needsDerivedImage(in BuildPrimaryInputs) bool {

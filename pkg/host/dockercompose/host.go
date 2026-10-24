@@ -43,7 +43,12 @@ var ErrPrimaryNotFound = errors.New("dockercompose host: primary service not fou
 
 // Options tunes a Host. All fields are optional.
 type Options struct {
-	// RegistryAuth supplies the same native pull credentials as the Docker host.
+	// RegistryAuth supplies the same native pull credentials as the Docker
+	// host, and the credentials of Up's service builds. A value that also
+	// implements buildkit.RegistryAuth (such as a *registryauth.Store or a
+	// registryauth.Static) answers the builds directly; any other value
+	// answers them through its EngineAuth values. When nil, pulls are
+	// anonymous and service builds read the docker CLI's configuration.
 	RegistryAuth interface{ EngineAuth(string) (string, error) }
 	// UserDataFolder selects the parent for private materialized configs/secrets.
 	UserDataFolder string
