@@ -283,3 +283,64 @@ func TestFetchManifest_PlainHTTPRealmIsRefusedWhenAnonymous(t *testing.T) {
 		t.Fatalf("plain-HTTP realm called %d times, want 0", calls)
 	}
 }
+
+func TestWithAuth_UsesTheNewSourceWithAFreshAuthorization(t *testing.T) {
+	first := "Basic " + basicCredential("firstuser", "firstpassword")
+	second := "Basic " + basicCredential("seconduser", "secondpassword")
+	var mu sync.Mutex
+	want := first
+	var seen []string
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		seen = append(seen, r.Header.Get("Authorization"))
+		ok := r.Header.Get("Authorization") == want
+		mu.Unlock()
+		if !ok {
+			w.Header().Set("WWW-Authenticate", `Basic realm="test"`)
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		w.Header().Set("Content-Type", mediaTypeOCIManifest)
+		_, _ = w.Write([]byte(testManifest))
+	}))
+	t.Cleanup(srv.Close)
+	ref := Reference{Registry: strings.TrimPrefix(srv.URL, "https://"), Repository: "team/feature", Tag: "1"}
+
+	base := NewClient()
+	base.HTTP = srv.Client()
+	base.Auth = &staticAuth{creds: registryauth.Credentials{Username: "firstuser", Password: "firstpassword"}}
+	if _, _, err := base.FetchManifest(ref); err != nil {
+		t.Fatalf("base FetchManifest: %v", err)
+	}
+
+	mu.Lock()
+	want, seen = second, nil
+	mu.Unlock()
+	auth := &staticAuth{creds: registryauth.Credentials{Username: "seconduser", Password: "secondpassword"}}
+	bound := base.WithAuth(auth)
+	if bound.HTTP != base.HTTP {
+		t.Fatal("WithAuth did not share the HTTP client")
+	}
+	if _, _, err := bound.FetchManifest(ref); err != nil {
+		t.Fatalf("bound FetchManifest: %v", err)
+	}
+	if len(auth.hosts) != 1 {
+		t.Fatalf("bound source asked for %v, want one request", auth.hosts)
+	}
+	for _, h := range seen {
+		if h == first {
+			t.Fatal("bound client sent the base client's authorization")
+		}
+	}
+	if base.Auth == auth {
+		t.Fatal("WithAuth changed the base client's source")
+	}
+}
+
+func TestWithAuth_NilClientUsesDefaults(t *testing.T) {
+	auth := &staticAuth{}
+	c := (*Client)(nil).WithAuth(auth)
+	if c.HTTP == nil || c.Auth != auth {
+		t.Fatalf("WithAuth on nil = %+v, want default HTTP and the source", c)
+	}
+}

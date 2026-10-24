@@ -107,6 +107,19 @@ func NewClient() *Client {
 	}
 }
 
+// WithAuth returns a client that reads registry credentials from auth
+// and shares c's HTTP client. Its authorizations start empty, so that a
+// token c obtained with its own credentials is never sent for auth. A nil
+// c gives NewClient's HTTP client.
+func (c *Client) WithAuth(auth CredentialSource) *Client {
+	out := NewClient()
+	if c != nil && c.HTTP != nil {
+		out.HTTP = c.HTTP
+	}
+	out.Auth = auth
+	return out
+}
+
 // Manifest is a thin model of an OCI image manifest.
 type Manifest struct {
 	SchemaVersion int           `json:"schemaVersion"`
