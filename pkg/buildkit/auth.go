@@ -113,7 +113,7 @@ func (a *sessionAuth) registryToken(host string) (string, error) {
 }
 
 // credentials asks the credential source for host, and records its
-// first error for credentialError.
+// first error for withCredentialError.
 func (a *sessionAuth) credentials(host string) (registryauth.Credentials, error) {
 	c, err := a.creds.Credentials(host)
 	if err != nil {
