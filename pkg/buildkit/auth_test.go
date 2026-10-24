@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/ed25519"
 	"encoding/base64"
+	"errors"
 	"strings"
 	"testing"
 
@@ -118,3 +119,38 @@ func TestSessionAuth_RegistryTokenIsFetched(t *testing.T) {
 		t.Fatalf("Credentials = %v, %v; want no secret for a token-only host", creds, err)
 	}
 }
+
+func TestWithCredentialError_KeepsTheSourceErrorTyped(t *testing.T) {
+	sentinel := errors.New("synthetic credential source failure")
+	session := newSessionAuth(sentinelAuth{sentinel})
+	server, ok := session.(auth.AuthServer)
+	if !ok {
+		t.Fatal("session attachable is not an auth server")
+	}
+	if _, err := server.Credentials(context.Background(), &auth.CredentialsRequest{Host: "registry.example.test"}); !errors.Is(err, sentinel) {
+		t.Fatalf("Credentials err = %v, want the source error", err)
+	}
+	solve := errors.New("failed to solve: synthetic")
+	err := withCredentialError(solve, session)
+	if !errors.Is(err, sentinel) || !errors.Is(err, solve) || err.Error() != solve.Error() {
+		t.Fatalf("withCredentialError = %v, want the solve message wrapping both errors", err)
+	}
+}
+
+func TestWithCredentialError_KeepsOtherErrorsUnchanged(t *testing.T) {
+	session := newSessionAuth(registryTokenAuth{})
+	solve := errors.New("failed to solve: synthetic")
+	if err := withCredentialError(solve, session); err != solve {
+		t.Fatalf("withCredentialError = %v, want the solve error itself", err)
+	}
+	if err := withCredentialError(nil, session); err != nil {
+		t.Fatalf("withCredentialError(nil) = %v, want nil", err)
+	}
+}
+
+type sentinelAuth struct{ err error }
+
+func (a sentinelAuth) Credentials(string) (registryauth.Credentials, error) {
+	return registryauth.Credentials{}, a.err
+}
+func (a sentinelAuth) EngineAuth(string) (string, error) { return "", a.err }

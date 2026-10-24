@@ -176,13 +176,14 @@ func runSolve(ctx context.Context, opt SolveOptions, multi bool, localMounts map
 		return nil, fmt.Errorf("progress display: %w", err)
 	}
 
+	credentials := newSessionAuth(opt.RegistryAuth)
 	so := client.SolveOpt{
 		Exports:       plan.entries,
 		LocalMounts:   localMounts,
 		CacheImports:  cacheEntries(opt.CacheImports),
 		CacheExports:  cacheEntries(opt.CacheExports),
 		FrontendAttrs: opt.FrontendAttrs,
-		Session:       []session.Attachable{newSessionAuth(opt.RegistryAuth)},
+		Session:       []session.Attachable{credentials},
 	}
 
 	g, gctx := errgroup.WithContext(ctx)
@@ -205,6 +206,7 @@ func runSolve(ctx context.Context, opt SolveOptions, multi bool, localMounts map
 	if err == nil && plan.finish != nil {
 		err = plan.finish(ctx)
 	}
+	err = withCredentialError(err, credentials)
 	if err != nil {
 		if conn.Daemon && strings.Contains(err.Error(), `exporter "oci" could not be found`) {
 			return nil, fmt.Errorf("OCI export requires Docker's containerd image store or a separate BuildKit worker; the classic Docker image store does not support it: %w", err)

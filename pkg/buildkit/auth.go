@@ -45,8 +45,9 @@ type sessionAuth struct {
 	auth.UnimplementedAuthServer
 	creds RegistryAuth
 
-	mu   sync.Mutex
-	keys map[string]ed25519.PrivateKey // host -> token authority key
+	mu      sync.Mutex
+	keys    map[string]ed25519.PrivateKey // host -> token authority key
+	credErr error                         // the first credential source error
 }
 
 func newSessionAuth(creds RegistryAuth) session.Attachable {
@@ -58,7 +59,7 @@ func (a *sessionAuth) Register(server *grpc.Server) {
 }
 
 func (a *sessionAuth) Credentials(_ context.Context, req *auth.CredentialsRequest) (*auth.CredentialsResponse, error) {
-	c, err := a.creds.Credentials(req.Host)
+	c, err := a.credentials(req.Host)
 	if err != nil {
 		return nil, err
 	}
@@ -101,7 +102,7 @@ const registryTokenExpiry = 60
 // registryToken is host's static registry token. A host without one is
 // unimplemented, so that BuildKit uses Credentials instead.
 func (a *sessionAuth) registryToken(host string) (string, error) {
-	c, err := a.creds.Credentials(host)
+	c, err := a.credentials(host)
 	if err != nil {
 		return "", err
 	}
@@ -110,6 +111,45 @@ func (a *sessionAuth) registryToken(host string) (string, error) {
 	}
 	return c.RegistryToken, nil
 }
+
+// credentials asks the credential source for host, and records its
+// first error for credentialError.
+func (a *sessionAuth) credentials(host string) (registryauth.Credentials, error) {
+	c, err := a.creds.Credentials(host)
+	if err != nil {
+		a.mu.Lock()
+		if a.credErr == nil {
+			a.credErr = err
+		}
+		a.mu.Unlock()
+	}
+	return c, err
+}
+
+// withCredentialError returns a solve error that also wraps the first
+// error of the session's credential source. BuildKit receives that error
+// only as text over the session, so that callers could not match it with
+// errors.Is otherwise. The message stays the solve error's.
+func withCredentialError(err error, session session.Attachable) error {
+	a, ok := session.(*sessionAuth)
+	if err == nil || !ok {
+		return err
+	}
+	a.mu.Lock()
+	credErr := a.credErr
+	a.mu.Unlock()
+	if credErr == nil {
+		return err
+	}
+	return &credentialFailure{solve: err, cred: credErr}
+}
+
+// credentialFailure is the error of a failed solve whose session's
+// credential source also failed.
+type credentialFailure struct{ solve, cred error }
+
+func (e *credentialFailure) Error() string   { return e.solve.Error() }
+func (e *credentialFailure) Unwrap() []error { return []error{e.solve, e.cred} }
 
 // authority is the session's token authority key for a host with a
 // static registry token.
