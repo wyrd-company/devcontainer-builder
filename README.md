@@ -7,7 +7,7 @@ Docker Engine API. Every command writes one JSON result line to stdout, except
 help and a valid `exec` invocation.
 
 Documentation is at [wyrd.foo/docs/dcb](https://wyrd.foo/docs/dcb), published
-from [`docs/`](docs).
+from [`docs/user/`](docs/user).
 
 ## Install
 

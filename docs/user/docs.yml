@@ -1,0 +1,73 @@
+# ---
+# relationships:
+#   publishes-to: wyrd-foo
+#   references: [ README, install, overview, usage, configuration, library ]
+# ---
+schemaVersion: 1
+assets:
+  - assets/up-exec-down.png
+products:
+  dcb:
+    name: dcb
+    version: 0.1.0
+    docs-version: 0.1.0
+    tagline: Build and run development containers from devcontainer.json.
+    blurb: >-
+      A single Go binary that builds devcontainer images on Docker's built-in
+      BuildKit and creates, starts, and runs lifecycle commands in development
+      containers through the Docker Engine API. Commands write one JSON result
+      line, so scripts and agents can read the outcome.
+    status: preview
+    category: Dev Containers
+    order: 9
+    # DRAFT highlights, pending the approved text from the highlights task.
+    highlights:
+      - >-
+        Reads the same devcontainer.json as the Dev Container CLI and installs
+        the same OCI features.
+      - >-
+        One static binary: no Node.js and no docker command, only a reachable
+        Docker Engine.
+      - >-
+        Builds on the daemon's built-in BuildKit, with each feature as a
+        separate cached step.
+      - >-
+        Every command writes one JSON result line, so scripts and agents read
+        the outcome without parsing logs.
+      - >-
+        Creates containers that carry the upstream labels, so upstream tools
+        and editors find them.
+    media:
+      - src: assets/up-exec-down.png
+        caption: Bring up a container, run a command in it and remove it.
+        alt: >-
+          Terminal output of dcb up, dcb exec and dcb down, each ending in a
+          JSON result line.
+    kinds:
+      - kind: cli
+        install:
+          - method: homebrew
+            os:
+              - macos
+              - linux
+            default: true
+            command: brew install wyrd-company/tools/dcb
+          - method: npm
+            os:
+              - macos
+              - linux
+            command: npm install --global @wyrd-company/dcb
+          - method: apt
+            os:
+              - linux
+            label: Debian, Ubuntu
+            command: sudo apt install dcb
+          - method: rpm
+            os:
+              - linux
+            label: Fedora, RHEL
+            command: sudo dnf install dcb
+          - method: aur
+            os:
+              - linux
+            command: paru -S dcb-bin

@@ -32,7 +32,7 @@ func TestDocumentedCommandsExist(t *testing.T) {
 	root := (&application{}).command()
 	initHelp(root)
 
-	files, err := filepath.Glob("../../docs/*.md")
+	files, err := filepath.Glob("../../docs/user/*.md")
 	if err != nil {
 		t.Fatal(err)
 	}
