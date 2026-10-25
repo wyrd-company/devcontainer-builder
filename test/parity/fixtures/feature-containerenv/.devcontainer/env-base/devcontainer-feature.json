@@ -1,0 +1,9 @@
+{
+  "id": "env-base",
+  "version": "1.0.0",
+  "name": "Environment base",
+  "containerEnv": {
+    "SAMPLE_ROOT": "/opt/sample",
+    "PATH": "/opt/sample/bin:${PATH}"
+  }
+}

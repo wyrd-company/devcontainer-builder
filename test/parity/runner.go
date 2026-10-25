@@ -44,6 +44,10 @@ var fixtures = []Fixture{
 	{"dockerfile-context-config-dir", "dockerfile-context/config-dir", ".devcontainer/devcontainer.json", contextMarkers, nil, nil, "test/parity/fixtures"},
 	{"dockerfile-context-parent-dir", "dockerfile-context/parent-dir", ".devcontainer/devcontainer.json", contextMarkers, nil, nil, "test/parity/fixtures"},
 	{"dockerfile-context-subdir", "dockerfile-context/subdir", ".devcontainer/devcontainer.json", contextMarkers, nil, nil, "test/parity/fixtures"},
+	// Two local features whose containerEnv reads the base PATH, the other
+	// feature, earlier keys of its own, an unset name and a default. The
+	// marker records what the second feature's install step saw.
+	{"feature-containerenv", "feature-containerenv", ".devcontainer/devcontainer.json", []string{"/sample-install-env.txt"}, nil, nil, "test/parity/fixtures"},
 }
 
 // composeLabelsFile is appended to a Compose configuration's files, so that

@@ -1,0 +1,12 @@
+{
+  "id": "env-chain",
+  "version": "1.0.0",
+  "name": "Environment chain",
+  "containerEnv": {
+    "ZZ_HOME": "${SAMPLE_ROOT}/zz",
+    "AA_BIN": "${ZZ_HOME}/bin",
+    "MM_UNSET": "[${SAMPLE_UNSET}]",
+    "QQ_DEFAULT": "${SAMPLE_UNSET:-fallback}",
+    "QUOTED": "say \"hi\" \\ back"
+  }
+}
