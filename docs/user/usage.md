@@ -652,6 +652,11 @@ newlines belong to the path. Gitfiles larger than 1 MiB give no Git root.
 Repository admission checks the first 255 bytes of `HEAD` for a `ref:` target
 starting with `refs/` or a 40-digit hexadecimal object ID. A symbolic-link
 `HEAD` must point to a path starting with `refs/`; its target need not exist.
+A `commondir` pointer selects the common folder whose `objects` and `refs`
+paths must pass Git's executable-access check. Relative pointers start at the
+administrative folder; final CR and LF bytes are removed. A failed pointer read
+or path resolution ends discovery. A resolved folder without those signatures
+is not a repository; parent discovery can continue past a `.git` directory.
 The common-folder mount option reads pointer lines separately, as upstream does.
 Relative values start at the workspace folder. A valid `GIT_DIR` selects the
 workspace folder without parent discovery; `GIT_WORK_TREE` can select its working
