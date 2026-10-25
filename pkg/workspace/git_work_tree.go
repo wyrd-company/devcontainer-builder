@@ -8,7 +8,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"syscall"
 	"unicode"
 )
 
@@ -18,8 +17,9 @@ import (
 // and GitRoot applies it. core.bare leaves no working tree, and the upstream
 // CLI resolves the empty cdup to the caller folder. Otherwise core.worktree
 // selects the working tree. Rejected config, or a core.worktree that Git cannot
-// resolve, is fatal.
-func gitSelectedRoot(root, dir, folder string) string {
+// resolve, is fatal. gitdir gives the repository folder that Git changes to
+// before a relative core.worktree.
+func gitSelectedRoot(root, dir, folder string, gitdir func() (string, error)) string {
 	bare, workTree, err := gitRepositoryFormat(dir, folder)
 	if err != nil {
 		return ""
@@ -31,16 +31,17 @@ func gitSelectedRoot(root, dir, folder string) string {
 	case bare:
 		return filepath.Clean(folder)
 	case workTree != nil:
-		return gitConfigWorkTreeRoot(dir, *workTree, folder)
+		return gitConfigWorkTreeRoot(gitdir, *workTree, folder)
 	}
 	return root
 }
 
-// gitConfigWorkTreeRoot resolves a core.worktree value for repository dir.
-// Git resolves an absolute value as it does GIT_WORK_TREE. For a relative
-// value it changes to dir and then to the value, so the value must name an
-// accessible folder, and reads the physical cwd. An empty value fails.
-func gitConfigWorkTreeRoot(dir, value, folder string) string {
+// gitConfigWorkTreeRoot resolves a core.worktree value. Git resolves an
+// absolute value as it does GIT_WORK_TREE. For a relative value it changes to
+// the repository folder that gitdir gives and then to the value, so the value
+// must name an accessible folder, and reads the physical cwd. An empty value
+// fails.
+func gitConfigWorkTreeRoot(gitdir func() (string, error), value, folder string) string {
 	physical, err := gitPhysicalPath(folder)
 	if err != nil {
 		return ""
@@ -49,7 +50,7 @@ func gitConfigWorkTreeRoot(dir, value, folder string) string {
 	if filepath.IsAbs(value) {
 		workTree, err = gitCeilingPath(value)
 	} else {
-		workTree, err = gitChdirPath(dir, value)
+		workTree, err = gitChdirPath(gitdir, value)
 	}
 	if err != nil {
 		return ""
@@ -57,24 +58,40 @@ func gitConfigWorkTreeRoot(dir, value, folder string) string {
 	return gitWorkTreeRoot(folder, physical, workTree)
 }
 
-// gitChdirPath returns the physical folder that chdir(dir) then chdir(value)
-// selects. The kernel resolves symbolic links before .. components.
-func gitChdirPath(dir, value string) (string, error) {
+// gitChdirPath returns the physical folder that chdir(gitdir) then
+// chdir(value) selects.
+func gitChdirPath(gitdir func() (string, error), value string) (string, error) {
 	if value == "" {
 		return "", fs.ErrNotExist
 	}
-	path := dir + string(os.PathSeparator) + value
-	info, err := os.Stat(path)
+	dir, err := gitdir()
 	if err != nil {
 		return "", err
 	}
-	if !info.IsDir() {
-		return "", syscall.ENOTDIR
+	return gitChdir(dir, value)
+}
+
+// gitChdirDir gives dir, which Git changes to as named.
+func gitChdirDir(dir string) func() (string, error) {
+	return func() (string, error) { return dir, nil }
+}
+
+// gitRealpathDir returns the folder that Git's realpath gives for path, as
+// Git resolves a gitfile target or a .git folder found above the caller
+// folder before it changes to it. A non-empty parent is the folder whose
+// physical path, Git's cwd, a relative path starts from. That realpath has
+// its own symbolic link limit and fails on a missing intermediate component.
+func gitRealpathDir(parent, path string) func() (string, error) {
+	return func() (string, error) {
+		if parent == "" {
+			return gitCeilingPath(path)
+		}
+		cwd, err := gitPhysicalPath(parent)
+		if err != nil {
+			return "", err
+		}
+		return gitCeilingPath(cwd + string(os.PathSeparator) + path)
 	}
-	if err := syscall.Access(path, 1); err != nil {
-		return "", err
-	}
-	return gitPhysicalPath(path)
 }
 
 // gitPhysicalPath returns the absolute physical path of folder, which Git
