@@ -34,7 +34,10 @@ func TestGitfileFormatMatchesGit(t *testing.T) {
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("init unusual: %s: %v", out, err)
 	}
-	unusual = filepath.Join(unusual, ".git")
+	if err := os.Rename(filepath.Join(unusual, ".git"), unusual+" admin "); err != nil {
+		t.Fatal(err)
+	}
+	unusual += " admin "
 	for _, tc := range []struct {
 		name, content string
 		valid         bool
@@ -45,7 +48,7 @@ func TestGitfileFormatMatchesGit(t *testing.T) {
 		{"crlf", "gitdir: " + gitdir + "\r\n", true},
 		{"multiple-final-newlines", "gitdir: " + gitdir + "\n\r\n", true},
 		{"interior-newline-path", "gitdir: " + unusual + "\n", true},
-		{"relative-leading-whitespace-path", "gitdir: ../../../ admin\t\nfolder /.git\n", true},
+		{"relative-leading-whitespace-path", "gitdir: ../../../ admin\t\nfolder  admin \n", true},
 		{"nul-terminated-path", "gitdir: " + gitdir + "\x00ignored\n", true},
 		{"size-at-limit", "gitdir: " + gitdir + strings.Repeat("\n", (1<<20)-8-len(gitdir)), true},
 		{"size-over-limit", "gitdir: " + gitdir + strings.Repeat("\n", (1<<20)+1-8-len(gitdir)), false},
