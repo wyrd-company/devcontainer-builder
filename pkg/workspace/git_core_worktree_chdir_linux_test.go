@@ -20,6 +20,7 @@ func TestGitRootCoreWorktreeChdirLimits(t *testing.T) {
 	}{
 		// Each chdir has its own limit, though the two chains exceed one.
 		{coreWorktreeChain{"discovered", 20, 25}, true},
+		{coreWorktreeChain{"discovered-top", 20, 25}, true},
 		{coreWorktreeChain{"explicit", 20, 25}, true},
 		{coreWorktreeChain{"gitfile", 20, 25}, true},
 		{coreWorktreeChain{"discovered", 1, 40}, true},
