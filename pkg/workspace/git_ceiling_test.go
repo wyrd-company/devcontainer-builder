@@ -27,6 +27,10 @@ func TestGitRootCeilingsMatchesGit(t *testing.T) {
 	if err := os.Symlink(app, alias); err != nil {
 		t.Fatal(err)
 	}
+	deepAlias := filepath.Join(base, "deep-alias")
+	if err := os.Symlink(sub, deepAlias); err != nil {
+		t.Fatal(err)
+	}
 	sep := string(os.PathListSeparator)
 	for _, tc := range []struct{ name, folder, ceiling string }{
 		{"ancestor", sub, app},
@@ -41,6 +45,14 @@ func TestGitRootCeilingsMatchesGit(t *testing.T) {
 		{"empty disables symlink resolution", sub, sep + alias},
 		{"empty retains literal ancestor", sub, sep + app},
 		{"trailing slash", sub, app + string(os.PathSeparator)},
+		{"symlink parent", sub, deepAlias + "/.."},
+		{"missing parent", sub, app + "/missing/.."},
+		{"literal dot", sub, sep + app + "/."},
+		{"literal parent", sub, sep + app + "/.."},
+		{"literal double slash", sub, sep + app + "//"},
+		{"literal trailing slash", sub, sep + app + "/"},
+		{"root ceiling", sub, string(os.PathSeparator)},
+		{"literal root ceiling", sub, sep + string(os.PathSeparator)},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Setenv("GIT_CEILING_DIRECTORIES", tc.ceiling)
@@ -70,5 +82,30 @@ func TestResolveGitCeiling(t *testing.T) {
 	got, err := Resolve(sub, false, false, Options{MountGitRoot: true, Platform: "linux"})
 	if err != nil || got.WorkspaceMount == nil || got.WorkspaceMount.Source != sub || got.WorkspaceFolder != "/workspaces/src" {
 		t.Fatalf("Resolve = %+v, mount %+v, %v", got, got.WorkspaceMount, err)
+	}
+}
+
+func TestResolveGitCeilingPathComponents(t *testing.T) {
+	base := t.TempDir()
+	repo := filepath.Join(base, "repo")
+	makeRepo(t, repo)
+	app := mkdir(t, filepath.Join(repo, "app"))
+	sub := mkdir(t, filepath.Join(app, "src"))
+	alias := filepath.Join(base, "alias")
+	if err := os.Symlink(sub, alias); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct{ name, ceiling, source string }{
+		{"symlink parent", alias + "/..", sub},
+		{"missing parent", app + "/missing/..", repo},
+		{"literal dot", string(os.PathListSeparator) + app + "/.", repo},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("GIT_CEILING_DIRECTORIES", tc.ceiling)
+			got, err := Resolve(sub, false, false, Options{MountGitRoot: true, Platform: "linux"})
+			if err != nil || got.WorkspaceMount == nil || got.WorkspaceMount.Source != tc.source {
+				t.Fatalf("Resolve=%+v mount=%+v err=%v; source want %q", got, got.WorkspaceMount, err, tc.source)
+			}
+		})
 	}
 }
