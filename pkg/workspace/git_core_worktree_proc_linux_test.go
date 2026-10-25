@@ -148,10 +148,15 @@ func TestGitRootCoreWorktreeWithoutProc(t *testing.T) {
 	requirePassedWithout(t, out, append(coreWorktreeLimits, "TestGitRootCoreWorktreeIntermediatePathMax/passes"))
 }
 
-// Where threads cannot have their own working folders, as under a seccomp
-// profile that blocks unshare, /proc names the folder.
+// Under a seccomp profile that blocks unshare, /proc names the folder.
 func TestGitRootCoreWorktreeWithoutThread(t *testing.T) {
 	out := runWithout(t, "thread", coreWorktreeRun, "")
+	requirePassedWithout(t, out, append(coreWorktreeLimits, "TestGitRootCoreWorktreeIntermediatePathMax/passes"))
+}
+
+// Where seccomp blocks both kinds of thread, /proc names the folder.
+func TestGitRootCoreWorktreeWithoutThreads(t *testing.T) {
+	out := runWithout(t, "thread clone", coreWorktreeRun, "")
 	requirePassedWithout(t, out, append(coreWorktreeLimits, "TestGitRootCoreWorktreeIntermediatePathMax/passes"))
 }
 
@@ -159,6 +164,13 @@ func TestGitRootCoreWorktreeWithoutThread(t *testing.T) {
 // created with its own working folder names the folder.
 func TestGitRootCoreWorktreeWithoutProcOrThread(t *testing.T) {
 	out := runWithout(t, "proc thread", coreWorktreeRun, "")
+	requirePassedWithout(t, out, append(coreWorktreeLimits, "TestGitRootCoreWorktreeIntermediatePathMax/passes"))
+}
+
+// Without /proc, where seccomp blocks a new thread with its own working
+// folder, a thread that unshares its working folder names the folder.
+func TestGitRootCoreWorktreeWithoutProcOrClone(t *testing.T) {
+	out := runWithout(t, "proc clone", coreWorktreeRun, "")
 	requirePassedWithout(t, out, append(coreWorktreeLimits, "TestGitRootCoreWorktreeIntermediatePathMax/passes"))
 }
 
