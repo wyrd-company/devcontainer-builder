@@ -686,8 +686,14 @@ Otherwise `core.worktree` selects the working tree, with the same version and
 common-config rules; `GIT_WORK_TREE` and a true `core.bare` take precedence. An
 absolute value is resolved as `GIT_WORK_TREE` is. A relative value starts at
 the repository folder and must name an existing, accessible folder; its
-symbolic links are resolved before `..` components. An empty value or one that
-Git cannot resolve gives no Git root. Inside that working tree, the Git root
+symbolic links are resolved before `..` components. Git changes to the
+repository folder first, so the folder and the value are separate lookups, each
+with its own symbolic link and path length limits. A `.git` folder above the
+workspace folder and a gitfile target first pass through Git's own path
+resolution, which allows 33 symbolic links. On hosts other than Linux, the
+repository folder's physical path joined with the value must fit the host's
+path length limit. An empty value or one that Git cannot resolve gives no Git
+root. Inside that working tree, the Git root
 keeps the workspace folder's path; outside it, the Git root is the working
 tree's physical path. Includes, other config keys and extensions outside Git's
 version 0 set are not interpreted.
