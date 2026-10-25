@@ -660,7 +660,10 @@ is not a repository; parent discovery can continue past a `.git` directory.
 `GIT_OBJECT_DIRECTORY` replaces the `objects` signature path during admission.
 Relative values start at the workspace folder and retain physical path traversal.
 An empty or inaccessible value fails admission; `refs` is still checked in the
-common folder. The common-folder mount option reads pointer lines separately,
+common folder. `GIT_COMMON_DIR` replaces the `commondir` pointer, which is then
+not read. Relative values start at the workspace folder and retain physical
+path traversal; an empty value checks `/objects` and `/refs`, as Git does.
+The common-folder mount option reads pointer lines separately,
 as upstream does.
 Relative values start at the workspace folder. A valid `GIT_DIR` selects the
 workspace folder without parent discovery; `GIT_WORK_TREE` can select its working
