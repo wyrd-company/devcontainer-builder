@@ -682,11 +682,18 @@ with `0b`, with an optional `k`, `m` or `g` unit. When
 `core.repositoryformatversion` is 0 or 1, a true `core.bare` leaves a discovered
 repository without a working tree, and the workspace folder is the Git root. A
 linked worktree and `GIT_COMMON_DIR` ignore `core.bare` in the common config.
-Includes, other config keys and extensions outside Git's version 0 set are not
-interpreted.
+Otherwise `core.worktree` selects the working tree, with the same version and
+common-config rules; `GIT_WORK_TREE` and a true `core.bare` take precedence. An
+absolute value is resolved as `GIT_WORK_TREE` is. A relative value starts at
+the repository folder and must name an existing, accessible folder; its
+symbolic links are resolved before `..` components. An empty value or one that
+Git cannot resolve gives no Git root. Inside that working tree, the Git root
+keeps the workspace folder's path; outside it, the Git root is the working
+tree's physical path. Includes, other config keys and extensions outside Git's
+version 0 set are not interpreted.
 Relative values start at the workspace folder. A valid `GIT_DIR` selects the
-workspace folder without parent discovery; `GIT_WORK_TREE` can select its working
-tree. The `core.worktree` setting is not interpreted. Other Git
+workspace folder without parent discovery; `GIT_WORK_TREE` or the repository
+config can select its working tree. Other Git
 environment overrides
 and ownership checks are not applied. `exec`, `run-user-commands`, `set-up`,
 and an `up` that
