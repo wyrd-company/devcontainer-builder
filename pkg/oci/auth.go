@@ -42,6 +42,7 @@ func (c *Client) do(req *http.Request, ref Reference) (*http.Response, error) {
 			return nil, fmt.Errorf("registry %s redirected to another origin that requires authentication; the registry's credentials are not sent there", ref.Registry)
 		}
 		creds, credErr := c.credentials(ref)
+		c.recordAnonymous(ref, credErr)
 		h, aerr := c.authorize(ref, challenge, creds)
 		if aerr != nil {
 			return nil, withCredentialError(aerr, credErr)
@@ -74,11 +75,41 @@ func (c *Client) credentials(ref Reference) (registryauth.Credentials, error) {
 	return creds, nil
 }
 
+// recordAnonymous keeps credErr as the reason that ref's registry is
+// accessed anonymously, or forgets the reason once credentials are read.
+func (c *Client) recordAnonymous(ref Reference, credErr error) {
+	if c.anonymous == nil {
+		c.anonymous = map[string]error{}
+	}
+	if credErr == nil {
+		delete(c.anonymous, ref.Registry)
+		return
+	}
+	c.anonymous[ref.Registry] = credErr
+}
+
+// refused returns err, a registry's refusal of a request, wrapping the
+// credential source error that made the client access that registry
+// anonymously, if any. The message stays err's.
+func (c *Client) refused(ref Reference, err error) error {
+	if credErr := c.anonymous[ref.Registry]; credErr != nil {
+		return &anonymousRefusal{err: err, cred: credErr}
+	}
+	return err
+}
+
+// anonymousRefusal is a registry's refusal of a request that the client
+// sent anonymously because the registry's credentials could not be read.
+type anonymousRefusal struct{ err, cred error }
+
+func (e *anonymousRefusal) Error() string   { return e.err.Error() }
+func (e *anonymousRefusal) Unwrap() []error { return []error{e.err, e.cred} }
+
 func withCredentialError(err, credErr error) error {
 	if credErr == nil {
 		return err
 	}
-	return fmt.Errorf("%w (%v)", err, credErr)
+	return fmt.Errorf("%w (%w)", err, credErr)
 }
 
 // authorize answers a registry's WWW-Authenticate challenge with an

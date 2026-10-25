@@ -7,6 +7,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -103,3 +104,15 @@ func TestInspectConfig(t *testing.T) {
 type testAuth struct{}
 
 func (testAuth) EngineAuth(string) (string, error) { return "test-auth", nil }
+
+func TestPull_KeepsTheCredentialErrorTyped(t *testing.T) {
+	sentinel := errors.New("synthetic credential source failure")
+	err := Pull(context.Background(), nil, "registry.example.test/team/app:1", failingEngineAuth{sentinel}, nil)
+	if !errors.Is(err, sentinel) {
+		t.Fatalf("Pull: err = %v, want the credential source's error", err)
+	}
+}
+
+type failingEngineAuth struct{ err error }
+
+func (a failingEngineAuth) EngineAuth(string) (string, error) { return "", a.err }

@@ -5,6 +5,8 @@
 // configuration, as the docker CLI does: static "auths" entries in
 // config.json, and the credential-helper protocol
 // (docker-credential-<name> get) for "credsStore" and "credHelpers".
+// NewWithoutHelpers reads the same configuration without running a helper,
+// and Static holds credentials that the caller supplies.
 //
 // Credentials are read on demand and held in memory only. A credential
 // helper's output never reaches the process output or an error, so that a
@@ -12,6 +14,7 @@
 package registryauth
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -50,6 +53,9 @@ func (c Credentials) Anonymous() bool {
 // anonymous for every registry.
 type Store struct {
 	dir string
+	// noHelpers makes a host that a credential helper answers fail with
+	// ErrHelpersDisabled instead of running the helper.
+	noHelpers bool
 
 	once sync.Once
 	file *configfile.ConfigFile
@@ -72,6 +78,21 @@ func New(dir string) *Store {
 	return &Store{dir: dir, cache: map[string]Credentials{}}
 }
 
+// NewWithoutHelpers returns a Store like New that never runs a credential
+// helper. It reads DOCKER_AUTH_CONFIG and the static auths of config.json.
+// A host that credHelpers or credsStore assigns to a helper fails with
+// ErrHelpersDisabled, as a failing helper fails: its static auths entry, if
+// any, is not used, because the docker CLI would not use it either.
+func NewWithoutHelpers(dir string) *Store {
+	s := New(dir)
+	s.noHelpers = true
+	return s
+}
+
+// ErrHelpersDisabled is the error for a host whose credentials a
+// credential helper answers, from a Store that runs no helpers.
+var ErrHelpersDisabled = errors.New("credential helpers are disabled")
+
 // Credentials returns the credentials for the registry host (for
 // example "ghcr.io", "127.0.0.1:5000" or "registry-1.docker.io"). A host
 // with no configured credentials is anonymous.
@@ -89,7 +110,7 @@ func (s *Store) Credentials(host string) (Credentials, error) {
 	if err != nil {
 		return Credentials{}, err
 	}
-	c, err := lookup(file, key)
+	c, err := lookup(file, key, !s.noHelpers)
 	if err != nil {
 		return Credentials{}, fmt.Errorf("registry credentials for %s: %w", host, err)
 	}
@@ -99,8 +120,9 @@ func (s *Store) Credentials(host string) (Credentials, error) {
 
 // lookup resolves key as the docker CLI does: DOCKER_AUTH_CONFIG first;
 // then the credential helper that credHelpers or credsStore names, which
-// alone answers when one is configured; otherwise the static auths.
-func lookup(file *configfile.ConfigFile, key string) (Credentials, error) {
+// alone answers when one is configured; otherwise the static auths. When
+// helpers is false, a key a helper answers fails with ErrHelpersDisabled.
+func lookup(file *configfile.ConfigFile, key string, helpers bool) (Credentials, error) {
 	if env := os.Getenv(envAuthConfig); env != "" {
 		envFile := configfile.New("")
 		if err := envFile.LoadFromReader(strings.NewReader(env)); err != nil {
@@ -111,6 +133,9 @@ func lookup(file *configfile.ConfigFile, key string) (Credentials, error) {
 		}
 	}
 	if helper := helperFor(file, key); helper != "" {
+		if !helpers {
+			return Credentials{}, ErrHelpersDisabled
+		}
 		return helperCredentials(helper, key)
 	}
 	return staticCredentials(file, key), nil
@@ -141,12 +166,18 @@ func helperFor(file *configfile.ConfigFile, key string) string {
 // EngineAuth returns the X-Registry-Auth value for an Engine API pull or
 // push of the image ref, or "" when its registry has no credentials.
 func (s *Store) EngineAuth(ref string) (string, error) {
+	return engineAuth(s.Credentials, ref)
+}
+
+// engineAuth encodes the credentials that lookup gives for ref's registry
+// as an X-Registry-Auth value, or "" when they are anonymous.
+func engineAuth(lookup func(host string) (Credentials, error), ref string) (string, error) {
 	named, err := reference.ParseNormalizedNamed(ref)
 	if err != nil {
 		return "", fmt.Errorf("registry credentials for %s: %w", ref, err)
 	}
 	host := reference.Domain(named)
-	c, err := s.Credentials(host)
+	c, err := lookup(host)
 	if err != nil || c.Anonymous() {
 		return "", err
 	}
@@ -188,9 +219,10 @@ func environmentDir() string {
 
 // configKey is the config.json key the docker CLI uses for host.
 func configKey(host string) string {
-	switch host {
-	case "docker.io", "index.docker.io", "registry-1.docker.io", dockerHubKey:
-		return dockerHubKey
+	for _, alias := range dockerHubHosts {
+		if host == alias {
+			return dockerHubKey
+		}
 	}
 	return host
 }

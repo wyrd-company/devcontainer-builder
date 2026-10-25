@@ -93,6 +93,9 @@ type Client struct {
 	// accessed anonymously.
 	Auth          CredentialSource
 	authorization map[string]string // registry-host -> Authorization header
+	// anonymous holds, per registry host, the credential source error that
+	// made the client continue anonymously, for its later refusals.
+	anonymous map[string]error
 }
 
 // NewClient constructs a Client using sensible defaults. It reads
@@ -105,6 +108,19 @@ func NewClient() *Client {
 		Auth:          registryauth.FromEnvironment(),
 		authorization: map[string]string{},
 	}
+}
+
+// WithAuth returns a client that reads registry credentials from auth
+// and shares c's HTTP client. Its authorizations start empty, so that a
+// token c obtained with its own credentials is never sent for auth. A nil
+// c gives NewClient's HTTP client.
+func (c *Client) WithAuth(auth CredentialSource) *Client {
+	out := NewClient()
+	if c != nil && c.HTTP != nil {
+		out.HTTP = c.HTTP
+	}
+	out.Auth = auth
+	return out
 }
 
 // Manifest is a thin model of an OCI image manifest.
@@ -229,7 +245,7 @@ func (c *Client) fetchManifest(ref Reference, name string, depth int, choose chi
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return nil, nil, fmt.Errorf("manifest %s: %s", name, statusText(resp.StatusCode))
+		return nil, nil, c.refused(ref, fmt.Errorf("manifest %s: %s", name, statusText(resp.StatusCode)))
 	}
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -297,7 +313,7 @@ func (c *Client) FetchBlob(ref Reference, digest string, w io.Writer) error {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("blob of %s: %s", ref, statusText(resp.StatusCode))
+		return c.refused(ref, fmt.Errorf("blob of %s: %s", ref, statusText(resp.StatusCode)))
 	}
 	hasher := sha256.New()
 	body := &readErrRecorder{r: resp.Body}

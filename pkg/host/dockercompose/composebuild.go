@@ -42,6 +42,10 @@ type BuildServiceImagesInputs struct {
 	NoCache bool
 	// Pull always re-pulls referenced images.
 	Pull bool
+	// RegistryAuth supplies the registry credentials of every service
+	// build. When nil, BuildKit reads the docker CLI's configuration
+	// (registryauth.FromEnvironment).
+	RegistryAuth buildkit.RegistryAuth
 	// Progress one of "auto" | "plain" | "tty" | "rawjson".
 	Progress string
 	// Stdout / Stderr receive build output. nil means os.Stdout /
@@ -234,6 +238,7 @@ func serviceBuild(
 		CacheExports: buildkit.ParseCacheRefs(bc.CacheTo),
 		NoCache:      in.NoCache || bc.NoCache,
 		Pull:         in.Pull || bc.Pull,
+		RegistryAuth: in.RegistryAuth,
 		Progress:     in.Progress,
 		Stdout:       in.Stdout,
 		Stderr:       in.Stderr,
