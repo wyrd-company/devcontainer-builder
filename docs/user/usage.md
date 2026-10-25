@@ -649,6 +649,7 @@ invalid gitfile target, gives no Git root; parent discovery does not replace it.
 Gitfiles must start with literal `gitdir:` followed by one space and a repository
 path. Only final CR and LF bytes are removed; other whitespace and interior
 newlines belong to the path. Gitfiles larger than 1 MiB give no Git root.
+The common-folder mount option reads pointer lines separately, as upstream does.
 Relative values start at the workspace folder. A valid `GIT_DIR` selects the
 workspace folder without parent discovery; `GIT_WORK_TREE` can select its working
 tree. Repository config, including `core.worktree`, is not interpreted. Other Git
