@@ -24,8 +24,41 @@ var gitdirLine = regexp.MustCompile(`(?m)^gitdir:\s*(.+)$`)
 // repository, and otherwise ends discovery, as Git refuses an invalid gitfile.
 // GIT_CEILING_DIRECTORIES limits parent discovery as in Git. GIT_WORK_TREE
 // selects the working tree after repository discovery. Other environment
-// overrides and Git's ownership check are not applied.
+// overrides and Git's ownership check are not applied, except that a GIT_DIR
+// value without a repository stops discovery instead of falling back to parents.
 func GitRoot(folder string) (string, error) {
+	if dir, set := os.LookupEnv("GIT_DIR"); set {
+		if dir == "" {
+			return "", nil
+		}
+		if !filepath.IsAbs(dir) {
+			// Resolve relative to the probe cwd, without cleaning symlink/..
+			// components before the filesystem has followed them.
+			dir = folder + string(os.PathSeparator) + dir
+		}
+		var err error
+		dir, err = gitCeilingPath(dir)
+		if err != nil {
+			return "", nil
+		}
+		if info, err := os.Stat(dir); err == nil && !info.IsDir() {
+			// GIT_DIR can name a gitfile, whose target is relative to it.
+			target, err := gitfilePointer(dir)
+			if err != nil || target == "" {
+				return "", nil
+			}
+			if !filepath.IsAbs(target) {
+				target = filepath.Dir(dir) + string(os.PathSeparator) + target
+			}
+			dir, err = gitCeilingPath(target)
+			if err != nil {
+				return "", nil
+			}
+		}
+		if dir == "" || !isGitDir(dir) {
+			return "", nil
+		}
+	}
 	root, err := discoverGitRoot(folder)
 	if err != nil || root == "" {
 		return root, err
