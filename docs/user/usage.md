@@ -691,10 +691,12 @@ repository folder first, so the folder and the value are separate lookups, each
 with its own symbolic link and path length limits. A `.git` folder above the
 workspace folder and a gitfile target first pass through Git's own path
 resolution, which allows 33 symbolic links. On Linux, the selected folder is
-named from `/proc`, or without it by a thread with its own working folder. A
-Linux process that has neither, such as one without `/proc` under a seccomp
-profile that blocks `unshare`, resolves the joined repository folder and value,
-so each folder the value passes must have a physical path within `PATH_MAX`.
+named from `/proc`, or without it by a thread with its own working folder: one
+that unshares its working folder or, where a seccomp profile blocks `unshare`
+as Docker's default profile does, on `amd64` and `arm64` one created without
+sharing it. A Linux process without `/proc` whose seccomp profile blocks both
+resolves the joined repository folder and value, so each folder the value
+passes must have a physical path within `PATH_MAX`.
 Builds for hosts other than Linux and macOS instead join the repository
 folder's physical path and the value, which must fit the host's path length
 limit. An empty value or one that Git cannot resolve gives no Git
