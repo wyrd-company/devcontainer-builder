@@ -37,7 +37,13 @@ func TestGitRootRepositoryFormatMatchesGit(t *testing.T) {
 		{"bare-word-case", v0 + "\tbare = YeS\n", ""},
 		{"bare-integer", v0 + "\tbare = -1\n", ""},
 		{"bare-unit", v0 + "\tbare = 1k\n", ""},
+		{"bare-unit-m", v0 + "\tbare = 2m\n", ""},
+		{"bare-unit-g", v0 + "\tbare = 1G\n", ""},
 		{"bare-zero", v0 + "\tbare = 0x0\n", ""},
+		{"bare-binary", v0 + "\tbare = 0b1\n", ""},
+		{"bare-binary-signed", v0 + "\tbare = -0B1\n", ""},
+		{"bare-binary-zero", v0 + "\tbare = 0b0\n", ""},
+		{"bare-binary-max", v0 + "\tbare = 0b" + strings.Repeat("1", 31) + "\n", ""},
 		{"bare-quoted", v0 + "\tbare = \"true\"\n", ""},
 		{"bare-comment", v0 + "\tbare = true ; note\n", ""},
 		{"bare-trailing-space", v0 + "\tbare = off \t\n", ""},
@@ -57,6 +63,8 @@ func TestGitRootRepositoryFormatMatchesGit(t *testing.T) {
 		{"bare-work-tree-env", v0 + "\tbare = true\n", ""},
 		{"version-padded", "[core]\n\trepositoryformatversion = \\t+1\n\tbare = true\n", ""},
 		{"version-hex", "[core]\n\trepositoryformatversion = 0x1\n\tbare = true\n", ""},
+		{"version-binary", "[core]\n\trepositoryformatversion = 0b1\n", ""},
+		{"version-binary-unit", "[core]\n\trepositoryformatversion = 0b1k\n", ""},
 		{"version-2", "[core]\n\trepositoryformatversion = 2\n", ""},
 		{"version-octal", "[core]\n\trepositoryformatversion = 010\n", ""},
 		{"version-unit", "[core]\n\trepositoryformatversion = 1k\n", ""},
@@ -72,6 +80,9 @@ func TestGitRootRepositoryFormatMatchesGit(t *testing.T) {
 		{"bad-bare-range", v0 + "\tbare = 2147483648\n", ""},
 		{"bad-bare-octal", v0 + "\tbare = 08\n", ""},
 		{"bad-bare-sign", v0 + "\tbare = +\n", ""},
+		{"bad-bare-binary-prefix", v0 + "\tbare = 0b\n", ""},
+		{"bad-bare-binary-digit", v0 + "\tbare = 0b2\n", ""},
+		{"bad-bare-binary-range", v0 + "\tbare = 0b1" + strings.Repeat("0", 31) + "\n", ""},
 		{"worktree-no-value", v0 + "\tworktree\n", ""},
 		{"extension-worktree-config", v0 + "[extensions]\n\tworktreeConfig = maybe\n", ""},
 		{"extension-precious-objects", v0 + "[extensions]\n\tpreciousObjects = maybe\n", ""},
@@ -102,9 +113,13 @@ func TestGitRootRepositoryFormatMatchesGit(t *testing.T) {
 		{"worktree-config-bad-bare", v1 + worktreeConfig, "[core]\n\tbare = maybe\n"},
 		{"worktree-config-directory", v1 + worktreeConfig, ""},
 	}
+	binary := gitReadsBinaryIntegers(git)
 	for _, route := range []string{"discovered", "gitfile", "explicit", "self", "linked", "common-env"} {
 		for _, c := range cases {
 			t.Run(c.name+"/"+route, func(t *testing.T) {
+				if strings.Contains(c.name, "binary") && !binary {
+					t.Skip("host Git reads no 0b integers; TestGitRootReadsBinaryIntegers covers them")
+				}
 				base := t.TempDir()
 				tree := filepath.Join(base, "tree")
 				env := testgit.Env()
@@ -220,5 +235,61 @@ func TestGitRootRepositoryFormatMatchesGit(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+// gitReadsBinaryIntegers reports whether the host Git reads 0b integers. Git
+// parses integers with the C library's strtoimax, which reads them in C23
+// mode, as in glibc 2.38 and later.
+func gitReadsBinaryIntegers(git string) bool {
+	cmd := exec.Command(git, "-c", "probe.value=0b1", "config", "--type=bool", "probe.value")
+	cmd.Env = testgit.Env()
+	out, err := cmd.Output()
+	return err == nil && strings.TrimSpace(string(out)) == "true"
+}
+
+// The format check reads integers as Git with a C23 C library does, whatever
+// the host Git reads.
+func TestGitRootReadsBinaryIntegers(t *testing.T) {
+	git, err := exec.LookPath("git")
+	if err != nil {
+		t.Skip("git unavailable")
+	}
+	cases := []struct{ name, config, root string }{
+		{"version", "[core]\n\trepositoryformatversion = 0b1\n", "tree"},
+		{"version-above-one", "[core]\n\trepositoryformatversion = 0b10\n", ""},
+		{"bare", "[core]\n\trepositoryformatversion = 0\n\tbare = -0B1\n", "folder"},
+		{"bare-false", "[core]\n\trepositoryformatversion = 0\n\tbare = 0b0\n", "tree"},
+		{"bare-max", "[core]\n\trepositoryformatversion = 0\n\tbare = 0b" + strings.Repeat("1", 31) + "\n", "folder"},
+		{"bare-no-digits", "[core]\n\trepositoryformatversion = 0\n\tbare = 0b2\n", ""},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			base := t.TempDir()
+			tree := filepath.Join(base, "tree")
+			cmd := exec.Command(git, "init", "-q", "-b", "main", tree)
+			cmd.Env = testgit.Env()
+			if out, e := cmd.CombinedOutput(); e != nil {
+				t.Fatalf("git init: %v %s", e, out)
+			}
+			writeFile(t, filepath.Join(tree, ".git", "config"), c.config)
+			folder := mkdir(t, filepath.Join(tree, "app"))
+			want := map[string]string{"tree": tree, "folder": folder}[c.root]
+			got, e := GitRoot(folder)
+			if e != nil || got != want {
+				t.Fatalf("GitRoot = %q, %v; want %q", got, e, want)
+			}
+			resolved, e := Resolve(folder, false, false, Options{MountGitRoot: true, Platform: "linux"})
+			if e != nil {
+				t.Fatal(e)
+			}
+			mount := want
+			if mount == "" {
+				mount = folder
+			}
+			if resolved.WorkspaceMount.Source != mount {
+				t.Fatalf("mount = %q; want %q", resolved.WorkspaceMount.Source, mount)
+			}
+		})
 	}
 }

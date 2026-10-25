@@ -24,7 +24,8 @@ func gitParseBool(value *string) (bool, bool) {
 }
 
 // gitParseInt follows git_parse_int: C strtoimax with base 0, then an optional
-// k, m or g unit, within the range of a 32-bit int.
+// k, m or g unit, within the range of a 32-bit int. Git built against a C23 C
+// library, such as glibc 2.38 and later, also reads a 0b binary prefix.
 func gitParseInt(value *string) (int, bool) {
 	const limit = 1<<31 - 1
 	if value == nil || *value == "" {
@@ -44,6 +45,10 @@ func gitParseInt(value *string) (int, bool) {
 	switch {
 	case i+2 < len(s) && s[i] == '0' && (s[i+1] == 'x' || s[i+1] == 'X') && digitValue(s[i+2]) < 16:
 		base = 16
+		i += 2
+	case i+1 < len(s) && s[i] == '0' && (s[i+1] == 'b' || s[i+1] == 'B'):
+		// Without binary digits, Git reads the 'b' as an invalid unit.
+		base = 2
 		i += 2
 	case i < len(s) && s[i] == '0':
 		base = 8
