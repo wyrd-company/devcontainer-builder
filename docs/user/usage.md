@@ -648,7 +648,8 @@ An explicitly empty `GIT_DIR`, or one that names a missing repository or an
 invalid gitfile target, gives no Git root; parent discovery does not replace it.
 Relative values start at the workspace folder. A valid `GIT_DIR` selects the
 workspace folder without parent discovery; `GIT_WORK_TREE` can select its working
-tree. Repository config, including `core.worktree`, is not interpreted. Other Git environment overrides
+tree. Repository config, including `core.worktree`, is not interpreted. Other Git
+environment overrides
 and ownership checks are not applied. `exec`, `run-user-commands`, `set-up`,
 and an `up` that
 reuses a container use the folder where that container mounts the workspace,
