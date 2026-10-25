@@ -287,11 +287,16 @@ func mergeImageConfig(base []byte, g GraphInputs, labels map[string]string, p oc
 		img.Variant = p.Variant
 	}
 
-	// Features first, then the spec, so the spec wins (upstream order).
+	// Features first, each expanded against the environment as built, then
+	// the spec's literal values, so the spec wins (upstream order).
 	envIndex := envMap(img.Config.Env)
 	for _, f := range g.Features {
-		for _, k := range sortedKeys(f.Metadata.ContainerEnv) {
-			envIndex[k] = f.Metadata.ContainerEnv[k]
+		vars, err := expandFeatureEnv(envSlice(envIndex), f.Metadata, p.OS)
+		if err != nil {
+			return nil, err
+		}
+		for _, v := range vars {
+			envIndex[v.key] = v.value
 		}
 	}
 	for _, k := range sortedKeys(toStringMap(g.Spec.ContainerEnv)) {
