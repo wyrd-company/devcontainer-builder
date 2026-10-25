@@ -21,10 +21,14 @@ var gitdirLine = regexp.MustCompile(`(?m)^gitdir:\s*(.+)$`)
 // upstream's `git rev-parse --show-cdup` result is), a .git folder that is a
 // repository marks the root; a .git file marks the root when its gitdir is a
 // repository, and otherwise ends discovery, as Git refuses an invalid gitfile.
-// Environment overrides such as GIT_DIR and GIT_CEILING_DIRECTORIES and Git's
-// ownership check are not applied.
+// GIT_CEILING_DIRECTORIES limits parent discovery as in Git. Other environment
+// overrides and Git's ownership check are not applied.
 func GitRoot(folder string) (string, error) {
-	for current := filepath.Clean(folder); ; current = filepath.Dir(current) {
+	limit := gitCeilingLimit(folder, os.Getenv("GIT_CEILING_DIRECTORIES"))
+	for current, depth := filepath.Clean(folder), 0; ; current, depth = filepath.Dir(current), depth+1 {
+		if limit >= 0 && depth >= limit {
+			return "", nil
+		}
 		dotGit := filepath.Join(current, ".git")
 		info, err := os.Stat(dotGit)
 		switch {
@@ -96,4 +100,49 @@ func isFile(path string) bool {
 func isDir(path string) bool {
 	info, err := os.Stat(path)
 	return err == nil && info.IsDir()
+}
+
+// gitCeilingLimit counts parent steps to the closest strict ancestor ceiling.
+// Git canonicalizes entries until an empty list entry disables symlink resolution.
+// Count against the physical starting path, retaining lexical paths in GitRoot.
+func gitCeilingLimit(folder, ceilings string) int {
+	if ceilings == "" {
+		return -1
+	}
+	physical, err := filepath.EvalSymlinks(folder)
+	if err != nil {
+		return -1
+	}
+	physical, err = filepath.Abs(physical)
+	if err != nil {
+		return -1
+	}
+	limit := -1
+	resolve := true
+	for _, entry := range strings.Split(ceilings, string(os.PathListSeparator)) {
+		if entry == "" {
+			resolve = false
+			continue
+		}
+		if !filepath.IsAbs(entry) {
+			continue
+		}
+		entry = filepath.Clean(entry)
+		if resolve {
+			entry, err = filepath.EvalSymlinks(entry)
+			if err != nil {
+				continue
+			}
+		}
+		for parent, depth := filepath.Dir(physical), 1; parent != physical; parent, depth = filepath.Dir(parent), depth+1 {
+			if parent == entry && (limit < 0 || depth < limit) {
+				limit = depth
+				break
+			}
+			if filepath.Dir(parent) == parent {
+				break
+			}
+		}
+	}
+	return limit
 }

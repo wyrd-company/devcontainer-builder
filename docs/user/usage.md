@@ -635,7 +635,11 @@ primary Compose service.
 | `--id-label` | `up`, `exec`, `read-configuration`, `run-user-commands`, `down`, `inspect` | none | A `name=value` label. Repeat the flag for more labels. |
 
 The Git root is found from the files in the workspace's parent folders; `dcb`
-does not run `git`. `exec`, `run-user-commands`, `set-up`, and an `up` that
+does not run `git`. `GIT_CEILING_DIRECTORIES` stops parent discovery before
+a listed ancestor. Entries must be absolute paths. Git resolves symlinks in
+entries until an empty path-list entry disables that resolution. A ceiling equal
+to the starting folder does not stop discovery. Other Git environment overrides
+and ownership checks are not applied. `exec`, `run-user-commands`, `set-up`, and an `up` that
 reuses a container use the folder where that container mounts the workspace,
 read from its bind mounts, whatever flags created it. A configured
 `workspaceFolder` still wins. When the container mounts no folder that holds
