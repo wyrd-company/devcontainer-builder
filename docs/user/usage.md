@@ -583,9 +583,12 @@ root edits run once per container, with markers in this folder, including when
 `--skip-post-create` is set. That flag skips the user environment probe.
 
 `--container-session-data-folder` is accepted on `up`, `set-up`, and
-`run-user-commands`, with no default. Probe-cache persistence is not implemented.
-Probe results are not stored between calls, and dcb does not create the supplied
-session folder.
+`run-user-commands`, with no default. When supplied, dcb stores the probed
+environment in `env-<probe-mode>.json` inside this container folder and reuses it
+on later calls with the same folder and mode. Read, parse, or write failures are
+non-fatal. No cache is read or written when the probe mode is `none` or lifecycle
+commands are skipped. Remote environment overrides and lifecycle secrets are not
+added to the cached probe result.
 
 ## Terminal dimensions
 

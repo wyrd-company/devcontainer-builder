@@ -182,8 +182,9 @@ user's home). Exec does not write markers. Use `--container-system-data-folder`
 (default: `/var/devcontainer`) for the root environment and profile patch
 markers on up and set-up. These patches run before lifecycle commands, including
 under `--skip-post-create`; skipped lifecycle commands do not probe the user's
-shell environment. Session folder flags are accepted on their upstream commands;
-probe-cache persistence is not implemented.
+shell environment. Use `--container-session-data-folder` on up, set-up, and
+run-user-commands to persist and reuse `env-<probe-mode>.json` in the container.
+Cache failures are non-fatal. The default empty folder disables persistence.
 
 ### Terminal dimensions
 

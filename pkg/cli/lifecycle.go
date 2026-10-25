@@ -151,7 +151,7 @@ func (a *application) lifecycleCommand(name string) *cobra.Command {
 		}
 		var probed map[string]string
 		if !skip.postCreate {
-			probed = runner.ProbeUserEnv(cmd.Context(), execer, dc.UserEnvProbe, environment.probe.mode, dc.RemoteUser, runner.EnvFromList(info.Config.Env), a.logf, runner.ProbeOptions{CanPatchSystemConfig: true})
+			probed = runner.ProbeUserEnv(cmd.Context(), execer, dc.UserEnvProbe, environment.probe.mode, dc.RemoteUser, runner.EnvFromList(info.Config.Env), a.logf, runner.ProbeOptions{CanPatchSystemConfig: true, ContainerSessionDataFolder: folderOption(cmd, "container-session-data-folder")})
 		}
 		rt := runner.Runtime{User: dc.RemoteUser, Workdir: workdir, Env: runner.LifecycleEnv(probed, remoteEnv, resolveRemoteEnv(dc.UpdateRemoteEnv, sub, env), secrets), CreatedAt: info.Created, StartedAt: info.State.StartedAt, UserDataFolder: lifecycle.UserDataFolder(home, folderOption(cmd, "container-data-folder")), Dotfiles: dotfiles.forRun(skip)}
 		rt.Lifecycle = controls.LifecycleControls

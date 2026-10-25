@@ -36,14 +36,14 @@ func TestDataFoldersDockerIntegration(t *testing.T) {
 				}
 				source = `"dockerComposeFile":"compose.yml","service":"app","workspaceFolder":"/"`
 			}
-			if err := os.WriteFile(cfg, []byte(`{`+source+`,"updateRemoteUserUID":false,"postCreateCommand":"true"}`), 0o644); err != nil {
+			if err := os.WriteFile(cfg, []byte(`{`+source+`,"updateRemoteUserUID":false,"postCreateCommand":"true","postAttachCommand":"printenv SAMPLE > /tmp/probe-observed || true"}`), 0o644); err != nil {
 				t.Fatal(err)
 			}
 			common := []string{"--workspace-folder", workspace, "--config", cfg}
 			t.Cleanup(func() { invoke(t, 0, append([]string{"down"}, common...)...) })
 			for _, command := range []string{"up", "run-user-commands", "set-up"} {
 				folder := "/tmp/state 'folder/" + command
-				args := append([]string{command, "--container-data-folder", folder + "/../" + command + "/", "--container-system-data-folder", "/tmp/system", "--container-session-data-folder", "/tmp/session"}, common...)
+				args := append([]string{command, "--container-data-folder", folder + "/../" + command + "/", "--container-system-data-folder", "/tmp/system", "--container-session-data-folder", "/tmp/session/" + command}, common...)
 				// Create a container before exercising existing-container commands.
 				if command != "up" {
 					result, _ := invoke(t, 0, append([]string{"up", "--skip-post-create"}, common...)...)
@@ -51,12 +51,12 @@ func TestDataFoldersDockerIntegration(t *testing.T) {
 				}
 				result, _ := invoke(t, 0, args...)
 				id := result["containerId"].(string)
-				prep, err := (&application{}).dockerHost(cli).Exec(context.Background(), hostdocker.ExecRequest{ContainerID: id, Cmd: []string{"/bin/sh", "-c", "mkdir -p /tmp/existing /usr/local/bin && ln -sf /bin/false /usr/local/bin/git && printf '#!/bin/sh\\nexit 0\\n' > /tmp/existing/install.sh"}})
+				prep, err := (&application{}).dockerHost(cli).Exec(context.Background(), hostdocker.ExecRequest{ContainerID: id, Cmd: []string{"/bin/sh", "-c", "printf '%s' '{\"SAMPLE\":\"cached\"}' > /tmp/session/" + command + "/env-loginInteractiveShell.json && mkdir -p /tmp/existing /usr/local/bin && ln -sf /bin/false /usr/local/bin/git && printf '#!/bin/sh\\nexit 0\\n' > /tmp/existing/install.sh"}})
 				if err != nil || prep.ExitCode != 0 {
 					t.Fatalf("prepare dotfiles target: %+v %v", prep, err)
 				}
 				_, logs := invoke(t, 0, append(args, "--dotfiles-repository", "/tmp/source", "--dotfiles-target-path", "/tmp/existing", "--dotfiles-install-command", "install.sh")...)
-				check := "test -f " + quoteDataFolder(folder+"/.postCreateCommandMarker") + " && test -f " + quoteDataFolder(folder+"/.dotfilesMarker") + " && test ! -e /root/.devcontainer/.postCreateCommandMarker && test -f /tmp/system/.patchEtcEnvironmentMarker && test -f /tmp/system/.patchEtcProfileMarker && test ! -e /tmp/session"
+				check := "test $(cat /tmp/probe-observed) = cached && test -f " + quoteDataFolder(folder+"/.postCreateCommandMarker") + " && test -f " + quoteDataFolder(folder+"/.dotfilesMarker") + " && test ! -e /root/.devcontainer/.postCreateCommandMarker && test -f /tmp/system/.patchEtcEnvironmentMarker && test -f /tmp/system/.patchEtcProfileMarker && test -s /tmp/session/" + command + "/env-loginInteractiveShell.json"
 				res, err := (&application{}).dockerHost(cli).Exec(context.Background(), hostdocker.ExecRequest{ContainerID: id, Cmd: []string{"/bin/sh", "-c", check}})
 				if err != nil || res.ExitCode != 0 {
 					t.Fatalf("%s %s marker not routed: %+v %v; logs=%s", mode, command, res, err, logs)
