@@ -639,8 +639,11 @@ does not run `git`. `GIT_CEILING_DIRECTORIES` stops parent discovery before
 a listed ancestor. Entries must be absolute paths. Git resolves symlinks in
 entries until an empty path-list entry disables that resolution. Entries after
 that marker retain literal path components. A ceiling equal
-to the starting folder does not stop discovery. Other Git environment overrides
-and ownership checks are not applied. `exec`, `run-user-commands`, `set-up`,
+to the starting folder does not stop discovery. After a repository is found,
+`GIT_WORK_TREE` selects its working tree. Relative values start at the workspace
+folder; Git resolves symlinks and path components. An empty value or an invalid
+intermediate component gives no Git root. Other Git environment overrides and
+ownership checks are not applied. `exec`, `run-user-commands`, `set-up`,
 and an `up` that
 reuses a container use the folder where that container mounts the workspace,
 read from its bind mounts, whatever flags created it. A configured

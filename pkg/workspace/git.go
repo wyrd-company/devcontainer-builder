@@ -15,15 +15,58 @@ import (
 // gitdirLine matches a gitfile's pointer, as upstream reads worktree .git files.
 var gitdirLine = regexp.MustCompile(`(?m)^gitdir:\s*(.+)$`)
 
-// GitRoot returns the top folder of the Git working tree that contains folder,
-// or "" when folder is not inside one. It follows Git's discovery without
+// GitRoot returns the Git working tree selected from folder,
+// or "" when no repository is found or its working tree is invalid. It follows Git's discovery without
 // running git: walking up lexically (so symlinked names are kept, as
 // upstream's `git rev-parse --show-cdup` result is), a .git folder that is a
 // repository marks the root; a .git file marks the root when its gitdir is a
 // repository, and otherwise ends discovery, as Git refuses an invalid gitfile.
-// GIT_CEILING_DIRECTORIES limits parent discovery as in Git. Other environment
+// GIT_CEILING_DIRECTORIES limits parent discovery as in Git. GIT_WORK_TREE
+// selects the working tree after repository discovery. Other environment
 // overrides and Git's ownership check are not applied.
 func GitRoot(folder string) (string, error) {
+	root, err := discoverGitRoot(folder)
+	if err != nil || root == "" {
+		return root, err
+	}
+	workTree, set := os.LookupEnv("GIT_WORK_TREE")
+	if !set {
+		return root, nil
+	}
+	if workTree == "" {
+		return "", nil
+	}
+	physical, err := filepath.EvalSymlinks(folder)
+	if err != nil {
+		return "", nil
+	}
+	physical, err = filepath.Abs(physical)
+	if err != nil {
+		return "", nil
+	}
+	if !filepath.IsAbs(workTree) {
+		// Preserve components until Git's physical path resolution, including
+		// a symlink followed by .. and an invalid missing intermediate.
+		workTree = physical + string(os.PathSeparator) + workTree
+	}
+	workTree, err = gitCeilingPath(workTree)
+	if err != nil {
+		// Upstream treats a failed rev-parse as no Git root.
+		return "", nil
+	}
+	// --show-cdup returns parent steps inside the work tree, preserving the
+	// caller's lexical path, or the absolute physical work tree outside it.
+	for current, lexical := physical, filepath.Clean(folder); ; current, lexical = filepath.Dir(current), filepath.Dir(lexical) {
+		if current == workTree {
+			return lexical, nil
+		}
+		if filepath.Dir(current) == current {
+			return workTree, nil
+		}
+	}
+}
+
+func discoverGitRoot(folder string) (string, error) {
 	limit := gitCeilingLimit(folder, os.Getenv("GIT_CEILING_DIRECTORIES"))
 	for current, depth := filepath.Clean(folder), 0; ; current, depth = filepath.Dir(current), depth+1 {
 		if limit >= 0 && depth >= limit {
@@ -151,7 +194,8 @@ func gitCeilingLimit(folder, ceilings string) int {
 	return limit
 }
 
-// gitCeilingPath follows Git's strbuf_realpath component rules. In particular,
+// gitCeilingPath follows Git's strbuf_realpath component rules for ceilings
+// and explicit working trees. In particular,
 // existing regular files can precede dot components; Go's EvalSymlinks rejects
 // those paths. Missing intermediate components still invalidate the ceiling.
 // Reference: https://github.com/git/git/blob/master/abspath.c
