@@ -23,6 +23,9 @@ func TestGitWorkTreeMatchesGit(t *testing.T) {
 	sub := mkdir(t, filepath.Join(repo, "app", "src"))
 	other := mkdir(t, filepath.Join(base, "other"))
 	plain := mkdir(t, filepath.Join(base, "plain"))
+	for _, suffix := range []string{" ", "\t", "\n", "\ufeff", "\u0085", "\u2003"} {
+		mkdir(t, other+suffix)
+	}
 	cmd := exec.Command(gitBin, "init", "-q", repo)
 	cmd.Env = testgit.Env()
 	if out, err := cmd.CombinedOutput(); err != nil {
@@ -43,6 +46,12 @@ func TestGitWorkTreeMatchesGit(t *testing.T) {
 		{"relative-outside", sub, "../../.."},
 		{"absolute-outside", sub, other},
 		{"empty", sub, ""},
+		{"outside-space", sub, other + " "},
+		{"outside-tab", sub, other + "\t"},
+		{"outside-newline", sub, other + "\n"},
+		{"outside-bom", sub, other + "\ufeff"},
+		{"outside-nel", sub, other + "\u0085"},
+		{"outside-zs", sub, other + "\u2003"},
 		{"missing-final", sub, "missing"},
 		{"missing-intermediate", sub, "missing/child"},
 		{"missing-before-parent", sub, "missing/.."},
@@ -63,7 +72,10 @@ func TestGitWorkTreeMatchesGit(t *testing.T) {
 			out, probeErr := cmd.Output()
 			want := ""
 			if probeErr == nil {
-				cdup := strings.TrimSpace(string(out))
+				// JavaScript String.trim(), as used by the upstream CLI.
+				// The explicit set keeps this oracle independent of the Unicode
+				// category predicate in the native implementation.
+				cdup := strings.Trim(string(out), "\t\n\v\f\r \u00a0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u2028\u2029\u202f\u205f\u3000\ufeff")
 				if filepath.IsAbs(cdup) {
 					want = filepath.Clean(cdup)
 				} else {
