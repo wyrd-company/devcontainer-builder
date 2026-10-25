@@ -387,7 +387,7 @@ func applyRequestIdentity(cfg *container.Config, host *container.HostConfig, dc 
 			cfg.Labels[key] = value
 		}
 	}
-	if req.WorkspaceMount != nil && dc.WorkspaceMount == "" && len(host.Mounts) > 0 {
+	if req.WorkspaceMount != nil && !dc.DeclaresWorkspaceMount() && len(host.Mounts) > 0 {
 		// Without a spec workspaceMount the default workspace mount is first.
 		host.Mounts[0] = *req.WorkspaceMount
 	}

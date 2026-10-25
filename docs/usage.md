@@ -642,7 +642,10 @@ read from its bind mounts, whatever flags created it. A configured
 the workspace, these commands calculate the folder from the flags, as
 `read-configuration` does. `read-configuration`
 returns the folder and mounts in its `workspace` object. A configuration that
-sets `workspaceMount` keeps its mount. A configuration that sets
+sets `workspaceMount` keeps its mount. An explicitly empty `"workspaceMount": ""`
+disables the default workspace mount; additional `mounts` and `--mount` values
+still apply. `read-configuration` keeps the empty `workspaceMount` value. A
+configuration that sets
 `workspaceFolder` without `workspaceMount` keeps that folder and mounts the
 workspace or its Git root at `/workspaces/<name>`, according to the Git-root
 and worktree flags. Set `workspaceMount` to mount at a specific target.
