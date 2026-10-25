@@ -2,7 +2,8 @@
   "image": "mirror.gcr.io/library/debian:bookworm-slim",
   "features": {
     "./env-base": {},
-    "./env-chain": {}
+    "./env-chain": {},
+    "./env-index": {}
   },
   "containerEnv": {
     "SPEC_REF": "${SAMPLE_ROOT}/spec"
