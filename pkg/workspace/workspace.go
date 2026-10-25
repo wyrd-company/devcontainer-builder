@@ -9,8 +9,10 @@
 package workspace
 
 import (
+	"os"
 	"path"
 	"path/filepath"
+	"regexp"
 	"strings"
 )
 
@@ -135,7 +137,7 @@ func worktreeCommonDir(hostMountFolder, consistency string) (string, *Mount, err
 	if !isFile(dotGit) {
 		return "", nil, nil
 	}
-	gitdir, err := gitfilePointer(dotGit)
+	gitdir, err := commonDirGitfilePointer(dotGit)
 	if err != nil || gitdir == "" || filepath.IsAbs(gitdir) {
 		return "", nil, err
 	}
@@ -148,4 +150,21 @@ func worktreeCommonDir(hostMountFolder, consistency string) (string, *Mount, err
 	folder := path.Join(append([]string{"/workspaces"}, segments...)...)
 	target := path.Join(folder, filepath.ToSlash(gitdir), "..", "..")
 	return folder, &Mount{Source: common, Target: target, Consistency: consistency}, nil
+}
+
+// The common-folder option follows upstream utils.ts independently of Git's
+// repository discovery. It accepts a matching pointer line even when Git
+// rejects the surrounding file. Do not reuse the strict GitRoot reader here.
+var commonDirGitdirLine = regexp.MustCompile(`(?m)^gitdir:\s*(.+)$`)
+
+func commonDirGitfilePointer(path string) (string, error) {
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	match := commonDirGitdirLine.FindSubmatch(content)
+	if match == nil {
+		return "", nil
+	}
+	return strings.TrimRight(string(match[1]), "\r"), nil
 }
