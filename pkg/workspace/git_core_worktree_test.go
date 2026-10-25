@@ -68,7 +68,7 @@ func TestGitRootCoreWorktreeMatchesGit(t *testing.T) {
 		{"worktree-config-bare", worktree("$BASE/other") + worktreeConfig, "[core]\n\tbare\n"},
 		{"worktree-config-off", v0 + "[extensions]\n\tworktreeConfig = false\n", "[core]\n\tworktree = $BASE/other\n"},
 	}
-	for _, route := range []string{"discovered", "gitfile", "explicit", "self", "self-nested", "linked", "common-env"} {
+	for _, route := range []string{"discovered", "gitfile", "explicit", "self", "self-nested", "linked", "common-env", "symlinked-folder"} {
 		for _, c := range cases {
 			t.Run(c.name+"/"+route, func(t *testing.T) {
 				base := t.TempDir()
@@ -124,6 +124,13 @@ func TestGitRootCoreWorktreeMatchesGit(t *testing.T) {
 					worktreeAdmin = filepath.Join(admin, "worktrees", "linked")
 				case "common-env":
 					set("GIT_COMMON_DIR", admin)
+				case "symlinked-folder":
+					// Upstream keeps the caller's lexical path inside the working tree.
+					alias := filepath.Join(base, "alias")
+					if e := os.Symlink(tree, alias); e != nil {
+						t.Fatal(e)
+					}
+					folders = []string{alias, filepath.Join(alias, "app", "deep")}
 				}
 				for _, folder := range folders {
 					mkdir(t, folder)
