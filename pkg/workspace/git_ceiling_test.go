@@ -4,6 +4,7 @@
 package workspace
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -31,6 +32,21 @@ func TestGitRootCeilingsMatchesGit(t *testing.T) {
 	if err := os.Symlink(sub, deepAlias); err != nil {
 		t.Fatal(err)
 	}
+	writeFile(t, filepath.Join(app, "file"), "sample")
+	fileAlias := filepath.Join(base, "file-alias")
+	if err := os.Symlink(filepath.Join(app, "file"), fileAlias); err != nil {
+		t.Fatal(err)
+	}
+
+	for n := 1; n <= 34; n++ {
+		target := app
+		if n > 1 {
+			target = filepath.Join(base, fmt.Sprintf("link%d", n-1))
+		}
+		if err := os.Symlink(target, filepath.Join(base, fmt.Sprintf("link%d", n))); err != nil {
+			t.Fatal(err)
+		}
+	}
 	sep := string(os.PathListSeparator)
 	for _, tc := range []struct{ name, folder, ceiling string }{
 		{"ancestor", sub, app},
@@ -51,6 +67,14 @@ func TestGitRootCeilingsMatchesGit(t *testing.T) {
 		{"literal parent", sub, sep + app + "/.."},
 		{"literal double slash", sub, sep + app + "//"},
 		{"literal trailing slash", sub, sep + app + "/"},
+		{"file parent", sub, app + "/file/.."},
+		{"symlink file parent", sub, fileAlias + "/.."},
+		{"file parent before marker", sub, app + "/file/.." + sep + sep + base},
+		{"literal file parent", sub, sep + app + "/file/.."},
+		{"file dot parent", sub, app + "/file/./.."},
+		{"file missing parent", sub, app + "/file/missing/../.."},
+		{"33 symbolic links", sub, filepath.Join(base, "link33")},
+		{"34 symbolic links", sub, filepath.Join(base, "link34")},
 		{"root ceiling", sub, string(os.PathSeparator)},
 		{"literal root ceiling", sub, sep + string(os.PathSeparator)},
 	} {
@@ -95,8 +119,10 @@ func TestResolveGitCeilingPathComponents(t *testing.T) {
 	if err := os.Symlink(sub, alias); err != nil {
 		t.Fatal(err)
 	}
+	writeFile(t, filepath.Join(app, "file"), "sample")
 	for _, tc := range []struct{ name, ceiling, source string }{
 		{"symlink parent", alias + "/..", sub},
+		{"file parent", app + "/file/..", sub},
 		{"missing parent", app + "/missing/..", repo},
 		{"literal dot", string(os.PathListSeparator) + app + "/.", repo},
 	} {

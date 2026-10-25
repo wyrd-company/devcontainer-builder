@@ -128,7 +128,7 @@ func gitCeilingLimit(folder, ceilings string) int {
 			continue
 		}
 		if resolve {
-			entry, err = filepath.EvalSymlinks(entry)
+			entry, err = gitCeilingPath(entry)
 			if err != nil {
 				continue
 			}
@@ -149,4 +149,61 @@ func gitCeilingLimit(folder, ceilings string) int {
 		}
 	}
 	return limit
+}
+
+// gitCeilingPath follows Git's strbuf_realpath component rules. In particular,
+// existing regular files can precede dot components; Go's EvalSymlinks rejects
+// those paths. Missing intermediate components still invalidate the ceiling.
+// Reference: https://github.com/git/git/blob/master/abspath.c
+func gitCeilingPath(path string) (string, error) {
+	separator := func(r rune) bool { return r == '/' || r == rune(os.PathSeparator) }
+	root := func(p string) (string, string) {
+		volume := filepath.VolumeName(p)
+		return volume + string(os.PathSeparator), strings.TrimLeftFunc(p[len(volume):], separator)
+	}
+	resolved, remaining := root(path)
+	links := 0
+	for remaining != "" {
+		remaining = strings.TrimLeftFunc(remaining, separator)
+		end := strings.IndexFunc(remaining, separator)
+		if end < 0 {
+			end = len(remaining)
+		}
+		component := remaining[:end]
+		remaining = remaining[end:]
+		switch component {
+		case "", ".":
+			continue
+		case "..":
+			resolved = filepath.Dir(resolved)
+			continue
+		}
+		candidate := filepath.Join(resolved, component)
+		info, err := os.Lstat(candidate)
+		if err != nil {
+			if !errors.Is(err, fs.ErrNotExist) || remaining != "" {
+				return "", err
+			}
+			resolved = candidate
+			continue
+		}
+		if info.Mode()&os.ModeSymlink == 0 {
+			resolved = candidate
+			continue
+		}
+		// Git allows 33 expansions, then rejects a further symbolic link.
+		if links > 32 {
+			return "", errors.New("too many symbolic links in Git ceiling")
+		}
+		links++
+		target, err := os.Readlink(candidate)
+		if err != nil {
+			return "", err
+		}
+		if filepath.IsAbs(target) {
+			resolved, target = root(target)
+		}
+		remaining = target + remaining
+	}
+	return resolved, nil
 }
