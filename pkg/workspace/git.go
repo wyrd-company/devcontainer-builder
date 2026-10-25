@@ -36,11 +36,6 @@ func GitRoot(folder string) (string, error) {
 			// components before the filesystem has followed them.
 			dir = folder + string(os.PathSeparator) + dir
 		}
-		var err error
-		dir, err = gitCeilingPath(dir)
-		if err != nil {
-			return "", nil
-		}
 		if info, err := os.Stat(dir); err == nil && !info.IsDir() {
 			// GIT_DIR can name a gitfile, whose target is relative to it.
 			target, err := gitfilePointer(dir)
@@ -48,12 +43,12 @@ func GitRoot(folder string) (string, error) {
 				return "", nil
 			}
 			if !filepath.IsAbs(target) {
-				target = filepath.Dir(dir) + string(os.PathSeparator) + target
+				// Git anchors relative targets at the given gitfile path,
+				// even when that file is a symlink. Split keeps dot components.
+				parent, _ := filepath.Split(dir)
+				target = parent + target
 			}
-			dir, err = gitCeilingPath(target)
-			if err != nil {
-				return "", nil
-			}
+			dir = target
 		}
 		if dir == "" || !isGitDir(dir) {
 			return "", nil
@@ -163,15 +158,17 @@ func gitfilePointer(path string) (string, error) {
 }
 
 // isGitDir is Git's repository test: HEAD, plus objects and refs or, for a
-// linked worktree's administrative folder, a commondir file.
+// linked worktree's administrative folder, a commondir file. Paths retain
+// components until filesystem traversal; cleaning first changes symlink/..
+// and regular-file/.. semantics.
 func isGitDir(dir string) bool {
-	if !isFile(filepath.Join(dir, "HEAD")) {
+	if !isFile(dir + string(os.PathSeparator) + "HEAD") {
 		return false
 	}
-	if isFile(filepath.Join(dir, "commondir")) {
+	if isFile(dir + string(os.PathSeparator) + "commondir") {
 		return true
 	}
-	return isDir(filepath.Join(dir, "objects")) && isDir(filepath.Join(dir, "refs"))
+	return isDir(dir+string(os.PathSeparator)+"objects") && isDir(dir+string(os.PathSeparator)+"refs")
 }
 
 func isFile(path string) bool {

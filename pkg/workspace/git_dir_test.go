@@ -37,6 +37,19 @@ func TestInvalidGitDirMatchesGit(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	pointDir := mkdir(t, filepath.Join(base, "pointers"))
+	point := filepath.Join(pointDir, "file")
+	if err := os.WriteFile(point, []byte("gitdir: .git\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	alias := filepath.Join(repo, "pointer")
+	if err := os.Symlink(point, alias); err != nil {
+		t.Fatal(err)
+	}
+	badAlias := filepath.Join(sub, "pointer")
+	if err := os.Symlink(valid, badAlias); err != nil {
+		t.Fatal(err)
+	}
 	// The lexical parent of link is app; its physical parent is base.
 	if err := os.Symlink(filepath.Join(repo, ".git"), filepath.Join(sub, "link")); err != nil {
 		t.Fatal(err)
@@ -52,12 +65,15 @@ func TestInvalidGitDirMatchesGit(t *testing.T) {
 		{"missing-relative", sub, "missing", false, false},
 		{"working-directory-is-not-git-dir", sub, repo, false, false},
 		{"regular-file", sub, filepath.Join(repo, ".git", "HEAD"), false, false},
+		{"file-before-parent", sub, filepath.Join(repo, ".git", "HEAD") + "/..", false, false},
+		{"symlinked-gitfile-invalid-relative-target", sub, badAlias, false, false},
 		{"broken-gitfile", sub, broken, false, false},
 		{"cwd-relative-not-process-relative", sub, ".git", false, false},
 		{"invalid-dir-before-work-tree", sub, "missing", true, false},
 		{"valid-absolute", repo, filepath.Join(repo, ".git"), false, true},
 		{"valid-relative", repo, ".git", false, true},
 		{"valid-gitfile", repo, valid, false, true},
+		{"valid-symlinked-gitfile", repo, alias, false, true},
 		{"valid-gitfile-physical-target", repo, linked, false, true},
 		{"valid-relative-with-work-tree", sub, "../../.git", true, true},
 		{"valid-symlink-before-parent", sub, "link/../.git", true, true},
