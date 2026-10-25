@@ -71,6 +71,8 @@ type UpRequest struct {
 	RemoteEnv map[string]string
 	// DefaultUserEnvProbe selects the shell probe when userEnvProbe is not configured.
 	DefaultUserEnvProbe string
+	// ContainerSessionDataFolder stores user environment probe caches.
+	ContainerSessionDataFolder string
 	// Secrets are secret environment variables for lifecycle commands and
 	// the dotfiles install (upstream --secrets-file). They win over every
 	// other layer and are never stored in container configuration, labels
@@ -305,7 +307,7 @@ func (h *Host) Up(ctx context.Context, req UpRequest) (*UpResult, error) {
 	}
 	var probed map[string]string
 	if !req.SkipLifecycle {
-		probed = runner.ProbeUserEnv(ctx, execer, dc.UserEnvProbe, req.DefaultUserEnvProbe, dc.RemoteUser, systemEnv, h.logf, runner.ProbeOptions{CanPatchSystemConfig: true})
+		probed = runner.ProbeUserEnv(ctx, execer, dc.UserEnvProbe, req.DefaultUserEnvProbe, dc.RemoteUser, systemEnv, h.logf, runner.ProbeOptions{CanPatchSystemConfig: true, ContainerSessionDataFolder: req.ContainerSessionDataFolder})
 	}
 	mergedEnv := runner.LifecycleEnv(probed, req.RemoteEnv, stringMap(dc.UpdateRemoteEnv), req.Secrets)
 
