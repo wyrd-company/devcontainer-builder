@@ -134,12 +134,7 @@ func (a *application) placeWorkspace(dc *spec.DevContainer, local string) error 
 
 // declaresWorkspaceMount follows upstream's `'workspaceMount' in config`.
 func declaresWorkspaceMount(dc *spec.DevContainer) bool {
-	var keys map[string]json.RawMessage
-	if json.Unmarshal(dc.Raw, &keys) != nil {
-		return dc.WorkspaceMount != ""
-	}
-	_, ok := keys["workspaceMount"]
-	return ok
+	return dc.DeclaresWorkspaceMount()
 }
 
 // dockerMounts converts the placement and --mount values for the Docker host.
@@ -211,7 +206,7 @@ func (a *application) workspaceResult(dc *spec.DevContainer, local string) map[s
 	switch {
 	case a.placement != nil && a.placement.WorkspaceMount != nil:
 		out["workspaceMount"] = a.placement.WorkspaceMount.String()
-	case dc.Mode() != spec.ModeCompose && dc.WorkspaceMount != "":
+	case dc.Mode() != spec.ModeCompose && dc.DeclaresWorkspaceMount():
 		out["workspaceMount"] = dc.WorkspaceMount
 	}
 	if a.placement != nil && a.placement.AdditionalMount != nil {
