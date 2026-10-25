@@ -63,6 +63,21 @@ type DevContainer struct {
 	Raw json.RawMessage `json:"-"`
 }
 
+// DeclaresWorkspaceMount reports whether workspaceMount is configured, including
+// an explicitly empty value that disables the default workspace mount. Specs
+// constructed in Go can set WorkspaceMount or retain the key in Raw.
+func (dc *DevContainer) DeclaresWorkspaceMount() bool {
+	if dc.WorkspaceMount != "" {
+		return true
+	}
+	var keys map[string]json.RawMessage
+	if json.Unmarshal(dc.Raw, &keys) != nil {
+		return false
+	}
+	_, ok := keys["workspaceMount"]
+	return ok
+}
+
 // Build models the inline build object inside devcontainer.json.
 type Build struct {
 	Dockerfile string            `json:"dockerfile,omitempty"`

@@ -195,9 +195,12 @@ func buildContainerConfigWithEntrypoints(dc *spec.DevContainer, resolved []featu
 }
 
 // workspaceMount returns the bind mount for the workspace, honoring
-// dc.WorkspaceMount when set. Returns nil for an empty workspace
+// dc.WorkspaceMount when declared, including an empty value. Returns nil for an empty workspace
 // (allowed: the user may not need one for container-image-only specs).
 func workspaceMount(dc *spec.DevContainer, localFolder, containerFolder string) *mount.Mount {
+	if dc.DeclaresWorkspaceMount() && dc.WorkspaceMount == "" {
+		return nil
+	}
 	if dc.WorkspaceMount != "" {
 		if m := parseMountString(dc.WorkspaceMount); m != nil {
 			return m
