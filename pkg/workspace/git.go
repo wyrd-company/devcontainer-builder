@@ -26,14 +26,15 @@ import (
 // A commondir pointer selects the common objects and refs signatures.
 // GIT_COMMON_DIR replaces that pointer and GIT_OBJECT_DIRECTORY overrides the
 // objects signature, both relative to folder. Git's repository format check
-// then reads the repository config: core.bare selects the caller folder for a
-// discovered repository, and config that Git rejects gives no root.
+// then reads the repository config: core.bare selects the caller folder,
+// core.worktree selects the working tree, and config that Git rejects gives no
+// root.
 // Gitfiles use a literal prefix and path payload, with Git's 1 MiB size limit.
 // GIT_CEILING_DIRECTORIES limits parent discovery as in Git. GIT_WORK_TREE
 // selects the working tree after repository discovery. Other environment
 // overrides and Git's ownership check are not applied. A valid GIT_DIR
-// selects the caller folder before GIT_WORK_TREE; core.worktree is not
-// interpreted. Invalid GIT_DIR stops parent discovery.
+// selects the caller folder unless GIT_WORK_TREE or the repository config
+// selects another. Invalid GIT_DIR stops parent discovery.
 func GitRoot(folder string) (string, error) {
 	var root string
 	var err error
@@ -72,13 +73,10 @@ func GitRoot(folder string) (string, error) {
 		if dir == "" || !valid {
 			return "", nil
 		}
-		// Without a working tree, core.bare also gives the caller folder.
-		if _, err := gitRepositoryFormat(dir, folder); err != nil {
-			return "", nil
-		}
 		// An explicit repository disables parent discovery. Git defaults its
 		// working tree to the probe cwd, including outside a discovered tree.
-		root = filepath.Clean(folder)
+		// Without a working tree, core.bare also gives the caller folder.
+		root = gitSelectedRoot(filepath.Clean(folder), dir, folder)
 	} else {
 		root, err = discoverGitRoot(folder)
 	}
@@ -156,7 +154,7 @@ func discoverGitRoot(folder string) (string, error) {
 				return "", nil
 			}
 			if valid {
-				return gitDiscoveredRoot(current, dotGit, folder), nil
+				return gitSelectedRoot(current, dotGit, folder), nil
 			}
 		case err == nil:
 			gitdir, err := readGitfile(dotGit)
@@ -167,7 +165,7 @@ func discoverGitRoot(folder string) (string, error) {
 			if gitdir == "" || !valid {
 				return "", nil
 			}
-			return gitDiscoveredRoot(current, gitdir, folder), nil
+			return gitSelectedRoot(current, gitdir, folder), nil
 		case !errors.Is(err, fs.ErrNotExist) && !errors.Is(err, fs.ErrPermission):
 			return "", err
 		}
@@ -179,10 +177,7 @@ func discoverGitRoot(folder string) (string, error) {
 			return "", nil
 		}
 		if valid {
-			if _, err := gitRepositoryFormat(current, folder); err != nil {
-				return "", nil
-			}
-			return filepath.Clean(folder), nil
+			return gitSelectedRoot(filepath.Clean(folder), current, folder), nil
 		}
 		if filepath.Dir(current) == current {
 			return "", nil
@@ -190,18 +185,69 @@ func discoverGitRoot(folder string) (string, error) {
 	}
 }
 
-// gitDiscoveredRoot applies Git's repository format check to the repository
-// dir discovered for root. core.bare leaves no working tree, and the upstream
-// CLI resolves the empty cdup to the caller folder. Rejected config is fatal.
-func gitDiscoveredRoot(root, dir, folder string) string {
-	bare, err := gitRepositoryFormat(dir, folder)
-	switch {
-	case err != nil:
+// gitSelectedRoot applies Git's repository format check to the repository dir
+// whose default working-tree root is root, then selects the working tree as
+// setup_explicit_git_dir in Git's setup.c does. GIT_WORK_TREE takes precedence
+// and GitRoot applies it. core.bare leaves no working tree, and the upstream
+// CLI resolves the empty cdup to the caller folder. Otherwise core.worktree
+// selects the working tree. Rejected config, or a core.worktree that Git cannot
+// resolve, is fatal.
+func gitSelectedRoot(root, dir, folder string) string {
+	bare, workTree, err := gitRepositoryFormat(dir, folder)
+	if err != nil {
 		return ""
+	}
+	if _, set := os.LookupEnv("GIT_WORK_TREE"); set {
+		return root
+	}
+	switch {
 	case bare:
 		return filepath.Clean(folder)
+	case workTree != nil:
+		return gitConfigWorkTreeRoot(dir, *workTree, folder)
 	}
 	return root
+}
+
+// gitConfigWorkTreeRoot resolves a core.worktree value for repository dir.
+// Git resolves an absolute value as it does GIT_WORK_TREE. For a relative
+// value it changes to dir and then to the value, so the value must name an
+// accessible folder, and reads the physical cwd. An empty value fails.
+func gitConfigWorkTreeRoot(dir, value, folder string) string {
+	physical, err := gitPhysicalPath(folder)
+	if err != nil {
+		return ""
+	}
+	var workTree string
+	if filepath.IsAbs(value) {
+		workTree, err = gitCeilingPath(value)
+	} else {
+		workTree, err = gitChdirPath(dir, value)
+	}
+	if err != nil {
+		return ""
+	}
+	return gitWorkTreeRoot(folder, physical, workTree)
+}
+
+// gitChdirPath returns the physical folder that chdir(dir) then chdir(value)
+// selects. The kernel resolves symbolic links before .. components.
+func gitChdirPath(dir, value string) (string, error) {
+	if value == "" {
+		return "", fs.ErrNotExist
+	}
+	path := dir + string(os.PathSeparator) + value
+	info, err := os.Stat(path)
+	if err != nil {
+		return "", err
+	}
+	if !info.IsDir() {
+		return "", syscall.ENOTDIR
+	}
+	if err := syscall.Access(path, 1); err != nil {
+		return "", err
+	}
+	return gitPhysicalPath(path)
 }
 
 // readGitfile returns the folder a .git file points to, resolved against the
