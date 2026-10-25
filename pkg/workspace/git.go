@@ -92,11 +92,7 @@ func GitRoot(folder string) (string, error) {
 	if workTree == "" {
 		return "", nil
 	}
-	physical, err := filepath.EvalSymlinks(folder)
-	if err != nil {
-		return "", nil
-	}
-	physical, err = filepath.Abs(physical)
+	physical, err := gitPhysicalPath(folder)
 	if err != nil {
 		return "", nil
 	}
@@ -110,11 +106,27 @@ func GitRoot(folder string) (string, error) {
 		// Upstream treats a failed rev-parse as no Git root.
 		return "", nil
 	}
-	// --show-cdup returns parent steps inside the work tree, preserving the
-	// caller's lexical path, or the absolute physical work tree outside it.
+	return gitWorkTreeRoot(folder, physical, workTree), nil
+}
+
+// gitPhysicalPath returns the absolute physical path of folder, which Git
+// reads as its cwd.
+func gitPhysicalPath(folder string) (string, error) {
+	physical, err := filepath.EvalSymlinks(folder)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Abs(physical)
+}
+
+// gitWorkTreeRoot resolves upstream's `git rev-parse --show-cdup` result for
+// the physical working tree workTree. Inside it, the cdup returns parent steps
+// that preserve the caller's lexical path; outside it, the cdup is the
+// absolute physical working tree.
+func gitWorkTreeRoot(folder, physical, workTree string) string {
 	for current, lexical := physical, filepath.Clean(folder); ; current, lexical = filepath.Dir(current), filepath.Dir(lexical) {
 		if current == workTree {
-			return lexical, nil
+			return lexical
 		}
 		if filepath.Dir(current) == current {
 			// Upstream trims JavaScript whitespace from the probe output before
@@ -122,7 +134,7 @@ func GitRoot(folder string) (string, error) {
 			// its suffix can change. Go TrimSpace differs for BOM and NEL.
 			return filepath.Clean(strings.TrimRightFunc(workTree, func(r rune) bool {
 				return unicode.Is(unicode.Zs, r) || strings.ContainsRune("\t\n\v\f\r\u2028\u2029\ufeff", r)
-			})), nil
+			}))
 		}
 	}
 }
