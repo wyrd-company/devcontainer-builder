@@ -49,6 +49,8 @@ func TestGitRootCoreWorktreeMatchesGit(t *testing.T) {
 		{"relative-executable-file", worktree("../../tool"), ""},
 		{"relative-unsearchable", worktree("../../locked"), ""},
 		{"absolute-unsearchable", worktree("$BASE/locked"), ""},
+		{"relative-search-only", worktree("../../sealed"), ""},
+		{"absolute-search-only", worktree("$BASE/sealed"), ""},
 		{"relative-symlink-dot-dot", worktree("../../link/.."), ""},
 		{"relative-symlink-inside", worktree("../app-link"), ""},
 		{"empty", worktree(""), ""},
@@ -233,7 +235,9 @@ func TestGitRootCoreWorktreeSelection(t *testing.T) {
 }
 
 // makeWorktreeObstacles adds an executable regular file, tool, and an empty
-// folder without search permission, locked, which chdir both refuse.
+// folder without search permission, locked, which chdir both refuse. It also
+// adds an empty folder with only search permission, sealed, which chdir
+// accepts.
 func makeWorktreeObstacles(t *testing.T, base string) {
 	t.Helper()
 	writeFile(t, filepath.Join(base, "tool"), "")
@@ -242,6 +246,10 @@ func makeWorktreeObstacles(t *testing.T, base string) {
 	}
 	locked := mkdir(t, filepath.Join(base, "locked"))
 	if err := os.Chmod(locked, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	sealed := mkdir(t, filepath.Join(base, "sealed"))
+	if err := os.Chmod(sealed, 0o100); err != nil {
 		t.Fatal(err)
 	}
 }
