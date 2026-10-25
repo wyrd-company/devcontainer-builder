@@ -675,7 +675,10 @@ rejects gives no Git root: a syntax error, a directory or an unreadable file,
 a `core.repositoryformatversion` that is not an integer or is above 1, an
 invalid `core.bare`, `extensions.worktreeConfig` or `extensions.preciousObjects`
 boolean, and `core.worktree` or `extensions.partialClone` without a value. A
-special file such as a FIFO is not read and also gives no Git root. When
+special file such as a FIFO is not read and also gives no Git root. Integers
+are read as Git built against a C23 C library, such as glibc 2.38 or later,
+reads them: decimal, octal with a leading `0`, hexadecimal with `0x` and binary
+with `0b`, with an optional `k`, `m` or `g` unit. When
 `core.repositoryformatversion` is 0 or 1, a true `core.bare` leaves a discovered
 repository without a working tree, and the workspace folder is the Git root. A
 linked worktree and `GIT_COMMON_DIR` ignore `core.bare` in the common config.
