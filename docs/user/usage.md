@@ -659,8 +659,8 @@ or path resolution ends discovery. A resolved folder without those signatures
 is not a repository; parent discovery can continue past a `.git` directory.
 After the `.git` entry, each folder is also tested as a repository, as Git does.
 When the workspace is in a bare repository or in a `.git` folder, Git reports no
-working tree, and the workspace folder is the Git root. Git configuration such
-as `safe.bareRepository` is not read.
+working tree, and the workspace folder is the Git root. The global
+`safe.bareRepository` setting is not read.
 `GIT_OBJECT_DIRECTORY` replaces the `objects` signature path during admission.
 Relative values start at the workspace folder and retain physical path traversal.
 An empty or inaccessible value fails admission; `refs` is still checked in the
