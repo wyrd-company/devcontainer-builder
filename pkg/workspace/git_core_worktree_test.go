@@ -46,6 +46,9 @@ func TestGitRootCoreWorktreeMatchesGit(t *testing.T) {
 		{"relative-missing", worktree("../missing"), ""},
 		{"relative-file", worktree("../../file"), ""},
 		{"relative-file-dot-dot", worktree("../../file/.."), ""},
+		{"relative-executable-file", worktree("../../tool"), ""},
+		{"relative-unsearchable", worktree("../../locked"), ""},
+		{"absolute-unsearchable", worktree("$BASE/locked"), ""},
 		{"relative-symlink-dot-dot", worktree("../../link/.."), ""},
 		{"relative-symlink-inside", worktree("../app-link"), ""},
 		{"empty", worktree(""), ""},
@@ -83,6 +86,7 @@ func TestGitRootCoreWorktreeMatchesGit(t *testing.T) {
 				run(base, "init", "-q", "-b", "main", tree)
 				mkdir(t, filepath.Join(base, "other", "sub"))
 				writeFile(t, filepath.Join(base, "file"), "")
+				makeWorktreeObstacles(t, base)
 				for link, target := range map[string]string{
 					filepath.Join(base, "link"):     filepath.Join(base, "other", "sub"),
 					filepath.Join(tree, "app-link"): filepath.Join(tree, "app"),
@@ -181,6 +185,8 @@ func TestGitRootCoreWorktreeSelection(t *testing.T) {
 		{"relative-physical", v0 + "\tworktree = ../../link/..\n", "", "$BASE/other"},
 		{"relative-missing", v0 + "\tworktree = ../missing\n", "", ""},
 		{"relative-file", v0 + "\tworktree = ../../file\n", "", ""},
+		{"relative-executable-file", v0 + "\tworktree = ../../tool\n", "", ""},
+		{"relative-unsearchable", v0 + "\tworktree = ../../locked\n", "", ""},
 		{"empty", v0 + "\tworktree =\n", "", ""},
 		{"unversioned", "[core]\n\tworktree = $BASE/other\n", "", "$BASE/tree"},
 		{"bare", v0 + "\tworktree = $BASE/other\n\tbare = true\n", "", "$BASE/tree/app/deep"},
@@ -197,6 +203,7 @@ func TestGitRootCoreWorktreeSelection(t *testing.T) {
 			makeRepo(t, tree)
 			mkdir(t, filepath.Join(base, "other", "sub"))
 			writeFile(t, filepath.Join(base, "file"), "")
+			makeWorktreeObstacles(t, base)
 			if err := os.Symlink(filepath.Join(base, "other", "sub"), filepath.Join(base, "link")); err != nil {
 				t.Fatal(err)
 			}
@@ -215,5 +222,19 @@ func TestGitRootCoreWorktreeSelection(t *testing.T) {
 				t.Fatalf("GitRoot = %q, %v; want %q", got, err, want)
 			}
 		})
+	}
+}
+
+// makeWorktreeObstacles adds an executable regular file, tool, and an empty
+// folder without search permission, locked, which chdir both refuse.
+func makeWorktreeObstacles(t *testing.T, base string) {
+	t.Helper()
+	writeFile(t, filepath.Join(base, "tool"), "")
+	if err := os.Chmod(filepath.Join(base, "tool"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	locked := mkdir(t, filepath.Join(base, "locked"))
+	if err := os.Chmod(locked, 0o600); err != nil {
+		t.Fatal(err)
 	}
 }
