@@ -637,7 +637,8 @@ primary Compose service.
 The Git root is found from the files in the workspace's parent folders; `dcb`
 does not run `git`. `GIT_CEILING_DIRECTORIES` stops parent discovery before
 a listed ancestor. Entries must be absolute paths. Git resolves symlinks in
-entries until an empty path-list entry disables that resolution. A ceiling equal
+entries until an empty path-list entry disables that resolution. Entries after
+that marker retain literal path components. A ceiling equal
 to the starting folder does not stop discovery. Other Git environment overrides
 and ownership checks are not applied. `exec`, `run-user-commands`, `set-up`,
 and an `up` that
