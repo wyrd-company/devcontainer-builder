@@ -127,12 +127,16 @@ func gitCeilingLimit(folder, ceilings string) int {
 		if !filepath.IsAbs(entry) {
 			continue
 		}
-		entry = filepath.Clean(entry)
 		if resolve {
 			entry, err = filepath.EvalSymlinks(entry)
 			if err != nil {
 				continue
 			}
+		}
+		// Git removes one trailing separator from literal entries, but does
+		// not collapse dot components or repeated separators.
+		if !resolve && len(entry) > 1 {
+			entry = strings.TrimSuffix(entry, string(os.PathSeparator))
 		}
 		for parent, depth := filepath.Dir(physical), 1; parent != physical; parent, depth = filepath.Dir(parent), depth+1 {
 			if parent == entry && (limit < 0 || depth < limit) {
