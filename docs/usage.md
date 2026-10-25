@@ -690,12 +690,12 @@ symbolic links are resolved before `..` components. Git changes to the
 repository folder first, so the folder and the value are separate lookups, each
 with its own symbolic link and path length limits. A `.git` folder above the
 workspace folder and a gitfile target first pass through Git's own path
-resolution, which allows 33 symbolic links. On hosts other than Linux, the
-repository folder's physical path joined with the value must fit the host's
-path length limit. An empty value or one that Git cannot resolve gives no Git
-root. Inside that working tree, the Git root
-keeps the workspace folder's path; outside it, the Git root is the working
-tree's physical path. Includes, other config keys and extensions outside Git's
+resolution, which allows 33 symbolic links. Builds for hosts other than Linux
+and macOS instead join the repository folder's physical path and the value,
+which must fit the host's path length limit. An empty value or one that Git
+cannot resolve gives no Git root. Inside that working tree, the Git root keeps
+the workspace folder's path; outside it, the Git root is the working tree's
+physical path. Includes, other config keys and extensions outside Git's
 version 0 set are not interpreted.
 Relative values start at the workspace folder. A valid `GIT_DIR` selects the
 workspace folder without parent discovery; `GIT_WORK_TREE` or the repository
