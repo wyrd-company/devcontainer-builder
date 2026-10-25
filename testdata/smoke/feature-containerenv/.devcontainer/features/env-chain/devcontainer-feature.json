@@ -1,0 +1,13 @@
+{
+  "id": "env-chain",
+  "version": "1.0.0",
+  "name": "Environment chain",
+  "description": "Records the containerEnv its install step sees.",
+  "installsAfter": ["ghcr.io/devcontainers/features/go"],
+  "containerEnv": {
+    "ZZ_HOME": "${GOPATH}/zz",
+    "AA_BIN": "${ZZ_HOME}/bin",
+    "MM_UNSET": "[${SAMPLE_UNSET}]",
+    "QQ_DEFAULT": "${SAMPLE_UNSET:-fallback}"
+  }
+}

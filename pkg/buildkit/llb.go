@@ -156,9 +156,7 @@ func Build(in GraphInputs) (llb.State, error) {
 	}
 	for _, f := range in.Features {
 		// A feature's containerEnv is visible to its own install script.
-		for _, k := range sortedKeys(f.Metadata.ContainerEnv) {
-			state = state.AddEnv(k, f.Metadata.ContainerEnv[k])
-		}
+		state = withFeatureEnv(state, f.Metadata)
 		state = applyFeature(state, localCtx, in.FeaturesContextSubdir, f, cOpts)
 	}
 

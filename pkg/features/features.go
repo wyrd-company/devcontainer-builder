@@ -64,6 +64,10 @@ type Metadata struct {
 	PostCreateCommand spec.Command      `json:"postCreateCommand,omitempty"`
 	PostStartCommand  spec.Command      `json:"postStartCommand,omitempty"`
 	PostAttachCommand spec.Command      `json:"postAttachCommand,omitempty"`
+
+	// containerEnvOrder is the declaration order of the ContainerEnv keys,
+	// which a JSON object decoded into a map does not keep.
+	containerEnvOrder []string
 }
 
 // Option models a single configurable feature option.
@@ -379,12 +383,18 @@ func readMetadata(dir string) (Metadata, error) {
 	if err != nil {
 		return Metadata{}, fmt.Errorf("read %s: %w", path, err)
 	}
-	data, _, err = spec.MigrateLegacyVSCode(spec.StripJSONC(data), false)
+	stripped := spec.StripJSONC(data)
+	data, _, err = spec.MigrateLegacyVSCode(stripped, false)
 	if err != nil {
 		return Metadata{}, fmt.Errorf("parse %s: %w", path, err)
 	}
 	var meta Metadata
 	if err := json.Unmarshal(data, &meta); err != nil {
+		return Metadata{}, fmt.Errorf("parse %s: %w", path, err)
+	}
+	// The legacy migration re-encodes the document through a map, so the
+	// key order comes from the file as written.
+	if meta.containerEnvOrder, err = containerEnvOrder(stripped); err != nil {
 		return Metadata{}, fmt.Errorf("parse %s: %w", path, err)
 	}
 	if meta.ID == "" {

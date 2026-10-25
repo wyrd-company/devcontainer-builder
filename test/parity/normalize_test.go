@@ -565,7 +565,7 @@ func TestRepositoryFixturesExist(t *testing.T) {
 	if got := (Fixture{Path: "src/test/configs/image"}).sourceDir(); got != filepath.Join("reference/cli", "src/test/configs/image") {
 		t.Fatalf("upstream fixture source = %s", got)
 	}
-	var repository int
+	var repository, contexts int
 	for _, f := range fixtures {
 		if f.Source == "" {
 			continue
@@ -575,11 +575,15 @@ func TestRepositoryFixturesExist(t *testing.T) {
 		if _, err := os.Stat(filepath.Join(dir, f.Config)); err != nil {
 			t.Errorf("fixture %s config: %v", f.Name, err)
 		}
+		if !strings.HasPrefix(f.Name, "dockerfile-context-") {
+			continue
+		}
+		contexts++
 		if !reflect.DeepEqual(f.Markers, contextMarkers) {
 			t.Errorf("fixture %s markers = %q, want %q", f.Name, f.Markers, contextMarkers)
 		}
 	}
-	if repository != 3 {
-		t.Fatalf("repository fixtures = %d, want the three build-context layouts", repository)
+	if repository != 4 || contexts != 3 {
+		t.Fatalf("repository fixtures = %d with %d build-context layouts, want the three layouts and feature-containerenv", repository, contexts)
 	}
 }

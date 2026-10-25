@@ -138,9 +138,11 @@ func emitFeature(b *strings.Builder, f features.Resolved, contextDir string) {
 	src := contextDir + "/" + f.SafeID
 	dest := features.InstallDir + "/" + f.SafeID
 	fmt.Fprintf(b, "# Feature: %s (%s)\n", f.Metadata.ID, f.Source)
-	// A feature's containerEnv is visible to its own install script.
-	if env := mapToEnv(f.Metadata.ContainerEnv); env != "" {
-		fmt.Fprintln(b, env)
+	// A feature's containerEnv is visible to its own install script. As in
+	// the reference CLI, each key is its own ENV in declaration order and
+	// its value is expanded against the environment as built.
+	for _, k := range f.Metadata.ContainerEnvKeys() {
+		fmt.Fprintf(b, "ENV %s=%s\n", k, features.QuoteContainerEnv(f.Metadata.ContainerEnv[k]))
 	}
 	fmt.Fprintf(b, "COPY --chown=root:root %s %s\n", src, dest)
 	emitHeredocCopy(b, "", dest+"/"+features.EnvFile, f.EnvFileContent())

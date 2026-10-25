@@ -71,6 +71,11 @@ res, err := host.Up(ctx, docker.UpRequest{
 
 `ImageBuilt` tells `Up` that the image was built from this configuration, so
 its metadata label already holds the feature and configuration entries.
+Without `ImageBuilt`, the Docker and Compose hosts add each feature's
+`containerEnv` to the container, and `pkg/projection/kubernetes` adds it to
+the Pod. References to other environment variables, such as `${PATH}`, are not
+expanded there; they are expanded only when the features are built into the
+image.
 
 `RemoteEnv` and `Secrets` add variables to the lifecycle commands and the
 dotfiles install of one `Up`. The configuration's `remoteEnv` wins over

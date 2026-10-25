@@ -1,0 +1,15 @@
+{
+  "name": "smoke-feature-containerenv",
+  "image": "mcr.microsoft.com/devcontainers/base:trixie",
+  "workspaceFolder": "/workspaces/smoke-feature-containerenv",
+  "updateRemoteUserUID": false,
+  "features": {
+    "ghcr.io/devcontainers/features/go:1": {
+      "version": "1.27.3"
+    },
+    "./features/env-chain": {}
+  },
+  "containerEnv": {
+    "SPEC_REF": "${GOPATH}/spec"
+  }
+}
