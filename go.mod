@@ -22,6 +22,7 @@ require (
 	github.com/tonistiigi/go-csvvalue v0.0.0-20240710180619-ddb21b71c0b4
 	golang.org/x/crypto v0.27.0
 	golang.org/x/sync v0.8.0
+	golang.org/x/sys v0.26.0
 	golang.org/x/text v0.18.0
 	google.golang.org/grpc v1.67.0
 	gopkg.in/yaml.v3 v3.0.1
@@ -106,7 +107,6 @@ require (
 	go.yaml.in/yaml/v4 v4.0.0-rc.4 // indirect
 	golang.org/x/net v0.29.0 // indirect
 	golang.org/x/oauth2 v0.22.0 // indirect
-	golang.org/x/sys v0.26.0 // indirect
 	golang.org/x/term v0.24.0 // indirect
 	golang.org/x/time v0.6.0 // indirect
 	google.golang.org/genproto v0.0.0-20240123012728-ef4313101c80 // indirect
