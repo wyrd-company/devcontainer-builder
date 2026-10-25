@@ -646,6 +646,9 @@ intermediate component gives no Git root. For an outside-tree override, trailing
 whitespace is removed from the resolved path as in the upstream CLI probe.
 An explicitly empty `GIT_DIR`, or one that names a missing repository or an
 invalid gitfile target, gives no Git root; parent discovery does not replace it.
+Gitfiles must start with the literal `gitdir: ` prefix and contain a repository
+path. Only final CR and LF bytes are removed; other whitespace and interior
+newlines belong to the path. Gitfiles larger than 1 MiB give no Git root.
 Relative values start at the workspace folder. A valid `GIT_DIR` selects the
 workspace folder without parent discovery; `GIT_WORK_TREE` can select its working
 tree. Repository config, including `core.worktree`, is not interpreted. Other Git
