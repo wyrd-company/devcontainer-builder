@@ -51,6 +51,25 @@ func symlinkChain(t *testing.T, folder, prefix string, count int, final string) 
 	return prefix + "0"
 }
 
+// chainAttempts bounds the observations of one layout. While mounts change
+// anywhere on the host, Linux can fail one lookup of more than 20 symbolic
+// links with ELOOP, below its limit of 40; this was measured on the gate host
+// for Git and for plain stat. A difference in semantics recurs on every
+// attempt, so only such a spurious failure is retried.
+const chainAttempts = 5
+
+// observeChain repeats observe until it succeeds or the attempts end, and
+// returns the last failure.
+func observeChain(observe func() error) error {
+	var err error
+	for range chainAttempts {
+		if err = observe(); err == nil {
+			return nil
+		}
+	}
+	return err
+}
+
 // makeCoreWorktreeChain builds the layout under base, sets its environment,
 // and returns the caller folder, the Git environment and the working tree.
 // Without a git command it writes the minimal repository instead.
@@ -139,31 +158,37 @@ func TestGitRootCoreWorktreeChdirMatchesGit(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.String(), func(t *testing.T) {
 			folder, env, _ := makeCoreWorktreeChain(t, git, t.TempDir(), c)
-			cmd := exec.Command(git, "rev-parse", "--show-cdup")
-			cmd.Dir = folder
-			cmd.Env = env
-			out, e := cmd.Output()
-			want := ""
-			if e == nil {
-				cdup := strings.TrimSpace(string(out))
-				want = filepath.Join(folder, cdup)
-				if filepath.IsAbs(cdup) {
-					want = filepath.Clean(cdup)
+			err := observeChain(func() error {
+				cmd := exec.Command(git, "rev-parse", "--show-cdup")
+				cmd.Dir = folder
+				cmd.Env = env
+				out, e := cmd.Output()
+				want := ""
+				if e == nil {
+					cdup := strings.TrimSpace(string(out))
+					want = filepath.Join(folder, cdup)
+					if filepath.IsAbs(cdup) {
+						want = filepath.Clean(cdup)
+					}
 				}
-			}
-			if got, e := GitRoot(folder); e != nil || got != want {
-				t.Fatalf("GitRoot(%s) = %q, %v; git = %q", folder, got, e, want)
-			}
-			resolved, e := Resolve(folder, false, false, Options{MountGitRoot: true, Platform: "linux"})
-			if e != nil {
-				t.Fatal(e)
-			}
-			mount := want
-			if mount == "" {
-				mount = folder
-			}
-			if resolved.WorkspaceMount.Source != mount {
-				t.Fatalf("mount(%s) = %q; want %q", folder, resolved.WorkspaceMount.Source, mount)
+				if got, e := GitRoot(folder); e != nil || got != want {
+					return fmt.Errorf("GitRoot(%s) = %q, %v; git = %q", folder, got, e, want)
+				}
+				resolved, e := Resolve(folder, false, false, Options{MountGitRoot: true, Platform: "linux"})
+				if e != nil {
+					return e
+				}
+				mount := want
+				if mount == "" {
+					mount = folder
+				}
+				if resolved.WorkspaceMount.Source != mount {
+					return fmt.Errorf("mount(%s) = %q; want %q", folder, resolved.WorkspaceMount.Source, mount)
+				}
+				return nil
+			})
+			if err != nil {
+				t.Fatal(err)
 			}
 		})
 	}
