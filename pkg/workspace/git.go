@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"unicode"
 )
 
 // gitdirLine matches a gitfile's pointer, as upstream reads worktree .git files.
@@ -61,7 +62,12 @@ func GitRoot(folder string) (string, error) {
 			return lexical, nil
 		}
 		if filepath.Dir(current) == current {
-			return workTree, nil
+			// Upstream trims JavaScript whitespace from the probe output before
+			// resolving it. Absolute cdup starts with a separator, so only
+			// its suffix can change. Go TrimSpace differs for BOM and NEL.
+			return filepath.Clean(strings.TrimRightFunc(workTree, func(r rune) bool {
+				return unicode.Is(unicode.Zs, r) || strings.ContainsRune("\t\n\v\f\r\u2028\u2029\ufeff", r)
+			})), nil
 		}
 	}
 }
