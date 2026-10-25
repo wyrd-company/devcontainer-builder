@@ -50,6 +50,7 @@ func GitRoot(folder string) (string, error) {
 		if err != nil {
 			return "", nil
 		}
+		gitdir := gitChdirDir(dir)
 		if !info.IsDir() {
 			// Git rejects special files; reading a FIFO could block discovery.
 			if !info.Mode().IsRegular() {
@@ -67,6 +68,7 @@ func GitRoot(folder string) (string, error) {
 				target = parent + target
 			}
 			dir = target
+			gitdir = gitRealpathDir("", dir)
 		}
 		valid, _ := isGitDir(dir, folder)
 		if dir == "" || !valid {
@@ -75,7 +77,7 @@ func GitRoot(folder string) (string, error) {
 		// An explicit repository disables parent discovery. Git defaults its
 		// working tree to the probe cwd, including outside a discovered tree.
 		// Without a working tree, core.bare also gives the caller folder.
-		root = gitSelectedRoot(filepath.Clean(folder), dir, folder)
+		root = gitSelectedRoot(filepath.Clean(folder), dir, folder, gitdir)
 	} else {
 		root, err = discoverGitRoot(folder)
 	}
@@ -123,7 +125,13 @@ func discoverGitRoot(folder string) (string, error) {
 				return "", nil
 			}
 			if valid {
-				return gitSelectedRoot(current, dotGit, folder), nil
+				gitdir := gitChdirDir(dotGit)
+				if depth > 0 {
+					// Git takes the realpath of a .git folder found above
+					// the caller folder, from the physical found folder.
+					gitdir = gitRealpathDir(current, ".git")
+				}
+				return gitSelectedRoot(current, dotGit, folder, gitdir), nil
 			}
 		case err == nil:
 			gitdir, err := readGitfile(dotGit)
@@ -134,7 +142,7 @@ func discoverGitRoot(folder string) (string, error) {
 			if gitdir == "" || !valid {
 				return "", nil
 			}
-			return gitSelectedRoot(current, gitdir, folder), nil
+			return gitSelectedRoot(current, gitdir, folder, gitRealpathDir("", gitdir)), nil
 		case !errors.Is(err, fs.ErrNotExist) && !errors.Is(err, fs.ErrPermission):
 			return "", err
 		}
@@ -146,7 +154,7 @@ func discoverGitRoot(folder string) (string, error) {
 			return "", nil
 		}
 		if valid {
-			return gitSelectedRoot(filepath.Clean(folder), current, folder), nil
+			return gitSelectedRoot(filepath.Clean(folder), current, folder, gitChdirDir(current)), nil
 		}
 		if filepath.Dir(current) == current {
 			return "", nil
