@@ -22,7 +22,8 @@ import (
 // repository, and otherwise ends discovery, as Git refuses an invalid gitfile.
 // HEAD must pass Git's symbolic or detached syntax admission check.
 // A commondir pointer selects the common objects and refs signatures.
-// GIT_OBJECT_DIRECTORY overrides the objects signature, relative to folder.
+// GIT_COMMON_DIR replaces that pointer and GIT_OBJECT_DIRECTORY overrides the
+// objects signature, both relative to folder.
 // Gitfiles use a literal prefix and path payload, with Git's 1 MiB size limit.
 // GIT_CEILING_DIRECTORIES limits parent discovery as in Git. GIT_WORK_TREE
 // selects the working tree after repository discovery. Other environment
@@ -203,16 +204,24 @@ func gitfilePointer(path string) (string, error) {
 }
 
 // isGitDir is Git's repository test: HEAD, plus accessible objects and refs
-// in the common directory selected by commondir, if present. Paths retain
+// in the common directory selected by GIT_COMMON_DIR or commondir. Paths retain
 // components until filesystem traversal; cleaning first changes symlink/..
 // and regular-file/.. semantics.
 func isGitDir(dir, folder string) (bool, error) {
 	if !validGitHEAD(dir + string(os.PathSeparator) + "HEAD") {
 		return false, nil
 	}
-	common, err := gitCommonDirectory(dir)
-	if err != nil {
-		return false, err
+	// Git's get_common_dir uses GIT_COMMON_DIR verbatim instead of reading
+	// commondir. An empty value leaves the absolute /objects and /refs paths.
+	common, set := os.LookupEnv("GIT_COMMON_DIR")
+	if !set {
+		var err error
+		common, err = gitCommonDirectory(dir)
+		if err != nil {
+			return false, err
+		}
+	} else if common != "" && !filepath.IsAbs(common) {
+		common = folder + string(os.PathSeparator) + common
 	}
 	// Git uses access(X_OK), including for executable regular files. Linux
 	// and macOS are the supported host platforms.
