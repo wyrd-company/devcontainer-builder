@@ -20,6 +20,8 @@ import (
 // upstream's `git rev-parse --show-cdup` result is), a .git folder that is a
 // repository marks the root; a .git file marks the root when its gitdir is a
 // repository, and otherwise ends discovery, as Git refuses an invalid gitfile.
+// A folder that is itself a repository, such as a bare repository or a .git
+// folder, selects the caller folder as upstream's empty cdup does.
 // HEAD must pass Git's symbolic or detached syntax admission check.
 // A commondir pointer selects the common objects and refs signatures.
 // GIT_COMMON_DIR replaces that pointer and GIT_OBJECT_DIRECTORY overrides the
@@ -150,6 +152,16 @@ func discoverGitRoot(folder string) (string, error) {
 			return current, nil
 		case !errors.Is(err, fs.ErrNotExist) && !errors.Is(err, fs.ErrPermission):
 			return "", err
+		}
+		// Git then tests the folder itself, which finds a bare repository or an
+		// administrative folder. Its probe then has no working tree, and the
+		// upstream CLI resolves the empty cdup to the caller folder.
+		valid, err := isGitDir(current, folder)
+		if err != nil {
+			return "", nil
+		}
+		if valid {
+			return filepath.Clean(folder), nil
 		}
 		if filepath.Dir(current) == current {
 			return "", nil
