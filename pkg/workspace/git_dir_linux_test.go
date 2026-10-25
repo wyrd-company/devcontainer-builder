@@ -84,3 +84,38 @@ func TestGitDirFIFOHelper(t *testing.T) {
 		t.Fatalf("GitRoot = %q, %v; want no root", root, err)
 	}
 }
+
+// A commondir FIFO is not a repository pointer to read. Reuse the established
+// test-only subprocess bound so a regression cannot leave a blocked producer.
+func TestGitCommonDirectoryFIFORejectsWithoutReading(t *testing.T) {
+	for _, explicit := range []bool{false, true} {
+		name := "discovered"
+		if explicit {
+			name = "explicit"
+		}
+		t.Run(name, func(t *testing.T) {
+			repo := t.TempDir()
+			makeRepo(t, repo)
+			folder := mkdir(t, filepath.Join(repo, "app"))
+			if err := unix.Mkfifo(filepath.Join(repo, ".git", "commondir"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			env := append(testgit.Env(), "DCB_TEST_GIT_DIR_FIFO_HELPER=1")
+			if explicit {
+				env = append(env, "GIT_DIR="+filepath.Join(repo, ".git"))
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+			defer cancel()
+			cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestGitDirFIFOHelper$")
+			cmd.Dir = folder
+			cmd.Env = env
+			out, err := cmd.CombinedOutput()
+			if ctx.Err() != nil {
+				t.Fatalf("native blocked on commondir FIFO: %v; %s", ctx.Err(), out)
+			}
+			if err != nil {
+				t.Fatalf("native = %s, %v", out, err)
+			}
+		})
+	}
+}

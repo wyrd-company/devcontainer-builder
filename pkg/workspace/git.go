@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"unicode"
 )
 
@@ -20,6 +21,7 @@ import (
 // repository marks the root; a .git file marks the root when its gitdir is a
 // repository, and otherwise ends discovery, as Git refuses an invalid gitfile.
 // HEAD must pass Git's symbolic or detached syntax admission check.
+// A commondir pointer selects the common objects and refs signatures.
 // Gitfiles use a literal prefix and path payload, with Git's 1 MiB size limit.
 // GIT_CEILING_DIRECTORIES limits parent discovery as in Git. GIT_WORK_TREE
 // selects the working tree after repository discovery. Other environment
@@ -60,7 +62,8 @@ func GitRoot(folder string) (string, error) {
 			}
 			dir = target
 		}
-		if dir == "" || !isGitDir(dir) {
+		valid, _ := isGitDir(dir)
+		if dir == "" || !valid {
 			return "", nil
 		}
 		// An explicit repository disables parent discovery. Git defaults its
@@ -124,7 +127,13 @@ func discoverGitRoot(folder string) (string, error) {
 		info, err := os.Stat(dotGit)
 		switch {
 		case err == nil && info.IsDir():
-			if isGitDir(dotGit) {
+			valid, err := isGitDir(dotGit)
+			if err != nil {
+				// A failed common-directory read or resolution makes Git's
+				// probe fail, rather than continuing to a parent repository.
+				return "", nil
+			}
+			if valid {
 				return current, nil
 			}
 		case err == nil:
@@ -132,7 +141,8 @@ func discoverGitRoot(folder string) (string, error) {
 			if err != nil {
 				return "", err
 			}
-			if gitdir == "" || !isGitDir(gitdir) {
+			valid, _ := isGitDir(gitdir)
+			if gitdir == "" || !valid {
 				return "", nil
 			}
 			return current, nil
@@ -191,18 +201,58 @@ func gitfilePointer(path string) (string, error) {
 	return value, nil
 }
 
-// isGitDir is Git's repository test: HEAD, plus objects and refs or, for a
-// linked worktree's administrative folder, a commondir file. Paths retain
+// isGitDir is Git's repository test: HEAD, plus accessible objects and refs
+// in the common directory selected by commondir, if present. Paths retain
 // components until filesystem traversal; cleaning first changes symlink/..
 // and regular-file/.. semantics.
-func isGitDir(dir string) bool {
+func isGitDir(dir string) (bool, error) {
 	if !validGitHEAD(dir + string(os.PathSeparator) + "HEAD") {
-		return false
+		return false, nil
 	}
-	if isFile(dir + string(os.PathSeparator) + "commondir") {
-		return true
+	common, err := gitCommonDirectory(dir)
+	if err != nil {
+		return false, err
 	}
-	return isDir(dir+string(os.PathSeparator)+"objects") && isDir(dir+string(os.PathSeparator)+"refs")
+	// Git uses access(X_OK), including for executable regular files. Linux
+	// and macOS are the supported host platforms.
+	return syscall.Access(common+string(os.PathSeparator)+"objects", 1) == nil &&
+		syscall.Access(common+string(os.PathSeparator)+"refs", 1) == nil, nil
+}
+
+// gitCommonDirectory follows get_common_dir_noenv in Git's setup.c. This is
+// separate from the upstream CLI's permissive common-folder mount parser.
+func gitCommonDirectory(dir string) (string, error) {
+	path := dir + string(os.PathSeparator) + "commondir"
+	_, err := os.Lstat(path)
+	if errors.Is(err, fs.ErrNotExist) {
+		return dir, nil
+	}
+	if err != nil {
+		return "", err
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		return "", err
+	}
+	// Do not read special files such as FIFOs during repository discovery.
+	if !info.Mode().IsRegular() {
+		return "", errors.New("Git common-directory pointer is not a regular file")
+	}
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	if len(content) == 0 {
+		return "", errors.New("empty Git common-directory pointer")
+	}
+	common := strings.TrimRight(string(content), "\r\n")
+	if end := strings.IndexByte(common, 0); end >= 0 {
+		common = common[:end]
+	}
+	if !filepath.IsAbs(common) {
+		common = dir + string(os.PathSeparator) + common
+	}
+	return gitCeilingPath(common)
 }
 
 // validGitHEAD follows Git's validate_headref repository admission test, not
@@ -252,11 +302,6 @@ func validGitHEAD(path string) bool {
 func isFile(path string) bool {
 	info, err := os.Stat(path)
 	return err == nil && info.Mode().IsRegular()
-}
-
-func isDir(path string) bool {
-	info, err := os.Stat(path)
-	return err == nil && info.IsDir()
 }
 
 // gitCeilingLimit counts parent steps to the closest strict ancestor ceiling.
