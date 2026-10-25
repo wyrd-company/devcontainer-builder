@@ -93,6 +93,14 @@ copied files to `/context-files.txt`; the lifecycle probe reads that list and
 `/context/kept.txt`. A fixture's `Source` names the repository folder of a
 fixture that is not in `reference/cli`.
 
+The `feature-containerenv` repository fixture installs two local features on
+a generic base image. Their `containerEnv` values read the base `PATH`, the
+other feature's value, earlier keys of the same feature, an unset name, a
+default and escaped quotes; the configuration's `containerEnv` references a
+feature value. The second feature's install step writes the values it sees to
+`/sample-install-env.txt`, which the lifecycle probe reads, and the `env`
+dimension compares the container environment.
+
 The `additional-features` fixture runs the image fixture again and passes
 `--additional-features` with the published common-utils feature to both
 sides' `up`. The shared runner passes `--mount-workspace-git-root=false` to both

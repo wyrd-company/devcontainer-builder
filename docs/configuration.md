@@ -55,6 +55,24 @@ Strings can use `${localEnv:NAME}`, `${localWorkspaceFolder}`,
 `${localEnv:NAME:default}`. `dcb read-configuration` shows the configuration
 after substitution.
 
+### Feature containerEnv
+
+A feature's `containerEnv` is applied as the reference CLI applies it: each
+key becomes a Dockerfile `ENV` instruction before the feature installs, in the
+order the feature declares its keys. A value reads the environment as built
+with `$NAME`, `${NAME}`, and the Dockerfile modifiers such as
+`${NAME:-default}`: the base image's environment, the earlier features, and the
+feature's earlier keys. `PATH` reads as the platform default when the base
+image sets none, and an unset name reads as an empty string. A substitution the
+Dockerfile rejects, such as `${localEnv:NAME}` in a feature value, fails the
+build. Later install steps and the final image get the expanded values, so the
+Go feature's `PATH=/usr/local/go/bin:/go/bin:${PATH}` keeps the base image's
+`PATH`.
+
+The configuration's own `containerEnv` is not expanded this way. It is applied
+after the features, with its `${...}` references kept as written once the
+variables above are substituted.
+
 ### runArgs
 
 `runArgs` is read as `docker run` flags and applied to the container through
