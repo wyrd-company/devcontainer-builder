@@ -1,5 +1,5 @@
 // relationships:
-//   references: [git_work_tree, git_chdir_linux, git_chdir_other]
+//   references: [git_work_tree, git_chdir_linux, git_chdir_darwin, git_chdir_other]
 
 package workspace
 
@@ -8,8 +8,11 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
+
+	"golang.org/x/sys/unix"
 
 	"github.com/wyrd-company/devcontainer-builder/internal/testgit"
 )
@@ -191,5 +194,236 @@ func TestGitRootCoreWorktreeChdirMatchesGit(t *testing.T) {
 				t.Fatal(err)
 			}
 		})
+	}
+}
+
+// Git's chdir arguments and its final cwd each stay below the host's PATH_MAX
+// while joining the repository folder and the value would exceed it, through
+// either the physical (physical-long) or the named (named-long) repository
+// folder.
+func TestGitRootCoreWorktreePathMax(t *testing.T) {
+	git, _ := exec.LookPath("git")
+	deep := func(root string, n int, c string) string {
+		for i := 0; i < n; i++ {
+			root = filepath.Join(root, strings.Repeat(c, 200)+string(rune('a'+i)))
+		}
+		return mkdir(t, root)
+	}
+	// Each folder name takes 201 bytes, so Linux's PATH_MAX of 4096 gives
+	// depths of 10 and 13.
+	half, most := unix.PathMax/2/201, unix.PathMax*2/3/201
+	for _, c := range []struct {
+		name                         string
+		adminDepth, treeDepth, depth int
+	}{
+		{"physical-long", half, 0, most},
+		{"named-long", 0, half, most},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			base, err := filepath.EvalSymlinks(t.TempDir())
+			if err != nil {
+				t.Fatal(err)
+			}
+			tree := deep(filepath.Join(base, "t"), c.treeDepth, "x")
+			makeRepo(t, tree)
+			admin := filepath.Join(deep(filepath.Join(base, "a"), c.adminDepth, "y"), "admin")
+			if err := os.Rename(filepath.Join(tree, ".git"), admin); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Symlink(admin, filepath.Join(tree, ".git")); err != nil {
+				t.Fatal(err)
+			}
+			other := mkdir(t, filepath.Join(deep(filepath.Join(base, "o"), c.depth, "z"), "other"))
+			value, err := filepath.Rel(admin, other)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(admin)+len(value) < unix.PathMax && len(tree)+len(value) < unix.PathMax {
+				t.Fatalf("joined lengths %d and %d stay below PATH_MAX", len(admin)+len(value), len(tree)+len(value))
+			}
+			for _, path := range []string{tree, admin, value, other} {
+				if len(path) >= unix.PathMax {
+					t.Fatalf("%d bytes reach PATH_MAX: %s", len(path), path)
+				}
+			}
+			writeFile(t, filepath.Join(admin, "config"), "[core]\n\trepositoryformatversion = 0\n\tworktree = "+value+"\n")
+			t.Setenv("GIT_CEILING_DIRECTORIES", base)
+			folder := mkdir(t, filepath.Join(tree, "app"))
+			if git != "" {
+				cmd := exec.Command(git, "rev-parse", "--show-cdup")
+				cmd.Dir = folder
+				if out, err := cmd.Output(); err != nil || strings.TrimSpace(string(out)) != other {
+					t.Fatalf("git = %q, %v; want %q", out, err, other)
+				}
+			}
+			if got, err := GitRoot(folder); err != nil || got != other {
+				t.Fatalf("GitRoot = %q, %v; want %q", got, err, other)
+			}
+		})
+	}
+}
+
+// The value passes, through symbolic links, a physical folder whose path
+// exceeds the host's PATH_MAX. Git's chdir resolves it in the kernel, so a
+// value that climbs back to a short folder selects it (passes). Git resolves
+// its final cwd again, which fails when the value ends in that folder (ends).
+func TestGitRootCoreWorktreeIntermediatePathMax(t *testing.T) {
+	for _, c := range []struct {
+		name  string
+		climb bool
+	}{
+		{"passes", true},
+		{"ends", false},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			base, err := filepath.EvalSymlinks(t.TempDir())
+			if err != nil {
+				t.Fatal(err)
+			}
+			tree := filepath.Join(base, "tree")
+			makeRepo(t, tree)
+			other := mkdir(t, filepath.Join(base, "other"))
+			// A path longer than PATH_MAX is created one folder at a time.
+			var names []string
+			parent, err := unix.Open(base, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_CLOEXEC, 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for i := 0; i <= unix.PathMax/200; i++ {
+				name := strings.Repeat("k", 199) + string(rune('a'+i))
+				names = append(names, name)
+				err := unix.Mkdirat(parent, name, 0o755)
+				var child int
+				if err == nil {
+					child, err = unix.Openat(parent, name, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_CLOEXEC, 0)
+				}
+				unix.Close(parent)
+				if err != nil {
+					t.Fatal(err)
+				}
+				parent = child
+			}
+			unix.Close(parent)
+			// low names the first half absolutely; deep in it names the rest.
+			half := len(names) / 2
+			low := filepath.Join(append([]string{base}, names[:half]...)...)
+			if err := os.Symlink(low, filepath.Join(base, "low")); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Symlink(filepath.Join(names[half:]...), filepath.Join(low, "deep")); err != nil {
+				t.Fatal(err)
+			}
+			if physical := len(base) + 201*len(names); physical <= unix.PathMax {
+				t.Fatalf("physical path of %d bytes stays below PATH_MAX", physical)
+			}
+			value, want := "../../low/deep", ""
+			if c.climb {
+				value, want = value+strings.Repeat("/..", len(names))+"/other", other
+			}
+			writeFile(t, filepath.Join(tree, ".git", "config"), "[core]\n\trepositoryformatversion = 0\n\tworktree = "+value+"\n")
+			t.Setenv("GIT_CEILING_DIRECTORIES", base)
+			folder := mkdir(t, filepath.Join(tree, "app"))
+			if git, err := exec.LookPath("git"); err == nil {
+				cmd := exec.Command(git, "rev-parse", "--show-cdup")
+				cmd.Dir = folder
+				out, err := cmd.Output()
+				if got := strings.TrimSpace(string(out)); (err == nil) != (want != "") || got != want {
+					t.Fatalf("git = %q, %v; want %q", out, err, want)
+				}
+			}
+			if got, err := GitRoot(folder); err != nil || got != want {
+				t.Fatalf("GitRoot = %q, %v; want %q", got, err, want)
+			}
+			mount := want
+			if mount == "" {
+				mount = folder
+			}
+			resolved, err := Resolve(folder, false, false, Options{MountGitRoot: true, Platform: "linux"})
+			if err != nil || resolved.WorkspaceMount.Source != mount {
+				t.Fatalf("mount = %q, %v; want %q", resolved.WorkspaceMount.Source, err, mount)
+			}
+		})
+	}
+}
+
+// chdir needs only search permission on the repository folder, which Git
+// changes to before a relative core.worktree.
+func TestGitRootCoreWorktreeSearchOnlyRepository(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root bypasses permissions")
+	}
+	git, _ := exec.LookPath("git")
+	for _, route := range []string{"discovered", "explicit"} {
+		t.Run(route, func(t *testing.T) {
+			base, err := filepath.EvalSymlinks(t.TempDir())
+			if err != nil {
+				t.Fatal(err)
+			}
+			tree := filepath.Join(base, "tree")
+			makeRepo(t, tree)
+			other := mkdir(t, filepath.Join(base, "other"))
+			admin := filepath.Join(tree, ".git")
+			writeFile(t, filepath.Join(admin, "config"), "[core]\n\trepositoryformatversion = 0\n\tworktree = ../../other\n")
+			t.Setenv("GIT_CEILING_DIRECTORIES", base)
+			if route == "explicit" {
+				t.Setenv("GIT_DIR", admin)
+			}
+			folder := mkdir(t, filepath.Join(tree, "app"))
+			if err := os.Chmod(admin, 0o100); err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { os.Chmod(admin, 0o755) })
+			if git != "" {
+				cmd := exec.Command(git, "rev-parse", "--show-cdup")
+				cmd.Dir = folder
+				if out, err := cmd.Output(); err != nil || strings.TrimSpace(string(out)) != other {
+					t.Fatalf("git = %q, %v; want %q", out, err, other)
+				}
+			}
+			if got, err := GitRoot(folder); err != nil || got != other {
+				t.Fatalf("GitRoot = %q, %v; want %q", got, err, other)
+			}
+		})
+	}
+}
+
+// Following a relative core.worktree leaves the process's working folder, and
+// that of every thread, unchanged.
+func TestGitRootCoreWorktreeKeepsWorkingFolder(t *testing.T) {
+	base, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	tree := filepath.Join(base, "tree")
+	makeRepo(t, tree)
+	other := mkdir(t, filepath.Join(base, "other"))
+	writeFile(t, filepath.Join(tree, ".git", "config"), "[core]\n\trepositoryformatversion = 0\n\tworktree = ../../other\n")
+	t.Setenv("GIT_CEILING_DIRECTORIES", base)
+	folder := mkdir(t, filepath.Join(tree, "app"))
+	cwd := mkdir(t, filepath.Join(base, "cwd"))
+	writeFile(t, filepath.Join(cwd, "marker"), "")
+	t.Chdir(cwd)
+	for range 20 {
+		if got, err := GitRoot(folder); err != nil || got != other {
+			t.Fatalf("GitRoot = %q, %v; want %q", got, err, other)
+		}
+	}
+	// Each locked goroutine takes an idle thread, as a later caller would.
+	errs := make(chan error, 64)
+	for range cap(errs) {
+		go func() {
+			runtime.LockOSThread()
+			defer runtime.UnlockOSThread()
+			_, err := os.Stat("marker")
+			errs <- err
+		}()
+	}
+	for range cap(errs) {
+		if err := <-errs; err != nil {
+			t.Fatalf("relative lookup after GitRoot: %v", err)
+		}
+	}
+	if got, err := os.Getwd(); err != nil || got != cwd {
+		t.Fatalf("Getwd = %q, %v; want %q", got, err, cwd)
 	}
 }
