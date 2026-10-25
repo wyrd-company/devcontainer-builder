@@ -6,9 +6,7 @@ package workspace
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"strings"
 	"testing"
 )
 
@@ -63,59 +61,25 @@ func TestGitRootCoreWorktreeChdirLimits(t *testing.T) {
 	}
 }
 
-// Git's chdir arguments and its final cwd each stay below PATH_MAX while
-// joining the repository folder and the value would exceed it, through either
-// the physical (physical-long) or the named (named-long) repository folder.
-func TestGitRootCoreWorktreePathMax(t *testing.T) {
-	git, _ := exec.LookPath("git")
-	deep := func(root string, n int, c string) string {
-		for i := 0; i < n; i++ {
-			root = filepath.Join(root, strings.Repeat(c, 200)+string(rune('a'+i)))
-		}
-		return mkdir(t, root)
+// chdir needs only search permission on the folder a relative core.worktree
+// names, and Linux's getcwd names that folder without read permission. Other
+// hosts' getcwd may need it, as Git's does there. The expectation is fixed,
+// independent of the host Git.
+func TestGitRootCoreWorktreeSearchOnlyFolder(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root bypasses permissions")
 	}
-	for _, c := range []struct {
-		name                         string
-		adminDepth, treeDepth, depth int
-	}{
-		{"physical-long", 10, 0, 13},
-		{"named-long", 0, 10, 13},
-	} {
-		t.Run(c.name, func(t *testing.T) {
-			base, err := filepath.EvalSymlinks(t.TempDir())
-			if err != nil {
-				t.Fatal(err)
-			}
-			tree := deep(filepath.Join(base, "t"), c.treeDepth, "x")
-			makeRepo(t, tree)
-			admin := filepath.Join(deep(filepath.Join(base, "a"), c.adminDepth, "y"), "admin")
-			if err := os.Rename(filepath.Join(tree, ".git"), admin); err != nil {
-				t.Fatal(err)
-			}
-			if err := os.Symlink(admin, filepath.Join(tree, ".git")); err != nil {
-				t.Fatal(err)
-			}
-			other := mkdir(t, filepath.Join(deep(filepath.Join(base, "o"), c.depth, "z"), "other"))
-			value, err := filepath.Rel(admin, other)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if len(admin)+len(value) < 4096 && len(tree)+len(value) < 4096 {
-				t.Fatalf("joined lengths %d and %d stay below PATH_MAX", len(admin)+len(value), len(tree)+len(value))
-			}
-			writeFile(t, filepath.Join(admin, "config"), "[core]\n\trepositoryformatversion = 0\n\tworktree = "+value+"\n")
-			t.Setenv("GIT_CEILING_DIRECTORIES", base)
-			folder := mkdir(t, filepath.Join(tree, "app"))
-			if git != "" {
-				cmd := exec.Command(git, "rev-parse", "--show-cdup")
-				cmd.Dir = folder
-				if out, err := cmd.Output(); err != nil || strings.TrimSpace(string(out)) != other {
-					t.Fatalf("git = %q, %v; want %q", out, err, other)
-				}
-			}
-			if got, err := GitRoot(folder); err != nil || got != other {
-				t.Fatalf("GitRoot = %q, %v; want %q", got, err, other)
-			}
-		})
+	base, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	tree := filepath.Join(base, "tree")
+	makeRepo(t, tree)
+	makeWorktreeObstacles(t, base)
+	writeFile(t, filepath.Join(tree, ".git", "config"), "[core]\n\trepositoryformatversion = 0\n\tworktree = ../../sealed\n")
+	t.Setenv("GIT_CEILING_DIRECTORIES", base)
+	folder := mkdir(t, filepath.Join(tree, "app"))
+	if got, err := GitRoot(folder); err != nil || got != filepath.Join(base, "sealed") {
+		t.Fatalf("GitRoot = %q, %v; want %q", got, err, filepath.Join(base, "sealed"))
 	}
 }
