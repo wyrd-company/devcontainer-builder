@@ -644,8 +644,11 @@ to the starting folder does not stop discovery. After a repository is found,
 folder; Git resolves symlinks and path components. An empty value or an invalid
 intermediate component gives no Git root. For an outside-tree override, trailing
 whitespace is removed from the resolved path as in the upstream CLI probe.
-Other Git environment overrides and
-ownership checks are not applied. `exec`, `run-user-commands`, `set-up`,
+An explicitly empty `GIT_DIR`, or one that names a missing repository or an
+invalid gitfile target, gives no Git root; parent discovery does not replace it.
+Relative values start at the workspace folder. Valid `GIT_DIR` values do not yet
+select a different repository or working tree. Other Git environment overrides
+and ownership checks are not applied. `exec`, `run-user-commands`, `set-up`,
 and an `up` that
 reuses a container use the folder where that container mounts the workspace,
 read from its bind mounts, whatever flags created it. A configured
