@@ -31,28 +31,43 @@ func TestGitDirFIFORejectsWithoutReading(t *testing.T) {
 	if err := unix.Mkfifo(fifo, 0600); err != nil {
 		t.Fatal(err)
 	}
-	env := append(testgit.Env(), "GIT_DIR="+fifo, "DCB_TEST_GIT_DIR_FIFO_HELPER=1")
-	// Review measured a blocked FIFO at three seconds. Bound only the test
-	// subprocess so a missing node-type guard cannot leave an owned producer.
-	run := func(bin string, args ...string) ([]byte, error) {
-		t.Helper()
-		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-		defer cancel()
-		cmd := exec.CommandContext(ctx, bin, args...)
-		cmd.Dir = folder
-		cmd.Env = env
-		out, err := cmd.CombinedOutput()
-		if ctx.Err() != nil {
-			t.Fatalf("%s blocked on FIFO: %v; %s", bin, ctx.Err(), out)
+	for _, explicit := range []bool{true, false} {
+		name := "discovered"
+		if explicit {
+			name = "explicit"
 		}
-		return out, err
-	}
-	out, err := run(gitBin, "rev-parse", "--show-cdup")
-	if exit, ok := err.(*exec.ExitError); !ok || exit.ExitCode() != 128 {
-		t.Fatalf("Git = %s, %v; want exit128", out, err)
-	}
-	if out, err := run(os.Args[0], "-test.run=^TestGitDirFIFOHelper$"); err != nil {
-		t.Fatalf("native = %s, %v", out, err)
+		t.Run(name, func(t *testing.T) {
+			env := append(testgit.Env(), "DCB_TEST_GIT_DIR_FIFO_HELPER=1")
+			if explicit {
+				env = append(env, "GIT_DIR="+fifo)
+			} else {
+				if err := os.Rename(fifo, filepath.Join(folder, ".git")); err != nil {
+					t.Fatal(err)
+				}
+			}
+			// Review measured a blocked FIFO at three seconds. Bound only the test
+			// subprocess so a missing node-type guard cannot leave an owned producer.
+			run := func(bin string, args ...string) ([]byte, error) {
+				t.Helper()
+				ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+				defer cancel()
+				cmd := exec.CommandContext(ctx, bin, args...)
+				cmd.Dir = folder
+				cmd.Env = env
+				out, err := cmd.CombinedOutput()
+				if ctx.Err() != nil {
+					t.Fatalf("%s blocked on FIFO: %v; %s", bin, ctx.Err(), out)
+				}
+				return out, err
+			}
+			out, err := run(gitBin, "rev-parse", "--show-cdup")
+			if exit, ok := err.(*exec.ExitError); !ok || exit.ExitCode() != 128 {
+				t.Fatalf("Git = %s, %v; want exit128", out, err)
+			}
+			if out, err := run(os.Args[0], "-test.run=^TestGitDirFIFOHelper$"); err != nil {
+				t.Fatalf("native = %s, %v", out, err)
+			}
+		})
 	}
 }
 

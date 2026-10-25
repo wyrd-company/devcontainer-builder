@@ -5,16 +5,13 @@ package workspace
 
 import (
 	"errors"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"unicode"
 )
-
-// gitdirLine matches a gitfile's pointer, as upstream reads worktree .git files.
-var gitdirLine = regexp.MustCompile(`(?m)^gitdir:\s*(.+)$`)
 
 // GitRoot returns the Git working tree selected from folder,
 // or "" when no repository is found or its working tree is invalid. It follows Git's discovery without
@@ -22,6 +19,7 @@ var gitdirLine = regexp.MustCompile(`(?m)^gitdir:\s*(.+)$`)
 // upstream's `git rev-parse --show-cdup` result is), a .git folder that is a
 // repository marks the root; a .git file marks the root when its gitdir is a
 // repository, and otherwise ends discovery, as Git refuses an invalid gitfile.
+// Gitfiles use a literal prefix and path payload, with Git's 1 MiB size limit.
 // GIT_CEILING_DIRECTORIES limits parent discovery as in Git. GIT_WORK_TREE
 // selects the working tree after repository discovery. Other environment
 // overrides and Git's ownership check are not applied. A valid GIT_DIR
@@ -159,17 +157,37 @@ func readGitfile(path string) (string, error) {
 	return gitdir, nil
 }
 
-// gitfilePointer returns the gitdir value of a .git file as written.
+// gitfilePointer reads Git's literal gitfile format. Only trailing CR/LF bytes
+// are removed; whitespace and interior newlines belong to the path. Git caps
+// gitfiles at 1 MiB and uses a C string for the resulting filesystem path.
+// Reference: https://github.com/git/git/blob/master/setup.c (read_gitfile_raw).
 func gitfilePointer(path string) (string, error) {
-	content, err := os.ReadFile(path)
+	const maxGitfileSize = 1 << 20
+	info, err := os.Stat(path)
 	if err != nil {
 		return "", err
 	}
-	match := gitdirLine.FindSubmatch(content)
-	if match == nil {
+	if !info.Mode().IsRegular() || info.Size() > maxGitfileSize {
 		return "", nil
 	}
-	return strings.TrimRight(string(match[1]), "\r"), nil
+	file, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer file.Close()
+	// Bound the read too, in case the file grows after Stat.
+	content, err := io.ReadAll(io.LimitReader(file, maxGitfileSize+1))
+	if err != nil {
+		return "", err
+	}
+	if len(content) > maxGitfileSize || !strings.HasPrefix(string(content), "gitdir: ") {
+		return "", nil
+	}
+	value := strings.TrimRight(string(content[8:]), "\r\n")
+	if end := strings.IndexByte(value, 0); end >= 0 {
+		value = value[:end]
+	}
+	return value, nil
 }
 
 // isGitDir is Git's repository test: HEAD, plus objects and refs or, for a
