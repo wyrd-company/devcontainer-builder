@@ -4,6 +4,7 @@
 package workspace
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -49,8 +50,14 @@ func TestGitRootCoreWorktreeChdirLimits(t *testing.T) {
 			if c.found {
 				want = other
 			}
-			if got, err := GitRoot(folder); err != nil || got != want {
-				t.Fatalf("GitRoot = %q, %v; want %q", got, err, want)
+			err = observeChain(func() error {
+				if got, err := GitRoot(folder); err != nil || got != want {
+					return fmt.Errorf("GitRoot = %q, %v; want %q", got, err, want)
+				}
+				return nil
+			})
+			if err != nil {
+				t.Fatal(err)
 			}
 		})
 	}
