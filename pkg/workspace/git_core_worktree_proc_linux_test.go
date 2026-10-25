@@ -19,8 +19,9 @@ import (
 )
 
 // withoutEnv lists what a test process removes before its tests run: "proc"
-// hides /proc, and "thread" stops each thread from having its own working
-// folder.
+// hides /proc, "thread" stops a thread from unsharing its working folder,
+// "clone" stops a new thread from having its own working folder, and
+// "fchdir" ends any thread that calls fchdir.
 const withoutEnv = "DCB_WORKSPACE_TEST_WITHOUT"
 
 // withoutUnavailable starts the message of a process that cannot hide /proc.
@@ -56,6 +57,30 @@ func init() {
 		}
 		runtime.UnlockOSThread()
 	}
+	if slices.Contains(without, "clone") {
+		if err := denyThreadClone(); err != nil {
+			withoutExit("without a new thread's working folder: " + err.Error())
+		}
+		root, err := unix.Open("/", unix.O_PATH|unix.O_DIRECTORY|unix.O_CLOEXEC, 0)
+		if err != nil {
+			withoutExit("without a new thread's working folder: " + err.Error())
+		}
+		_, isolated, _ := gitCloneCwd(root)
+		unix.Close(root)
+		if isolated {
+			withoutExit("without a new thread's working folder: a thread started")
+		}
+	}
+	if slices.Contains(without, "fchdir") {
+		if err := installFilter([]unix.SockFilter{
+			{Code: unix.BPF_LD | unix.BPF_W | unix.BPF_ABS, K: 0},
+			{Code: unix.BPF_JMP | unix.BPF_JEQ | unix.BPF_K, Jt: 0, Jf: 1, K: unix.SYS_FCHDIR},
+			{Code: unix.BPF_RET | unix.BPF_K, K: unix.SECCOMP_RET_KILL_THREAD},
+			{Code: unix.BPF_RET | unix.BPF_K, K: unix.SECCOMP_RET_ALLOW},
+		}); err != nil {
+			withoutExit("with fchdir ending its thread: " + err.Error())
+		}
+	}
 }
 
 func withoutExit(message string) {
@@ -67,12 +92,32 @@ func withoutExit(message string) {
 // profile that blocks it does. Go makes only native system calls, so the
 // filter does not check the architecture.
 func denyUnshare() error {
-	filter := []unix.SockFilter{
+	return installFilter([]unix.SockFilter{
 		{Code: unix.BPF_LD | unix.BPF_W | unix.BPF_ABS, K: 0},
 		{Code: unix.BPF_JMP | unix.BPF_JEQ | unix.BPF_K, Jt: 0, Jf: 1, K: unix.SYS_UNSHARE},
 		{Code: unix.BPF_RET | unix.BPF_K, K: unix.SECCOMP_RET_ERRNO | uint32(unix.EPERM)},
 		{Code: unix.BPF_RET | unix.BPF_K, K: unix.SECCOMP_RET_ALLOW},
-	}
+	})
+}
+
+// denyThreadClone makes clone fail with EPERM for a thread (CLONE_THREAD)
+// that does not share the process's working folder (no CLONE_FS). Go's
+// threads share it, and its processes are not threads. The filter reads the
+// low half of the flags, as on little-endian hosts.
+func denyThreadClone() error {
+	return installFilter([]unix.SockFilter{
+		{Code: unix.BPF_LD | unix.BPF_W | unix.BPF_ABS, K: 0},
+		{Code: unix.BPF_JMP | unix.BPF_JEQ | unix.BPF_K, Jt: 0, Jf: 4, K: unix.SYS_CLONE},
+		{Code: unix.BPF_LD | unix.BPF_W | unix.BPF_ABS, K: 16},
+		{Code: unix.BPF_JMP | unix.BPF_JSET | unix.BPF_K, Jt: 0, Jf: 2, K: unix.CLONE_THREAD},
+		{Code: unix.BPF_JMP | unix.BPF_JSET | unix.BPF_K, Jt: 1, Jf: 0, K: unix.CLONE_FS},
+		{Code: unix.BPF_RET | unix.BPF_K, K: unix.SECCOMP_RET_ERRNO | uint32(unix.EPERM)},
+		{Code: unix.BPF_RET | unix.BPF_K, K: unix.SECCOMP_RET_ALLOW},
+	})
+}
+
+// installFilter adds a seccomp filter to every thread.
+func installFilter(filter []unix.SockFilter) error {
 	prog := unix.SockFprog{Len: uint16(len(filter)), Filter: &filter[0]}
 	if err := unix.Prctl(unix.PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0); err != nil {
 		return err
@@ -99,34 +144,45 @@ var coreWorktreeLimits = []string{
 // core.worktree selects. The core.worktree tests run again, Git root and
 // Resolve mount alike, in a process whose /proc is hidden.
 func TestGitRootCoreWorktreeWithoutProc(t *testing.T) {
-	out := runWithout(t, "proc", "")
+	out := runWithout(t, "proc", coreWorktreeRun, "")
 	requirePassedWithout(t, out, append(coreWorktreeLimits, "TestGitRootCoreWorktreeIntermediatePathMax/passes"))
 }
 
 // Where threads cannot have their own working folders, as under a seccomp
 // profile that blocks unshare, /proc names the folder.
 func TestGitRootCoreWorktreeWithoutThread(t *testing.T) {
-	out := runWithout(t, "thread", "")
+	out := runWithout(t, "thread", coreWorktreeRun, "")
 	requirePassedWithout(t, out, append(coreWorktreeLimits, "TestGitRootCoreWorktreeIntermediatePathMax/passes"))
 }
 
-// Without /proc or a thread of its own, the joined path is resolved, so each
-// folder the value passes must have a physical path within PATH_MAX. The
-// layout that only Git's kernel lookup reaches does not run.
+// Without /proc, under a seccomp profile that blocks unshare, a thread
+// created with its own working folder names the folder.
 func TestGitRootCoreWorktreeWithoutProcOrThread(t *testing.T) {
-	out := runWithout(t, "proc thread", "^TestGitRootCoreWorktreeIntermediatePathMax$/^passes$")
+	out := runWithout(t, "proc thread", coreWorktreeRun, "")
+	requirePassedWithout(t, out, append(coreWorktreeLimits, "TestGitRootCoreWorktreeIntermediatePathMax/passes"))
+}
+
+// Where /proc is hidden and seccomp blocks both kinds of thread, the joined
+// path is resolved, so each folder the value passes must have a physical
+// path within PATH_MAX. The layout that only Git's kernel lookup reaches
+// does not run.
+func TestGitRootCoreWorktreeWithoutProcOrThreads(t *testing.T) {
+	out := runWithout(t, "proc thread clone", coreWorktreeRun, "^TestGitRootCoreWorktreeIntermediatePathMax$/^passes$")
 	requirePassedWithout(t, out, coreWorktreeLimits)
 }
 
-// runWithout runs this package's core.worktree tests, except skip, in a
+// coreWorktreeRun selects the core.worktree tests.
+const coreWorktreeRun = "^TestGitRootCoreWorktree"
+
+// runWithout runs this package's tests that run selects, except skip, in a
 // process without what without lists, and returns their verbose output. A
 // process that hides /proc has its own user and mount namespaces.
-func runWithout(t *testing.T, without, skip string) string {
+func runWithout(t *testing.T, without, run, skip string) string {
 	t.Helper()
 	if os.Getenv(withoutEnv) != "" {
 		t.Skip("this process already runs without " + os.Getenv(withoutEnv))
 	}
-	args := []string{"-test.run=^TestGitRootCoreWorktree", "-test.v"}
+	args := []string{"-test.run=" + run, "-test.v"}
 	if skip != "" {
 		args = append(args, "-test.skip="+skip)
 	}
