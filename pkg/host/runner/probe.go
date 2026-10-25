@@ -136,7 +136,9 @@ func ProbeUserEnv(ctx context.Context, execer Execer, configured, fallback, user
 		}
 		if resultValue.err != nil {
 			log("Error reading shell environment: %v", resultValue.err)
-			return nil
+			env := map[string]string{}
+			writeProbeCache(ctx, execer, user, mode, options.ContainerSessionDataFolder, env, log)
+			return env
 		}
 		raw := string(resultValue.res.Stdout)
 		start := strings.Index(raw, mark)

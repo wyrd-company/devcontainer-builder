@@ -139,3 +139,42 @@ func TestProbeTimeoutCachesEmptyEnvironment(t *testing.T) {
 		t.Fatalf("env=%v writes=%d", got, writes)
 	}
 }
+
+func TestProbeShellFailureCachesEmptyEnvironment(t *testing.T) {
+	for _, execError := range []bool{false, true} {
+		t.Run(fmt.Sprint(execError), func(t *testing.T) {
+			probes := 0
+			var cache []byte
+			f := probeExecer(func(_ context.Context, r ExecRequest) (*ExecResult, error) {
+				command := r.Cmd[len(r.Cmd)-1]
+				switch {
+				case strings.HasPrefix(command, "test -f"):
+					if cache == nil {
+						return &ExecResult{ExitCode: 1}, nil
+					}
+					return &ExecResult{Stdout: cache}, nil
+				case strings.Contains(command, "id -u"):
+					return &ExecResult{Stdout: []byte("/bin/sh\n1000\n")}, nil
+				case strings.HasPrefix(command, "mkdir -p"):
+					cache, _ = io.ReadAll(r.Stdin)
+					return &ExecResult{}, nil
+				default:
+					probes++
+					if execError {
+						return nil, fmt.Errorf("shell exec failed")
+					}
+					return &ExecResult{ExitCode: 1}, nil
+				}
+			})
+			for i := 0; i < 2; i++ {
+				got := ProbeUserEnv(context.Background(), f, "loginShell", "", "sample", nil, nil, ProbeOptions{ContainerSessionDataFolder: "/cache"})
+				if got == nil || len(got) != 0 {
+					t.Fatalf("run %d env=%v", i, got)
+				}
+			}
+			if probes != 1 || string(cache) != "{}\n" {
+				t.Fatalf("probes=%d cache=%s", probes, cache)
+			}
+		})
+	}
+}
