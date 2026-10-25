@@ -116,3 +116,23 @@ func TestGenerate_FeatureContainerEnvIsReferenceEnvLines(t *testing.T) {
 		}
 	}
 }
+
+// The generated Dockerfile emits array-index keys first, in numeric order,
+// as the reference CLI's Object.keys order does.
+func TestGenerate_FeatureContainerEnvArrayIndexKeysFirst(t *testing.T) {
+	resolved := resolveLocal(t, `{"id":"env-index","version":"1.0.0","containerEnv":{"RESULT":"${1:-u}","01":"a","10":"b","1":"c","4294967295":"d"}}`)
+	out, err := Generate(Inputs{Spec: &spec.DevContainer{Image: "alpine"}, BaseImage: "alpine", ImageUser: "root", Features: resolved, FeaturesContextDir: "_features"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, line := range strings.Split(string(out), "\n") {
+		if strings.HasPrefix(line, "ENV ") && !strings.HasPrefix(line, "ENV _") {
+			got = append(got, line)
+		}
+	}
+	want := []string{`ENV 1="c"`, `ENV 10="b"`, `ENV RESULT="${1:-u}"`, `ENV 01="a"`, `ENV 4294967295="d"`}
+	if !slices.Equal(got, want) {
+		t.Fatalf("ENV lines:\n%s\nwant:\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
+	}
+}

@@ -3,33 +3,58 @@ package features
 import (
 	"encoding/json"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/wyrd-company/devcontainer-builder/pkg/spec"
 )
 
 // ContainerEnvKeys returns the keys of m.ContainerEnv in the order the
-// feature's devcontainer-feature.json declares them. The reference CLI emits
-// one ENV instruction per key in this order, so a value can reference a key
-// declared before it. A key with no recorded position, as in a Metadata built
-// in code, follows the declared keys in sorted order.
+// reference CLI applies them: ECMAScript Object.keys order over the
+// devcontainer-feature.json object. Keys that are array indices come first in
+// ascending numeric order, then the other keys in declaration order. The
+// reference emits one ENV instruction per key in this order, so a value can
+// reference a key applied before it. A key with no recorded position, as in a
+// Metadata built in code, follows the other keys in sorted order.
 func (m Metadata) ContainerEnvKeys() []string {
-	keys := make([]string, 0, len(m.ContainerEnv))
+	var indices, named, rest []string
 	seen := make(map[string]bool, len(m.ContainerEnv))
 	for _, k := range m.containerEnvOrder {
-		if _, ok := m.ContainerEnv[k]; ok && !seen[k] {
-			seen[k] = true
-			keys = append(keys, k)
+		if _, ok := m.ContainerEnv[k]; !ok || seen[k] {
+			continue
+		}
+		seen[k] = true
+		if isArrayIndex(k) {
+			indices = append(indices, k)
+		} else {
+			named = append(named, k)
 		}
 	}
-	var rest []string
 	for k := range m.ContainerEnv {
-		if !seen[k] {
+		if seen[k] {
+			continue
+		}
+		if isArrayIndex(k) {
+			indices = append(indices, k)
+		} else {
 			rest = append(rest, k)
 		}
 	}
+	sort.Slice(indices, func(i, j int) bool {
+		a, _ := strconv.ParseUint(indices[i], 10, 32)
+		b, _ := strconv.ParseUint(indices[j], 10, 32)
+		return a < b
+	})
 	sort.Strings(rest)
-	return append(keys, rest...)
+	return append(append(indices, named...), rest...)
+}
+
+// isArrayIndex reports whether key is an ECMAScript array index: the
+// canonical decimal form of an integer from 0 to 2^32-2. "01", "-1", "1.0"
+// and "4294967295" are not array indices.
+func isArrayIndex(key string) bool {
+	n, err := strconv.ParseUint(key, 10, 32)
+	return err == nil && n != 1<<32-1 && strconv.FormatUint(n, 10) == key
 }
 
 // containerEnvOrder reads the declaration order of the containerEnv keys in

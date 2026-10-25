@@ -167,3 +167,21 @@ func TestFeatureContainerEnvRejectedSubstitutionFails(t *testing.T) {
 		}
 	}
 }
+
+// Array-index keys apply before the others, as the reference CLI's
+// Object.keys order emits them, on the install step and in the image config.
+func TestBuildOnePlatform_FeatureContainerEnvArrayIndexKeysFirst(t *testing.T) {
+	resolved := localFeatures(t, `{"id":"env-index","version":"1.0.0","containerEnv":{
+		"RESULT":"${1:-u}-${10:-u}-${4294967294:-u}-${01:-u}-${4294967295:-u}",
+		"01":"a", "10":"${2:-u}b", "4294967295":"c", "1":"d", "2":"two", "4294967294":"e"}}`)
+	gc := &fakeGateway{baseConfig: []byte(`{"config":{"Env":["PATH=` + basePath + `"]}}`)}
+	in := featureGraphInputs(resolved[0])
+	in.ResolveImageConfig = true
+	_, cfg, err := buildOnePlatform(context.Background(), gc, BuildSpec{Graph: in}, ocispecs.Platform{OS: "linux", Architecture: "amd64"}, buildSettings{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"RESULT=d-twob-e-u-u", "10=twob", "01=a", "4294967295=c"}
+	assertEnv(t, "install", installEnv(t, solvedGraph(t, gc), resolved[0]), want)
+	assertEnv(t, "image config", configEnv(t, cfg), want)
+}
