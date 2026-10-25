@@ -669,9 +669,21 @@ not read. Relative values start at the workspace folder and retain physical
 path traversal; an empty value checks `/objects` and `/refs`, as Git does.
 The common-folder mount option reads pointer lines separately,
 as upstream does.
+Git's repository format check then reads the common folder's `config`, and
+`config.worktree` when `extensions.worktreeConfig` is set. Config that Git
+rejects gives no Git root: a syntax error, a directory or an unreadable file,
+a `core.repositoryformatversion` that is not an integer or is above 1, an
+invalid `core.bare`, `extensions.worktreeConfig` or `extensions.preciousObjects`
+boolean, and `core.worktree` or `extensions.partialClone` without a value. A
+special file such as a FIFO is not read and also gives no Git root. When
+`core.repositoryformatversion` is 0 or 1, a true `core.bare` leaves a discovered
+repository without a working tree, and the workspace folder is the Git root. A
+linked worktree and `GIT_COMMON_DIR` ignore `core.bare` in the common config.
+Includes, other config keys and extensions outside Git's version 0 set are not
+interpreted.
 Relative values start at the workspace folder. A valid `GIT_DIR` selects the
 workspace folder without parent discovery; `GIT_WORK_TREE` can select its working
-tree. Repository config, including `core.worktree`, is not interpreted. Other Git
+tree. The `core.worktree` setting is not interpreted. Other Git
 environment overrides
 and ownership checks are not applied. `exec`, `run-user-commands`, `set-up`,
 and an `up` that
