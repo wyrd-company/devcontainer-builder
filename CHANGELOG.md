@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.0
+
+### Features
+
+- Go library callers can supply one registry credential source for every registry request: `builder.Options.RegistryAuth` reaches BuildKit pulls and pushes, feature downloads and base image reads, and `dockercompose` forwards its sources to service builds. `registryauth.Static` holds caller credentials, and `registryauth.NewWithoutHelpers` reads the Docker client configuration without running credential helpers.
+
+### Fixes
+
+- A feature's `containerEnv` is now expanded as the reference CLI's Dockerfile `ENV` expands it, in the reference CLI's key order (array-index keys such as `1` first, then the others as declared). A value such as the Go feature's `PATH=/usr/local/go/bin:/go/bin:${PATH}` keeps the base image's `PATH`, so the feature installs and the image keeps a working `PATH`. The generated Dockerfile writes these values the same way.
+- A credential source error that makes a build, a feature download or a base image read fail is now part of the returned error, so that `errors.Is` matches it.
+
 ## 0.1.0
 
 ### Features
