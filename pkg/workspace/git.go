@@ -22,6 +22,7 @@ import (
 // repository, and otherwise ends discovery, as Git refuses an invalid gitfile.
 // HEAD must pass Git's symbolic or detached syntax admission check.
 // A commondir pointer selects the common objects and refs signatures.
+// GIT_OBJECT_DIRECTORY overrides the objects signature, relative to folder.
 // Gitfiles use a literal prefix and path payload, with Git's 1 MiB size limit.
 // GIT_CEILING_DIRECTORIES limits parent discovery as in Git. GIT_WORK_TREE
 // selects the working tree after repository discovery. Other environment
@@ -62,7 +63,7 @@ func GitRoot(folder string) (string, error) {
 			}
 			dir = target
 		}
-		valid, _ := isGitDir(dir)
+		valid, _ := isGitDir(dir, folder)
 		if dir == "" || !valid {
 			return "", nil
 		}
@@ -127,7 +128,7 @@ func discoverGitRoot(folder string) (string, error) {
 		info, err := os.Stat(dotGit)
 		switch {
 		case err == nil && info.IsDir():
-			valid, err := isGitDir(dotGit)
+			valid, err := isGitDir(dotGit, folder)
 			if err != nil {
 				// A failed common-directory read or resolution makes Git's
 				// probe fail, rather than continuing to a parent repository.
@@ -141,7 +142,7 @@ func discoverGitRoot(folder string) (string, error) {
 			if err != nil {
 				return "", err
 			}
-			valid, _ := isGitDir(gitdir)
+			valid, _ := isGitDir(gitdir, folder)
 			if gitdir == "" || !valid {
 				return "", nil
 			}
@@ -205,7 +206,7 @@ func gitfilePointer(path string) (string, error) {
 // in the common directory selected by commondir, if present. Paths retain
 // components until filesystem traversal; cleaning first changes symlink/..
 // and regular-file/.. semantics.
-func isGitDir(dir string) (bool, error) {
+func isGitDir(dir, folder string) (bool, error) {
 	if !validGitHEAD(dir + string(os.PathSeparator) + "HEAD") {
 		return false, nil
 	}
@@ -215,7 +216,14 @@ func isGitDir(dir string) (bool, error) {
 	}
 	// Git uses access(X_OK), including for executable regular files. Linux
 	// and macOS are the supported host platforms.
-	return syscall.Access(common+string(os.PathSeparator)+"objects", 1) == nil &&
+	objects := common + string(os.PathSeparator) + "objects"
+	if override, set := os.LookupEnv("GIT_OBJECT_DIRECTORY"); set {
+		objects = override
+		if objects != "" && !filepath.IsAbs(objects) {
+			objects = folder + string(os.PathSeparator) + objects
+		}
+	}
+	return syscall.Access(objects, 1) == nil &&
 		syscall.Access(common+string(os.PathSeparator)+"refs", 1) == nil, nil
 }
 
