@@ -19,6 +19,7 @@ import (
 // upstream's `git rev-parse --show-cdup` result is), a .git folder that is a
 // repository marks the root; a .git file marks the root when its gitdir is a
 // repository, and otherwise ends discovery, as Git refuses an invalid gitfile.
+// HEAD must pass Git's symbolic or detached syntax admission check.
 // Gitfiles use a literal prefix and path payload, with Git's 1 MiB size limit.
 // GIT_CEILING_DIRECTORIES limits parent discovery as in Git. GIT_WORK_TREE
 // selects the working tree after repository discovery. Other environment
@@ -195,13 +196,57 @@ func gitfilePointer(path string) (string, error) {
 // components until filesystem traversal; cleaning first changes symlink/..
 // and regular-file/.. semantics.
 func isGitDir(dir string) bool {
-	if !isFile(dir + string(os.PathSeparator) + "HEAD") {
+	if !validGitHEAD(dir + string(os.PathSeparator) + "HEAD") {
 		return false
 	}
 	if isFile(dir + string(os.PathSeparator) + "commondir") {
 		return true
 	}
 	return isDir(dir+string(os.PathSeparator)+"objects") && isDir(dir+string(os.PathSeparator)+"refs")
+}
+
+// validGitHEAD follows Git's validate_headref repository admission test, not
+// full refname validation. Git inspects at most 255 bytes and accepts a refs/
+// symbolic target or a hexadecimal object ID followed by arbitrary bytes.
+func validGitHEAD(path string) bool {
+	info, err := os.Lstat(path)
+	if err != nil {
+		return false
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		target, err := os.Readlink(path)
+		return err == nil && strings.HasPrefix(target, "refs/")
+	}
+	if !info.Mode().IsRegular() {
+		return false
+	}
+	file, err := os.Open(path)
+	if err != nil {
+		return false
+	}
+	defer file.Close()
+	content, err := io.ReadAll(io.LimitReader(file, 255))
+	if err != nil {
+		return false
+	}
+	value := string(content)
+	if end := strings.IndexByte(value, 0); end >= 0 {
+		value = value[:end]
+	}
+	if rest, ok := strings.CutPrefix(value, "ref:"); ok {
+		if strings.HasPrefix(strings.TrimLeft(rest, " \t\n\r"), "refs/") {
+			return true
+		}
+	}
+	if len(value) < 40 {
+		return false
+	}
+	for _, c := range []byte(value[:40]) {
+		if !(c >= '0' && c <= '9' || c >= 'a' && c <= 'f' || c >= 'A' && c <= 'F') {
+			return false
+		}
+	}
+	return true
 }
 
 func isFile(path string) bool {
