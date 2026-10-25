@@ -25,13 +25,15 @@ import (
 // HEAD must pass Git's symbolic or detached syntax admission check.
 // A commondir pointer selects the common objects and refs signatures.
 // GIT_COMMON_DIR replaces that pointer and GIT_OBJECT_DIRECTORY overrides the
-// objects signature, both relative to folder.
+// objects signature, both relative to folder. Git's repository format check
+// then reads the repository config: core.bare selects the caller folder for a
+// discovered repository, and config that Git rejects gives no root.
 // Gitfiles use a literal prefix and path payload, with Git's 1 MiB size limit.
 // GIT_CEILING_DIRECTORIES limits parent discovery as in Git. GIT_WORK_TREE
 // selects the working tree after repository discovery. Other environment
 // overrides and Git's ownership check are not applied. A valid GIT_DIR
-// selects the caller folder before GIT_WORK_TREE; repository config (including
-// core.worktree) is not interpreted. Invalid GIT_DIR stops parent discovery.
+// selects the caller folder before GIT_WORK_TREE; core.worktree is not
+// interpreted. Invalid GIT_DIR stops parent discovery.
 func GitRoot(folder string) (string, error) {
 	var root string
 	var err error
@@ -68,6 +70,10 @@ func GitRoot(folder string) (string, error) {
 		}
 		valid, _ := isGitDir(dir, folder)
 		if dir == "" || !valid {
+			return "", nil
+		}
+		// Without a working tree, core.bare also gives the caller folder.
+		if _, err := gitRepositoryFormat(dir, folder); err != nil {
 			return "", nil
 		}
 		// An explicit repository disables parent discovery. Git defaults its
@@ -138,7 +144,7 @@ func discoverGitRoot(folder string) (string, error) {
 				return "", nil
 			}
 			if valid {
-				return current, nil
+				return gitDiscoveredRoot(current, dotGit, folder), nil
 			}
 		case err == nil:
 			gitdir, err := readGitfile(dotGit)
@@ -149,7 +155,7 @@ func discoverGitRoot(folder string) (string, error) {
 			if gitdir == "" || !valid {
 				return "", nil
 			}
-			return current, nil
+			return gitDiscoveredRoot(current, gitdir, folder), nil
 		case !errors.Is(err, fs.ErrNotExist) && !errors.Is(err, fs.ErrPermission):
 			return "", err
 		}
@@ -161,12 +167,29 @@ func discoverGitRoot(folder string) (string, error) {
 			return "", nil
 		}
 		if valid {
+			if _, err := gitRepositoryFormat(current, folder); err != nil {
+				return "", nil
+			}
 			return filepath.Clean(folder), nil
 		}
 		if filepath.Dir(current) == current {
 			return "", nil
 		}
 	}
+}
+
+// gitDiscoveredRoot applies Git's repository format check to the repository
+// dir discovered for root. core.bare leaves no working tree, and the upstream
+// CLI resolves the empty cdup to the caller folder. Rejected config is fatal.
+func gitDiscoveredRoot(root, dir, folder string) string {
+	bare, err := gitRepositoryFormat(dir, folder)
+	switch {
+	case err != nil:
+		return ""
+	case bare:
+		return filepath.Clean(folder)
+	}
+	return root
 }
 
 // readGitfile returns the folder a .git file points to, resolved against the
@@ -223,17 +246,9 @@ func isGitDir(dir, folder string) (bool, error) {
 	if !validGitHEAD(dir + string(os.PathSeparator) + "HEAD") {
 		return false, nil
 	}
-	// Git's get_common_dir uses GIT_COMMON_DIR verbatim instead of reading
-	// commondir. An empty value leaves the absolute /objects and /refs paths.
-	common, set := os.LookupEnv("GIT_COMMON_DIR")
-	if !set {
-		var err error
-		common, err = gitCommonDirectory(dir)
-		if err != nil {
-			return false, err
-		}
-	} else if common != "" && !filepath.IsAbs(common) {
-		common = folder + string(os.PathSeparator) + common
+	common, _, err := gitCommon(dir, folder)
+	if err != nil {
+		return false, err
 	}
 	// Git uses access(X_OK), including for executable regular files. Linux
 	// and macOS are the supported host platforms.
@@ -248,31 +263,45 @@ func isGitDir(dir, folder string) (bool, error) {
 		syscall.Access(common+string(os.PathSeparator)+"refs", 1) == nil, nil
 }
 
+// gitCommon follows get_common_dir in Git's setup.c. GIT_COMMON_DIR is used
+// verbatim instead of reading commondir; an empty value leaves the absolute
+// /objects, /refs and /config paths. shared reports that either selected the
+// common folder, as for a linked worktree.
+func gitCommon(dir, folder string) (common string, shared bool, err error) {
+	if common, set := os.LookupEnv("GIT_COMMON_DIR"); set {
+		if common != "" && !filepath.IsAbs(common) {
+			common = folder + string(os.PathSeparator) + common
+		}
+		return common, true, nil
+	}
+	return gitCommonDirectory(dir)
+}
+
 // gitCommonDirectory follows get_common_dir_noenv in Git's setup.c. This is
 // separate from the upstream CLI's permissive common-folder mount parser.
-func gitCommonDirectory(dir string) (string, error) {
+func gitCommonDirectory(dir string) (string, bool, error) {
 	path := dir + string(os.PathSeparator) + "commondir"
 	_, err := os.Lstat(path)
 	if errors.Is(err, fs.ErrNotExist) {
-		return dir, nil
+		return dir, false, nil
 	}
 	if err != nil {
-		return "", err
+		return "", false, err
 	}
 	info, err := os.Stat(path)
 	if err != nil {
-		return "", err
+		return "", false, err
 	}
 	// Do not read special files such as FIFOs during repository discovery.
 	if !info.Mode().IsRegular() {
-		return "", errors.New("Git common-directory pointer is not a regular file")
+		return "", false, errors.New("Git common-directory pointer is not a regular file")
 	}
 	content, err := os.ReadFile(path)
 	if err != nil {
-		return "", err
+		return "", false, err
 	}
 	if len(content) == 0 {
-		return "", errors.New("empty Git common-directory pointer")
+		return "", false, errors.New("empty Git common-directory pointer")
 	}
 	common := strings.TrimRight(string(content), "\r\n")
 	if end := strings.IndexByte(common, 0); end >= 0 {
@@ -281,7 +310,8 @@ func gitCommonDirectory(dir string) (string, error) {
 	if !filepath.IsAbs(common) {
 		common = dir + string(os.PathSeparator) + common
 	}
-	return gitCeilingPath(common)
+	common, err = gitCeilingPath(common)
+	return common, true, err
 }
 
 // validGitHEAD follows Git's validate_headref repository admission test, not
