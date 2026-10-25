@@ -642,7 +642,9 @@ that marker retain literal path components. A ceiling equal
 to the starting folder does not stop discovery. After a repository is found,
 `GIT_WORK_TREE` selects its working tree. Relative values start at the workspace
 folder; Git resolves symlinks and path components. An empty value or an invalid
-intermediate component gives no Git root. Other Git environment overrides and
+intermediate component gives no Git root. For an outside-tree override, trailing
+whitespace is removed from the resolved path as in the upstream CLI probe.
+Other Git environment overrides and
 ownership checks are not applied. `exec`, `run-user-commands`, `set-up`,
 and an `up` that
 reuses a container use the folder where that container mounts the workspace,
