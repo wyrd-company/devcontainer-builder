@@ -36,7 +36,15 @@ func GitRoot(folder string) (string, error) {
 			// components before the filesystem has followed them.
 			dir = folder + string(os.PathSeparator) + dir
 		}
-		if info, err := os.Stat(dir); err == nil && !info.IsDir() {
+		info, err := os.Stat(dir)
+		if err != nil {
+			return "", nil
+		}
+		if !info.IsDir() {
+			// Git rejects special files; reading a FIFO could block discovery.
+			if !info.Mode().IsRegular() {
+				return "", nil
+			}
 			// GIT_DIR can name a gitfile, whose target is relative to it.
 			target, err := gitfilePointer(dir)
 			if err != nil || target == "" {
