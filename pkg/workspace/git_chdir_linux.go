@@ -6,6 +6,7 @@ package workspace
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 
 	"golang.org/x/sys/unix"
@@ -33,11 +34,43 @@ func gitChdir(dir, value string) (string, error) {
 		return "", err
 	}
 	// Git reads its working folder, which the kernel names from the folder
-	// itself, as it names the descriptor's folder. Without /proc, the joined
-	// path is resolved, which also limits the length of each folder the value
-	// passes.
+	// itself, as it names the descriptor's folder.
 	if path, err := os.Readlink("/proc/self/fd/" + strconv.Itoa(target)); err == nil && filepath.IsAbs(path) {
 		return path, nil
 	}
+	if path, isolated, err := gitDescriptorCwd(target); isolated {
+		return path, err
+	}
+	// Without /proc or a thread of its own, the joined path is resolved,
+	// which also limits the length of each folder the value passes.
 	return gitPhysicalPath(dir + "/" + value)
+}
+
+// gitDescriptorCwd returns the working folder of a thread that changes to
+// the folder fd names, as Git's getcwd reads it. The thread has a working
+// folder of its own, which it cannot give back, so it ends with its
+// goroutine. isolated is false if the thread cannot have its own working
+// folder.
+func gitDescriptorCwd(fd int) (path string, isolated bool, err error) {
+	type result struct {
+		path     string
+		isolated bool
+		err      error
+	}
+	done := make(chan result, 1)
+	go func() {
+		runtime.LockOSThread()
+		if err := unix.Unshare(unix.CLONE_FS); err != nil {
+			done <- result{}
+			return
+		}
+		if err := unix.Fchdir(fd); err != nil {
+			done <- result{"", true, err}
+			return
+		}
+		path, err := unix.Getwd()
+		done <- result{path, true, err}
+	}()
+	r := <-done
+	return r.path, r.isolated, r.err
 }
