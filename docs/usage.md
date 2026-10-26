@@ -666,8 +666,19 @@ then also gives no Git root, and so does a system file that the process cannot
 read because permission is denied. Each read takes a special file, such as a
 terminal or a FIFO, until it ends, and a read error ends the file, as in Git.
 As in Git, a FIFO read waits, with no time limit, until a writer opens the
-FIFO, and the file ends when the last writer closes it. Includes, typed values,
-and the command-line config are not applied.
+FIFO, and the file ends when the last writer closes it. Both reads follow
+`include.path` entries when Git reads them, as Git does. A relative include
+path starts at the including file's folder, `~/` starts at `HOME`, and `~name/`
+at the home folder of that account. Without cgo, as in release builds, `dcb`
+looks up accounts in `/etc/passwd` only. A missing included file is skipped.
+An include without a value, a `~` path that cannot be expanded, an access
+failure other than a missing file, a file that Git cannot open, such as a
+folder, a syntax error, and more than 10 nested includes give no Git root. Git
+reads a `%(prefix)/` path below the prefix that its build names; `dcb` does not
+read that file. The read after setup then also reads the repository config
+files of the format check, described below, with their includes.
+`includeIf` conditions, typed values, and the command-line config are not
+applied.
 As Git does, discovery walks the physical parent folders, after symbolic links
 in the workspace folder's path are resolved. The Git root keeps the workspace
 folder's path, up as many folders as Git walked, as the upstream CLI resolves
@@ -720,6 +731,9 @@ An empty or inaccessible value fails admission; `refs` is still checked in the
 common folder. `GIT_COMMON_DIR` replaces the `commondir` pointer, which is then
 not read. Relative values start at the workspace folder and retain physical
 path traversal; an empty value checks `/objects` and `/refs`, as Git does.
+Git keeps the value as given: its repository format check starts a relative
+value at the folder where it found the repository, or at the workspace folder
+for `GIT_DIR`, and its config read after setup at its working folder.
 The common-folder mount option reads pointer lines separately,
 as upstream does.
 Git's repository format check then reads the common folder's `config`, and
@@ -772,8 +786,8 @@ Builds for hosts other than Linux and macOS instead join the repository
 folder's physical path and the value, which must fit the host's path length
 limit. An empty value or one that Git cannot resolve gives no Git
 root. Inside that working tree, the Git root keeps the workspace folder's path;
-outside it, the Git root is the working tree's physical path. Includes and
-other config keys are not interpreted.
+outside it, the Git root is the working tree's physical path. The format check
+does not follow includes, and other config keys are not interpreted.
 Relative values start at the workspace folder. A valid `GIT_DIR` selects the
 workspace folder without parent discovery; `GIT_WORK_TREE` or the repository
 config can select its working tree. Other Git
