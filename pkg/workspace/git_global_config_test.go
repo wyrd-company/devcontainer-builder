@@ -23,13 +23,17 @@ const (
 
 // globalConfigCase sets the variables that select Git's global config files.
 // setup writes files under base and folder and returns the variables; a nil
-// value unsets the variable. ok is true when Git admits every file, so the Git
-// root is the one that the layout gives without the case.
+// value unsets the variable. ok is the native result: true when every file
+// passes Git's first read, so the Git root is the one that the layout gives
+// without the case. secondRead names the routes where Git's second read, from
+// its working folder after discovery, finds a relative path again and
+// rejects it; native discovery does not apply that read.
 type globalConfigCase struct {
 	name         string
 	setup        func(t *testing.T, base, folder string) map[string]*string
 	ok           bool
 	unprivileged bool
+	secondRead   map[string]bool
 }
 
 func globalValue(value string) *string { return &value }
@@ -146,6 +150,10 @@ var globalConfigCases = []globalConfigCase{
 		writeFile(t, filepath.Join(folder, "global.cfg"), globalConfigBroken)
 		return "global.cfg"
 	})},
+	{name: "global-relative-directory", setup: globalOnly(func(t *testing.T, _ string, folder string) string {
+		mkdir(t, filepath.Join(folder, "global.d"))
+		return "global.d"
+	}), ok: true, secondRead: map[string]bool{"explicit": true, "self": true}},
 	{name: "global-overrides-xdg", setup: func(t *testing.T, base, folder string) map[string]*string {
 		env := xdgFolder(globalConfigBroken, globalConfigBroken, globalConfigBroken)(t, base, folder)
 		env["GIT_CONFIG_GLOBAL"] = globalValue(globalFile(globalConfigValid)(t, base, folder))
@@ -308,12 +316,18 @@ func TestGitRootGlobalConfigMatchesGit(t *testing.T) {
 					t.Fatalf("Git finds no root before the case: %s", stderr)
 				}
 				env = applyGlobalEnv(t, env, c.setup(t, base, folder))
-				want := ""
+				want, gitWant := "", ""
 				if c.ok {
 					want = control
 				}
-				if measured, stderr := probe(env); measured != want {
-					t.Fatalf("Git root = %q (%s); want %q", measured, strings.TrimSpace(stderr), want)
+				if c.ok && !c.secondRead[route] {
+					gitWant = control
+				}
+				if measured, stderr := probe(env); measured != gitWant {
+					t.Fatalf("Git root = %q (%s); want %q", measured, strings.TrimSpace(stderr), gitWant)
+				}
+				if gitWant != want {
+					t.Logf("declared difference: Git's second read from its working folder gives %q; native discovery gives %q", gitWant, want)
 				}
 				got, err := GitRoot(folder)
 				if err != nil || got != want {
