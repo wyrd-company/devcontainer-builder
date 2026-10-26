@@ -4,6 +4,7 @@
 package workspace
 
 import (
+	"net"
 	"os"
 	"os/exec"
 	"path"
@@ -97,6 +98,22 @@ var globalConfigCases = []globalConfigCase{
 	{name: "global-dev-null", setup: globalOnly(func(*testing.T, string, string) string { return os.DevNull }), ok: true},
 	{name: "global-dev-zero", setup: globalOnly(func(*testing.T, string, string) string { return "/dev/zero" })},
 	{name: "global-directory", setup: globalOnly(func(t *testing.T, base, _ string) string { return mkdir(t, filepath.Join(base, "global.d")) })},
+	{name: "global-socket", setup: globalOnly(func(t *testing.T, _, _ string) string {
+		// A short folder keeps the socket path within the host's limit.
+		folder, err := os.MkdirTemp("", "gfr")
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { os.RemoveAll(folder) })
+		socket := filepath.Join(folder, "global.sock")
+		listener, err := net.Listen("unix", socket)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { listener.Close() })
+		return socket
+	})},
+	{name: "global-large-regular", setup: globalOnly(globalFile(strings.Repeat("# "+strings.Repeat("x", 97)+"\n", 11000) + globalConfigValid)), ok: true},
 	{name: "global-dangling-symlink", setup: globalOnly(func(t *testing.T, base, _ string) string {
 		link := filepath.Join(base, "global.cfg")
 		symlink(t, filepath.Join(base, "missing.cfg"), link)
