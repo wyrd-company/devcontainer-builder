@@ -688,10 +688,12 @@ failure other than a missing file, a file that Git cannot open, such as a
 folder, a syntax error, and more than 10 nested includes give no Git root. As
 in Git, a relative config file name, and a relative include in that file, is
 looked up from the folder that the read starts at, so the length of that
-folder's path does not limit it. On macOS, if the process cannot read that
-folder, and on hosts other than Linux and macOS, `dcb` joins the name to the
-folder's path instead. The read after setup then also reads the repository
-config files of the format check, described below, with their includes.
+folder's path does not limit it, and the process needs only search permission
+on that folder, as Git's `chdir` does. On macOS, a thread of its own changes
+to that folder to look the name up. On hosts other than Linux and macOS, `dcb`
+joins the name to the folder's path instead. The read after setup then also
+reads the repository config files of the format check, described below, with
+their includes.
 `includeIf` conditions, typed values, and the command-line config are not
 applied.
 As Git does, discovery walks the physical parent folders, after symbolic links
