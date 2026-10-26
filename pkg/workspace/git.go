@@ -30,7 +30,9 @@ import (
 // root.
 // Gitfiles use a literal prefix and path payload, with Git's 1 MiB size limit.
 // A relative gitfile target keeps its components until filesystem traversal.
-// GIT_CEILING_DIRECTORIES limits parent discovery as in Git. GIT_WORK_TREE
+// GIT_CEILING_DIRECTORIES limits parent discovery as in Git. Parent discovery
+// also stops at a file system boundary unless GIT_DISCOVERY_ACROSS_FILESYSTEM
+// is true; a value Git rejects gives no root. GIT_WORK_TREE
 // selects the working tree after repository discovery. Other environment
 // overrides and Git's ownership check are not applied. A valid GIT_DIR
 // selects the caller folder unless GIT_WORK_TREE or the repository config
@@ -111,9 +113,20 @@ func GitRoot(folder string) (string, error) {
 
 func discoverGitRoot(folder string) (string, error) {
 	limit := gitCeilingLimit(folder, os.Getenv("GIT_CEILING_DIRECTORIES"))
+	device, oneFilesystem, ok := gitDiscoveryDevice(folder)
+	if !ok {
+		return "", nil
+	}
 	for current, depth := filepath.Clean(folder), 0; ; current, depth = filepath.Dir(current), depth+1 {
 		if limit >= 0 && depth >= limit {
 			return "", nil
+		}
+		if oneFilesystem && depth > 0 {
+			// Git stops at the first parent on another file system, after
+			// the ceiling check. A parent it cannot stat also ends discovery.
+			if parent, err := gitDevice(current); err != nil || parent != device {
+				return "", nil
+			}
 		}
 		dotGit := filepath.Join(current, ".git")
 		info, err := os.Stat(dotGit)
