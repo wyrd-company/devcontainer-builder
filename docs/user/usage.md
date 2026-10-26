@@ -644,12 +644,13 @@ or `$HOME/.config/git/config` when `XDG_CONFIG_HOME` is empty or unset, and
 then `$HOME/.gitconfig`. Relative paths start at the workspace folder. A
 global config file that Git rejects gives no Git root: a syntax error, or an
 access failure other than a missing file or denied permission. Git reads the
-files again after discovery, from its working folder, and then also rejects a
-folder or a file that it cannot open; an absolute path names the same file, so
-these also give no Git root. Git's second read of a relative path is not
-applied. A FIFO is not read and also gives no Git root; another special file,
-such as `/dev/null`, is read up to 1 MiB. Includes, typed values, and the
-system and command-line config are not applied.
+files again after setup, from its working folder: the working tree, after
+symbolic links are resolved, when the workspace folder is inside it, and
+otherwise the workspace folder. Relative paths then start at that folder, and
+a folder or another file that Git cannot open also gives no Git root. Each
+read takes a special file, such as a terminal, until it ends, and a read error
+ends the file, as in Git; a FIFO is not read and gives no Git root. Includes,
+typed values, and the system and command-line config are not applied.
 As Git does, discovery walks the physical parent folders, after symbolic links
 in the workspace folder's path are resolved. The Git root keeps the workspace
 folder's path, up as many folders as Git walked, as the upstream CLI resolves
