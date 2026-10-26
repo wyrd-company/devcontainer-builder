@@ -16,6 +16,12 @@ Optional upstream fixture tests run when the reference submodules are initialize
 `task parity` compares `dcb` with the upstream CLI; see the
 [parity harness](test/parity/README.md). Report a parity change in the pull request.
 `task docs:check` checks the public Markdown in `docs/user/`.
+The docs publish to wyrd.foo through the `Publish docs` workflow, which calls
+the wyrd.foo `publish-docs` workflow at `@v2`. It runs after a successful
+`Release` run for a release tag, on a `dcb-docs@X.Y.Z` record, and on a manual
+run with a `ref`. A push to `main` does not publish. The `dcb-docs` unit is
+tag-only and has no GitHub Release. Keep `version` and `docs-version` in
+`docs/user/docs.yml` as Intentional writes them.
 Task lists the individual checks, tool installation, and reference setup verbs.
 
 CLI Docker tests run in name shards from `scripts/cli-integration-shards.tsv`.
