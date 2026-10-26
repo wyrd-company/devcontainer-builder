@@ -84,6 +84,11 @@ func TestGitCloneThread(t *testing.T) {
 	if err := unix.PthreadSigmask(unix.SIG_BLOCK, nil, &after); err != nil {
 		t.Fatal(err)
 	}
+	// A thread left with every signal blocked returns to the scheduler, so a
+	// later caller can start on one.
+	if before.Val[0] == gitCloneBlocked {
+		t.Errorf("calling thread started with every signal blocked")
+	}
 	if after != before {
 		t.Errorf("calling thread's signal mask = %x; want %x", after.Val[0], before.Val[0])
 	}
