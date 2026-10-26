@@ -20,7 +20,8 @@ import (
 // read_very_early_config, before repository discovery, from the probe cwd. It
 // reads them again after setup, second, from its working folder, where a file
 // that it cannot open is also fatal. gitSystemConfigRead reads the system file
-// first. Includes, typed values and the command-line config are not applied.
+// first. Both reads follow include.path entries. includeIf conditions, typed
+// values and the command-line config are not applied.
 // Reference: https://github.com/git/git/blob/master/config.c
 func gitGlobalConfigRead(folder string, second bool) bool {
 	for _, path := range gitGlobalConfigPaths() {
@@ -91,7 +92,8 @@ func gitGlobalConfigPaths() []string {
 // parses the file as it reads it, so a syntax error stops the probe as soon
 // as Git reads it, and a read error ends the file. A FIFO is read as Git
 // reads it: the open waits for a writer, and the file ends when its last
-// writer closes it.
+// writer closes it. Git follows include.path entries, as gitConfigInclude
+// does.
 func gitConfigFile(path string, eaccesOK bool) gitConfigFileResult {
 	// syscall.Access checks the real credentials, as access(2) does; 4 is
 	// R_OK.
@@ -101,16 +103,5 @@ func gitConfigFile(path string, eaccesOK bool) gitConfigFileResult {
 		}
 		return gitConfigFileRejected
 	}
-	file, err := os.Open(path)
-	if err != nil {
-		return gitConfigFileUnopened
-	}
-	defer file.Close()
-	if opened, err := file.Stat(); err != nil || opened.IsDir() {
-		return gitConfigFileUnopened
-	}
-	if !parseGitConfigReader(file, nil) {
-		return gitConfigFileRejected
-	}
-	return gitConfigFileAdmitted
+	return gitConfigParse(path, 0)
 }
