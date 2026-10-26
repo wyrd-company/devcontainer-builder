@@ -205,6 +205,31 @@ var includeCases = []includeCase{
 		// including file's folder.
 		"global/%(prefix)/no-such-folder-for-dcb-tests/inc.cfg": globalConfigBroken,
 	}), ok: true},
+	{name: "global-prefix-relative-anchor", setup: includeGlobal(includeLine("%(prefix)/no-such-folder-for-dcb-tests/inc.cfg"), map[string]string{
+		// The rest of a %(prefix)/ path does not start at the including
+		// file's folder either.
+		"global/no-such-folder-for-dcb-tests/inc.cfg": globalConfigBroken,
+	}), ok: true},
+	{name: "global-prefix-absolute-valid", setup: func(t *testing.T, f includeFixture) map[string]*string {
+		// Git keeps an absolute rest as it is, whatever its build prefix.
+		return includeGlobal(includeLine("%(prefix)/"+filepath.Join(f.base, "inc.cfg")), map[string]string{"inc.cfg": globalConfigValid})(t, f)
+	}, ok: true},
+	{name: "global-prefix-absolute-syntax", setup: func(t *testing.T, f includeFixture) map[string]*string {
+		return includeGlobal(includeLine("%(prefix)/"+filepath.Join(f.base, "inc.cfg")), map[string]string{"inc.cfg": globalConfigBroken})(t, f)
+	}},
+	{name: "global-prefix-absolute-missing", setup: func(t *testing.T, f includeFixture) map[string]*string {
+		return includeGlobal(includeLine("%(prefix)/"+filepath.Join(f.base, "missing.cfg")), nil)(t, f)
+	}, ok: true},
+	{name: "global-prefix-absolute-nested-syntax", setup: func(t *testing.T, f includeFixture) map[string]*string {
+		// A relative include in the file starts at that file's folder.
+		return includeGlobal(includeLine("%(prefix)/"+filepath.Join(f.base, "sub", "inc1.cfg")), map[string]string{
+			"sub/inc1.cfg": includeLine("inc2.cfg"), "sub/inc2.cfg": globalConfigBroken, "global/inc2.cfg": globalConfigValid,
+		})(t, f)
+	}},
+	{name: "repository-prefix-absolute-syntax", setup: func(t *testing.T, f includeFixture) map[string]*string {
+		writeFile(t, filepath.Join(f.base, "inc.cfg"), globalConfigBroken)
+		return includeRepository(includeLine("%(prefix)/"+filepath.Join(f.base, "inc.cfg")), nil)(t, f)
+	}},
 	{name: "system-syntax", setup: func(t *testing.T, f includeFixture) map[string]*string {
 		system := filepath.Join(f.base, "system", "system.cfg")
 		writeFile(t, system, includeLine("inc.cfg"))
