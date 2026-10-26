@@ -658,9 +658,10 @@ workspace folder is inside it, and otherwise the workspace folder. Relative
 paths then start at that folder. A folder or another file that Git cannot open
 then also gives no Git root, and so does a system file that the process cannot
 read because permission is denied. Each read takes a special file, such as a
-terminal, until it ends, and a read error ends the file, as in Git; a FIFO is
-not read and gives no Git root. Includes, typed values, and the command-line
-config are not applied.
+terminal or a FIFO, until it ends, and a read error ends the file, as in Git.
+As in Git, a FIFO read waits, with no time limit, until a writer opens the
+FIFO, and the file ends when the last writer closes it. Includes, typed values,
+and the command-line config are not applied.
 As Git does, discovery walks the physical parent folders, after symbolic links
 in the workspace folder's path are resolved. The Git root keeps the workspace
 folder's path, up as many folders as Git walked, as the upstream CLI resolves
