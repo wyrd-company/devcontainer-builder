@@ -1,5 +1,5 @@
 // relationships:
-//   references: [git_chdir_darwin]
+//   references: [git_chdir_darwin, git_config_cwd_thread]
 
 package workspace
 

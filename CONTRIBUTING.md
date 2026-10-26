@@ -14,6 +14,8 @@ and Lefthook. Run `task check` before review. Docker integration checks require
 a working Docker daemon; Kubernetes validation uses kubeconform without a cluster.
 Optional upstream fixture tests run when the reference submodules are initialized.
 The Git account-lookup test builds a C fixture and runs when a C compiler is installed.
+`task test` also runs the workspace tests with the `gitthreadcwd` tag, which
+uses the macOS lookup of relative Git config file names on Linux.
 `task parity` compares `dcb` with the upstream CLI; see the
 [parity harness](test/parity/README.md). Report a parity change in the pull request.
 `task docs:check` checks the public Markdown in `docs/user/`, and `DESIGN.md`,
