@@ -15,7 +15,8 @@ import (
 
 // GitRoot returns the Git working tree selected from folder,
 // or "" when no repository is found or its working tree is invalid. It follows Git's discovery without
-// running git: walking up the physical parents of folder, as Git does from
+// running git. Git first reads its global config files, and one that it
+// rejects gives no root. Walking up the physical parents of folder, as Git does from
 // its cwd, a .git folder that is a repository marks the root; the root keeps
 // folder's lexical names up the same number of steps, as upstream's resolved
 // `git rev-parse --show-cdup` result does; a .git file marks the root when its gitdir is a
@@ -42,6 +43,9 @@ import (
 // selects the caller folder unless GIT_WORK_TREE or the repository config
 // selects another. Invalid GIT_DIR stops parent discovery.
 func GitRoot(folder string) (string, error) {
+	if !gitGlobalConfigAdmitted(folder) {
+		return "", nil
+	}
 	var root string
 	if dir, set := os.LookupEnv("GIT_DIR"); set {
 		if dir == "" {
