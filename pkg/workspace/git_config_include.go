@@ -104,13 +104,15 @@ func gitConfigInclude(folder *gitConfigCwd, from string, value *string, depth in
 
 // gitIncludePath follows interpolate_path in Git's path.c for an include
 // path. A leading ~ names HOME, which must be set, and ~name names that
-// account's home folder, which must exist. follow is false for a
-// %(prefix)/ path: Git reads it below the prefix that its build names, and
-// that file is not read. ok is false for a path that Git cannot expand.
+// account's home folder, which must exist. A %(prefix)/ path names the rest
+// of the path, as system_path in Git's exec-cmd.c does: an absolute rest as
+// it is, and a relative one below the prefix that Git's build names. follow
+// is false for that relative rest, which is not read. ok is false for a path
+// that Git cannot expand.
 // Reference: https://github.com/git/git/blob/master/path.c
 func gitIncludePath(value string) (path string, follow, ok bool) {
-	if strings.HasPrefix(value, "%(prefix)/") {
-		return "", false, true
+	if rest, prefixed := strings.CutPrefix(value, "%(prefix)/"); prefixed {
+		return rest, strings.HasPrefix(rest, "/"), true
 	}
 	if !strings.HasPrefix(value, "~") {
 		return value, true, true
