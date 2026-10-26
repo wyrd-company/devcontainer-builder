@@ -634,9 +634,21 @@ primary Compose service.
 | `--mount` | `up` | none | An additional mount, `type=<bind\|volume>,source=<source>,target=<target>[,external=<true\|false>]`. Repeat the flag for more mounts. `external=true` marks a Compose named volume as external. |
 | `--id-label` | `up`, `exec`, `read-configuration`, `run-user-commands`, `down`, `inspect` | none | A `name=value` label. Repeat the flag for more labels. |
 
-The Git root is found from the files in the workspace's parent folders; `dcb`
-does not run `git`. It reads these files with the credentials of its own
-process; see [Process credentials](/docs/dcb/overview#process-credentials).
+The Git root is found from the files in the workspace's parent folders and
+Git's global config files; `dcb` does not run `git`. It reads these files with
+the credentials of its own process; see
+[Process credentials](/docs/dcb/overview#process-credentials).
+As Git does when it starts, `dcb` first reads the global config files: the
+file that `GIT_CONFIG_GLOBAL` names, or else `$XDG_CONFIG_HOME/git/config`,
+or `$HOME/.config/git/config` when `XDG_CONFIG_HOME` is empty or unset, and
+then `$HOME/.gitconfig`. Relative paths start at the workspace folder. A
+global config file that Git rejects gives no Git root: a syntax error, a
+folder, a file that cannot be opened, or an access failure other than a
+missing file or denied permission. A FIFO is not read and also gives no Git
+root; another special file, such as `/dev/null`, is read up to 1 MiB. Includes,
+typed values, and the system and command-line config are not applied. Git
+reads a relative path again after it changes to the working tree; that second
+read is not applied.
 As Git does, discovery walks the physical parent folders, after symbolic links
 in the workspace folder's path are resolved. The Git root keeps the workspace
 folder's path, up as many folders as Git walked, as the upstream CLI resolves
