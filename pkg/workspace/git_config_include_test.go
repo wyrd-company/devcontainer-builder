@@ -200,7 +200,11 @@ var includeCases = []includeCase{
 		}
 		return includeGlobal(includeLine("~"+account.Username+"/no-such-folder-for-dcb-tests/inc.cfg"), nil)(t, f)
 	}, ok: true},
-	{name: "global-prefix", setup: includeGlobal(includeLine("%(prefix)/no-such-folder-for-dcb-tests/inc.cfg"), nil), ok: true},
+	{name: "global-prefix", setup: includeGlobal(includeLine("%(prefix)/no-such-folder-for-dcb-tests/inc.cfg"), map[string]string{
+		// Git reads the path below its build prefix, not below the
+		// including file's folder.
+		"global/%(prefix)/no-such-folder-for-dcb-tests/inc.cfg": globalConfigBroken,
+	}), ok: true},
 	{name: "system-syntax", setup: func(t *testing.T, f includeFixture) map[string]*string {
 		system := filepath.Join(f.base, "system", "system.cfg")
 		writeFile(t, system, includeLine("inc.cfg"))
@@ -440,5 +444,67 @@ func TestGitRootConfigIncludeMatchesGit(t *testing.T) {
 				assertIncludeResolve(t, folder, want)
 			})
 		}
+	}
+}
+
+// Git keeps a relative GIT_COMMON_DIR as given. Its format check starts it at
+// the probe cwd for GIT_DIR, and its full read after setup at its working
+// folder, which GIT_WORK_TREE selects. From the caller folder, w/c names the
+// common folder; from the working tree, c names a folder whose config only the
+// full read reads.
+func TestGitRootRelativeCommonDirFullRead(t *testing.T) {
+	git, err := exec.LookPath("git")
+	if err != nil {
+		t.Skip("git is not installed")
+	}
+	for _, c := range []struct {
+		name, config string
+		ok           bool
+	}{
+		{name: "valid", config: includeLine("inc.cfg"), ok: true},
+		{name: "syntax", config: includeLine("inc.cfg") + globalConfigBroken},
+		{name: "include-broken", config: includeLine("broken.cfg")},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			base, err := filepath.EvalSymlinks(t.TempDir())
+			if err != nil {
+				t.Fatal(err)
+			}
+			tree := filepath.Join(base, "tree")
+			env := testgit.Env()
+			run := func(dir string, args ...string) {
+				t.Helper()
+				cmd := exec.Command(git, args...)
+				cmd.Dir, cmd.Env = dir, env
+				if out, err := cmd.CombinedOutput(); err != nil {
+					t.Fatalf("git %v: %v %s", args, err, out)
+				}
+			}
+			run(base, "init", "-q", "-b", "main", tree)
+			run(tree, "commit", "-q", "--allow-empty", "-m", "initial")
+			linked := filepath.Join(base, "w", "linked")
+			run(tree, "worktree", "add", "-q", linked)
+			symlink(t, filepath.Join(tree, ".git"), filepath.Join(base, "w", "c"))
+			writeFile(t, filepath.Join(base, "c", "config"), c.config)
+			writeFile(t, filepath.Join(base, "c", "inc.cfg"), globalConfigValid)
+			writeFile(t, filepath.Join(base, "c", "broken.cfg"), globalConfigBroken)
+			folder := mkdir(t, filepath.Join(linked, "app"))
+			env = applyGlobalEnv(t, env, includeCaseVars(base, map[string]*string{
+				"GIT_DIR":        globalValue(filepath.Join(tree, ".git", "worktrees", "linked")),
+				"GIT_WORK_TREE":  &linked,
+				"GIT_COMMON_DIR": globalValue("../../c"),
+			}))
+			want := ""
+			if c.ok {
+				want = linked
+			}
+			if measured := globalSetupGit(t, git, folder, env); measured != want {
+				t.Fatalf("Git root = %q; want %q", measured, want)
+			}
+			if got, err := GitRoot(folder); err != nil || got != want {
+				t.Fatalf("GitRoot = %q, %v; want %q", got, err, want)
+			}
+			assertIncludeResolve(t, folder, want)
+		})
 	}
 }
