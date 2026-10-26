@@ -52,6 +52,34 @@ Differences from upstream:
 | Can install the VS Code server into the image at build time. | The editor installs the server when it attaches. |
 | Adds `down`, `inspect`, `generate`, `server`, and `skills`. | Adds `outdated`, `upgrade`, and `templates`. |
 | `dcb features` stages the features of a configuration. | `features` tests, packages, and publishes features. |
+| Finds the Git root with the credentials of its own process. See [Process credentials](#process-credentials). | Runs `git`, which can start with different credentials. |
+
+### Process credentials
+
+`dcb` and its Go packages read workspace, configuration and Git files with
+the credentials that the process has at the time of each read: its user and
+groups, and on Linux its capabilities. They do not change these credentials.
+A permission that the caller dropped stays dropped, and a permission that the
+caller holds is used.
+
+To find the Git root, the upstream CLI starts `git`. Starting a program can
+change its credentials, and `dcb` does not copy these changes:
+
+- A root process that cleared its effective capabilities can get them back
+  in `git`, unless `SECBIT_NOROOT` is set.
+- With `SECBIT_NOROOT`, the `git` of a root process starts with only the
+  ambient capabilities of that process.
+- File capabilities or a set-user-ID or set-group-ID bit on `git`, and a
+  security module that changes domain when `git` starts, also change its
+  credentials.
+
+In these cases, `dcb` and the upstream CLI can find different Git roots and
+mount different folders. When the process has the credentials that a started
+`git` gets, credentials cause no difference between them. A `dcb` started from
+a shell has these credentials when neither `dcb` nor `git` has file
+capabilities, a set-user-ID or set-group-ID bit, or a security module domain
+change when it starts. The Dev Container specification does not define how the
+Git root is found.
 
 ## Requirements
 

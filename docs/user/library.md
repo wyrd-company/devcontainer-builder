@@ -10,7 +10,9 @@ relationships:
 `github.com/wyrd-company/devcontainer-builder`. The host packages take their
 Docker or Kubernetes client from the caller, do not read `DOCKER_HOST` or
 `KUBECONFIG`, and write nothing to stdout or stderr unless given a writer, so
-a service or an operator can embed them.
+a service or an operator can embed them. The packages read files with the
+credentials that the calling process has at the time of the call; see
+[Process credentials](/docs/dcb/overview#process-credentials).
 
 | Package | Purpose |
 | --- | --- |
