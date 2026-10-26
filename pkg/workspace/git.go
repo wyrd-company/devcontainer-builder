@@ -15,9 +15,10 @@ import (
 
 // GitRoot returns the Git working tree selected from folder,
 // or "" when no repository is found or its working tree is invalid. It follows Git's discovery without
-// running git: walking up lexically (so symlinked names are kept, as
-// upstream's `git rev-parse --show-cdup` result is), a .git folder that is a
-// repository marks the root; a .git file marks the root when its gitdir is a
+// running git: walking up the physical parents of folder, as Git does from
+// its cwd, a .git folder that is a repository marks the root; the root keeps
+// folder's lexical names up the same number of steps, as upstream's resolved
+// `git rev-parse --show-cdup` result does; a .git file marks the root when its gitdir is a
 // repository, and otherwise ends discovery, as Git refuses an invalid gitfile.
 // A folder that is itself a repository, such as a bare repository or a .git
 // folder, selects the caller folder as upstream's empty cdup does.
@@ -117,13 +118,22 @@ func discoverGitRoot(folder string) (string, error) {
 	if !ok {
 		return "", nil
 	}
-	for current, depth := filepath.Clean(folder), 0; ; current, depth = filepath.Dir(current), depth+1 {
+	// Git walks the parents of its physical cwd. Upstream resolves the
+	// resulting cdup, one `..` per parent step, against the caller's path, so
+	// the root keeps the caller's lexical names up the same number of steps.
+	physical, err := gitPhysicalPath(folder)
+	if err != nil {
+		return "", nil
+	}
+	lexical := filepath.Clean(folder)
+	for current, depth := physical, 0; ; current, lexical, depth = filepath.Dir(current), filepath.Dir(lexical), depth+1 {
 		if limit >= 0 && depth >= limit {
 			return "", nil
 		}
 		if oneFilesystem && depth > 0 {
-			// Git stops at the first parent on another file system, after
-			// the ceiling check. A parent it cannot stat also ends discovery.
+			// Git stops at the first physical parent on another file system,
+			// after the ceiling check. A parent it cannot stat also ends
+			// discovery.
 			if parent, err := gitDevice(current); err != nil || parent != device {
 				return "", nil
 			}
@@ -145,7 +155,7 @@ func discoverGitRoot(folder string) (string, error) {
 					// the caller folder, from the physical found folder.
 					gitdir = gitRealpathDir(current, ".git")
 				}
-				return gitSelectedRoot(current, dotGit, folder, gitdir), nil
+				return gitSelectedRoot(lexical, dotGit, folder, gitdir), nil
 			}
 		case err == nil:
 			gitdir, err := readGitfile(dotGit)
@@ -156,7 +166,7 @@ func discoverGitRoot(folder string) (string, error) {
 			if gitdir == "" || !valid {
 				return "", nil
 			}
-			return gitSelectedRoot(current, gitdir, folder, gitRealpathDir("", gitdir)), nil
+			return gitSelectedRoot(lexical, gitdir, folder, gitRealpathDir("", gitdir)), nil
 		case !errors.Is(err, fs.ErrNotExist) && !errors.Is(err, fs.ErrPermission):
 			return "", err
 		}
