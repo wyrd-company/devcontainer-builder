@@ -18,8 +18,11 @@ import (
 )
 
 // accountHelperResult is what TestGitRootNamedAccountHelper reports.
+// FixtureAccount is true when os/user finds fixtureacct, which only the
+// preloaded lookup knows, so the build asks the libc account lookup.
 type accountHelperResult struct {
 	Root, RootErr, Source, Target, Folder, ResolveErr string
+	FixtureAccount                                    bool
 }
 
 // TestGitRootNamedAccountInclude includes ~name/ paths from a global config
@@ -30,7 +33,9 @@ type accountHelperResult struct {
 // as the release build, cannot. That build skips an include whose account it
 // cannot find, the approved difference, so it finds the Git root where Git
 // rejects an unknown name or the included file of a service-only account.
-// Known accounts and ~/ follow Git in every build.
+// Known accounts and ~/ follow Git in every build. The helper measures which
+// lookup the build has, and that must be what gitAccountLookupPasswdOnly
+// states.
 func TestGitRootNamedAccountInclude(t *testing.T) {
 	git, err := exec.LookPath("git")
 	if err != nil {
@@ -108,12 +113,9 @@ func TestGitRootNamedAccountInclude(t *testing.T) {
 			env := applyGlobalEnv(t, testgit.Env(), includeCaseVars(caseBase, map[string]*string{
 				"GIT_CONFIG_GLOBAL": &global, "HOME": &home, "XDG_CONFIG_HOME": nil,
 			}))
-			gitWant, nativeWant := "", ""
+			gitWant := ""
 			if c.git {
 				gitWant = tree
-			}
-			if c.git || c.passwdOnly && gitAccountLookupPasswdOnly {
-				nativeWant = tree
 			}
 			fixtureEnv := append(env, "LD_PRELOAD="+preload, "FIXTURE_ACCOUNT_HOME="+accountHome)
 			if measured := globalSetupGit(t, git, folder, fixtureEnv); measured != gitWant {
@@ -132,6 +134,14 @@ func TestGitRootNamedAccountInclude(t *testing.T) {
 				t.Fatalf("helper: %v %s", err, out)
 			}
 			got := accountHelperOutput(t, out)
+			passwdOnly := !got.FixtureAccount
+			if passwdOnly != gitAccountLookupPasswdOnly {
+				t.Fatalf("the build's account lookup reads /etc/passwd only: %v; gitAccountLookupPasswdOnly = %v", passwdOnly, gitAccountLookupPasswdOnly)
+			}
+			nativeWant := ""
+			if c.git || c.passwdOnly && passwdOnly {
+				nativeWant = tree
+			}
 			if got.Root != nativeWant || got.RootErr != "" {
 				t.Fatalf("GitRoot = %q, %s; want %q (Git %q)", got.Root, got.RootErr, nativeWant, gitWant)
 			}
@@ -183,6 +193,8 @@ func TestGitRootNamedAccountHelper(t *testing.T) {
 		t.Fatal(err)
 	}
 	var result accountHelperResult
+	_, err = user.Lookup("fixtureacct")
+	result.FixtureAccount = err == nil
 	result.Root, err = GitRoot(folder)
 	if err != nil {
 		result.RootErr = err.Error()
