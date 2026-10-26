@@ -21,10 +21,12 @@ import (
 // path of its reading side. Its input stays queued until a reader takes it.
 func globalConfigTerminal(t *testing.T, segments ...string) string {
 	t.Helper()
-	master, err := os.OpenFile("/dev/ptmx", os.O_RDWR|unix.O_NOCTTY, 0)
+	// A non-blocking descriptor lets Close end a write that no reader takes.
+	fd, err := unix.Open("/dev/ptmx", unix.O_RDWR|unix.O_NOCTTY|unix.O_NONBLOCK|unix.O_CLOEXEC, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
+	master := os.NewFile(uintptr(fd), "/dev/ptmx")
 	if err := unix.IoctlSetPointerInt(int(master.Fd()), unix.TIOCSPTLCK, 0); err != nil {
 		t.Fatal(err)
 	}
@@ -56,7 +58,6 @@ func globalConfigTerminal(t *testing.T, segments ...string) string {
 		}
 	}()
 	t.Cleanup(func() {
-		// Closing the terminal ends a write that no reader took.
 		master.Close()
 		<-written
 		slave.Close()
