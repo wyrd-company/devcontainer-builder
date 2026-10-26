@@ -80,6 +80,12 @@ func TestGitRootFilesystemBoundaryMatchesGitAsRoot(t *testing.T) {
 	inner := tmpfs(filepath.Join(outer, "sv"))
 	run(inner, "init", "-q")
 	mkdir(t, filepath.Join(inner, "app"))
+	// A caller that is itself a symbolic link into that file system: Git
+	// takes the device of the link's target, finds inner one physical step
+	// up, and upstream resolves that cdup against the link's path.
+	if err := os.Symlink(filepath.Join(inner, "app"), filepath.Join(base, "toinner")); err != nil {
+		t.Fatal(err)
+	}
 	// Two nested boundaries.
 	nested := mkdir(t, filepath.Join(base, "nested"))
 	run(nested, "init", "-q")
@@ -122,6 +128,7 @@ func TestGitRootFilesystemBoundaryMatchesGitAsRoot(t *testing.T) {
 		{filepath.Join(base, "gitfile", "sv", "app"), all},
 		{filepath.Join(base, "bare", "sv", "app"), all},
 		{filepath.Join(inner, "app"), all},
+		{filepath.Join(base, "toinner"), all},
 		{filepath.Join(nested, "s1", "s2", "app"), all},
 		{filepath.Join(base, "wtfs", "wt", "app"), all},
 		{filepath.Join(bound, "b", "x"), all},
