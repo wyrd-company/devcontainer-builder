@@ -642,13 +642,14 @@ As Git does when it starts, `dcb` first reads the global config files: the
 file that `GIT_CONFIG_GLOBAL` names, or else `$XDG_CONFIG_HOME/git/config`,
 or `$HOME/.config/git/config` when `XDG_CONFIG_HOME` is empty or unset, and
 then `$HOME/.gitconfig`. Relative paths start at the workspace folder. A
-global config file that Git rejects gives no Git root: a syntax error, a
-folder, a file that cannot be opened, or an access failure other than a
-missing file or denied permission. A FIFO is not read and also gives no Git
-root; another special file, such as `/dev/null`, is read up to 1 MiB. Includes,
-typed values, and the system and command-line config are not applied. Git
-reads a relative path again after it changes to the working tree; that second
-read is not applied.
+global config file that Git rejects gives no Git root: a syntax error, or an
+access failure other than a missing file or denied permission. Git reads the
+files again after discovery, from its working folder, and then also rejects a
+folder or a file that it cannot open; an absolute path names the same file, so
+these also give no Git root. Git's second read of a relative path is not
+applied. A FIFO is not read and also gives no Git root; another special file,
+such as `/dev/null`, is read up to 1 MiB. Includes, typed values, and the
+system and command-line config are not applied.
 As Git does, discovery walks the physical parent folders, after symbolic links
 in the workspace folder's path are resolved. The Git root keeps the workspace
 folder's path, up as many folders as Git walked, as the upstream CLI resolves
