@@ -19,6 +19,8 @@ tasks:
     cmds:
       - go test ./...
       - go test -race ./pkg/host/runner ./pkg/substitute ./pkg/features ./pkg/lifecycle
+      # Release builds have no cgo, so os/user reads /etc/passwd only.
+      - CGO_ENABLED=0 go test ./pkg/workspace -run 'TestGitAccountLookup|TestGitRootNamedAccount|TestGitRootConfigInclude'
   lint:
     desc: Check Go, workflow syntax, and release intents without changing files
     cmds:
