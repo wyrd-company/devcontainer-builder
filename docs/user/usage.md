@@ -635,22 +635,32 @@ primary Compose service.
 | `--id-label` | `up`, `exec`, `read-configuration`, `run-user-commands`, `down`, `inspect` | none | A `name=value` label. Repeat the flag for more labels. |
 
 The Git root is found from the files in the workspace's parent folders and
-Git's global config files; `dcb` does not run `git`. It reads these files with
-the credentials of its own process; see
+Git's system and global config files; `dcb` does not run `git`. It reads these
+files with the credentials of its own process; see
 [Process credentials](/docs/dcb/overview#process-credentials).
-As Git does when it starts, `dcb` first reads the global config files: the
-file that `GIT_CONFIG_GLOBAL` names, or else `$XDG_CONFIG_HOME/git/config`,
-or `$HOME/.config/git/config` when `XDG_CONFIG_HOME` is empty or unset, and
-then `$HOME/.gitconfig`. Relative paths start at the workspace folder. A
-global config file that Git rejects gives no Git root: a syntax error, or an
-access failure other than a missing file or denied permission. Git reads the
-files again after setup, from its working folder: the working tree, after
-symbolic links are resolved, when the workspace folder is inside it, and
-otherwise the workspace folder. Relative paths then start at that folder, and
-a folder or another file that Git cannot open also gives no Git root. Each
-read takes a special file, such as a terminal, until it ends, and a read error
-ends the file, as in Git; a FIFO is not read and gives no Git root. Includes,
-typed values, and the system and command-line config are not applied.
+As Git does when it starts, `dcb` first reads the system config file and then
+the global config files. The system file is the file that `GIT_CONFIG_SYSTEM`
+names, unless `GIT_CONFIG_NOSYSTEM` is true; a `GIT_CONFIG_NOSYSTEM` value
+that Git does not read as a boolean gives no Git root. As Git does, `dcb`
+removes `.` components and repeated separators from `GIT_CONFIG_SYSTEM`, and
+removes each `..` component with the component before it, without reading the
+file system. When a `..` component has no component before it, the path keeps
+the changes made until then. Without `GIT_CONFIG_SYSTEM`, Git reads the system
+file that its build names, such as `/etc/gitconfig`; `dcb` does not read that
+file. The global config files are the file that `GIT_CONFIG_GLOBAL` names, or
+else `$XDG_CONFIG_HOME/git/config`, or `$HOME/.config/git/config` when
+`XDG_CONFIG_HOME` is empty or unset, and then `$HOME/.gitconfig`. Relative
+paths start at the workspace folder. A config file that Git rejects gives no
+Git root: a syntax error, or an access failure other than a missing file or
+denied permission. Git reads the files again after setup, from its working
+folder: the working tree, after symbolic links are resolved, when the
+workspace folder is inside it, and otherwise the workspace folder. Relative
+paths then start at that folder. A folder or another file that Git cannot open
+then also gives no Git root, and so does a system file that the process cannot
+read because permission is denied. Each read takes a special file, such as a
+terminal, until it ends, and a read error ends the file, as in Git; a FIFO is
+not read and gives no Git root. Includes, typed values, and the command-line
+config are not applied.
 As Git does, discovery walks the physical parent folders, after symbolic links
 in the workspace folder's path are resolved. The Git root keeps the workspace
 folder's path, up as many folders as Git walked, as the upstream CLI resolves
