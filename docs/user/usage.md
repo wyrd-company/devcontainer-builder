@@ -685,8 +685,9 @@ linked worktree and `GIT_COMMON_DIR` ignore `core.bare` in the common config.
 Otherwise `core.worktree` selects the working tree, with the same version and
 common-config rules; `GIT_WORK_TREE` and a true `core.bare` take precedence. An
 absolute value is resolved as `GIT_WORK_TREE` is. A relative value starts at
-the repository folder and must name an existing, accessible folder; its
-symbolic links are resolved before `..` components. Git changes to the
+the repository folder and must name an existing folder that the effective user
+and capabilities can search, as Git's `chdir` requires; its symbolic links are
+resolved before `..` components. Git changes to the
 repository folder first, so the folder and the value are separate lookups, each
 with its own symbolic link and path length limits. A `.git` folder above the
 workspace folder and a gitfile target first pass through Git's own path
