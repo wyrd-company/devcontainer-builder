@@ -76,7 +76,10 @@ Upstream defaults govern implementation unless an approved requirement states
 otherwise. Git-root mounting defaults to true. Configuration remoteEnv persists
 in image metadata unless omit-config-remote-env-from-metadata is enabled.
 A stricter policy requires Bob's decision; an additive opt-in does not itself
-authorize changing the default.
+authorize changing the default. The approved process-credential requirement
+governs native Git discovery: it reads with the credentials of its own process,
+not those of a started `git`; see
+[Process credentials](../overview.md#process-credentials). It removes no option.
 
 Template commands are outside the current implementation scope. Template
 application extracts non-omitted files into the destination and overwrites
