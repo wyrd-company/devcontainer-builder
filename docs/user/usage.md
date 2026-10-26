@@ -656,6 +656,12 @@ intermediate component gives no Git root. For an outside-tree override, trailing
 whitespace is removed from the resolved path as in the upstream CLI probe.
 An explicitly empty `GIT_DIR`, or one that names a missing repository or an
 invalid gitfile target, gives no Git root; parent discovery does not replace it.
+As in Git 2.54 and later, parent discovery continues past a `.git` entry only
+when the entry is missing, which includes a symbolic link to a missing path or
+through a regular file. A `.git` entry that cannot be read gives no Git root:
+for example a symbolic link loop, a name that is too long, a link into a
+folder that cannot be searched, a gitfile that cannot be opened, or a special
+file such as a FIFO.
 Gitfiles must start with literal `gitdir:` followed by one space and a repository
 path. Only final CR and LF bytes are removed; other whitespace and interior
 newlines belong to the path. Gitfiles larger than 1 MiB give no Git root.
