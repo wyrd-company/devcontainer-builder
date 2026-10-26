@@ -109,6 +109,7 @@ func TestGitRootDiscoveryAcrossFilesystemValuesMatchGit(t *testing.T) {
 
 // Git stats the caller folder before discovery; a folder it cannot stat
 // cannot start the probe either, and upstream then mounts the caller folder.
+// Git cannot change to a missing folder even when it may cross file systems.
 func TestGitRootUnreadableFolderDevice(t *testing.T) {
 	base := t.TempDir()
 	repo := filepath.Join(base, "repo")
@@ -119,6 +120,11 @@ func TestGitRootUnreadableFolderDevice(t *testing.T) {
 	if got, err := GitRoot(missing); got != "" || err != nil {
 		t.Fatalf("GitRoot(%s) = %q, %v; want no root", missing, got, err)
 	}
+	t.Setenv(acrossFilesystem, "true")
+	if got, err := GitRoot(missing); got != "" || err != nil {
+		t.Fatalf("GitRoot(%s) across file systems = %q, %v; want no root", missing, got, err)
+	}
+	os.Unsetenv(acrossFilesystem)
 	present := mkdir(t, filepath.Join(repo, "present", "app"))
 	if got, err := GitRoot(present); got != repo || err != nil {
 		t.Fatalf("GitRoot(%s) = %q, %v; want %q", present, got, err, repo)
