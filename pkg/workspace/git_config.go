@@ -28,9 +28,9 @@ type gitWorktreeSettings struct {
 // selects no working tree, and the core.worktree value that applies, if any.
 // Without core.repositoryformatversion, or with a negative version, Git
 // ignores both. A linked worktree or GIT_COMMON_DIR also ignores the common
-// values. Extensions outside Git's version 0 set are not checked. Includes are
-// not followed, as in the format check; Git's later full config read, which
-// follows them, is not applied.
+// values. Extensions follow gitExtensions. Includes are not followed, as in
+// the format check; Git's later full config read, which follows them, is not
+// applied.
 // Reference: https://github.com/git/git/blob/master/setup.c
 func gitRepositoryFormat(dir, folder string) (bool, *string, error) {
 	common, shared, err := gitCommon(dir, folder)
@@ -41,7 +41,8 @@ func gitRepositoryFormat(dir, folder string) (bool, *string, error) {
 	if err != nil {
 		return false, nil, err
 	}
-	version, worktreeConfig := -1, false
+	version := -1
+	var extensions gitExtensions
 	settings := gitWorktreeSettings{bare: -1}
 	for _, entry := range entries {
 		switch {
@@ -52,22 +53,8 @@ func gitRepositoryFormat(dir, folder string) (bool, *string, error) {
 			}
 			version = value
 		case strings.HasPrefix(entry.name, "extensions."):
-			// Git handles these version 0 extensions in every repository.
-			switch strings.TrimPrefix(entry.name, "extensions.") {
-			case "preciousobjects":
-				if _, ok := gitParseBool(entry.value); !ok {
-					return false, nil, errGitConfig
-				}
-			case "partialclone":
-				if entry.value == nil {
-					return false, nil, errGitConfig
-				}
-			case "worktreeconfig":
-				value, ok := gitParseBool(entry.value)
-				if !ok {
-					return false, nil, errGitConfig
-				}
-				worktreeConfig = value
+			if !extensions.add(strings.TrimPrefix(entry.name, "extensions."), entry.value) {
+				return false, nil, errGitConfig
 			}
 		default:
 			if !gitWorktreeConfig(entry, &settings) {
@@ -78,10 +65,10 @@ func gitRepositoryFormat(dir, folder string) (bool, *string, error) {
 	if version < 0 {
 		return false, nil, nil
 	}
-	if version > 1 {
+	if version > 1 || !extensions.verify(version) {
 		return false, nil, errGitConfig
 	}
-	if worktreeConfig {
+	if extensions.worktreeConfig {
 		entries, err := readGitConfig(dir + string(os.PathSeparator) + "config.worktree")
 		if err != nil {
 			return false, nil, err
