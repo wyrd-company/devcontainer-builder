@@ -20,7 +20,9 @@ import (
 
 // withoutEnv lists what a test process removes before its tests run: "proc"
 // hides /proc, "thread" stops a thread from unsharing its working folder,
-// and "clone" stops a new thread from having its own working folder.
+// and "clone" stops a new thread from having its own working folder. "root"
+// runs the process as root of its own user namespace, with the capabilities
+// to mount and to override file permissions.
 const withoutEnv = "DCB_WORKSPACE_TEST_WITHOUT"
 
 // withoutUnavailable starts the message of a process that cannot hide /proc.
@@ -28,19 +30,16 @@ const withoutUnavailable = "without /proc unavailable: "
 
 func init() {
 	without := strings.Fields(os.Getenv(withoutEnv))
-	if slices.Contains(without, "proc") {
+	if slices.Contains(without, "proc") || slices.Contains(without, "root") {
 		// The process has its own user and mount namespaces, so these mounts
 		// end with it and the host's mounts do not change.
-		err := unix.Mount("", "/", "", unix.MS_REC|unix.MS_PRIVATE, "")
-		if err == nil {
-			err = unix.Mount("tmpfs", "/proc", "tmpfs", 0, "")
+		if err := unix.Mount("", "/", "", unix.MS_REC|unix.MS_PRIVATE, ""); err != nil {
+			withoutMountExit(err)
 		}
-		if err != nil {
-			prefix := "without /proc: "
-			if errors.Is(err, unix.EPERM) {
-				prefix = withoutUnavailable
-			}
-			withoutExit(prefix + err.Error())
+	}
+	if slices.Contains(without, "proc") {
+		if err := unix.Mount("tmpfs", "/proc", "tmpfs", 0, ""); err != nil {
+			withoutMountExit(err)
 		}
 		if _, err := os.Readlink("/proc/self/fd/0"); err == nil {
 			withoutExit("without /proc: /proc/self/fd is still present")
@@ -64,6 +63,15 @@ func init() {
 			withoutExit("without a new thread's working folder: " + err.Error())
 		}
 	}
+}
+
+// withoutMountExit ends a process that cannot mount in its own namespaces.
+func withoutMountExit(err error) {
+	prefix := "without /proc: "
+	if errors.Is(err, unix.EPERM) {
+		prefix = withoutUnavailable
+	}
+	withoutExit(prefix + err.Error())
 }
 
 func withoutExit(message string) {
@@ -200,15 +208,21 @@ func runWithout(t *testing.T, without, run, skip string) string {
 	}
 	cmd := exec.Command(os.Args[0], args...)
 	cmd.Env = append(os.Environ(), withoutEnv+"="+without)
-	namespaces := slices.Contains(strings.Fields(without), "proc")
+	fields := strings.Fields(without)
+	root := slices.Contains(fields, "root")
+	namespaces := root || slices.Contains(fields, "proc")
 	if namespaces {
+		// Without "root", the test process keeps its own user, so
+		// permissions still apply; it can only mount.
+		uid, gid, caps := os.Getuid(), os.Getgid(), []uintptr{unix.CAP_SYS_ADMIN}
+		if root {
+			uid, gid, caps = 0, 0, append(caps, unix.CAP_DAC_OVERRIDE)
+		}
 		cmd.SysProcAttr = &syscall.SysProcAttr{
 			Cloneflags:  syscall.CLONE_NEWUSER | syscall.CLONE_NEWNS,
-			UidMappings: []syscall.SysProcIDMap{{ContainerID: os.Getuid(), HostID: os.Getuid(), Size: 1}},
-			GidMappings: []syscall.SysProcIDMap{{ContainerID: os.Getgid(), HostID: os.Getgid(), Size: 1}},
-			// The test process keeps its own user, so permissions still
-			// apply; it can only mount.
-			AmbientCaps: []uintptr{unix.CAP_SYS_ADMIN},
+			UidMappings: []syscall.SysProcIDMap{{ContainerID: uid, HostID: os.Getuid(), Size: 1}},
+			GidMappings: []syscall.SysProcIDMap{{ContainerID: gid, HostID: os.Getgid(), Size: 1}},
+			AmbientCaps: caps,
 		}
 	}
 	out, err := cmd.CombinedOutput()
