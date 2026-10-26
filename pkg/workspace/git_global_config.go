@@ -5,18 +5,11 @@ package workspace
 
 import (
 	"errors"
-	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"syscall"
 )
-
-// gitDeviceConfigLimit bounds what is read from a device named as a global
-// config file. Git reads a device until it ends; native discovery rejects one
-// that streams more than this, such as /dev/zero, which Git's parser also
-// rejects.
-const gitDeviceConfigLimit = 1 << 20
 
 // gitGlobalConfigAdmitted follows Git's reads of its global config files. A
 // file that Git rejects stops the probe, and upstream finds no Git root.
@@ -65,10 +58,12 @@ func gitGlobalConfigPaths() []string {
 // gitGlobalConfigFileAdmitted follows access_or_die with ACCESS_EACCES_OK,
 // then the file read. Git skips a file that access(2) reports missing, or
 // denies with the real credentials, and stops on another access failure. It
-// then opens the file with the effective credentials. A syntax error stops
-// the probe. An open or read failure, such as a directory, stops it only when
-// Git reads the file again after discovery, reread. Git would block reading a
-// FIFO; it is rejected here without opening it.
+// then opens the file with the effective credentials; its fopen also fails on
+// a folder. An open failure stops the probe only when Git reads the file again
+// after discovery, reread. Git parses the file as it reads it, so a syntax
+// error stops the probe as soon as Git reads it, and a read error ends the
+// file. Git would block reading a FIFO; it is rejected here without opening
+// it.
 func gitGlobalConfigFileAdmitted(path string, reread bool) bool {
 	// syscall.Access checks the real credentials, as access(2) does; 4 is
 	// R_OK.
@@ -84,17 +79,8 @@ func gitGlobalConfigFileAdmitted(path string, reread bool) bool {
 		return !reread
 	}
 	defer file.Close()
-	var reader io.Reader = file
-	if !info.Mode().IsRegular() {
-		reader = io.LimitReader(file, gitDeviceConfigLimit+1)
-	}
-	content, err := io.ReadAll(reader)
-	if err != nil {
+	if opened, err := file.Stat(); err != nil || opened.IsDir() {
 		return !reread
 	}
-	if len(content) > gitDeviceConfigLimit && !info.Mode().IsRegular() {
-		return false
-	}
-	_, ok := parseGitConfig(content)
-	return ok
+	return parseGitConfigReader(file, nil)
 }
