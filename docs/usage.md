@@ -697,7 +697,23 @@ rejects gives no Git root: a syntax error, a directory or an unreadable file,
 a `core.repositoryformatversion` that is not an integer or is above 1, an
 invalid `core.bare`, `extensions.worktreeConfig` or `extensions.preciousObjects`
 boolean, and `core.worktree` or `extensions.partialClone` without a value. A
-special file such as a FIFO is not read and also gives no Git root. Integers
+special file such as a FIFO is not read and also gives no Git root.
+Extensions follow Git 2.54 and later. Git checks each extension value whatever
+the repository version: `extensions.objectFormat` and
+`extensions.compatObjectFormat` must be `sha1` or `sha256`,
+`extensions.refStorage` must name `files` or `reftable`, optionally followed by
+`://` and a payload, and `extensions.relativeWorktrees` and
+`extensions.submodulePathConfig` must be booleans. A second
+`extensions.compatObjectFormat` gives no Git root. When
+`core.repositoryformatversion` is 1, an extension that Git does not know gives
+no Git root. When it is 0, `extensions.noop-v1` or one of these version 1
+extensions gives no Git root; other unknown extensions are ignored. A
+compatibility object format equal to the object format, which is `sha1` by
+default, gives no Git root. A different compatibility object format is
+accepted, as Git built with Rust accepts it; Git built without Rust rejects
+every compatibility object format. Git before 2.54 does not know
+`extensions.submodulePathConfig` or the `://` payload form, and Git before 2.48
+does not know `extensions.relativeWorktrees`. Integers
 are read as Git built against a C23 C library, such as glibc 2.38 or later,
 reads them: decimal, octal with a leading `0`, hexadecimal with `0x` and binary
 with `0b`, with an optional `k`, `m` or `g` unit. When
@@ -723,8 +739,8 @@ Builds for hosts other than Linux and macOS instead join the repository
 folder's physical path and the value, which must fit the host's path length
 limit. An empty value or one that Git cannot resolve gives no Git
 root. Inside that working tree, the Git root keeps the workspace folder's path;
-outside it, the Git root is the working tree's physical path. Includes, other
-config keys and extensions outside Git's version 0 set are not interpreted.
+outside it, the Git root is the working tree's physical path. Includes and
+other config keys are not interpreted.
 Relative values start at the workspace folder. A valid `GIT_DIR` selects the
 workspace folder without parent discovery; `GIT_WORK_TREE` or the repository
 config can select its working tree. Other Git
