@@ -23,11 +23,10 @@ const (
 
 // globalConfigCase sets the variables that select Git's global config files.
 // setup writes files under base and folder and returns the variables; a nil
-// value unsets the variable. ok is the native result: true when every file
-// passes Git's first read, so the Git root is the one that the layout gives
+// value unsets the variable. ok is true when every file passes Git's reads on
+// the discovered route, so the Git root is the one that the layout gives
 // without the case. secondRead names the routes where Git's second read, from
-// its working folder after discovery, finds a relative path again and
-// rejects it; native discovery does not apply that read.
+// its working folder after setup, finds a relative path again and rejects it.
 type globalConfigCase struct {
 	name         string
 	setup        func(t *testing.T, base, folder string) map[string]*string
@@ -251,10 +250,10 @@ func TestGitRootGlobalConfigContract(t *testing.T) {
 	}
 }
 
-// Git reads its global config files when it starts, before discovery. A file
-// that it rejects stops the probe, and upstream finds no Git root. Native
-// discovery and the host Git must both give each case's result on every
-// discovery route.
+// Git reads its global config files when it starts, before discovery, and
+// again from its working folder after setup. A file that it rejects stops the
+// probe, and upstream finds no Git root. Native discovery and the host Git
+// must both give each case's result on every discovery route.
 func TestGitRootGlobalConfigMatchesGit(t *testing.T) {
 	git, err := exec.LookPath("git")
 	if err != nil {
@@ -324,18 +323,12 @@ func TestGitRootGlobalConfigMatchesGit(t *testing.T) {
 					t.Fatalf("Git finds no root before the case: %s", stderr)
 				}
 				env = applyGlobalEnv(t, env, c.setup(t, base, folder))
-				want, gitWant := "", ""
-				if c.ok {
+				want := ""
+				if c.ok && !c.secondRead[route] {
 					want = control
 				}
-				if c.ok && !c.secondRead[route] {
-					gitWant = control
-				}
-				if measured, stderr := probe(env); measured != gitWant {
-					t.Fatalf("Git root = %q (%s); want %q", measured, strings.TrimSpace(stderr), gitWant)
-				}
-				if gitWant != want {
-					t.Logf("declared difference: Git's second read from its working folder gives %q; native discovery gives %q", gitWant, want)
+				if measured, stderr := probe(env); measured != want {
+					t.Fatalf("Git root = %q (%s); want %q", measured, strings.TrimSpace(stderr), want)
 				}
 				got, err := GitRoot(folder)
 				if err != nil || got != want {

@@ -18,22 +18,24 @@ import (
 // CLI resolves the empty cdup to the caller folder. Otherwise core.worktree
 // selects the working tree. Rejected config, or a core.worktree that Git cannot
 // resolve, is fatal. gitdir gives the repository folder that Git changes to
-// before a relative core.worktree.
-func gitSelectedRoot(root, dir, folder string, gitdir func() (string, error)) string {
+// before a relative core.worktree. cwd is Git's working folder with the
+// default working tree; it returns the selected root and working folder.
+func gitSelectedRoot(root, cwd, dir, folder string, gitdir func() (string, error)) (string, string) {
 	bare, workTree, err := gitRepositoryFormat(dir, folder)
 	if err != nil {
-		return ""
+		return "", ""
 	}
 	if _, set := os.LookupEnv("GIT_WORK_TREE"); set {
-		return root
+		return root, cwd
 	}
 	switch {
 	case bare:
-		return filepath.Clean(folder)
+		// Git stays in the caller folder.
+		return filepath.Clean(folder), folder
 	case workTree != nil:
 		return gitConfigWorkTreeRoot(gitdir, *workTree, folder)
 	}
-	return root
+	return root, cwd
 }
 
 // gitConfigWorkTreeRoot resolves a core.worktree value. Git resolves an
@@ -41,10 +43,10 @@ func gitSelectedRoot(root, dir, folder string, gitdir func() (string, error)) st
 // the repository folder that gitdir gives and then to the value, so the value
 // must name an accessible folder, and reads the physical cwd. An empty value
 // fails.
-func gitConfigWorkTreeRoot(gitdir func() (string, error), value, folder string) string {
+func gitConfigWorkTreeRoot(gitdir func() (string, error), value, folder string) (string, string) {
 	physical, err := gitPhysicalPath(folder)
 	if err != nil {
-		return ""
+		return "", ""
 	}
 	var workTree string
 	if filepath.IsAbs(value) {
@@ -53,7 +55,7 @@ func gitConfigWorkTreeRoot(gitdir func() (string, error), value, folder string) 
 		workTree, err = gitChdirPath(gitdir, value)
 	}
 	if err != nil {
-		return ""
+		return "", ""
 	}
 	return gitWorkTreeRoot(folder, physical, workTree)
 }
@@ -107,11 +109,13 @@ func gitPhysicalPath(folder string) (string, error) {
 // gitWorkTreeRoot resolves upstream's `git rev-parse --show-cdup` result for
 // the physical working tree workTree. Inside it, the cdup returns parent steps
 // that preserve the caller's lexical path; outside it, the cdup is the
-// absolute physical working tree.
-func gitWorkTreeRoot(folder, physical, workTree string) string {
+// absolute physical working tree. It also returns Git's working folder: Git
+// changes to the working tree when folder is inside it, as
+// setup_explicit_git_dir does, and otherwise stays in folder.
+func gitWorkTreeRoot(folder, physical, workTree string) (string, string) {
 	for current, lexical := physical, filepath.Clean(folder); ; current, lexical = filepath.Dir(current), filepath.Dir(lexical) {
 		if current == workTree {
-			return lexical
+			return lexical, workTree
 		}
 		if filepath.Dir(current) == current {
 			// Upstream trims JavaScript whitespace from the probe output before
@@ -119,7 +123,7 @@ func gitWorkTreeRoot(folder, physical, workTree string) string {
 			// its suffix can change. Go TrimSpace differs for BOM and NEL.
 			return filepath.Clean(strings.TrimRightFunc(workTree, func(r rune) bool {
 				return unicode.Is(unicode.Zs, r) || strings.ContainsRune("\t\n\v\f\r\u2028\u2029\ufeff", r)
-			}))
+			})), folder
 		}
 	}
 }
