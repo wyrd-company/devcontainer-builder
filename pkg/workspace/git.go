@@ -29,6 +29,7 @@ import (
 // core.worktree selects the working tree, and config that Git rejects gives no
 // root.
 // Gitfiles use a literal prefix and path payload, with Git's 1 MiB size limit.
+// A relative gitfile target keeps its components until filesystem traversal.
 // GIT_CEILING_DIRECTORIES limits parent discovery as in Git. GIT_WORK_TREE
 // selects the working tree after repository discovery. Other environment
 // overrides and Git's ownership check are not applied. A valid GIT_DIR
@@ -163,14 +164,16 @@ func discoverGitRoot(folder string) (string, error) {
 }
 
 // readGitfile returns the folder a .git file points to, resolved against the
-// file's folder, or "" when the file has no gitdir line.
+// file's folder, or "" when the file has no gitdir line. As in Git, a relative
+// target keeps its components, so the filesystem follows a symbolic link
+// before a later .. and rejects a regular file or missing folder before one.
 func readGitfile(path string) (string, error) {
 	gitdir, err := gitfilePointer(path)
 	if err != nil || gitdir == "" {
 		return "", err
 	}
 	if !filepath.IsAbs(gitdir) {
-		gitdir = filepath.Join(filepath.Dir(path), gitdir)
+		gitdir = filepath.Dir(path) + string(os.PathSeparator) + gitdir
 	}
 	return gitdir, nil
 }
