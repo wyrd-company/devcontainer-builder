@@ -15,9 +15,9 @@ import (
 
 // GitRoot returns the Git working tree selected from folder,
 // or "" when no repository is found or its working tree is invalid. It follows Git's discovery without
-// running git. Git reads its global config files when it starts and again
-// from its working folder after setup, and a file that it rejects gives no
-// root. Walking up the physical parents of folder, as Git does from
+// running git. Git reads its system config file named by GIT_CONFIG_SYSTEM and
+// its global config files when it starts and again from its working folder
+// after setup, and a file that it rejects gives no root. Walking up the physical parents of folder, as Git does from
 // its cwd, a .git folder that is a repository marks the root; the root keeps
 // folder's lexical names up the same number of steps, as upstream's resolved
 // `git rev-parse --show-cdup` result does; a .git file marks the root when its gitdir is a
@@ -44,14 +44,20 @@ import (
 // selects the caller folder unless GIT_WORK_TREE or the repository config
 // selects another. Invalid GIT_DIR stops parent discovery.
 func GitRoot(folder string) (string, error) {
-	if !gitGlobalConfigRead(folder, false) {
+	if !gitConfigRead(folder, false) {
 		return "", nil
 	}
 	root, cwd := gitSetupRoot(folder)
-	if root == "" || !gitGlobalConfigRead(cwd, true) {
+	if root == "" || !gitConfigRead(cwd, true) {
 		return "", nil
 	}
 	return root, nil
+}
+
+// gitConfigRead follows one of Git's reads of its system and global config
+// files, from folder, and reports false when the read stops the probe.
+func gitConfigRead(folder string, second bool) bool {
+	return gitSystemConfigRead(folder, second) && gitGlobalConfigRead(folder, second)
 }
 
 // gitSetupRoot returns the Git root selected from folder, or "", and cwd, the

@@ -19,8 +19,8 @@ import (
 // start at folder. Git first reads them when it starts, in
 // read_very_early_config, before repository discovery, from the probe cwd. It
 // reads them again after setup, second, from its working folder, where a file
-// that it cannot open is also fatal. Includes, typed values and the system and
-// command-line config are not applied.
+// that it cannot open is also fatal. gitSystemConfigRead reads the system file
+// first. Includes, typed values and the command-line config are not applied.
 // Reference: https://github.com/git/git/blob/master/config.c
 func gitGlobalConfigRead(folder string, second bool) bool {
 	for _, path := range gitGlobalConfigPaths() {
