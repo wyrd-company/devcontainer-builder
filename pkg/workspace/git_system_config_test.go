@@ -119,6 +119,12 @@ var systemConfigCases = []globalConfigCase{
 		writeFile(t, filepath.Join(base, "system.cfg"), globalConfigBroken)
 		return base + "//missing/./../system.cfg"
 	})},
+	{name: "system-normalized-empty", setup: systemOnly(func(t *testing.T, _ string, folder string) string {
+		// sub/.. normalizes to an empty path, which Git skips; read
+		// without normalization, it names folder, which Git cannot open.
+		mkdir(t, filepath.Join(folder, "sub"))
+		return "sub/.."
+	}), ok: true},
 	{name: "system-normalize-failure-in-place", setup: systemOnly(func(t *testing.T, _ string, folder string) string {
 		// The .. past the start stops normalization after a/./x/ was
 		// rewritten to a/x/x/, so Git reads folder/a/x/x/../../../s.
