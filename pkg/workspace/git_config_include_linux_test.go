@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"golang.org/x/sys/unix"
@@ -84,5 +85,74 @@ func TestGitRootConfigIncludeFIFOStream(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+// Git names a relative config file, and a relative include in it, from its
+// working folder, as given, so each name has its own path length limit. The
+// caller folder's path takes more than half of PATH_MAX, and each long
+// relative name takes most of the rest, so the folder's path joined to it does
+// not fit in PATH_MAX. Both of Git's reads find the files, from the caller
+// folder and then from the working tree. Native discovery and the host Git
+// must both give each case's result.
+func TestGitRootConfigRelativePathMax(t *testing.T) {
+	git, err := exec.LookPath("git")
+	if err != nil {
+		t.Skip("git is not installed")
+	}
+	long := strings.Repeat("./", 1050)
+	for _, c := range []struct {
+		name, global, include, target string
+		ok                            bool
+	}{
+		{name: "include-short-valid", global: "global.cfg", include: "inc.cfg", target: globalConfigValid, ok: true},
+		{name: "include-short-syntax", global: "global.cfg", include: "inc.cfg", target: globalConfigBroken},
+		{name: "include-long-valid", global: "global.cfg", include: long + "inc.cfg", target: globalConfigValid, ok: true},
+		{name: "include-long-syntax", global: "global.cfg", include: long + "inc.cfg", target: globalConfigBroken},
+		{name: "global-long-valid", global: long + "global.cfg", include: "inc.cfg", target: globalConfigValid, ok: true},
+		{name: "global-long-syntax", global: long + "global.cfg", include: "inc.cfg", target: globalConfigBroken},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			base, err := filepath.EvalSymlinks(t.TempDir())
+			if err != nil {
+				t.Fatal(err)
+			}
+			tree := filepath.Join(base, "tree")
+			for i := 0; len(tree) < 2200; i++ {
+				tree = filepath.Join(tree, strings.Repeat("s", 150))
+			}
+			env := testgit.Env()
+			cmd := exec.Command(git, "init", "-q", "-b", "main", tree)
+			cmd.Env = env
+			if out, err := cmd.CombinedOutput(); err != nil {
+				t.Fatalf("git init: %v %s", err, out)
+			}
+			folder := mkdir(t, filepath.Join(tree, "app"))
+			env = applyGlobalEnv(t, env, includeCaseVars(base, nil))
+			if control := globalSetupGit(t, git, folder, env); control != tree {
+				t.Fatalf("Git root before the case = %q; want %q", control, tree)
+			}
+			// A long case's joined path does not fit in PATH_MAX, and a short
+			// case's does.
+			if joined := len(folder) + 1 + max(len(c.global), len(c.include)); joined >= 4096 != strings.Contains(c.name, "long") {
+				t.Fatalf("joined path length %d for case %s", joined, c.name)
+			}
+			for _, dir := range []string{folder, tree} {
+				writeFile(t, filepath.Join(dir, "global.cfg"), includeLine(c.include))
+				writeFile(t, filepath.Join(dir, "inc.cfg"), c.target)
+			}
+			env = applyGlobalEnv(t, env, includeCaseVars(base, map[string]*string{"GIT_CONFIG_GLOBAL": &c.global}))
+			want := ""
+			if c.ok {
+				want = tree
+			}
+			if measured := globalSetupGit(t, git, folder, env); measured != want {
+				t.Fatalf("Git root = %q; want %q", measured, want)
+			}
+			if got, err := GitRoot(folder); err != nil || got != want {
+				t.Fatalf("GitRoot = %q, %v; want %q", got, err, want)
+			}
+			assertIncludeResolve(t, folder, want)
+		})
 	}
 }

@@ -60,7 +60,9 @@ func GitRoot(folder string) (string, error) {
 // gitConfigRead follows one of Git's reads of its system and global config
 // files, from folder, and reports false when the read stops the probe.
 func gitConfigRead(folder string, second bool) bool {
-	return gitSystemConfigRead(folder, second) && gitGlobalConfigRead(folder, second)
+	cwd := newGitConfigCwd(folder)
+	defer cwd.close()
+	return gitSystemConfigRead(cwd, second) && gitGlobalConfigRead(cwd, second)
 }
 
 // gitSetupRoot returns the Git root selected from folder, or "", and cwd, the
