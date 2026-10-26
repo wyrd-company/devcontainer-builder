@@ -1,5 +1,5 @@
 // relationships:
-//   references: [git_chdir_walk_linux, git_core_worktree_proc_linux_test]
+//   references: [git_chdir_linux, git_chdir_walk_linux, git_core_worktree_proc_linux_test]
 
 package workspace
 
@@ -271,6 +271,47 @@ func TestGitWalkCwdClosesDescriptors(t *testing.T) {
 		for _, c := range cases {
 			if _, err := gitWalkCwd(c.dir, c.value, c.target); !errors.Is(err, c.want) {
 				t.Fatalf("gitWalkCwd(%q, %q) error = %v; want %v", c.dir, c.value, err, c.want)
+			}
+		}
+	}
+	if after := openDescriptors(t); !slices.Equal(after, before) {
+		t.Fatalf("open descriptors = %v; want %v", after, before)
+	}
+}
+
+// gitChdir closes every descriptor it opens, whether it names the folder or
+// fails, including where the folder cannot be searched.
+func TestGitChdirClosesDescriptors(t *testing.T) {
+	base, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	mkdir(t, filepath.Join(base, "b"))
+	writeFile(t, filepath.Join(base, "file"), "")
+	cases := []struct {
+		value string
+		want  error
+	}{
+		{"b", nil},
+		{"missing", unix.ENOENT},
+		{"file", unix.ENOTDIR},
+	}
+	if os.Geteuid() != 0 {
+		locked := mkdir(t, filepath.Join(base, "locked"))
+		if err := os.Chmod(locked, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { os.Chmod(locked, 0o700) })
+		cases = append(cases, struct {
+			value string
+			want  error
+		}{"locked", unix.EACCES})
+	}
+	before := openDescriptors(t)
+	for range 50 {
+		for _, c := range cases {
+			if _, err := gitChdir(base, c.value); !errors.Is(err, c.want) {
+				t.Fatalf("gitChdir(%q) error = %v; want %v", c.value, err, c.want)
 			}
 		}
 	}
