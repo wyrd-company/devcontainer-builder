@@ -80,6 +80,17 @@ authorize changing the default. The approved process-credential requirement
 governs native Git discovery: it reads with the credentials of its own process,
 not those of a started `git`; see
 [Process credentials](../overview.md#process-credentials). It removes no option.
+Native Git discovery applies the repository format rules of Git 2.55 built
+without Rust, which Bob approved, whatever Git is installed; it does not check
+the host Git's version or start `git`. Other Git versions and builds accept
+other repository extensions, so the upstream CLI can mount a different folder;
+see [Workspace mounts](../usage.md#workspace-mounts-and-container-selection).
+The specification recommends mounting the repository root but does not define
+how it is found or what happens when Git rejects the repository. Whether to keep
+upstream's Git-dependent default, mount the requested folder by default, or
+make the choice explicit is open in
+[issue 44](https://github.com/wyrd-company/devcontainer-builder/issues/44); no
+default change is approved.
 
 Template commands are outside the current implementation scope. Template
 application extracts non-omitted files into the destination and overwrites

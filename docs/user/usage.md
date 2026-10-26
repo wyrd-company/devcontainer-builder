@@ -698,22 +698,24 @@ a `core.repositoryformatversion` that is not an integer or is above 1, an
 invalid `core.bare`, `extensions.worktreeConfig` or `extensions.preciousObjects`
 boolean, and `core.worktree` or `extensions.partialClone` without a value. A
 special file such as a FIFO is not read and also gives no Git root.
-Extensions follow Git 2.54 and later. Git checks each extension value whatever
-the repository version: `extensions.objectFormat` and
+Extensions follow Git 2.55 built without Rust. Git checks each extension value
+whatever the repository version: `extensions.objectFormat` and
 `extensions.compatObjectFormat` must be `sha1` or `sha256`,
 `extensions.refStorage` must name `files` or `reftable`, optionally followed by
 `://` and a payload, and `extensions.relativeWorktrees` and
 `extensions.submodulePathConfig` must be booleans. A second
 `extensions.compatObjectFormat` gives no Git root. When
 `core.repositoryformatversion` is 1, an extension that Git does not know gives
-no Git root. When it is 0, `extensions.noop-v1` or one of these version 1
-extensions gives no Git root; other unknown extensions are ignored. A
-compatibility object format equal to the object format, which is `sha1` by
-default, gives no Git root. A different compatibility object format is
-accepted, as Git built with Rust accepts it; Git built without Rust rejects
-every compatibility object format. Git before 2.54 does not know
-`extensions.submodulePathConfig` or the `://` payload form, and Git before 2.48
-does not know `extensions.relativeWorktrees`. Integers
+no Git root, and so does any `extensions.compatObjectFormat`. When it is 0,
+`extensions.noop-v1` or one of these version 1 extensions gives no Git root;
+other unknown extensions are ignored. `dcb` applies these rules whatever Git is
+installed. The upstream CLI runs the installed `git`, and other Git versions and
+builds accept other repositories, so the two can mount different folders: Git
+before 2.54 does not know `extensions.submodulePathConfig` or the `://` payload
+form, Git before 2.48 `extensions.relativeWorktrees`, Git before 2.45
+`extensions.compatObjectFormat` and Git before 2.44 `extensions.refStorage`.
+Git 2.45 to 2.53, and Git built with Rust, accept a compatibility object format
+that differs from the object format. Integers
 are read as Git built against a C23 C library, such as glibc 2.38 or later,
 reads them: decimal, octal with a leading `0`, hexadecimal with `0x` and binary
 with `0b`, with an optional `k`, `m` or `g` unit. When
