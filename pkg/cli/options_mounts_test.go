@@ -153,6 +153,18 @@ func TestReadConfigurationWorkspaceGitRoot(t *testing.T) {
 	if ws, _ = workspace(); ws["workspaceFolder"] != "/workspaces/repo/app" || ws["workspaceMount"] != "type=bind,source=/host/custom,target=/src" {
 		t.Fatalf("configured mount=%v", ws)
 	}
+	for _, folder := range []string{"", "/tmp"} {
+		config := `{"image":"alpine:3.20","workspaceMount":""}`
+		if folder != "" {
+			config = `{"image":"alpine:3.20","workspaceFolder":"/tmp","workspaceMount":""}`
+		}
+		writeTestFile(t, filepath.Join(app, ".devcontainer.json"), config)
+		ws, _ := workspace()
+		if value, ok := ws["workspaceMount"]; !ok || value != "" {
+			t.Fatalf("empty workspaceMount = %v", ws)
+		}
+	}
+
 	// Compose files own the mounts; there is no derived workspace mount.
 	writeTestFile(t, filepath.Join(app, "compose.yml"), "services:\n  app:\n    image: alpine:3.20\n")
 	for _, folder := range []string{"", "/src/app"} {

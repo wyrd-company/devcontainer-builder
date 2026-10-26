@@ -583,9 +583,12 @@ root edits run once per container, with markers in this folder, including when
 `--skip-post-create` is set. That flag skips the user environment probe.
 
 `--container-session-data-folder` is accepted on `up`, `set-up`, and
-`run-user-commands`, with no default. Probe-cache persistence is not implemented.
-Probe results are not stored between calls, and dcb does not create the supplied
-session folder.
+`run-user-commands`, with no default. When supplied, dcb stores the probed
+environment in `env-<probe-mode>.json` inside this container folder and reuses it
+on later calls with the same folder and mode. Read, parse, or write failures are
+non-fatal. No cache is read or written when the probe mode is `none` or lifecycle
+commands are skipped. Remote environment overrides and lifecycle secrets are not
+added to the cached probe result.
 
 ## Terminal dimensions
 
@@ -632,14 +635,95 @@ primary Compose service.
 | `--id-label` | `up`, `exec`, `read-configuration`, `run-user-commands`, `down`, `inspect` | none | A `name=value` label. Repeat the flag for more labels. |
 
 The Git root is found from the files in the workspace's parent folders; `dcb`
-does not run `git`. `exec`, `run-user-commands`, `set-up`, and an `up` that
+does not run `git`. It reads these files with the credentials of its own
+process; see [Process credentials](/docs/dcb/overview#process-credentials).
+`GIT_CEILING_DIRECTORIES` stops parent discovery before
+a listed ancestor. Entries must be absolute paths. Git resolves symlinks in
+entries until an empty path-list entry disables that resolution. Entries after
+that marker retain literal path components. A ceiling equal
+to the starting folder does not stop discovery. After a repository is found,
+`GIT_WORK_TREE` selects its working tree. Relative values start at the workspace
+folder; Git resolves symlinks and path components. An empty value or an invalid
+intermediate component gives no Git root. For an outside-tree override, trailing
+whitespace is removed from the resolved path as in the upstream CLI probe.
+An explicitly empty `GIT_DIR`, or one that names a missing repository or an
+invalid gitfile target, gives no Git root; parent discovery does not replace it.
+Gitfiles must start with literal `gitdir:` followed by one space and a repository
+path. Only final CR and LF bytes are removed; other whitespace and interior
+newlines belong to the path. Gitfiles larger than 1 MiB give no Git root.
+A relative gitfile target starts at the gitfile's folder and keeps its path
+components, as Git does: a symbolic link is resolved before a later `..`, and
+a regular file or a missing folder before `..` gives no Git root.
+Repository admission checks the first 255 bytes of `HEAD` for a `ref:` target
+starting with `refs/` or a 40-digit hexadecimal object ID. A symbolic-link
+`HEAD` must point to a path starting with `refs/`; its target need not exist.
+A `commondir` pointer selects the common folder whose `objects` and `refs`
+paths must pass Git's executable-access check. Relative pointers start at the
+administrative folder; final CR and LF bytes are removed. A failed pointer read
+or path resolution ends discovery. A resolved folder without those signatures
+is not a repository; parent discovery can continue past a `.git` directory.
+After the `.git` entry, each folder is also tested as a repository, as Git does.
+When the workspace is in a bare repository or in a `.git` folder, Git reports no
+working tree, and the workspace folder is the Git root. The global
+`safe.bareRepository` setting is not read.
+`GIT_OBJECT_DIRECTORY` replaces the `objects` signature path during admission.
+Relative values start at the workspace folder and retain physical path traversal.
+An empty or inaccessible value fails admission; `refs` is still checked in the
+common folder. `GIT_COMMON_DIR` replaces the `commondir` pointer, which is then
+not read. Relative values start at the workspace folder and retain physical
+path traversal; an empty value checks `/objects` and `/refs`, as Git does.
+The common-folder mount option reads pointer lines separately,
+as upstream does.
+Git's repository format check then reads the common folder's `config`, and
+`config.worktree` when `extensions.worktreeConfig` is set. Config that Git
+rejects gives no Git root: a syntax error, a directory or an unreadable file,
+a `core.repositoryformatversion` that is not an integer or is above 1, an
+invalid `core.bare`, `extensions.worktreeConfig` or `extensions.preciousObjects`
+boolean, and `core.worktree` or `extensions.partialClone` without a value. A
+special file such as a FIFO is not read and also gives no Git root. Integers
+are read as Git built against a C23 C library, such as glibc 2.38 or later,
+reads them: decimal, octal with a leading `0`, hexadecimal with `0x` and binary
+with `0b`, with an optional `k`, `m` or `g` unit. When
+`core.repositoryformatversion` is 0 or 1, a true `core.bare` leaves a discovered
+repository without a working tree, and the workspace folder is the Git root. A
+linked worktree and `GIT_COMMON_DIR` ignore `core.bare` in the common config.
+Otherwise `core.worktree` selects the working tree, with the same version and
+common-config rules; `GIT_WORK_TREE` and a true `core.bare` take precedence. An
+absolute value is resolved as `GIT_WORK_TREE` is. A relative value starts at
+the repository folder and must name an existing folder that the effective user
+and capabilities can search, as Git's `chdir` requires; its symbolic links are
+resolved before `..` components. Git changes to the
+repository folder first, so the folder and the value are separate lookups, each
+with its own symbolic link and path length limits. A `.git` folder above the
+workspace folder and a gitfile target first pass through Git's own path
+resolution, which allows 33 symbolic links. On Linux, the selected folder is
+named from `/proc`, or without it by a thread that unshares its working
+folder. Where a seccomp profile also blocks `unshare`, as Docker's default
+profile does, both lookups are repeated one component at a time, so the value
+can pass a folder whose physical path exceeds `PATH_MAX`; the selected folder's
+own path must fit in `PATH_MAX`, as Git's working folder must.
+Builds for hosts other than Linux and macOS instead join the repository
+folder's physical path and the value, which must fit the host's path length
+limit. An empty value or one that Git cannot resolve gives no Git
+root. Inside that working tree, the Git root keeps the workspace folder's path;
+outside it, the Git root is the working tree's physical path. Includes, other
+config keys and extensions outside Git's version 0 set are not interpreted.
+Relative values start at the workspace folder. A valid `GIT_DIR` selects the
+workspace folder without parent discovery; `GIT_WORK_TREE` or the repository
+config can select its working tree. Other Git
+environment overrides
+and ownership checks are not applied. `exec`, `run-user-commands`, `set-up`,
+and an `up` that
 reuses a container use the folder where that container mounts the workspace,
 read from its bind mounts, whatever flags created it. A configured
 `workspaceFolder` still wins. When the container mounts no folder that holds
 the workspace, these commands calculate the folder from the flags, as
 `read-configuration` does. `read-configuration`
 returns the folder and mounts in its `workspace` object. A configuration that
-sets `workspaceMount` keeps its mount. A configuration that sets
+sets `workspaceMount` keeps its mount. An explicitly empty `"workspaceMount": ""`
+disables the default workspace mount; additional `mounts` and `--mount` values
+still apply. `read-configuration` keeps the empty `workspaceMount` value. A
+configuration that sets
 `workspaceFolder` without `workspaceMount` keeps that folder and mounts the
 workspace or its Git root at `/workspaces/<name>`, according to the Git-root
 and worktree flags. Set `workspaceMount` to mount at a specific target.

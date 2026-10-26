@@ -26,12 +26,12 @@ scores each canonical long option once. It never subtracts omissions. Registrati
 coverage is distinct from behavior parity and does not use these dispositions.
 The pinned `up` table has **44 explicit options**, plus inherited help/version.
 Registered option coverage is **154/253 (60.87%)**;
-registration includes the three session-folder pairs awaiting probe-cache behavior.
+registration includes the three implemented session-folder pairs.
 
 ## Dispositions
 
-- implemented: **151**.
-- implement: **86**.
+- implemented: **154**.
+- implement: **83**.
 - not applicable by design: **15**.
 - needs Bob's decision: **1**.
 
@@ -51,7 +51,7 @@ supports outdated reporting and template metadata.
 | lifecycle | M | 7 | Lifecycle controls: skip-non-blocking-commands, prebuild, stop-for-personalization, expect-existing-container. |
 | mounts | L | 14 | Workspace mounts and container selection: mount, workspace-mount-consistency, mount-workspace-git-root, mount-git-worktree-common-dir, id-label; mount-workspace-git-root defaults to true; mount-git-worktree-common-dir defaults to false; additional mounts are explicit. |
 | environment | M | 5 | Remote environment and secrets: remote-env, secrets-file; lifecycle secret inputs are separate from configuration remoteEnv metadata. |
-| data-folders | M | 17 | Registration: all folder options. Behavior: host staging, Compose object materialization/cleanup, and container markers are routed; see [state publication](state-publication.md). Session probe-cache persistence is not implemented. System patch markers are written by up and set-up. |
+| data-folders | M | 17 | Registration: all folder options. Behavior: host staging, Compose object materialization/cleanup, and container markers are routed; see [state publication](state-publication.md). Session probe caches use the supplied folder with the upstream mode-specific JSON format. System patch markers are written by up and set-up. |
 | terminal | S | 10 | Terminal dimensions: terminal-columns, terminal-rows. |
 | lockfile | L | 4 | Feature lockfiles: experimental-lockfile, experimental-frozen-lockfile. |
 | feature-controls | M | 9 | Feature mapping and metadata controls: skip-feature-auto-mapping, skip-persisting-customizations-from-features, omit-config-remote-env-from-metadata, omit-syntax-directive; persist remoteEnv in metadata by default; omit-config-remote-env-from-metadata defaults to false and omits it when enabled. |
@@ -76,7 +76,10 @@ Upstream defaults govern implementation unless an approved requirement states
 otherwise. Git-root mounting defaults to true. Configuration remoteEnv persists
 in image metadata unless omit-config-remote-env-from-metadata is enabled.
 A stricter policy requires Bob's decision; an additive opt-in does not itself
-authorize changing the default.
+authorize changing the default. The approved process-credential requirement
+governs native Git discovery: it reads with the credentials of its own process,
+not those of a started `git`; see
+[Process credentials](../overview.md#process-credentials). It removes no option.
 
 Template commands are outside the current implementation scope. Template
 application extracts non-omitted files into the destination and overwrites
@@ -326,7 +329,7 @@ when markers skip commands. Source: `injectHeadless.ts:364-410` and
 | --dotfiles-repository | --dotfiles-repository | implemented | sibling-unit | Registered; installs after postCreateCommand once per container. A failed install warns and the next run retries. Source: devContainersSpecCLI.ts:776. |
 | --dotfiles-install-command | --dotfiles-install-command | implemented | sibling-unit | Registered; runs in the clone in place of the default install-script search. Source: devContainersSpecCLI.ts:777. |
 | --dotfiles-target-path | --dotfiles-target-path | implemented | sibling-unit | Registered; default ~/dotfiles. Source: devContainersSpecCLI.ts:778. |
-| --container-session-data-folder | --container-session-data-folder | implement | data-folders | Registered; persistence of the shell probe cache in this folder is not implemented. Source: devContainersSpecCLI.ts:779. |
+| --container-session-data-folder | --container-session-data-folder | implemented | data-folders | Mode-specific user environment probe caches are read and written in this folder; failures are non-fatal. Source: devContainersSpecCLI.ts:779. |
 | --secrets-file | --secrets-file | implemented | environment | Registered; secret variables for lifecycle commands and the dotfiles install, above remoteEnv. Not stored; masked in stderr and the result. Source: devContainersSpecCLI.ts:780. |
 | --help | --help | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: yargs built-in help. |
 | --version | --version | implemented | sibling-unit | Registered on every command; prints the version result in place of the command, as upstream. Source: devContainersSpecCLI.ts (.version). |
@@ -352,7 +355,7 @@ when markers skip commands. Source: `injectHeadless.ts:364-410` and
 | --dotfiles-repository | --dotfiles-repository | implemented | sibling-unit | Registered; installs after postCreateCommand once per container. A failed install warns and the next run retries. Source: devContainersSpecCLI.ts:354. |
 | --dotfiles-install-command | --dotfiles-install-command | implemented | sibling-unit | Registered; runs in the clone in place of the default install-script search. Source: devContainersSpecCLI.ts:355. |
 | --dotfiles-target-path | --dotfiles-target-path | implemented | sibling-unit | Registered; default ~/dotfiles. Source: devContainersSpecCLI.ts:356. |
-| --container-session-data-folder | --container-session-data-folder | implement | data-folders | Registered; persistence of the shell probe cache in this folder is not implemented. Source: devContainersSpecCLI.ts:357. |
+| --container-session-data-folder | --container-session-data-folder | implemented | data-folders | Mode-specific user environment probe caches are read and written in this folder; failures are non-fatal. Source: devContainersSpecCLI.ts:357. |
 | --include-configuration | --include-configuration | implemented | covered | Configuration snapshot is included on request. Source: devContainersSpecCLI.ts:358. |
 | --include-merged-configuration | --include-merged-configuration | implemented | covered | Merged configuration snapshot is included on request. Source: devContainersSpecCLI.ts:359. |
 | --help | --help | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: yargs built-in help. |
@@ -448,7 +451,7 @@ when markers skip commands. Source: `injectHeadless.ts:364-410` and
 | --dotfiles-repository | --dotfiles-repository | implemented | sibling-unit | Registered; installs after postCreateCommand once per container. A failed install warns and the next run retries. Source: devContainersSpecCLI.ts:135. |
 | --dotfiles-install-command | --dotfiles-install-command | implemented | sibling-unit | Registered; runs in the clone in place of the default install-script search. Source: devContainersSpecCLI.ts:136. |
 | --dotfiles-target-path | --dotfiles-target-path | implemented | sibling-unit | Registered; default ~/dotfiles. Source: devContainersSpecCLI.ts:137. |
-| --container-session-data-folder | --container-session-data-folder | implement | data-folders | Registered; persistence of the shell probe cache in this folder is not implemented. Source: devContainersSpecCLI.ts:138. |
+| --container-session-data-folder | --container-session-data-folder | implemented | data-folders | Mode-specific user environment probe caches are read and written in this folder; failures are non-fatal. Source: devContainersSpecCLI.ts:138. |
 | --omit-config-remote-env-from-metadata [hidden] | --omit-config-remote-env-from-metadata | implemented | feature-controls | Registered hidden boolean, default false; persists configuration remoteEnv by default and omits it when enabled; runtime remoteEnv stays available. Source: devContainersSpecCLI.ts:139. |
 | --secrets-file | --secrets-file | implemented | environment | Registered; secret variables for lifecycle commands and the dotfiles install, above remoteEnv. Not stored; masked in stderr and the result. Source: devContainersSpecCLI.ts:140. |
 | --experimental-lockfile [hidden] | --experimental-lockfile | implemented | lockfile | Digest-pinned resolution, integrity checks, frozen drift validation, and atomic publication after success. Source: devContainersSpecCLI.ts:141. |
