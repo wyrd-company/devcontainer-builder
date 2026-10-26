@@ -156,3 +156,63 @@ func TestGitRootConfigRelativePathMax(t *testing.T) {
 		})
 	}
 }
+
+// Git's full read after setup names the common folder's config from its
+// working folder, the working tree, with a relative GIT_COMMON_DIR as given.
+// The working tree's physical path takes more than half of PATH_MAX and the
+// value takes most of the rest. The caller folder is reached through a short
+// symbolic link, from which the format check finds the value's folder within
+// PATH_MAX: from the caller folder it names the repository folder, and from
+// the working tree a folder whose config only the full read reads.
+func TestGitRootRelativeCommonDirFullReadPathMax(t *testing.T) {
+	git, err := exec.LookPath("git")
+	if err != nil {
+		t.Skip("git is not installed")
+	}
+	for _, c := range []struct {
+		name, config string
+		ok           bool
+	}{
+		{name: "valid", config: globalConfigValid, ok: true},
+		{name: "syntax", config: globalConfigBroken},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			base, err := filepath.EvalSymlinks(t.TempDir())
+			if err != nil {
+				t.Fatal(err)
+			}
+			tree := filepath.Join(base, "tree")
+			for i := 0; len(tree) < 2200; i++ {
+				tree = filepath.Join(tree, strings.Repeat("s", 150))
+			}
+			env := testgit.Env()
+			cmd := exec.Command(git, "init", "-q", "-b", "main", tree)
+			cmd.Env = env
+			if out, err := cmd.CombinedOutput(); err != nil {
+				t.Fatalf("git init: %v %s", err, out)
+			}
+			mkdir(t, filepath.Join(tree, "app"))
+			symlink(t, tree, filepath.Join(base, "alias"))
+			folder := filepath.Join(base, "alias", "app")
+			value := strings.Repeat("./", 1000) + "c"
+			symlink(t, filepath.Join(tree, ".git"), filepath.Join(tree, "app", "c"))
+			writeFile(t, filepath.Join(tree, "c", "config"), c.config)
+			if joined := len(tree) + 1 + len(value) + len("/config"); joined < 4096 {
+				t.Fatalf("joined path length %d fits in PATH_MAX", joined)
+			}
+			env = applyGlobalEnv(t, env, includeCaseVars(base, map[string]*string{
+				"GIT_DIR":        globalValue(filepath.Join(tree, ".git")),
+				"GIT_WORK_TREE":  &tree,
+				"GIT_COMMON_DIR": &value,
+			}))
+			measured := globalSetupGit(t, git, folder, env)
+			if (measured != "") != c.ok {
+				t.Fatalf("Git root = %q; want a root %v", measured, c.ok)
+			}
+			if got, err := GitRoot(folder); err != nil || got != measured {
+				t.Fatalf("GitRoot = %q, %v; want %q", got, err, measured)
+			}
+			assertIncludeResolve(t, folder, measured)
+		})
+	}
+}
