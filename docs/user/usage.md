@@ -635,7 +635,9 @@ primary Compose service.
 | `--id-label` | `up`, `exec`, `read-configuration`, `run-user-commands`, `down`, `inspect` | none | A `name=value` label. Repeat the flag for more labels. |
 
 The Git root is found from the files in the workspace's parent folders; `dcb`
-does not run `git`. `GIT_CEILING_DIRECTORIES` stops parent discovery before
+does not run `git`. It reads these files with the credentials of its own
+process; see [Process credentials](/docs/dcb/overview#process-credentials).
+`GIT_CEILING_DIRECTORIES` stops parent discovery before
 a listed ancestor. Entries must be absolute paths. Git resolves symlinks in
 entries until an empty path-list entry disables that resolution. Entries after
 that marker retain literal path components. A ceiling equal
