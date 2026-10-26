@@ -4,6 +4,7 @@
 package workspace
 
 import (
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -96,6 +97,19 @@ func TestGitRootConfigIncludeFIFOStream(t *testing.T) {
 // folder and then from the working tree. Native discovery and the host Git
 // must both give each case's result.
 func TestGitRootConfigRelativePathMax(t *testing.T) {
+	testConfigRelativePathMax(t, false)
+}
+
+// Git's chdir to its working folder needs only search permission on it, so
+// the cases of TestGitRootConfigRelativePathMax give the same results when the
+// process cannot read the caller folder.
+func TestGitRootConfigSearchOnlyPathMax(t *testing.T) {
+	testConfigRelativePathMax(t, true)
+}
+
+// testConfigRelativePathMax runs the cases of TestGitRootConfigRelativePathMax,
+// with a caller folder that the process can only search if searchOnly is set.
+func testConfigRelativePathMax(t *testing.T, searchOnly bool) {
 	git, err := exec.LookPath("git")
 	if err != nil {
 		t.Skip("git is not installed")
@@ -141,6 +155,9 @@ func TestGitRootConfigRelativePathMax(t *testing.T) {
 				writeFile(t, filepath.Join(dir, "global.cfg"), includeLine(c.include))
 				writeFile(t, filepath.Join(dir, "inc.cfg"), c.target)
 			}
+			if searchOnly {
+				searchOnlyFolder(t, folder)
+			}
 			env = applyGlobalEnv(t, env, includeCaseVars(base, map[string]*string{"GIT_CONFIG_GLOBAL": &c.global}))
 			want := ""
 			if c.ok {
@@ -154,6 +171,29 @@ func TestGitRootConfigRelativePathMax(t *testing.T) {
 			}
 			assertIncludeResolve(t, folder, want)
 		})
+	}
+}
+
+// searchOnlyFolder lets the process search folder but not read it, until the
+// test ends. The case is skipped for root, which reads it anyway.
+func searchOnlyFolder(t *testing.T, folder string) {
+	t.Helper()
+	if os.Geteuid() == 0 {
+		t.Skip("root bypasses the permission the case denies")
+	}
+	if err := os.Chmod(folder, 0o111); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := os.Chmod(folder, 0o755); err != nil {
+			t.Error(err)
+		}
+	})
+	if fd, err := unix.Open(folder, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_CLOEXEC, 0); !errors.Is(err, unix.EACCES) {
+		if err == nil {
+			unix.Close(fd)
+		}
+		t.Fatalf("open %s for reading = %v; want EACCES", folder, err)
 	}
 }
 
