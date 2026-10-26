@@ -79,6 +79,8 @@ var extensionCases = []extensionCase{
 	{"v1-compat-sha256-to-sha1", extensionsV1 + "\tobjectFormat = sha256\n\tcompatObjectFormat = sha1\n", 1, false, 45, true},
 	{"unversioned-unknown", extensionsUnversioned + "\texample = 1\n", -1, true, 0, false},
 	{"unversioned-v1-only", extensionsUnversioned + "\tobjectFormat = sha256\n\tcompatObjectFormat = sha256\n", -1, true, 45, false},
+	{"unversioned-compat-twice", extensionsUnversioned + "\tcompatObjectFormat = sha256\n\tcompatObjectFormat = sha256\n", -1, false, 45, false},
+	{"unversioned-compat-invalid", extensionsUnversioned + "\tcompatObjectFormat = md5\n", -1, false, 45, false},
 	{"unversioned-objectformat-invalid", extensionsUnversioned + "\tobjectFormat = md5\n", -1, false, 0, false},
 	{"unversioned-relative-worktrees-invalid", extensionsUnversioned + "\trelativeWorktrees = maybe\n", -1, false, 48, false},
 	{"negative-version-unknown", "[core]\n\trepositoryformatversion = -1\n[extensions]\n\texample = 1\n", -1, true, 0, false},
