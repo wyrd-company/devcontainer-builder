@@ -1,5 +1,5 @@
 // relationships:
-//   references: [git_work_tree, git_chdir_clone_linux]
+//   references: [git_work_tree, git_chdir_walk_linux]
 
 package workspace
 
@@ -41,14 +41,9 @@ func gitChdir(dir, value string) (string, error) {
 	if path, isolated, err := gitDescriptorCwd(target); isolated {
 		return path, err
 	}
-	// A seccomp profile that blocks unshare, as Docker's default profile
-	// does, can still allow a new thread with its own working folder.
-	if path, isolated, err := gitCloneCwd(target); isolated {
-		return path, err
-	}
-	// Without /proc or a thread of its own, the joined path is resolved,
-	// which also limits the length of each folder the value passes.
-	return gitPhysicalPath(dir + "/" + value)
+	// Without /proc, where a seccomp profile blocks unshare, both lookups
+	// are repeated one component at a time.
+	return gitWalkCwd(dir, value, target)
 }
 
 // gitDescriptorCwd returns the working folder of a thread that changes to

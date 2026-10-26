@@ -20,8 +20,7 @@ import (
 
 // withoutEnv lists what a test process removes before its tests run: "proc"
 // hides /proc, "thread" stops a thread from unsharing its working folder,
-// "clone" stops a new thread from having its own working folder, and
-// "fchdir" ends any thread that calls fchdir.
+// and "clone" stops a new thread from having its own working folder.
 const withoutEnv = "DCB_WORKSPACE_TEST_WITHOUT"
 
 // withoutUnavailable starts the message of a process that cannot hide /proc.
@@ -61,24 +60,8 @@ func init() {
 		if err := denyThreadClone(); err != nil {
 			withoutExit("without a new thread's working folder: " + err.Error())
 		}
-		root, err := unix.Open("/", unix.O_PATH|unix.O_DIRECTORY|unix.O_CLOEXEC, 0)
-		if err != nil {
+		if err := requireThreadCloneDenied(); err != nil {
 			withoutExit("without a new thread's working folder: " + err.Error())
-		}
-		_, isolated, _ := gitCloneCwd(root)
-		unix.Close(root)
-		if isolated {
-			withoutExit("without a new thread's working folder: a thread started")
-		}
-	}
-	if slices.Contains(without, "fchdir") {
-		if err := installFilter([]unix.SockFilter{
-			{Code: unix.BPF_LD | unix.BPF_W | unix.BPF_ABS, K: 0},
-			{Code: unix.BPF_JMP | unix.BPF_JEQ | unix.BPF_K, Jt: 0, Jf: 1, K: unix.SYS_FCHDIR},
-			{Code: unix.BPF_RET | unix.BPF_K, K: unix.SECCOMP_RET_KILL_THREAD},
-			{Code: unix.BPF_RET | unix.BPF_K, K: unix.SECCOMP_RET_ALLOW},
-		}); err != nil {
-			withoutExit("with fchdir ending its thread: " + err.Error())
 		}
 	}
 }
@@ -116,6 +99,24 @@ func denyThreadClone() error {
 	})
 }
 
+// requireThreadCloneDenied checks that the filter denies a thread without
+// CLONE_FS and allows one with it. Neither probe can start a thread: without
+// CLONE_SIGHAND the kernel rejects CLONE_THREAD with EINVAL after the filter
+// allows it.
+func requireThreadCloneDenied() error {
+	probe := func(flags uintptr) error {
+		_, _, errno := unix.RawSyscall6(unix.SYS_CLONE, flags, 0, 0, 0, 0, 0)
+		return errno
+	}
+	if err := probe(unix.CLONE_THREAD); !errors.Is(err, unix.EPERM) {
+		return fmt.Errorf("clone without CLONE_FS = %v; want EPERM", err)
+	}
+	if err := probe(unix.CLONE_THREAD | unix.CLONE_FS); !errors.Is(err, unix.EINVAL) {
+		return fmt.Errorf("clone with CLONE_FS = %v; want EINVAL", err)
+	}
+	return nil
+}
+
 // installFilter adds a seccomp filter to every thread.
 func installFilter(filter []unix.SockFilter) error {
 	prog := unix.SockFprog{Len: uint16(len(filter)), Filter: &filter[0]}
@@ -140,9 +141,9 @@ var coreWorktreeLimits = []string{
 	"TestGitRootCoreWorktreeKeepsWorkingFolder",
 }
 
-// Without /proc, a thread of its own names the folder a relative
-// core.worktree selects. The core.worktree tests run again, Git root and
-// Resolve mount alike, in a process whose /proc is hidden.
+// Without /proc, a thread that unshares its working folder names the folder
+// a relative core.worktree selects. The core.worktree tests run again, Git
+// root and Resolve mount alike, in a process whose /proc is hidden.
 func TestGitRootCoreWorktreeWithoutProc(t *testing.T) {
 	out := runWithout(t, "proc", coreWorktreeRun, "")
 	requirePassedWithout(t, out, append(coreWorktreeLimits, "TestGitRootCoreWorktreeIntermediatePathMax/passes"))
@@ -160,27 +161,26 @@ func TestGitRootCoreWorktreeWithoutThreads(t *testing.T) {
 	requirePassedWithout(t, out, append(coreWorktreeLimits, "TestGitRootCoreWorktreeIntermediatePathMax/passes"))
 }
 
-// Without /proc, under a seccomp profile that blocks unshare, a thread
-// created with its own working folder names the folder.
+// Without /proc, under a seccomp profile that blocks unshare, the lookups
+// are repeated one component at a time.
 func TestGitRootCoreWorktreeWithoutProcOrThread(t *testing.T) {
 	out := runWithout(t, "proc thread", coreWorktreeRun, "")
 	requirePassedWithout(t, out, append(coreWorktreeLimits, "TestGitRootCoreWorktreeIntermediatePathMax/passes"))
 }
 
-// Without /proc, where seccomp blocks a new thread with its own working
+// Without /proc, where seccomp also blocks a new thread with its own working
 // folder, a thread that unshares its working folder names the folder.
 func TestGitRootCoreWorktreeWithoutProcOrClone(t *testing.T) {
 	out := runWithout(t, "proc clone", coreWorktreeRun, "")
 	requirePassedWithout(t, out, append(coreWorktreeLimits, "TestGitRootCoreWorktreeIntermediatePathMax/passes"))
 }
 
-// Where /proc is hidden and seccomp blocks both kinds of thread, the joined
-// path is resolved, so each folder the value passes must have a physical
-// path within PATH_MAX. The layout that only Git's kernel lookup reaches
-// does not run.
+// Where /proc is hidden and seccomp blocks both kinds of thread, the lookups
+// are repeated one component at a time, including through a folder whose
+// physical path exceeds PATH_MAX.
 func TestGitRootCoreWorktreeWithoutProcOrThreads(t *testing.T) {
-	out := runWithout(t, "proc thread clone", coreWorktreeRun, "^TestGitRootCoreWorktreeIntermediatePathMax$/^passes$")
-	requirePassedWithout(t, out, coreWorktreeLimits)
+	out := runWithout(t, "proc thread clone", coreWorktreeRun, "")
+	requirePassedWithout(t, out, append(coreWorktreeLimits, "TestGitRootCoreWorktreeIntermediatePathMax/passes"))
 }
 
 // coreWorktreeRun selects the core.worktree tests.
