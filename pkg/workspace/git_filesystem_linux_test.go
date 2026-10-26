@@ -115,10 +115,10 @@ func TestGitRootFilesystemBoundaryMatchesGitAsRoot(t *testing.T) {
 		{filepath.Join(dotgit, "sv"), all},
 		{filepath.Join(dotgit, "sv", "app"), all},
 		{plain, all},
-		// A symbolic link into sv has the device of sv. Across file systems,
-		// Git walks the physical parents and the native walk the lexical
-		// ones, an existing difference this test does not cover.
-		{filepath.Join(dotgit, "into"), stops},
+		// A symbolic link into sv has the device of sv. Git walks the
+		// physical parents, so it meets the boundary at dotgit, and upstream
+		// resolves the cdup against the link's path.
+		{filepath.Join(dotgit, "into"), all},
 		{filepath.Join(base, "gitfile", "sv", "app"), all},
 		{filepath.Join(base, "bare", "sv", "app"), all},
 		{filepath.Join(inner, "app"), all},
@@ -132,5 +132,61 @@ func TestGitRootFilesystemBoundaryMatchesGitAsRoot(t *testing.T) {
 				requireDiscoveryMatchesGit(t, git, base, c.folder, value)
 			})
 		}
+	}
+}
+
+// Git checks the device of each physical parent, not of the caller's lexical
+// parents. Here the caller's path leaves the file system of its physical
+// folder at a lexical parent that Git never visits: Git finds the repository
+// at the root of that file system, two physical steps up, and upstream
+// resolves that cdup against the caller's path to the lexical parent.
+func TestGitRootSymlinkFilesystemDeviceMatchesGit(t *testing.T) {
+	runAsRoot(t, "", "TestGitRootSymlinkFilesystemDeviceMatchesGitAsRoot")
+}
+
+func TestGitRootSymlinkFilesystemDeviceMatchesGitAsRoot(t *testing.T) {
+	skipUnlessRoot(t)
+	git, err := exec.LookPath("git")
+	if err != nil {
+		t.Skip("git is not installed")
+	}
+	base, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	lexical := mkdir(t, filepath.Join(base, "lexical"))
+	physical := mkdir(t, filepath.Join(lexical, "physical"))
+	if err := unix.Mount("tmpfs", physical, "tmpfs", 0, ""); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { unix.Unmount(physical, unix.MNT_DETACH) })
+	for _, dir := range []string{lexical, physical} {
+		cmd := exec.Command(git, "init", "-q", dir)
+		cmd.Env = testgit.Env()
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git init %s: %v\n%s", dir, err, out)
+		}
+	}
+	mkdir(t, filepath.Join(physical, "sub", "app"))
+	if err := os.Symlink("physical/sub", filepath.Join(lexical, "link")); err != nil {
+		t.Fatal(err)
+	}
+	folder := filepath.Join(lexical, "link", "app")
+	var lexicalStat, physicalStat unix.Stat_t
+	if unix.Stat(lexical, &lexicalStat) != nil || unix.Stat(physical, &physicalStat) != nil || lexicalStat.Dev == physicalStat.Dev {
+		t.Fatal("fixture devices do not form the intended boundary")
+	}
+	for _, value := range []*string{nil, ptr(""), ptr("0"), ptr("false"), ptr("1"), ptr("true")} {
+		t.Run(discoveryName(value), func(t *testing.T) {
+			requireDiscoveryMatchesGit(t, git, base, folder, value)
+			if got, _ := GitRoot(folder); got != lexical {
+				t.Fatalf("GitRoot(%s) = %q; want the lexical parent %q", folder, got, lexical)
+			}
+			resolved, err := Resolve(folder, false, false, Options{MountGitRoot: true, Platform: "linux"})
+			if err != nil || resolved.WorkspaceMount == nil || resolved.WorkspaceMount.Target != "/workspaces/lexical" ||
+				resolved.WorkspaceFolder != "/workspaces/lexical/link/app" {
+				t.Fatalf("Resolve(%s) = %+v, %v; want target /workspaces/lexical, folder /workspaces/lexical/link/app", folder, resolved, err)
+			}
+		})
 	}
 }
