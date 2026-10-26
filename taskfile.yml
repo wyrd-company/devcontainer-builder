@@ -21,6 +21,9 @@ tasks:
       - go test -race ./pkg/host/runner ./pkg/substitute ./pkg/features ./pkg/lifecycle
       # Release builds have no cgo, so os/user reads /etc/passwd only.
       - CGO_ENABLED=0 go test ./pkg/workspace -run 'TestGitAccountLookup|TestGitRootNamedAccount|TestGitRootConfigInclude'
+      # macOS builds look up relative config file names from a thread's own
+      # working folder; the gitthreadcwd tag runs that lookup on Linux.
+      - go test -tags gitthreadcwd ./pkg/workspace
   lint:
     desc: Check Go, workflow syntax, and release intents without changing files
     cmds:
