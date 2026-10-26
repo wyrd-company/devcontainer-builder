@@ -16,11 +16,13 @@ import (
 	"github.com/wyrd-company/devcontainer-builder/internal/testgit"
 )
 
-// Git continues past a .git entry only when stat reports it missing (ENOENT or
-// ENOTDIR). Since Git 2.54 another stat failure, a gitfile it cannot open and a
-// special file each make its probe fail, so upstream finds no Git root rather
-// than a parent repository. The tree folder holds a repository; the case
-// writes the .git entry in the caller folder or in a parent below tree.
+// When stat fails on a .git entry, Git continues to parent folders only if the
+// entry is missing (ENOENT or ENOTDIR). Since Git 2.54 another stat failure, a
+// gitfile it cannot open and a special file each make its probe fail, so
+// upstream finds no Git root rather than a parent repository. A .git folder
+// that stat reads but that is not a repository, such as one Git cannot read,
+// does not stop discovery. The tree folder holds a repository; the case writes
+// the .git entry in the caller folder or in a parent below tree.
 func TestGitEntryAccessMatchesGit(t *testing.T) {
 	git, err := exec.LookPath("git")
 	if err != nil {
