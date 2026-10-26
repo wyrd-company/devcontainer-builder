@@ -122,6 +122,15 @@ var globalSetupLayouts = []globalSetupLayout{
 		folder := mkdir(t, filepath.Join(bare, "info"))
 		return folder, folder, folder, []string{bare}, nil
 	}},
+	{name: "admin-subfolder", build: func(t *testing.T, base string) (string, string, string, []string, map[string]string) {
+		// Git finds the repository folder above the caller and, without
+		// core.bare, still returns to the caller folder.
+		tree := filepath.Join(base, "tree")
+		admin := filepath.Join(tree, ".git")
+		makeGitAdmin(t, admin, "")
+		folder := filepath.Join(admin, "objects")
+		return folder, folder, folder, []string{admin, tree}, nil
+	}},
 	{name: "self", build: func(t *testing.T, base string) (string, string, string, []string, map[string]string) {
 		tree := filepath.Join(base, "tree")
 		makeGitAdmin(t, filepath.Join(tree, ".git"), "")
