@@ -571,12 +571,65 @@ class IdentityTests(unittest.TestCase):
             self.assertEqual(workflow["permissions"], {})
             for job in workflow["jobs"].values():
                 self.assertIn("permissions", job)
+                if "uses" in job:
+                    # A reusable-workflow call has no steps or timeout. The wyrd.foo
+                    # call is on its major tag until the 2.0.0 commit pin lands.
+                    self.assertRegex(
+                        job["uses"],
+                        r"^wyrd-company/wyrd\.foo/\.github/workflows/publish-docs\.yml@(v2|[a-f0-9]{40})$",
+                    )
+                    self.assertNotEqual(job.get("secrets"), "inherit")
+                    continue
                 self.assertEqual(job["timeout-minutes"], 30)
                 for step in job["steps"]:
                     if "uses" in step:
                         self.assertRegex(step["uses"], r"@[a-f0-9]{40}$")
                     if "run" in step:
                         self.assertTrue(step["run"].startswith("task "))
+
+
+class DocsTargetTests(unittest.TestCase):
+    def test_release_run_publishes_its_verified_tag(self):
+        self.assertEqual(
+            release_run.docs_target("workflow_run", "main", VERSION, "", []),
+            (VERSION, True),
+        )
+        with self.assertRaises(ValueError):
+            release_run.docs_target("workflow_run", "main", "v1.2.3", "", [])
+
+    def test_manual_run_publishes_the_given_ref(self):
+        self.assertEqual(
+            release_run.docs_target("workflow_dispatch", "main", "", "dcb-docs@0.1.0", []),
+            ("dcb-docs@0.1.0", True),
+        )
+        with self.assertRaises(ValueError):
+            release_run.docs_target("workflow_dispatch", "main", "", "", [])
+
+    def test_docs_record_publishes_alone_but_waits_for_a_code_tag(self):
+        self.assertEqual(
+            release_run.docs_target("push", "dcb-docs@0.1.1", "", "", []),
+            ("dcb-docs@0.1.1", True),
+        )
+        self.assertEqual(
+            release_run.docs_target("push", "dcb-docs@0.1.1", "", "", [VERSION]),
+            ("dcb-docs@0.1.1", False),
+        )
+
+    def test_other_pushes_do_not_publish(self):
+        for ref in ["main", VERSION, "dcb-docs@"]:
+            with self.assertRaises(ValueError):
+                release_run.docs_target("push", ref, "", "", [])
+
+    def test_release_workflow_starts_only_on_bare_semver_tags(self):
+        release = yaml_file(ROOT / ".github/workflows/release.yml")
+        self.assertEqual(
+            release["on"]["push"]["tags"], ["[0-9]*.[0-9]*.[0-9]*"]
+        )
+
+    def test_publish_workflow_has_no_main_push_trigger(self):
+        triggers = yaml_file(ROOT / ".github/workflows/publish-docs.yml")["on"]
+        self.assertEqual(triggers["push"], {"tags": ["dcb-docs@*"]})
+        self.assertIn("workflow_dispatch", triggers)
 
 
 if __name__ == "__main__":
