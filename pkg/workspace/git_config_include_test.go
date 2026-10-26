@@ -28,11 +28,21 @@ type includeFixture struct {
 // variables that select Git's system and global files; a nil value unsets
 // the variable. ok is true when Git follows every include without an error,
 // so the Git root is the one that the layout gives without the case.
+// unknownAccount is true when the case names an account that no lookup finds:
+// a build whose lookup reads /etc/passwd only skips that include, the
+// approved difference, so native discovery gives the root where Git does not.
 type includeCase struct {
-	name         string
-	setup        func(t *testing.T, f includeFixture) map[string]*string
-	ok           bool
-	unprivileged bool
+	name           string
+	setup          func(t *testing.T, f includeFixture) map[string]*string
+	ok             bool
+	unprivileged   bool
+	unknownAccount bool
+}
+
+// nativeOK reports whether native discovery follows every include of c
+// without an error in this build.
+func (c includeCase) nativeOK() bool {
+	return c.ok || c.unknownAccount && gitAccountLookupPasswdOnly
 }
 
 // includeLine is a config file with one include.path entry.
@@ -192,7 +202,7 @@ var includeCases = []includeCase{
 		env["HOME"] = globalValue("rel")
 		return env
 	}},
-	{name: "global-tilde-unknown-user", setup: includeGlobal(includeLine("~no-such-user-for-dcb-tests/inc.cfg"), nil)},
+	{name: "global-tilde-unknown-user", setup: includeGlobal(includeLine("~no-such-user-for-dcb-tests/inc.cfg"), nil), unknownAccount: true},
 	{name: "global-tilde-user", setup: func(t *testing.T, f includeFixture) map[string]*string {
 		account, err := user.Current()
 		if err != nil {
@@ -346,7 +356,7 @@ func TestGitRootConfigIncludeContract(t *testing.T) {
 			writeFile(t, filepath.Join(admin, "config"), "[core]\n\trepositoryformatversion = 0\n")
 			applyGlobalEnv(t, nil, includeCaseVars(base, c.setup(t, includeFixture{base: base, folder: folder, common: admin, admin: admin})))
 			want := ""
-			if c.ok {
+			if c.nativeOK() {
 				want = tree
 			}
 			if got, err := GitRoot(folder); err != nil || got != want {
@@ -361,7 +371,8 @@ func TestGitRootConfigIncludeContract(t *testing.T) {
 // starts and in its full read after setup, which also reads the repository
 // config files. An include that it rejects stops the probe, and upstream finds
 // no Git root. Native discovery and the host Git must both give each case's
-// result on every discovery route.
+// result on every discovery route, except where an unknown account is the
+// approved difference of a build whose lookup reads /etc/passwd only.
 func TestGitRootConfigIncludeMatchesGit(t *testing.T) {
 	git, err := exec.LookPath("git")
 	if err != nil {
@@ -462,6 +473,9 @@ func TestGitRootConfigIncludeMatchesGit(t *testing.T) {
 				}
 				if measured := globalSetupGit(t, git, folder, env); measured != want {
 					t.Fatalf("Git root = %q; want %q", measured, want)
+				}
+				if c.nativeOK() {
+					want = control
 				}
 				if got, err := GitRoot(folder); err != nil || got != want {
 					t.Fatalf("GitRoot = %q, %v; want %q", got, err, want)
