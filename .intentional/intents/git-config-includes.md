@@ -10,3 +10,6 @@ repository. As Git does, the repository config is read again after setup,
 with its includes, a `%(prefix)/` include followed by an absolute path names
 that path, and a relative config file or include name is looked up from the
 folder that the read starts at, without the length limit of that folder's path.
+Linux release builds look up accounts in `/etc/passwd` only and skip a
+`~name/` include whose account is not there, so that a Git configuration that
+works for an account of another account service finds the same Git root.

@@ -89,6 +89,10 @@ version or start `git`. Other Git versions and builds read some configuration
 paths differently and accept other repository extensions, so the upstream CLI
 can mount a different folder; see
 [Workspace mounts](../usage.md#workspace-mounts-and-container-selection).
+Bob also approved one account-lookup difference: Linux release builds look up
+accounts in `/etc/passwd` only and skip an `include.path` of `~name/` whose
+account is not there; see
+[Relation to the Dev Container CLI](../overview.md#relation-to-the-dev-container-cli).
 Another deliberate difference from the latest stable Git needs Bob's approval.
 The specification recommends mounting the repository root but does not define
 how it is found or what happens when Git rejects the repository. Whether to keep
