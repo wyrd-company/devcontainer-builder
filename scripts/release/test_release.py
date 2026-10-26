@@ -572,11 +572,10 @@ class IdentityTests(unittest.TestCase):
             for job in workflow["jobs"].values():
                 self.assertIn("permissions", job)
                 if "uses" in job:
-                    # A reusable-workflow call has no steps or timeout. The wyrd.foo
-                    # call is on its major tag until the 2.0.0 commit pin lands.
+                    # A reusable-workflow call has no steps or timeout.
                     self.assertRegex(
                         job["uses"],
-                        r"^wyrd-company/wyrd\.foo/\.github/workflows/publish-docs\.yml@(v2|[a-f0-9]{40})$",
+                        r"^wyrd-company/wyrd\.foo/\.github/workflows/publish-docs\.yml@[a-f0-9]{40}$",
                     )
                     self.assertNotEqual(job.get("secrets"), "inherit")
                     continue
