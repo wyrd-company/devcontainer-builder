@@ -22,6 +22,17 @@ type gitWorktreeSettings struct {
 	workTree *string
 }
 
+// gitFormat is the result of Git's repository format check.
+type gitFormat struct {
+	// bare reports that core.bare applies and selects no working tree.
+	bare bool
+	// workTree is the core.worktree value that applies, if any.
+	workTree *string
+	// config names the repository config files that Git's full config read
+	// reads after setup.
+	config gitRepositoryConfig
+}
+
 // gitRepositoryFormat follows check_repository_format_gently in Git's setup.c.
 // It reads the common folder's config, plus config.worktree when
 // extensions.worktreeConfig is set. It reports whether core.bare applies and
@@ -29,17 +40,20 @@ type gitWorktreeSettings struct {
 // Without core.repositoryformatversion, or with a negative version, Git
 // ignores both. A linked worktree or GIT_COMMON_DIR also ignores the common
 // values. Extensions follow gitExtensions. Includes are not followed, as in
-// the format check; Git's later full config read, which follows them, is not
-// applied.
+// the format check; GitRoot reads the same files again, with their includes,
+// for Git's full config read after setup. Git runs the check from folder: the
+// folder where it found a .git entry or a repository, or the probe cwd for
+// GIT_DIR. A relative GIT_COMMON_DIR starts there.
 // Reference: https://github.com/git/git/blob/master/setup.c
-func gitRepositoryFormat(dir, folder string) (bool, *string, error) {
+func gitRepositoryFormat(dir, folder string) (gitFormat, error) {
 	common, shared, err := gitCommon(dir, folder)
 	if err != nil {
-		return false, nil, err
+		return gitFormat{}, err
 	}
-	entries, err := readGitConfig(common + string(os.PathSeparator) + "config")
+	format := gitFormat{config: gitRepositoryConfig{common: common + string(os.PathSeparator) + "config"}}
+	entries, err := readGitConfig(format.config.common)
 	if err != nil {
-		return false, nil, err
+		return gitFormat{}, err
 	}
 	version := -1
 	var extensions gitExtensions
@@ -49,41 +63,45 @@ func gitRepositoryFormat(dir, folder string) (bool, *string, error) {
 		case entry.name == "core.repositoryformatversion":
 			value, ok := gitParseInt(entry.value)
 			if !ok {
-				return false, nil, errGitConfig
+				return gitFormat{}, errGitConfig
 			}
 			version = value
 		case strings.HasPrefix(entry.name, "extensions."):
 			if !extensions.add(strings.TrimPrefix(entry.name, "extensions."), entry.value) {
-				return false, nil, errGitConfig
+				return gitFormat{}, errGitConfig
 			}
 		default:
 			if !gitWorktreeConfig(entry, &settings) {
-				return false, nil, errGitConfig
+				return gitFormat{}, errGitConfig
 			}
 		}
 	}
 	if version < 0 {
-		return false, nil, nil
+		return format, nil
 	}
 	if version > 1 || !extensions.verify(version) {
-		return false, nil, errGitConfig
+		return gitFormat{}, errGitConfig
 	}
 	if extensions.worktreeConfig {
-		entries, err := readGitConfig(dir + string(os.PathSeparator) + "config.worktree")
+		worktree := dir + string(os.PathSeparator) + "config.worktree"
+		entries, err := readGitConfig(worktree)
 		if err != nil {
-			return false, nil, err
+			return gitFormat{}, err
 		}
 		for _, entry := range entries {
 			if !gitWorktreeConfig(entry, &settings) {
-				return false, nil, errGitConfig
+				return gitFormat{}, errGitConfig
 			}
 		}
+		format.config.worktree = worktree
 		shared = false
 	}
 	if shared {
-		return false, nil, nil
+		return format, nil
 	}
-	return settings.bare == 1, settings.workTree, nil
+	format.bare = settings.bare == 1
+	format.workTree = settings.workTree
+	return format, nil
 }
 
 // gitWorktreeConfig follows read_worktree_config in Git's setup.c. It records
