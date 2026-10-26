@@ -37,24 +37,23 @@ type gitRepositoryConfig struct {
 func (c gitRepositoryConfig) read(cwd string) bool {
 	common := c.common
 	if dir, set := os.LookupEnv("GIT_COMMON_DIR"); set {
-		if dir != "" && !filepath.IsAbs(dir) {
-			dir = cwd + string(os.PathSeparator) + dir
-		}
 		common = dir + string(os.PathSeparator) + "config"
 	}
+	folder := newGitConfigCwd(cwd)
+	defer folder.close()
 	for _, path := range []string{common, c.worktree} {
-		if path != "" && gitConfigFile(path, false) != gitConfigFileAdmitted {
+		if path != "" && gitConfigFile(folder, path, false) != gitConfigFileAdmitted {
 			return false
 		}
 	}
 	return true
 }
 
-// gitConfigParse opens the config file at path, which Git reads at include
-// depth depth, and parses it as Git reads it. It follows each include.path
-// entry when Git reads it, before the rest of the file.
-func gitConfigParse(path string, depth int) gitConfigFileResult {
-	file, err := os.Open(path)
+// gitConfigParse opens the config file at path, from folder, which Git reads
+// at include depth depth, and parses it as Git reads it. It follows each
+// include.path entry when Git reads it, before the rest of the file.
+func gitConfigParse(folder *gitConfigCwd, path string, depth int) gitConfigFileResult {
+	file, err := folder.open(path)
 	if err != nil {
 		return gitConfigFileUnopened
 	}
@@ -63,7 +62,7 @@ func gitConfigParse(path string, depth int) gitConfigFileResult {
 		return gitConfigFileUnopened
 	}
 	if !parseGitConfigReader(file, func(entry gitConfigEntry) bool {
-		return entry.name != "include.path" || gitConfigInclude(path, entry.value, depth)
+		return entry.name != "include.path" || gitConfigInclude(folder, path, entry.value, depth)
 	}) {
 		return gitConfigFileRejected
 	}
@@ -76,8 +75,9 @@ func gitConfigParse(path string, depth int) gitConfigFileResult {
 // Git cannot expand, a path that access(2) rejects other than a missing one,
 // a file that Git cannot open or parse, and nesting deeper than
 // gitConfigIncludeDepth are fatal. A relative path starts at the folder of
-// from, as named. includeIf conditions are not evaluated.
-func gitConfigInclude(from string, value *string, depth int) bool {
+// from, as named, so it stays relative to folder, Git's working folder, when
+// from is. includeIf conditions are not evaluated.
+func gitConfigInclude(folder *gitConfigCwd, from string, value *string, depth int) bool {
 	if value == nil {
 		return false
 	}
@@ -93,15 +93,13 @@ func gitConfigInclude(from string, value *string, depth int) bool {
 			path = from[:slash+1] + path
 		}
 	}
-	// syscall.Access checks the real credentials, as access(2) does; 4 is
-	// R_OK.
-	if err := syscall.Access(path, 4); err != nil {
+	if err := folder.access(path); err != nil {
 		return errors.Is(err, fs.ErrNotExist) || errors.Is(err, syscall.ENOTDIR)
 	}
 	if depth >= gitConfigIncludeDepth {
 		return false
 	}
-	return gitConfigParse(path, depth+1) == gitConfigFileAdmitted
+	return gitConfigParse(folder, path, depth+1) == gitConfigFileAdmitted
 }
 
 // gitIncludePath follows interpolate_path in Git's path.c for an include
