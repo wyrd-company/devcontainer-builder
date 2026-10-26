@@ -7,7 +7,6 @@ import (
 	"errors"
 	"io/fs"
 	"os"
-	"path/filepath"
 	"syscall"
 )
 
@@ -23,7 +22,7 @@ import (
 // first. Both reads follow include.path entries. includeIf conditions, typed
 // values and the command-line config are not applied.
 // Reference: https://github.com/git/git/blob/master/config.c
-func gitGlobalConfigRead(folder string, second bool) bool {
+func gitGlobalConfigRead(folder *gitConfigCwd, second bool) bool {
 	for _, path := range gitGlobalConfigPaths() {
 		if !gitConfigFileRead(folder, path, true, second) {
 			return false
@@ -36,15 +35,12 @@ func gitGlobalConfigRead(folder string, second bool) bool {
 // and reports false when the read stops the probe. eaccesOK skips a file that
 // access(2) denies. The second read, after setup, also stops on a file that
 // Git cannot open.
-func gitConfigFileRead(folder, path string, eaccesOK, second bool) bool {
+func gitConfigFileRead(folder *gitConfigCwd, path string, eaccesOK, second bool) bool {
 	if path == "" {
 		// access(2) reports an empty path missing.
 		return true
 	}
-	if !filepath.IsAbs(path) {
-		path = folder + string(os.PathSeparator) + path
-	}
-	switch gitConfigFile(path, eaccesOK) {
+	switch gitConfigFile(folder, path, eaccesOK) {
 	case gitConfigFileRejected:
 		return false
 	case gitConfigFileUnopened:
@@ -93,15 +89,13 @@ func gitGlobalConfigPaths() []string {
 // as Git reads it, and a read error ends the file. A FIFO is read as Git
 // reads it: the open waits for a writer, and the file ends when its last
 // writer closes it. Git follows include.path entries, as gitConfigInclude
-// does.
-func gitConfigFile(path string, eaccesOK bool) gitConfigFileResult {
-	// syscall.Access checks the real credentials, as access(2) does; 4 is
-	// R_OK.
-	if err := syscall.Access(path, 4); err != nil {
+// does. A relative path starts at folder, Git's working folder.
+func gitConfigFile(folder *gitConfigCwd, path string, eaccesOK bool) gitConfigFileResult {
+	if err := folder.access(path); err != nil {
 		if errors.Is(err, fs.ErrNotExist) || errors.Is(err, syscall.ENOTDIR) || eaccesOK && errors.Is(err, syscall.EACCES) {
 			return gitConfigFileAdmitted
 		}
 		return gitConfigFileRejected
 	}
-	return gitConfigParse(path, 0)
+	return gitConfigParse(folder, path, 0)
 }
