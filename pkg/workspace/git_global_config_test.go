@@ -150,6 +150,14 @@ var globalConfigCases = []globalConfigCase{
 		writeFile(t, filepath.Join(folder, "global.cfg"), globalConfigBroken)
 		return "global.cfg"
 	})},
+	{name: "global-relative-symlink-parent", setup: globalOnly(func(t *testing.T, base, folder string) string {
+		// The kernel resolves the link before .., so the path names
+		// other/global.cfg, not a file in folder.
+		writeFile(t, filepath.Join(base, "other", "global.cfg"), globalConfigBroken)
+		mkdir(t, filepath.Join(base, "other", "sub"))
+		symlink(t, filepath.Join(base, "other", "sub"), filepath.Join(folder, "link"))
+		return "link/../global.cfg"
+	})},
 	{name: "global-relative-directory", setup: globalOnly(func(t *testing.T, _ string, folder string) string {
 		mkdir(t, filepath.Join(folder, "global.d"))
 		return "global.d"
