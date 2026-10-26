@@ -1,30 +1,47 @@
 # relationships:
 #   references: [ release, taskfile ]
 name: Publish docs
-# workflow_run also fires for releases created with GITHUB_TOKEN.
-# Recovery requires the original retained handoff, never rebuilt release assets.
+# The reusable workflow in wyrd.foo reads the dcb GitHub Release, so a code tag
+# publishes after its Release run succeeds. workflow_run also fires for
+# releases created with GITHUB_TOKEN. A dcb-docs record publishes on its own
+# unless it was pushed with a code tag, and a manual run publishes any ref.
+# There is no publish on a plain push to main.
 on:
   workflow_run:
     workflows: [ Release ]
     types: [ completed ]
+  push:
+    tags: [ 'dcb-docs@*' ]
   workflow_dispatch:
     inputs:
-      run_id:
-        description: Successful Release workflow run retaining the original handoff
+      ref:
+        description: Tag or commit to publish
         required: true
         type: string
-      tag:
-        description: Bare stable SemVer tag from that Release run
-        required: true
+      feature:
+        description: Feature a product on the front page
+        type: boolean
+        default: false
+      feature-product:
+        description: The product key to feature; empty when the repo has one product
         type: string
+        default: ''
+      feature-days:
+        description: How long the feature lasts, in days
+        type: string
+        default: '14'
+      feature-reason:
+        description: For example "New MCP server"; default "New release"
+        type: string
+        default: ''
 permissions: {}
 concurrency:
-  group: publish-docs-${{ github.event.workflow_run.id || inputs.run_id }}
+  group: publish-docs-${{ github.event.workflow_run.id || inputs.ref || github.ref }}
   cancel-in-progress: false
 jobs:
-  publish:
+  target:
     if: >-
-      github.event_name == 'workflow_dispatch' ||
+      github.event_name != 'workflow_run' ||
       (github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.head_repository.full_name == github.repository)
     runs-on: ubuntu-latest
@@ -32,35 +49,56 @@ jobs:
     permissions:
       contents: read
       actions: read
+    outputs:
+      ref: ${{ steps.target.outputs.ref }}
+      publish: ${{ steps.target.outputs.publish }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
+          # Every tag is needed to see which code tag sits on a docs record.
+          fetch-depth: 0
           # The read token is needed by the exact release-tag fetch.
           persist-credentials: true
       - uses: go-task/setup-task@01a4adf9db2d14c1de7a560f09170b6e0df736aa # v2
       - id: release_run
+        if: github.event_name == 'workflow_run'
         run: task release:run
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          RELEASE_RUN_ID: ${{ github.event.workflow_run.id || inputs.run_id }}
-      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+          RELEASE_RUN_ID: ${{ github.event.workflow_run.id }}
+      - if: github.event_name == 'workflow_run'
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
         with:
           name: package-release-manifest
           path: handoff
           github-token: ${{ secrets.GITHUB_TOKEN }}
           run-id: ${{ steps.release_run.outputs.run_id }}
-      - run: task release:handoff
+      - id: handoff
+        if: github.event_name == 'workflow_run'
+        run: task release:handoff
         env:
-          EXPECTED_TAG: ${{ inputs.tag }}
           RELEASE_COMMIT: ${{ steps.release_run.outputs.head_sha }}
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-        with:
-          ref: ${{ steps.release_run.outputs.head_sha }}
-          path: released-docs
-          persist-credentials: false
-      # ryl disable-line rule:line-length
-      - uses: wyrd-company/wyrd.foo/.github/actions/publish-docs@fdb54b12e88eaf51a2b22714db63c80aba2ed88a # v1
-        with:
-          app-id: ${{ secrets.WYRD_TOOLS_DOCS_PUBLISHER_APP_ID }}
-          private-key: ${{ secrets.WYRD_TOOLS_DOCS_PUBLISHER_PRIVATE_KEY }}
-          docs-dir: released-docs/docs
+      - id: target
+        run: task release:docs-target
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+          INPUT_REF: ${{ inputs.ref }}
+          RELEASE_VERSION: ${{ steps.handoff.outputs.version }}
+  publish:
+    needs: target
+    if: needs.target.outputs.publish == 'true'
+    permissions:
+      contents: read
+    # Pin to the wyrd.foo 2.0.0 commit, with a "# 2.0.0" comment, once it exists.
+    uses: wyrd-company/wyrd.foo/.github/workflows/publish-docs.yml@v2
+    with:
+      ref: ${{ needs.target.outputs.ref }}
+      feature: ${{ inputs.feature || false }}
+      feature-product: ${{ inputs.feature-product || '' }}
+      feature-days: ${{ inputs.feature-days || '14' }}
+      feature-reason: ${{ inputs.feature-reason || '' }}
+    # Only the two publisher secrets, not the release credentials.
+    secrets:
+      WYRD_TOOLS_DOCS_PUBLISHER_APP_ID: ${{ secrets.WYRD_TOOLS_DOCS_PUBLISHER_APP_ID }}
+      WYRD_TOOLS_DOCS_PUBLISHER_PRIVATE_KEY: ${{ secrets.WYRD_TOOLS_DOCS_PUBLISHER_PRIVATE_KEY }}

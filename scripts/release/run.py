@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 # relationships:
 #   references: [manifest, release]
-"""Resolve and verify the successful Release run used by downstream workflows."""
+"""Resolve and verify the successful Release run used by downstream workflows,
+and choose the ref the docs publish uses."""
 
 import json
 import os
@@ -10,7 +11,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from manifest import COMMIT, verify_handoff
+from manifest import COMMIT, verify_handoff, version_value
 from git_env import git_env
 
 
@@ -63,5 +64,39 @@ def verify():
         output.write(f"version={version}\n")
 
 
+def docs_target(event, ref_name, version, input_ref, code_tags_at_head):
+    """Return (ref, publish) for the docs publish of one workflow event.
+
+    A Release run publishes its verified tag. A docs record alone publishes
+    itself; pushed with a code tag, it waits for that tag's Release run, because
+    the product page needs the GitHub Release. A manual run publishes its ref.
+    """
+    if event == "workflow_run":
+        return version_value(version), True
+    if event == "workflow_dispatch":
+        if not input_ref:
+            raise ValueError("a manual run needs a ref")
+        return input_ref, True
+    if event == "push" and re.fullmatch(r"dcb-docs@[0-9][^/\s]*", ref_name):
+        return ref_name, not code_tags_at_head
+    raise ValueError(f"no docs publish for {event} {ref_name}")
+
+
+def target():
+    code_tags = subprocess.check_output(
+        ["git", "tag", "--list", "[0-9]*.[0-9]*.[0-9]*", "--points-at", "HEAD"],
+        text=True, env=git_env(),
+    ).split()
+    ref, publish = docs_target(
+        os.environ["EVENT_NAME"],
+        os.environ.get("REF_NAME", ""),
+        os.environ.get("RELEASE_VERSION", ""),
+        os.environ.get("INPUT_REF", ""),
+        code_tags,
+    )
+    with Path(os.environ["GITHUB_OUTPUT"]).open("a") as output:
+        output.write(f"ref={ref}\npublish={str(publish).lower()}\n")
+
+
 if __name__ == "__main__":
-    {"resolve": resolve, "verify": verify}[sys.argv[1]]()
+    {"resolve": resolve, "verify": verify, "target": target}[sys.argv[1]]()
