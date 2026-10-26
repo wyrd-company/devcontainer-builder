@@ -156,6 +156,60 @@ var systemConfigCases = []globalConfigCase{
 	{name: "nosystem-out-of-range", setup: systemWith(globalValue("4294967296"), systemFile(globalConfigValid))},
 }
 
+// systemUnnormalized declares the cases that Git before 2.33 gives another
+// result: Git 2.32 opens GIT_CONFIG_SYSTEM as given, so the kernel resolves each
+// component, and link/.. names the parent of the link's target. Native discovery
+// follows the latest stable Git, which normalizes the path. Each result is
+// measured with an unmodified Git 2.32.0 on every route.
+var systemUnnormalized = map[string]globalConfigCase{
+	"system-normalized-symlink-parent":        {ok: true},
+	"system-normalized-skips-link-target":     {},
+	"system-normalized-missing-parent":        {ok: true},
+	"system-normalized-absolute":              {ok: true},
+	"system-normalized-empty":                 {ok: true, secondRead: map[string]bool{"explicit": true, "self": true}},
+	"system-normalize-failure-in-place":       {ok: true},
+	"system-normalize-failure-skips-original": {},
+}
+
+// hostResult reports the result that the host Git gives on route, by the
+// differences that systemUnnormalized declares.
+func (c globalConfigCase) hostResult(host hostGit, route string) bool {
+	if declared, ok := systemUnnormalized[c.name]; ok && host.minor < 33 {
+		c = declared
+	}
+	return c.ok && !c.secondRead[route]
+}
+
+// TestGitRootSystemUnnormalizedDeclaresDifferences requires each declared Git
+// 2.32 result to name a case and to differ from the latest stable Git on at
+// least one route, and Git 2.33 and later to give each case's own result.
+func TestGitRootSystemUnnormalizedDeclaresDifferences(t *testing.T) {
+	routes := []string{"discovered", "gitfile", "explicit", "self", "linked", "symlinked-folder"}
+	cases := map[string]bool{}
+	for _, c := range systemConfigCases {
+		cases[c.name] = true
+		_, declared := systemUnnormalized[c.name]
+		differs := false
+		for _, route := range routes {
+			want := c.ok && !c.secondRead[route]
+			for _, minor := range []int{33, 55, 56} {
+				if got := c.hostResult(hostGit{minor: minor}, route); got != want {
+					t.Errorf("%s/%s: Git 2.%d result %v, want %v", c.name, route, minor, got, want)
+				}
+			}
+			differs = differs || c.hostResult(hostGit{minor: 32}, route) != want
+		}
+		if differs != declared {
+			t.Errorf("%s: Git 2.32 differs %v, declared %v", c.name, differs, declared)
+		}
+	}
+	for name := range systemUnnormalized {
+		if !cases[name] {
+			t.Errorf("declared case %s is not a system config case", name)
+		}
+	}
+}
+
 // TestGitRootSystemConfigContract asserts the system config rules without
 // running Git.
 func TestGitRootSystemConfigContract(t *testing.T) {
@@ -191,13 +245,15 @@ func TestGitRootSystemConfigContract(t *testing.T) {
 // Git reads the file that GIT_CONFIG_SYSTEM names, unless GIT_CONFIG_NOSYSTEM
 // is true, when it starts and again from its working folder after setup. A
 // file or value that it rejects stops the probe, and upstream finds no Git
-// root. Native discovery and the host Git must both give each case's result on
-// every discovery route.
+// root. Native discovery must give each case's result on every discovery
+// route, and the host Git the result that its version declares: on Git 2.33
+// and later, both are the same.
 func TestGitRootSystemConfigMatchesGit(t *testing.T) {
 	git, err := exec.LookPath("git")
 	if err != nil {
 		t.Skip("git is not installed")
 	}
+	host := readHostGit(t, git)
 	for _, route := range []string{"discovered", "gitfile", "explicit", "self", "linked", "symlinked-folder"} {
 		for _, c := range systemConfigCases {
 			t.Run(c.name+"/"+route, func(t *testing.T) {
@@ -262,12 +318,19 @@ func TestGitRootSystemConfigMatchesGit(t *testing.T) {
 					t.Fatalf("Git finds no root before the case: %s", stderr)
 				}
 				env = applyGlobalEnv(t, env, c.setup(t, base, folder))
-				want := ""
+				want, hostWant := "", ""
 				if c.ok && !c.secondRead[route] {
 					want = control
 				}
-				if measured, stderr := probe(env); measured != want {
-					t.Fatalf("Git root = %q (%s); want %q", measured, strings.TrimSpace(stderr), want)
+				if c.hostResult(host, route) {
+					hostWant = control
+				}
+				measured, stderr := probe(env)
+				if measured != hostWant {
+					t.Fatalf("Git %s root = %q (%s); want %q", host.version, measured, strings.TrimSpace(stderr), hostWant)
+				}
+				if hostWant != want {
+					t.Logf("declared difference: Git %s root = %q; the latest stable Git gives %q", host.version, measured, want)
 				}
 				got, err := GitRoot(folder)
 				if err != nil || got != want {
