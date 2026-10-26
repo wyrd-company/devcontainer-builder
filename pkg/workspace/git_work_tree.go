@@ -19,23 +19,25 @@ import (
 // selects the working tree. Rejected config, or a core.worktree that Git cannot
 // resolve, is fatal. gitdir gives the repository folder that Git changes to
 // before a relative core.worktree. cwd is Git's working folder with the
-// default working tree; it returns the selected root and working folder.
-func gitSelectedRoot(root, cwd, dir, folder string, gitdir func() (string, error)) (string, string) {
-	bare, workTree, err := gitRepositoryFormat(dir, folder)
+// default working tree, and checked the folder that Git runs the format check
+// from; it returns the selected root and working folder, and the repository
+// config files of the format check.
+func gitSelectedRoot(root, cwd, dir, checked, folder string, gitdir func() (string, error)) (string, string, gitRepositoryConfig) {
+	format, err := gitRepositoryFormat(dir, checked)
 	if err != nil {
-		return "", ""
+		return "", "", gitRepositoryConfig{}
 	}
 	if _, set := os.LookupEnv("GIT_WORK_TREE"); set {
-		return root, cwd
+		return root, cwd, format.config
 	}
 	switch {
-	case bare:
+	case format.bare:
 		// Git stays in the caller folder.
-		return filepath.Clean(folder), folder
-	case workTree != nil:
-		return gitConfigWorkTreeRoot(gitdir, *workTree, folder)
+		return filepath.Clean(folder), folder, format.config
+	case format.workTree != nil:
+		root, cwd = gitConfigWorkTreeRoot(gitdir, *format.workTree, folder)
 	}
-	return root, cwd
+	return root, cwd, format.config
 }
 
 // gitConfigWorkTreeRoot resolves a core.worktree value. Git resolves an

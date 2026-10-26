@@ -18,7 +18,9 @@ import (
 // running git. Git reads the system config file that GIT_CONFIG_SYSTEM names,
 // unless GIT_CONFIG_NOSYSTEM is true, and its global config files when it
 // starts and again from its working folder after setup, and a file or value
-// that it rejects gives no root. Walking up the physical parents of folder, as
+// that it rejects gives no root. Both reads follow include.path entries, and
+// the read after setup also reads the repository config files, with their
+// includes. Walking up the physical parents of folder, as
 // Git does from its cwd, a .git folder that is a repository marks the root; the root keeps
 // folder's lexical names up the same number of steps, as upstream's resolved
 // `git rev-parse --show-cdup` result does; a .git file marks the root when its gitdir is a
@@ -48,8 +50,8 @@ func GitRoot(folder string) (string, error) {
 	if !gitConfigRead(folder, false) {
 		return "", nil
 	}
-	root, cwd := gitSetupRoot(folder)
-	if root == "" || !gitConfigRead(cwd, true) {
+	root, cwd, config := gitSetupRoot(folder)
+	if root == "" || !gitConfigRead(cwd, true) || !config.read(cwd) {
 		return "", nil
 	}
 	return root, nil
@@ -64,10 +66,12 @@ func gitConfigRead(folder string, second bool) bool {
 // gitSetupRoot returns the Git root selected from folder, or "", and cwd, the
 // folder that Git's setup leaves as its working folder: the working tree when
 // folder is inside it, the folder where Git found a .git entry, or folder.
-func gitSetupRoot(folder string) (root, cwd string) {
+// config names the repository config files that Git's full config read reads
+// after setup, from the format check.
+func gitSetupRoot(folder string) (root, cwd string, config gitRepositoryConfig) {
 	if dir, set := os.LookupEnv("GIT_DIR"); set {
 		if dir == "" {
-			return "", ""
+			return "", "", gitRepositoryConfig{}
 		}
 		if !filepath.IsAbs(dir) {
 			// Resolve relative to the probe cwd, without cleaning symlink/..
@@ -76,18 +80,18 @@ func gitSetupRoot(folder string) (root, cwd string) {
 		}
 		info, err := os.Stat(dir)
 		if err != nil {
-			return "", ""
+			return "", "", gitRepositoryConfig{}
 		}
 		gitdir := gitChdirDir(dir)
 		if !info.IsDir() {
 			// Git rejects special files; reading a FIFO could block discovery.
 			if !info.Mode().IsRegular() {
-				return "", ""
+				return "", "", gitRepositoryConfig{}
 			}
 			// GIT_DIR can name a gitfile, whose target is relative to it.
 			target, err := gitfilePointer(dir)
 			if err != nil || target == "" {
-				return "", ""
+				return "", "", gitRepositoryConfig{}
 			}
 			if !filepath.IsAbs(target) {
 				// Git anchors relative targets at the given gitfile path,
@@ -100,28 +104,28 @@ func gitSetupRoot(folder string) (root, cwd string) {
 		}
 		valid, _ := isGitDir(dir, folder)
 		if dir == "" || !valid {
-			return "", ""
+			return "", "", gitRepositoryConfig{}
 		}
 		// An explicit repository disables parent discovery. Git defaults its
 		// working tree to the probe cwd, including outside a discovered tree.
 		// Without a working tree, core.bare also gives the caller folder.
-		root, cwd = gitSelectedRoot(filepath.Clean(folder), folder, dir, folder, gitdir)
+		root, cwd, config = gitSelectedRoot(filepath.Clean(folder), folder, dir, folder, folder, gitdir)
 	} else {
-		root, cwd = discoverGitRoot(folder)
+		root, cwd, config = discoverGitRoot(folder)
 	}
 	if root == "" {
-		return "", ""
+		return "", "", gitRepositoryConfig{}
 	}
 	workTree, set := os.LookupEnv("GIT_WORK_TREE")
 	if !set {
-		return root, cwd
+		return root, cwd, config
 	}
 	if workTree == "" {
-		return "", ""
+		return "", "", gitRepositoryConfig{}
 	}
 	physical, err := gitPhysicalPath(folder)
 	if err != nil {
-		return "", ""
+		return "", "", gitRepositoryConfig{}
 	}
 	if !filepath.IsAbs(workTree) {
 		// Preserve components until Git's physical path resolution, including
@@ -131,37 +135,39 @@ func gitSetupRoot(folder string) (root, cwd string) {
 	workTree, err = gitCeilingPath(workTree)
 	if err != nil {
 		// Upstream treats a failed rev-parse as no Git root.
-		return "", ""
+		return "", "", gitRepositoryConfig{}
 	}
-	return gitWorkTreeRoot(folder, physical, workTree)
+	root, cwd = gitWorkTreeRoot(folder, physical, workTree)
+	return root, cwd, config
 }
 
 // discoverGitRoot walks the parents of folder for a repository, and returns
-// its Git root and Git's working folder, as gitSetupRoot does.
-func discoverGitRoot(folder string) (root, cwd string) {
+// its Git root, Git's working folder and repository config files, as
+// gitSetupRoot does.
+func discoverGitRoot(folder string) (root, cwd string, config gitRepositoryConfig) {
 	limit := gitCeilingLimit(folder, os.Getenv("GIT_CEILING_DIRECTORIES"))
 	device, oneFilesystem, ok := gitDiscoveryDevice(folder)
 	if !ok {
-		return "", ""
+		return "", "", gitRepositoryConfig{}
 	}
 	// Git walks the parents of its physical cwd. Upstream resolves the
 	// resulting cdup, one `..` per parent step, against the caller's path, so
 	// the root keeps the caller's lexical names up the same number of steps.
 	physical, err := gitPhysicalPath(folder)
 	if err != nil {
-		return "", ""
+		return "", "", gitRepositoryConfig{}
 	}
 	lexical := filepath.Clean(folder)
 	for current, depth := physical, 0; ; current, lexical, depth = filepath.Dir(current), filepath.Dir(lexical), depth+1 {
 		if limit >= 0 && depth >= limit {
-			return "", ""
+			return "", "", gitRepositoryConfig{}
 		}
 		if oneFilesystem && depth > 0 {
 			// Git stops at the first physical parent on another file system,
 			// after the ceiling check. A parent it cannot stat also ends
 			// discovery.
 			if parent, err := gitDevice(current); err != nil || parent != device {
-				return "", ""
+				return "", "", gitRepositoryConfig{}
 			}
 		}
 		dotGit := filepath.Join(current, ".git")
@@ -172,7 +178,7 @@ func discoverGitRoot(folder string) (root, cwd string) {
 			if err != nil {
 				// A failed common-directory read or resolution makes Git's
 				// probe fail, rather than continuing to a parent repository.
-				return "", ""
+				return "", "", gitRepositoryConfig{}
 			}
 			if valid {
 				gitdir := gitChdirDir(dotGit)
@@ -182,38 +188,38 @@ func discoverGitRoot(folder string) (root, cwd string) {
 					gitdir = gitRealpathDir(current, ".git")
 				}
 				// Git changes to the folder where it found .git.
-				return gitSelectedRoot(lexical, current, dotGit, folder, gitdir)
+				return gitSelectedRoot(lexical, current, dotGit, current, folder, gitdir)
 			}
 		case err == nil:
 			gitdir, err := readGitfile(dotGit)
 			if err != nil {
 				// Git also rejects a gitfile that it cannot open or read.
-				return "", ""
+				return "", "", gitRepositoryConfig{}
 			}
 			valid, _ := isGitDir(gitdir, folder)
 			if gitdir == "" || !valid {
-				return "", ""
+				return "", "", gitRepositoryConfig{}
 			}
-			return gitSelectedRoot(lexical, current, gitdir, folder, gitRealpathDir("", gitdir))
+			return gitSelectedRoot(lexical, current, gitdir, current, folder, gitRealpathDir("", gitdir))
 		case !errors.Is(err, fs.ErrNotExist) && !errors.Is(err, syscall.ENOTDIR):
 			// Git continues past a missing .git entry only. It rejects one
 			// that stat fails on for another reason, such as a symbolic link
 			// loop or a folder it cannot search, rather than continuing to
 			// parent folders.
-			return "", ""
+			return "", "", gitRepositoryConfig{}
 		}
 		// Git then tests the folder itself, which finds a bare repository or an
 		// administrative folder. Its probe then has no working tree, and the
 		// upstream CLI resolves the empty cdup to the caller folder.
 		valid, err := isGitDir(current, folder)
 		if err != nil {
-			return "", ""
+			return "", "", gitRepositoryConfig{}
 		}
 		if valid {
-			return gitSelectedRoot(filepath.Clean(folder), folder, current, folder, gitChdirDir(current))
+			return gitSelectedRoot(filepath.Clean(folder), folder, current, current, folder, gitChdirDir(current))
 		}
 		if filepath.Dir(current) == current {
-			return "", ""
+			return "", "", gitRepositoryConfig{}
 		}
 	}
 }
