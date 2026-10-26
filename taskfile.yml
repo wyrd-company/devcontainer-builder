@@ -33,14 +33,7 @@ tasks:
   intentional:check:
     desc: Validate release metadata, including the pre-release inventory
     cmds:
-      # Before the first tag, status validates config, discovery, and intents.
-      # Adopted from the trowel Go reference; no baseline tag is manufactured.
-      - |
-        if [ -n "$(git tag --list '[0-9]*.[0-9]*.[0-9]*')" ]; then
-          intentional check
-        else
-          intentional status
-        fi
+      - bash scripts/check-intentional.sh
   format:
     desc: Format Go files (optional file arguments)
     cmds:
@@ -82,7 +75,7 @@ tasks:
       - go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
       - go install github.com/yannh/kubeconform/cmd/kubeconform@v0.6.7
       - go install github.com/evilmartians/lefthook/v2@v2.1.4
-      - npm install --global --allow-scripts=@wyrd-company/intentional --@wyrd-company:registry=https://registry.npmjs.org @wyrd-company/intentional@0.1.6
+      - npm install --global --allow-scripts=@wyrd-company/intentional --@wyrd-company:registry=https://registry.npmjs.org @wyrd-company/intentional@0.2.0
   docs:tools:
     desc: Install public documentation check tools
     cmds:
@@ -196,6 +189,10 @@ tasks:
     desc: Verify the retained release manifest against its workflow run and tag
     cmds:
       - python3 scripts/release/run.py verify
+  release:docs-target:
+    desc: Choose the ref and whether this run publishes the docs to wyrd.foo
+    cmds:
+      - python3 scripts/release/run.py target
   release:preflight:
     desc: Check Intentional tag identity and credential presence before publication
     cmds:
