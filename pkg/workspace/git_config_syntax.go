@@ -3,7 +3,12 @@
 
 package workspace
 
-import "strings"
+import (
+	"bufio"
+	"bytes"
+	"io"
+	"strings"
+)
 
 // gitConfigEntry is one config variable. The name has Git's lower-case section
 // and key, with the subsection unchanged. A nil value is a key without "=".
@@ -13,42 +18,56 @@ type gitConfigEntry struct {
 }
 
 // gitConfigSource follows get_next_char in Git's config.c: CRLF reads as LF,
-// and the end of the file reads as LF with eof set.
+// and the end of the input reads as LF with eof set. Git reads a config file
+// with getc, so a read error also ends the input.
 type gitConfigSource struct {
-	data []byte
-	pos  int
-	eof  bool
+	reader *bufio.Reader
+	eof    bool
 }
 
 func (s *gitConfigSource) next() byte {
-	if s.pos >= len(s.data) {
+	c, err := s.reader.ReadByte()
+	if err != nil {
 		s.eof = true
 		return '\n'
 	}
-	c := s.data[s.pos]
-	s.pos++
-	if c == '\r' && s.pos < len(s.data) && s.data[s.pos] == '\n' {
-		s.pos++
-		return '\n'
+	if c == '\r' {
+		if next, err := s.reader.Peek(1); err == nil && next[0] == '\n' {
+			s.reader.ReadByte()
+			return '\n'
+		}
 	}
 	return c
 }
 
-// parseGitConfig follows git_parse_source in Git's config.c. Git uses its own
-// ASCII character classes, and C strings for names and values. It reports
-// false for a syntax error, which Git treats as fatal for a config file.
-// Reference: https://github.com/git/git/blob/master/config.c
+// parseGitConfig parses config data and returns its entries.
 func parseGitConfig(data []byte) ([]gitConfigEntry, bool) {
-	const bom = "\xef\xbb\xbf"
-	source := &gitConfigSource{data: data}
-	if len(data) > 0 && data[0] == bom[0] {
-		// Git skips a complete UTF-8 byte order mark and rejects a partial one.
-		if !strings.HasPrefix(string(data), bom) {
-			return nil, false
-		}
-		source.pos = len(bom)
-	}
 	var entries []gitConfigEntry
+	if !parseGitConfigReader(bytes.NewReader(data), func(entry gitConfigEntry) {
+		entries = append(entries, entry)
+	}) {
+		return nil, false
+	}
+	return entries, true
+}
+
+// parseGitConfigReader follows git_parse_source in Git's config.c, reading
+// input as it parses, as Git does, so it stops at the first syntax error
+// without an input size limit. Git uses its own ASCII character classes, and C
+// strings for names and values. It reports false for a syntax error, which Git
+// treats as fatal for a config file, and gives each entry to entry when it is
+// not nil.
+// Reference: https://github.com/git/git/blob/master/config.c
+func parseGitConfigReader(input io.Reader, entry func(gitConfigEntry)) bool {
+	const bom = "\xef\xbb\xbf"
+	source := &gitConfigSource{reader: bufio.NewReader(input)}
+	if first, err := source.reader.Peek(1); err == nil && first[0] == bom[0] {
+		// Git skips a complete UTF-8 byte order mark and rejects a partial one.
+		if prefix, _ := source.reader.Peek(len(bom)); string(prefix) != bom {
+			return false
+		}
+		source.reader.Discard(len(bom))
+	}
 	var name []byte
 	section := 0
 	comment := false
@@ -57,7 +76,7 @@ func parseGitConfig(data []byte) ([]gitConfigEntry, bool) {
 		switch {
 		case c == '\n':
 			if source.eof {
-				return entries, true
+				return true
 			}
 			comment = false
 		case comment, gitSpace(c):
@@ -66,20 +85,22 @@ func parseGitConfig(data []byte) ([]gitConfigEntry, bool) {
 		case c == '[':
 			name = name[:0]
 			if !source.section(&name) || len(name) < 1 {
-				return nil, false
+				return false
 			}
 			name = append(name, '.')
 			section = len(name)
 		case gitAlpha(c):
 			name = append(name[:section], gitLower(c))
-			entry, ok := source.entry(name)
+			key, ok := source.entry(name)
 			if !ok {
-				return nil, false
+				return false
 			}
-			name = entry.key
-			entries = append(entries, gitConfigEntry{name: cString(string(name)), value: entry.value})
+			name = key.key
+			if entry != nil {
+				entry(gitConfigEntry{name: cString(string(name)), value: key.value})
+			}
 		default:
-			return nil, false
+			return false
 		}
 	}
 }
