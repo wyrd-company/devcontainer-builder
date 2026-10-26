@@ -89,8 +89,9 @@ func gitGlobalConfigPaths() []string {
 // with the real credentials, and stops on another access failure. It then opens the
 // file with the effective credentials; its fopen also fails on a folder. It
 // parses the file as it reads it, so a syntax error stops the probe as soon
-// as Git reads it, and a read error ends the file. Git would block reading a
-// FIFO; it is rejected here without opening it.
+// as Git reads it, and a read error ends the file. A FIFO is read as Git
+// reads it: the open waits for a writer, and the file ends when its last
+// writer closes it.
 func gitConfigFile(path string, eaccesOK bool) gitConfigFileResult {
 	// syscall.Access checks the real credentials, as access(2) does; 4 is
 	// R_OK.
@@ -98,13 +99,6 @@ func gitConfigFile(path string, eaccesOK bool) gitConfigFileResult {
 		if errors.Is(err, fs.ErrNotExist) || errors.Is(err, syscall.ENOTDIR) || eaccesOK && errors.Is(err, syscall.EACCES) {
 			return gitConfigFileAdmitted
 		}
-		return gitConfigFileRejected
-	}
-	info, err := os.Stat(path)
-	if err != nil {
-		return gitConfigFileUnopened
-	}
-	if info.Mode()&os.ModeNamedPipe != 0 {
 		return gitConfigFileRejected
 	}
 	file, err := os.Open(path)
