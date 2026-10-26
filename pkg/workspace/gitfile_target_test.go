@@ -38,6 +38,7 @@ func TestGitfileTargetTraversalMatchesGit(t *testing.T) {
 		{"physical-bare", "link/../../admin", map[string]string{"deep/admin": "[core]\n\tbare = true\n"}, "tree/app"},
 		{"regular-file-parent", "file/../admin", map[string]string{"tree/admin": ""}, ""},
 		{"missing-parent", "missing/../admin", map[string]string{"tree/admin": ""}, ""},
+		{"physical-commondir", "link/../worktree", map[string]string{"main": "", "deep/x/worktree": "commondir:../../../main"}, "tree"},
 		{"plain", "../admin", map[string]string{"admin": ""}, "tree"},
 		{"dot-components", "./admin/./", map[string]string{"tree/admin": ""}, "tree"},
 		{"absolute-link", "$BASE/tree/link/../../admin", map[string]string{"deep/admin": ""}, "tree"},
@@ -59,6 +60,15 @@ func TestGitfileTargetTraversalMatchesGit(t *testing.T) {
 				writeFile(t, filepath.Join(tree, "file"), "")
 				for path, config := range c.repos {
 					repo := filepath.Join(base, path)
+					if common, ok := strings.CutPrefix(config, "commondir:"); ok {
+						// A linked worktree's administrative folder: HEAD and a
+						// commondir pointer, relative to this folder, to the
+						// repository holding objects and refs.
+						mkdir(t, repo)
+						writeFile(t, filepath.Join(repo, "HEAD"), "ref: refs/heads/main\n")
+						writeFile(t, filepath.Join(repo, "commondir"), common+"\n")
+						continue
+					}
 					cmd := exec.Command(git, "init", "-q", "--bare", repo)
 					cmd.Env = testgit.Env()
 					if out, err := cmd.CombinedOutput(); err != nil {
