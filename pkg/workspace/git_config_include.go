@@ -109,6 +109,13 @@ func gitConfigInclude(folder *gitConfigCwd, from string, value *string, depth in
 // it is, and a relative one below the prefix that Git's build names. follow
 // is false for that relative rest, which is not read. ok is false for a path
 // that Git cannot expand.
+//
+// A build whose account lookup reads /etc/passwd only cannot see an account
+// that only another account service knows, so it skips a ~name path whose
+// account it cannot find, where Git rejects an unknown name. Then a Git
+// configuration that works for such an account gives the same Git root.
+// This difference is approved; see the Differences from upstream table in
+// docs/overview.md.
 // Reference: https://github.com/git/git/blob/master/path.c
 func gitIncludePath(value string) (path string, follow, ok bool) {
 	if rest, prefixed := strings.CutPrefix(value, "%(prefix)/"); prefixed {
@@ -130,7 +137,7 @@ func gitIncludePath(value string) (path string, follow, ok bool) {
 	}
 	account, err := user.Lookup(name)
 	if err != nil {
-		return "", false, false
+		return "", false, gitAccountLookupPasswdOnly
 	}
 	return account.HomeDir + rest, true, true
 }
