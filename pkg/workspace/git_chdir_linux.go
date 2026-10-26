@@ -29,10 +29,13 @@ func gitChdir(dir, value string) (string, error) {
 	}
 	defer unix.Close(target)
 	// chdir also needs search permission on the folder it selects, which an
-	// O_PATH open does not check.
-	if err := unix.Faccessat(parent, value, unix.X_OK, 0); err != nil {
+	// O_PATH open does not check. A lookup from the folder checks it with
+	// the effective credentials chdir uses; access checks real ones.
+	search, err := unix.Openat(target, ".", flags, 0)
+	if err != nil {
 		return "", err
 	}
+	unix.Close(search)
 	// Git reads its working folder, which the kernel names from the folder
 	// itself, as it names the descriptor's folder.
 	if path, err := os.Readlink("/proc/self/fd/" + strconv.Itoa(target)); err == nil && filepath.IsAbs(path) {
