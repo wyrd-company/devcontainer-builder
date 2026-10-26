@@ -24,21 +24,30 @@ import (
 // Reference: https://github.com/git/git/blob/master/config.c
 func gitGlobalConfigRead(folder string, second bool) bool {
 	for _, path := range gitGlobalConfigPaths() {
-		if path == "" {
-			// access(2) reports an empty path missing.
-			continue
-		}
-		if !filepath.IsAbs(path) {
-			path = folder + string(os.PathSeparator) + path
-		}
-		switch gitGlobalConfigFile(path) {
-		case gitConfigFileRejected:
+		if !gitConfigFileRead(folder, path, true, second) {
 			return false
-		case gitConfigFileUnopened:
-			if second {
-				return false
-			}
 		}
+	}
+	return true
+}
+
+// gitConfigFileRead follows one read of the config file at path, from folder,
+// and reports false when the read stops the probe. eaccesOK skips a file that
+// access(2) denies. The second read, after setup, also stops on a file that
+// Git cannot open.
+func gitConfigFileRead(folder, path string, eaccesOK, second bool) bool {
+	if path == "" {
+		// access(2) reports an empty path missing.
+		return true
+	}
+	if !filepath.IsAbs(path) {
+		path = folder + string(os.PathSeparator) + path
+	}
+	switch gitConfigFile(path, eaccesOK) {
+	case gitConfigFileRejected:
+		return false
+	case gitConfigFileUnopened:
+		return !second
 	}
 	return true
 }
@@ -75,18 +84,18 @@ func gitGlobalConfigPaths() []string {
 	return paths
 }
 
-// gitGlobalConfigFile follows access_or_die with ACCESS_EACCES_OK, then the
-// file read. Git skips a file that access(2) reports missing, or denies with
-// the real credentials, and stops on another access failure. It then opens the
+// gitConfigFile follows access_or_die, then the file read. Git skips a file
+// that access(2) reports missing, or, with eaccesOK (ACCESS_EACCES_OK), denies
+// with the real credentials, and stops on another access failure. It then opens the
 // file with the effective credentials; its fopen also fails on a folder. It
 // parses the file as it reads it, so a syntax error stops the probe as soon
 // as Git reads it, and a read error ends the file. Git would block reading a
 // FIFO; it is rejected here without opening it.
-func gitGlobalConfigFile(path string) gitConfigFileResult {
+func gitConfigFile(path string, eaccesOK bool) gitConfigFileResult {
 	// syscall.Access checks the real credentials, as access(2) does; 4 is
 	// R_OK.
 	if err := syscall.Access(path, 4); err != nil {
-		if errors.Is(err, fs.ErrNotExist) || errors.Is(err, syscall.ENOTDIR) || errors.Is(err, syscall.EACCES) {
+		if errors.Is(err, fs.ErrNotExist) || errors.Is(err, syscall.ENOTDIR) || eaccesOK && errors.Is(err, syscall.EACCES) {
 			return gitConfigFileAdmitted
 		}
 		return gitConfigFileRejected
