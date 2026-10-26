@@ -43,8 +43,9 @@ func (s *gitConfigSource) next() byte {
 // parseGitConfig parses config data and returns its entries.
 func parseGitConfig(data []byte) ([]gitConfigEntry, bool) {
 	var entries []gitConfigEntry
-	if !parseGitConfigReader(bytes.NewReader(data), func(entry gitConfigEntry) {
+	if !parseGitConfigReader(bytes.NewReader(data), func(entry gitConfigEntry) bool {
 		entries = append(entries, entry)
+		return true
 	}) {
 		return nil, false
 	}
@@ -56,9 +57,10 @@ func parseGitConfig(data []byte) ([]gitConfigEntry, bool) {
 // without an input size limit. Git uses its own ASCII character classes, and C
 // strings for names and values. It reports false for a syntax error, which Git
 // treats as fatal for a config file, and gives each entry to entry when it is
-// not nil.
+// not nil. An entry result of false stops the parse, as an error from Git's
+// callback does, and the parse reports false.
 // Reference: https://github.com/git/git/blob/master/config.c
-func parseGitConfigReader(input io.Reader, entry func(gitConfigEntry)) bool {
+func parseGitConfigReader(input io.Reader, entry func(gitConfigEntry) bool) bool {
 	const bom = "\xef\xbb\xbf"
 	source := &gitConfigSource{reader: bufio.NewReader(input)}
 	if first, err := source.reader.Peek(1); err == nil && first[0] == bom[0] {
@@ -96,8 +98,8 @@ func parseGitConfigReader(input io.Reader, entry func(gitConfigEntry)) bool {
 				return false
 			}
 			name = key.key
-			if entry != nil {
-				entry(gitConfigEntry{name: cString(string(name)), value: key.value})
+			if entry != nil && !entry(gitConfigEntry{name: cString(string(name)), value: key.value}) {
+				return false
 			}
 		default:
 			return false
