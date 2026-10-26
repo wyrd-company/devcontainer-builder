@@ -1,0 +1,49 @@
+$schema: https://refinery.systems/ontology/decision-record
+name: Follow latest stable Git behavior
+relationships:
+  contextualizes:
+    - ../overview
+    - ../usage
+    - ../audits/upstream-options
+description: >-
+  The upstream CLI runs the installed Git executable to find the workspace
+  repository. Git releases can read the same configuration or path
+  differently: Git 2.32 opens the file that GIT_CONFIG_SYSTEM names as given,
+  and later releases remove its `.` and `..` components without reading the
+  file system first. Native discovery needs one compatibility target, so that
+  each version-dependent difference does not need its own target choice.
+considered-options:
+  1: >-
+    Follow the latest stable Git release available when behavior is implemented
+    or reviewed, with explicit documentation and tests for known differences
+    from older releases.
+  2: >-
+    Preserve older Git behavior for each version-dependent case, with explicit
+    differences from current upstream CLI behavior.
+  3: >-
+    Select behavior from the installed host Git version.
+decision-outcome:
+  chosen-option: 1
+  justification: >-
+    One current compatibility target keeps native Git behavior aligned with
+    the maintained upstream implementation. Each implementation or review
+    finds the latest stable release from the official Git release tags and
+    records the tested version and relevant build characteristics in
+    validation evidence. This is a development posture, not a runtime version
+    check or a minimum host Git requirement. Tests can read the host Git
+    version to declare a measured difference; the application does not. The
+    approved current-process credential boundary stays: the native engine and
+    library use the credentials that the process has and never regain
+    permissions that the caller dropped. The approved repository-extension
+    contract of Git 2.55 built without Rust stays in force; this posture does
+    not change it. Other deliberate differences from the latest stable Git
+    need explicit approval. Differential tests keep the real Git results and
+    name each approved or older-release difference explicitly.
+expected-outcomes:
+  positive:
+    - Version-dependent Git behavior has one target for development and review.
+    - Native discovery needs no host Git version probe or application subprocess.
+    - Known older-release differences stay visible in documentation and tests.
+  negative:
+    - Native behavior can differ from the upstream CLI when it runs an older installed Git.
+    - A new stable Git release can need compatibility work when its behavior is reviewed.
