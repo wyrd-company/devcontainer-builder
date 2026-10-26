@@ -637,12 +637,16 @@ primary Compose service.
 The Git root is found from the files in the workspace's parent folders; `dcb`
 does not run `git`. It reads these files with the credentials of its own
 process; see [Process credentials](/docs/dcb/overview#process-credentials).
+As Git does, discovery walks the physical parent folders, after symbolic links
+in the workspace folder's path are resolved. The Git root keeps the workspace
+folder's path, up as many folders as Git walked, as the upstream CLI resolves
+Git's relative result.
 `GIT_CEILING_DIRECTORIES` stops parent discovery before
 a listed ancestor. Entries must be absolute paths. Git resolves symlinks in
 entries until an empty path-list entry disables that resolution. Entries after
 that marker retain literal path components. A ceiling equal
 to the starting folder does not stop discovery. Parent discovery also stops at
-the first parent folder on another file system, unless
+the first physical parent folder on another file system, unless
 `GIT_DISCOVERY_ACROSS_FILESYSTEM` is true. Git compares device numbers, so a
 bind mount of the same file system is not a boundary. A value that Git does not
 read as a boolean gives no Git root. After a repository is found,
