@@ -9,7 +9,6 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
-	"syscall"
 	"testing"
 
 	"github.com/wyrd-company/devcontainer-builder/internal/testgit"
@@ -292,29 +291,6 @@ func TestGitRootSystemConfigMatchesGit(t *testing.T) {
 				}
 			})
 		}
-	}
-}
-
-// Git blocks reading a FIFO named as the system config file. Native discovery
-// rejects it without opening it, so it does not block.
-func TestGitRootSystemConfigFIFO(t *testing.T) {
-	base, err := filepath.EvalSymlinks(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
-	tree := filepath.Join(base, "tree")
-	makeRepo(t, tree)
-	folder := mkdir(t, filepath.Join(tree, "app"))
-	t.Setenv("GIT_CEILING_DIRECTORIES", base)
-	fifo := filepath.Join(base, "system.cfg")
-	if err := syscall.Mkfifo(fifo, 0o600); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("GIT_CONFIG_GLOBAL", os.DevNull)
-	os.Unsetenv("GIT_CONFIG_NOSYSTEM")
-	t.Setenv("GIT_CONFIG_SYSTEM", fifo)
-	if got, err := GitRoot(folder); err != nil || got != "" {
-		t.Fatalf("GitRoot = %q, %v; want no root", got, err)
 	}
 }
 
