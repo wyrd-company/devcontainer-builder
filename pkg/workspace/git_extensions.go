@@ -5,17 +5,17 @@ package workspace
 
 import "strings"
 
-// gitExtensions follows the extension handling of check_repo_format and
-// verify_repository_format in Git 2.55's setup.c. Git checks each
-// extensions.* value while it reads the config, whatever the repository
-// version. After the read, a version 1 repository rejects an extension Git
-// does not know, and a version 0 repository rejects a version 1 extension.
-// Reference: https://github.com/git/git/blob/master/setup.c
+// gitExtensions follows the extension handling of Git 2.55 built without
+// Rust: check_repo_format and verify_repository_format in setup.c, and
+// repo_set_compat_hash_algo in repository.c. Git checks each extensions.*
+// value while it reads the config, whatever the repository version. After the
+// read, a version 1 repository rejects an extension Git does not know, and a
+// version 0 repository rejects a version 1 extension.
+// Reference: https://github.com/git/git/blob/v2.55.0/setup.c
 type gitExtensions struct {
 	worktreeConfig bool
 	v1Only         bool
 	unknown        bool
-	objectFormat   string
 	compat         string
 }
 
@@ -42,7 +42,6 @@ func (e *gitExtensions) add(name string, value *string) bool {
 		if !gitHashName(value) {
 			return false
 		}
-		e.objectFormat = *value
 	case "compatobjectformat":
 		// Git accepts compatObjectFormat once only.
 		if !gitHashName(value) || e.compat != "" {
@@ -71,9 +70,8 @@ func (e *gitExtensions) add(name string, value *string) bool {
 }
 
 // verify follows verify_repository_format for a version that Git reads. A
-// compatibility hash equal to the object format also fails: Git built with
-// Rust stops on it, and Git built without Rust rejects any compatibility hash.
-// A different compatibility hash is accepted, as Git built with Rust does.
+// version 1 repository with a compatibility hash also fails: Git built without
+// Rust stops on any compatibility hash when it sets up the repository.
 func (e *gitExtensions) verify(version int) bool {
 	switch {
 	case version >= 1 && e.unknown:
@@ -81,11 +79,7 @@ func (e *gitExtensions) verify(version int) bool {
 	case version == 0 && e.v1Only:
 		return false
 	}
-	objectFormat := e.objectFormat
-	if objectFormat == "" {
-		objectFormat = "sha1"
-	}
-	return version < 1 || e.compat != objectFormat
+	return version < 1 || e.compat == ""
 }
 
 // gitHashName follows hash_algo_by_name: a case-sensitive algorithm name.
