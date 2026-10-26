@@ -669,8 +669,17 @@ As in Git, a FIFO read waits, with no time limit, until a writer opens the
 FIFO, and the file ends when the last writer closes it. Both reads follow
 `include.path` entries when Git reads them, as Git does. A relative include
 path starts at the including file's folder, `~/` starts at `HOME`, and `~name/`
-at the home folder of that account. Without cgo, as in release builds, `dcb`
-looks up accounts in `/etc/passwd` only. A `%(prefix)/` path followed by an
+at the home folder of that account. Git asks every account service that the
+host names, such as `/etc/passwd`, LDAP or systemd. The Linux release builds
+look up accounts in `/etc/passwd` only. They skip a `~name/` include whose
+account is not there, as if the included file were missing. Git reads that
+file for an account that another service knows, and rejects a name that no
+service knows. When Git rejects the name or that file, the upstream CLI mounts
+the workspace folder, and `dcb` mounts the Git root. This is an approved
+difference; see
+[Relation to the Dev Container CLI](/docs/dcb/overview#relation-to-the-dev-container-cli).
+Builds with cgo and macOS builds ask the account services, as Git does. A
+`%(prefix)/` path followed by an
 absolute path names that path, as in Git. Git reads another `%(prefix)/` path
 below the prefix that its build names; `dcb` does not read that file. A missing
 included file is skipped.
