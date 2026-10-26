@@ -651,6 +651,9 @@ invalid gitfile target, gives no Git root; parent discovery does not replace it.
 Gitfiles must start with literal `gitdir:` followed by one space and a repository
 path. Only final CR and LF bytes are removed; other whitespace and interior
 newlines belong to the path. Gitfiles larger than 1 MiB give no Git root.
+A relative gitfile target starts at the gitfile's folder and keeps its path
+components, as Git does: a symbolic link is resolved before a later `..`, and
+a regular file or a missing folder before `..` gives no Git root.
 Repository admission checks the first 255 bytes of `HEAD` for a `ref:` target
 starting with `refs/` or a 40-digit hexadecimal object ID. A symbolic-link
 `HEAD` must point to a path starting with `refs/`; its target need not exist.
