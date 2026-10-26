@@ -638,6 +638,9 @@ The Git root is found from the files in the workspace's parent folders and
 Git's system and global config files; `dcb` does not run `git`. It reads these
 files with the credentials of its own process; see
 [Process credentials](/docs/dcb/overview#process-credentials).
+Discovery follows the latest stable Git release, except where this section
+names another Git release. `dcb` does not check the version of the installed
+`git`; the upstream CLI runs it, so an older Git can mount a different folder.
 As Git does when it starts, `dcb` first reads the system config file and then
 the global config files. The system file is the file that `GIT_CONFIG_SYSTEM`
 names, unless `GIT_CONFIG_NOSYSTEM` is true; a `GIT_CONFIG_NOSYSTEM` value
@@ -645,7 +648,10 @@ that Git does not read as a boolean gives no Git root. As Git does, `dcb`
 removes `.` components and repeated separators from `GIT_CONFIG_SYSTEM`, and
 removes each `..` component with the component before it, without reading the
 file system. When a `..` component has no component before it, the path keeps
-the changes made until then. Without `GIT_CONFIG_SYSTEM`, Git reads the system
+the changes made until then. Git 2.32 opens `GIT_CONFIG_SYSTEM` as given, so
+`link/../system.cfg` names a file beside the folder that `link` points to, and
+the upstream CLI with that Git can mount a different folder.
+Without `GIT_CONFIG_SYSTEM`, Git reads the system
 file that its build names, such as `/etc/gitconfig`; `dcb` does not read that
 file. The global config files are the file that `GIT_CONFIG_GLOBAL` names, or
 else `$XDG_CONFIG_HOME/git/config`, or `$HOME/.config/git/config` when

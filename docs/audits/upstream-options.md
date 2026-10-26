@@ -80,11 +80,16 @@ authorize changing the default. The approved process-credential requirement
 governs native Git discovery: it reads with the credentials of its own process,
 not those of a started `git`; see
 [Process credentials](../overview.md#process-credentials). It removes no option.
-Native Git discovery applies the repository format rules of Git 2.55 built
-without Rust, which Bob approved, whatever Git is installed; it does not check
-the host Git's version or start `git`. Other Git versions and builds accept
-other repository extensions, so the upstream CLI can mount a different folder;
-see [Workspace mounts](../usage.md#workspace-mounts-and-container-selection).
+Native Git discovery follows the latest stable Git release, which Bob
+approved in
+[Follow latest stable Git behavior](../decisions/follow-latest-stable-git-behavior.yml).
+It applies the repository format rules of Git 2.55 built without Rust, which
+Bob approved, whatever Git is installed; it does not check the host Git's
+version or start `git`. Other Git versions and builds read some configuration
+paths differently and accept other repository extensions, so the upstream CLI
+can mount a different folder; see
+[Workspace mounts](../usage.md#workspace-mounts-and-container-selection).
+Another deliberate difference from the latest stable Git needs Bob's approval.
 The specification recommends mounting the repository root but does not define
 how it is found or what happens when Git rejects the repository. Whether to keep
 upstream's Git-dependent default, mount the requested folder by default, or

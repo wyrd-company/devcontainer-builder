@@ -53,7 +53,7 @@ Differences from upstream:
 | Adds `down`, `inspect`, `generate`, `server`, and `skills`. | Adds `outdated`, `upgrade`, and `templates`. |
 | `dcb features` stages the features of a configuration. | `features` tests, packages, and publishes features. |
 | Finds the Git root with the credentials of its own process. See [Process credentials](#process-credentials). | Runs `git`, which can start with different credentials. |
-| Finds the Git root by the repository format rules of Git 2.55 built without Rust. See [Workspace mounts](/docs/dcb/usage#workspace-mounts-and-container-selection). | Runs the installed `git`, whose version and build decide which repository formats it accepts. |
+| Finds the Git root as the latest stable Git release does, with the repository format rules of Git 2.55 built without Rust. See [Workspace mounts](/docs/dcb/usage#workspace-mounts-and-container-selection) and [the decision](https://github.com/wyrd-company/devcontainer-builder/blob/main/docs/decisions/follow-latest-stable-git-behavior.yml). | Runs the installed `git`, whose version and build decide which configuration and repository formats it accepts. |
 
 ### Process credentials
 
