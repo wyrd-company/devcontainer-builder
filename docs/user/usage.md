@@ -670,13 +670,19 @@ FIFO, and the file ends when the last writer closes it. Both reads follow
 `include.path` entries when Git reads them, as Git does. A relative include
 path starts at the including file's folder, `~/` starts at `HOME`, and `~name/`
 at the home folder of that account. Without cgo, as in release builds, `dcb`
-looks up accounts in `/etc/passwd` only. A missing included file is skipped.
+looks up accounts in `/etc/passwd` only. A `%(prefix)/` path followed by an
+absolute path names that path, as in Git. Git reads another `%(prefix)/` path
+below the prefix that its build names; `dcb` does not read that file. A missing
+included file is skipped.
 An include without a value, a `~` path that cannot be expanded, an access
 failure other than a missing file, a file that Git cannot open, such as a
-folder, a syntax error, and more than 10 nested includes give no Git root. Git
-reads a `%(prefix)/` path below the prefix that its build names; `dcb` does not
-read that file. The read after setup then also reads the repository config
-files of the format check, described below, with their includes.
+folder, a syntax error, and more than 10 nested includes give no Git root. As
+in Git, a relative config file name, and a relative include in that file, is
+looked up from the folder that the read starts at, so the length of that
+folder's path does not limit it. On macOS, if the process cannot read that
+folder, and on hosts other than Linux and macOS, `dcb` joins the name to the
+folder's path instead. The read after setup then also reads the repository
+config files of the format check, described below, with their includes.
 `includeIf` conditions, typed values, and the command-line config are not
 applied.
 As Git does, discovery walks the physical parent folders, after symbolic links
