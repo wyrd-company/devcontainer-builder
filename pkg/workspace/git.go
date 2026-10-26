@@ -15,10 +15,11 @@ import (
 
 // GitRoot returns the Git working tree selected from folder,
 // or "" when no repository is found or its working tree is invalid. It follows Git's discovery without
-// running git. Git reads its system config file named by GIT_CONFIG_SYSTEM and
-// its global config files when it starts and again from its working folder
-// after setup, and a file that it rejects gives no root. Walking up the physical parents of folder, as Git does from
-// its cwd, a .git folder that is a repository marks the root; the root keeps
+// running git. Git reads the system config file that GIT_CONFIG_SYSTEM names,
+// unless GIT_CONFIG_NOSYSTEM is true, and its global config files when it
+// starts and again from its working folder after setup, and a file or value
+// that it rejects gives no root. Walking up the physical parents of folder, as
+// Git does from its cwd, a .git folder that is a repository marks the root; the root keeps
 // folder's lexical names up the same number of steps, as upstream's resolved
 // `git rev-parse --show-cdup` result does; a .git file marks the root when its gitdir is a
 // repository, and otherwise ends discovery, as Git refuses an invalid gitfile.
