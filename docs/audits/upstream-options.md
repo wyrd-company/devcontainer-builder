@@ -251,6 +251,7 @@ features, dotfiles, environment probing and version support.
 accepts `<target>`, preserves existing output unless
 force is explicit, and writes plain tar archives with the upstream `.tgz` name.
 Single archives use the metadata ID; collection archives use folder names.
+An ID cannot place an archive outside the output directory.
 Nonempty `legacyIds` adds `currentId` in packaged metadata without source edits.
 The CLI retains dcb's JSON-result contract. `TestPackageSingle`,
 `TestPackageCollection`, `TestPackageOutput`, and `TestFeaturesPackageCommand`

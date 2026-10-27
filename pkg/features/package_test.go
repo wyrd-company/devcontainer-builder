@@ -278,6 +278,26 @@ func TestPackageCollectionFailureKeepsEarlierArchives(t *testing.T) {
 	}
 }
 
+func TestPackageRejectsArchiveTraversal(t *testing.T) {
+	root := t.TempDir()
+	source, out, outside := filepath.Join(root, "input"), filepath.Join(root, "output"), filepath.Join(root, "outside.tgz")
+	packageFixture(t, source, strings.Replace(packageMetadata, "sample", "../../../outside", 1), true)
+	if err := os.WriteFile(outside, []byte("keep"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, err := Package(t.Context(), PackageOptions{Target: source, OutputDir: out})
+	if err == nil || !strings.Contains(err.Error(), "outside output directory") {
+		t.Fatalf("traversal error = %v", err)
+	}
+	data, err := os.ReadFile(outside)
+	if err != nil || string(data) != "keep" {
+		t.Fatal("archive escaped the selected output directory")
+	}
+	if _, err := os.Stat(filepath.Join(out, "devcontainer-collection.json")); !os.IsNotExist(err) {
+		t.Fatal("invalid archive path published collection metadata")
+	}
+}
+
 func TestPackageOutput(t *testing.T) {
 	t.Chdir(t.TempDir())
 	packageFixture(t, ".", packageMetadata, true)
