@@ -82,6 +82,25 @@ func (a *application) featuresDocumentationCommand() *cobra.Command {
 var documentationAttachedNumber = regexp.MustCompile(`^-?\d+(\.\d*)?(e-?\d+)?$`)
 var documentationWord = regexp.MustCompile(`^[A-Za-z0-9_]$`)
 
+func documentationDottedFlag(cmd *cobra.Command, arg string) *pflag.Flag {
+	if cmd.Name() != "generate-docs" || cmd.Parent() == nil || cmd.Parent().Name() != "features" {
+		return nil
+	}
+	name, _, _ := strings.Cut(arg, "=")
+	var flag *pflag.Flag
+	if strings.HasPrefix(name, "--") {
+		if key, _, dotted := strings.Cut(name[2:], "."); dotted {
+			flag = cmd.Flags().Lookup(key)
+		}
+	} else if len(name) > 3 && name[0] == '-' && name[2] == '.' {
+		flag = cmd.Flags().ShorthandLookup(name[1:2])
+	}
+	if flag != nil && flag.Annotations["documentation-no-value"] != nil {
+		return flag
+	}
+	return nil
+}
+
 // yargs expands a short group even when an earlier letter is a string option.
 // Only numeric or punctuation suffixes attach to that letter; the final flag
 // uses the same following-token rules as its ungrouped spelling.

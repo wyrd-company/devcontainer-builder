@@ -73,6 +73,14 @@ func documentationUnits(s string) []uint16 {
 	return units
 }
 
+func documentationCanonical(s string) string {
+	var b strings.Builder
+	for _, unit := range documentationUnits(s) {
+		documentationWriteRune(&b, rune(unit))
+	}
+	return b.String()
+}
+
 type documentationParser struct {
 	data    string
 	at      int
@@ -232,7 +240,7 @@ func (p *documentationParser) str() string {
 			}
 		}
 	}
-	return b.String()
+	return documentationCanonical(b.String())
 }
 func (p *documentationParser) recover(end byte) {
 	for p.token != 0 && p.token != end && p.token != ',' {
