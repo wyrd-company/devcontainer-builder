@@ -519,6 +519,9 @@ the command does not append `src` or `test`. Hidden entries are skipped.
 A string flag without a value uses its declared default: an empty namespace or
 GitHub owner/repository, `.` for the project folder, and `ghcr.io` for the registry.
 An explicit empty string stays empty.
+Grouped short flags use the upstream defaults for earlier flags in the group.
+The camel-case aliases `--projectFolder`, `--githubOwner`, `--githubRepo`, and
+`--logLevel` select the same values as their hyphenated names.
 The example reference uses the Feature ID and the major part of its version,
 or `latest` when the version is absent. Supply both `--github-owner` and
 `--github-repo` to link metadata to that repository's `main` branch.
@@ -534,6 +537,7 @@ replacement for malformed byte sequences. Object values retain JavaScript own
 property and prototype conversion, including operation errors when conversion
 fails. A list's length property controls whether its map operation is attempted;
 invalid map operations also fail before replacing that entry's README.
+String-valued options enumerate UTF-16 indices, as upstream.
 
 Existing READMEs are replaced. An existing README symlink is unlinked; a dangling
 symlink is followed, as upstream. Source metadata and notes stay unchanged.

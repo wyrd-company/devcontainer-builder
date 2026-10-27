@@ -31,6 +31,11 @@ func booleanOptionArgs(root *cobra.Command, args []string) []string {
 		}
 		// Cobra also merges inherited persistent flags here.
 		cmd.InitDefaultHelpFlag()
+		if group, consumed, handled := documentationGroupedArgs(cmd, arg, args[i+1:]); handled {
+			// Revisit expanded tokens so the last flag can consume its value.
+			args = append(append(append([]string{}, args[:i]...), group...), args[i+1+consumed:]...)
+			arg = args[i]
+		}
 		var flag *pflag.Flag
 		name, _, equals := strings.Cut(arg, "=")
 		if strings.HasPrefix(name, "--") {

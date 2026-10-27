@@ -22,7 +22,7 @@ var foreignFlags = map[string]bool{"--docker-path": true, "--entrypoint": true, 
 
 var (
 	inlineCode = regexp.MustCompile("`([^`\n]+)`")
-	flagSpan   = regexp.MustCompile(`^--[a-z][a-z-]*`)
+	flagSpan   = regexp.MustCompile(`^--[a-zA-Z][a-zA-Z-]*`)
 	envPrefix  = regexp.MustCompile(`^[A-Z_][A-Z0-9_]*=\S*$`)
 )
 
@@ -109,6 +109,8 @@ func TestCheckCommand(t *testing.T) {
 		{"dcb build --load=false", true},
 		{"dcb up --push", false},
 		{"dcb skills --dir x", false},
+		{"dcb features generate-docs --namespace example/collection --projectFolder .", true},
+		{"dcb features generate-docs --namespace example/collection --projectMissing .", false},
 	} {
 		problems := checkCommand(root, commandWords(tc.line))
 		if (len(problems) == 0) != tc.ok {

@@ -235,11 +235,14 @@ replacement preserves the pinned symlink and mode behavior. Valueless string
 options use upstream defaults; explicit empty values stay empty. UTF-8 maximal
 subparts, malformed-fraction recovery, list-length coercion, and object/prototype
 conversion follow the actual pinned command, including conversion/map failures.
+String option indices, grouped short flags, and camel-case option aliases also
+follow the pinned command.
 The CLI retains dcb's
 JSON result, global diagnostic controls, and invocation-error exit 2. Upstream has
 no stdout result and invocation-error exit 1. Tests: `TestGenerateDocumentationPinnedReadmes`,
 `TestGenerateDocumentationFilesystem`, `TestGenerateDocumentationConversionReadmes`,
-`TestFeaturesDocumentationCommand`, `TestFeaturesDocumentationOptionalStringValues`.
+`TestFeaturesDocumentationCommand`, `TestFeaturesDocumentationOptionalStringValues`,
+`TestGenerateDocumentationStringOptions`, `TestFeaturesDocumentationGroupedAndCamelFlags`.
 
 | Upstream option | dcb equivalent | Disposition | Unit | Reason / source |
 | --- | --- | --- | --- | --- |

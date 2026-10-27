@@ -323,6 +323,10 @@ func documentationGet(value any, key string) any {
 		if key == "length" {
 			return float64(len(utf16.Encode([]rune(v))))
 		}
+		units := utf16.Encode([]rune(v))
+		if i, err := strconv.Atoi(key); err == nil && i >= 0 && i < len(units) && strconv.Itoa(i) == key {
+			return string(utf16.Decode(units[i : i+1]))
+		}
 	}
 	return documentationUndefined
 }
