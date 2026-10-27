@@ -51,7 +51,7 @@ Differences from upstream:
 | Docker only. | Docker, or Podman through `--docker-path`. |
 | Can install the VS Code server into the image at build time. | The editor installs the server when it attaches. |
 | Adds `down`, `inspect`, `generate`, `server`, and `skills`. | Adds `outdated`, `upgrade`, and `templates`. |
-| `dcb features` stages the features of a configuration. | `features` tests, packages, and publishes features. |
+| `dcb features` stages configuration Features; `features package` packages local Features. | `features` also tests, publishes, and reports Feature information. |
 | Finds the Git root with the credentials of its own process. See [Process credentials](#process-credentials). | Runs `git`, which can start with different credentials. |
 | Finds the Git root as the latest stable Git release does, with the repository format rules of Git 2.55 built without Rust. See [Workspace mounts](/docs/dcb/usage#workspace-mounts-and-container-selection) and [the decision](https://github.com/wyrd-company/devcontainer-builder/blob/main/docs/decisions/follow-latest-stable-git-behavior.yml). | Runs the installed `git`, whose version and build decide which configuration and repository formats it accepts. |
 | Linux release builds look up accounts in `/etc/passwd` only. They skip an `include.path` of `~name/` whose account is not there, as if the included file were missing. Builds with cgo and macOS builds ask the account services. Bob approved this difference. See [Workspace mounts](/docs/dcb/usage#workspace-mounts-and-container-selection). | Runs `git`, which asks every account service of the host. It rejects a name that no service knows, and an included file that it cannot parse, so the upstream CLI finds no Git root. |

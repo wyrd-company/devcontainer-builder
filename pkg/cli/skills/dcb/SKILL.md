@@ -69,8 +69,15 @@ Build or inspect build artifacts:
 dcb build --workspace-folder . --image-name example:dev
 dcb generate --workspace-folder . --work-dir ./generated
 dcb features --workspace-folder . --out ./staged-features
+dcb features package ./src --output-folder ./packaged
 dcb server --out ./server --platform linux/amd64
 ```
+
+`features package <target>` packages local Features without Docker. The target
+is required, and output defaults to `./output`. An existing
+output directory is refused unless `-f` removes it first. Use `-o` to choose the
+output folder. The result contains Feature metadata; archives and
+`devcontainer-collection.json` stay in the output folder.
 
 `build` loads into Docker by default and returns an `imageName` array.
 Use `--push` for registry export, `--platform` for target platforms,

@@ -49,6 +49,7 @@ dcb down --workspace-folder .
 | `dcb set-up` | Runs the lifecycle commands of a configuration in a container that `dcb` did not create. |
 | `dcb generate` | Writes the generated Dockerfile and build context, and does not build. |
 | `dcb features` | Resolves and downloads the configuration's features into a directory. |
+| `dcb features package <target>` | Packages a local Feature or collection as archives with collection metadata. |
 | `dcb server` | Downloads a VS Code server archive. |
 | `dcb skills` | Prints or installs the bundled agent skill. |
 | `dcb version` | Returns the `dcb` version. `dcb --version`, or `--version` on any command, returns the same result in place of the command. |
@@ -68,7 +69,7 @@ These upstream command families are not yet supported:
 
 - [`outdated`](https://github.com/wyrd-company/devcontainer-builder/issues/20)
 - [`upgrade`](https://github.com/wyrd-company/devcontainer-builder/issues/21)
-- [Feature authoring commands under `features`](https://github.com/wyrd-company/devcontainer-builder/issues/22)
+- [Feature authoring commands other than `features package`](https://github.com/wyrd-company/devcontainer-builder/issues/22)
 - [`templates`](https://github.com/wyrd-company/devcontainer-builder/issues/23)
 
 ### Workspace flags
@@ -474,6 +475,35 @@ dcb features --workspace-folder . --out ./staged-features
 ```bash
 dcb server --out ./server --platform linux/amd64
 ```
+
+### Package local Features
+
+```sh
+dcb features package ./src --output-folder ./packaged
+dcb features package ./src/sample -o ./packaged -f
+```
+
+The target is required. A target with
+`devcontainer-feature.json` is one Feature; otherwise its non-hidden child
+folders with that file form a collection. Collection entries must have
+`install.sh`. Each Feature must have `id`, `version`, and `name` metadata.
+Other metadata properties and source files are retained. Nonempty `legacyIds`
+adds `currentId` with the Feature ID to the packaged metadata. Source files
+are unchanged.
+
+`--output-folder` (`-o`) defaults to `./output`. An existing output directory
+causes an operation failure. `--force-clean-output-folder` (`-f`) removes it
+before packaging. An error can leave archives from earlier collection entries;
+the collection metadata is written only after all entries succeed.
+
+The output contains `devcontainer-collection.json` and
+`devcontainer-feature-<id>.tgz` for a single Feature, or
+`devcontainer-feature-<folder>.tgz` for each collection entry. These are plain
+tar archives with the upstream `.tgz` name. File bytes, modes, and symlinks are
+preserved. `dcb` returns its usual JSON result with a `features` metadata array;
+upstream logs progress without a stdout result. Packaging uses local files and
+does not need Docker or a registry. See `TestPackageSingle`,
+`TestPackageCollection`, and `TestFeaturesPackageCommand` for the contract checks.
 
 ## Agent skills
 
