@@ -22,9 +22,9 @@ import (
 // first. Both reads follow include.path entries. includeIf conditions, typed
 // values and the command-line config are not applied.
 // Reference: https://github.com/git/git/blob/master/config.c
-func gitGlobalConfigRead(folder *gitConfigCwd, second bool) bool {
+func gitGlobalConfigRead(folder *gitConfigCwd, second bool, prefix string) bool {
 	for _, path := range gitGlobalConfigPaths() {
-		if !gitConfigFileRead(folder, path, true, second) {
+		if !gitConfigFileRead(folder, path, true, second, prefix) {
 			return false
 		}
 	}
@@ -34,13 +34,13 @@ func gitGlobalConfigRead(folder *gitConfigCwd, second bool) bool {
 // gitConfigFileRead follows one read of the config file at path, from folder,
 // and reports false when the read stops the probe. eaccesOK skips a file that
 // access(2) denies. The second read, after setup, also stops on a file that
-// Git cannot open.
-func gitConfigFileRead(folder *gitConfigCwd, path string, eaccesOK, second bool) bool {
+// Git cannot open. prefix is the prefix of Git's build for include paths.
+func gitConfigFileRead(folder *gitConfigCwd, path string, eaccesOK, second bool, prefix string) bool {
 	if path == "" {
 		// access(2) reports an empty path missing.
 		return true
 	}
-	switch gitConfigFile(folder, path, eaccesOK) {
+	switch gitConfigFile(folder, path, eaccesOK, prefix) {
 	case gitConfigFileRejected:
 		return false
 	case gitConfigFileUnopened:
@@ -89,13 +89,13 @@ func gitGlobalConfigPaths() []string {
 // as Git reads it, and a read error ends the file. A FIFO is read as Git
 // reads it: the open waits for a writer, and the file ends when its last
 // writer closes it. Git follows include.path entries, as gitConfigInclude
-// does. A relative path starts at folder, Git's working folder.
-func gitConfigFile(folder *gitConfigCwd, path string, eaccesOK bool) gitConfigFileResult {
+// does, with prefix. A relative path starts at folder, Git's working folder.
+func gitConfigFile(folder *gitConfigCwd, path string, eaccesOK bool, prefix string) gitConfigFileResult {
 	if err := folder.access(path); err != nil {
 		if errors.Is(err, fs.ErrNotExist) || errors.Is(err, syscall.ENOTDIR) || eaccesOK && errors.Is(err, syscall.EACCES) {
 			return gitConfigFileAdmitted
 		}
 		return gitConfigFileRejected
 	}
-	return gitConfigParse(folder, path, 0)
+	return gitConfigParse(folder, path, 0, prefix)
 }
