@@ -716,13 +716,14 @@ These entries also follow `include.path`, with the account and prefix rules
 above. The expanded path must be absolute: a relative include has no file
 whose folder can be its base, and gives no Git root. A relative include
 inside that file starts at that file's folder. A missing absolute include
-is skipped. After the full read finishes, any `core.ignorecase`,
-`core.filemode`, `core.symlinks`, `core.trustctime`, `core.quotepath`,
-`core.ignorestat`, `core.sparseCheckout`, `core.sparseCheckoutCone`,
-`core.protectHFS`, `core.protectNTFS`, `core.precomposeUnicode`,
-`core.fsyncObjectFiles` or `core.safecrlf` value that Git cannot read as a boolean
-gives no Git root, even if a later value is valid. `core.safecrlf` also accepts
-`warn`, without regard to case.
+is skipped. After the full read finishes, any `core.ignorecase`, `core.filemode`,
+`core.symlinks`, `core.trustctime`, `core.quotepath`, `core.ignorestat`,
+`core.sparseCheckout`, `core.sparseCheckoutCone`, `core.protectHFS`,
+`core.protectNTFS`, `core.precomposeUnicode`, `core.fsyncObjectFiles`,
+`core.safecrlf` or `core.autocrlf` value that Git cannot read as a boolean
+gives no Git root, even if a later value is valid. `core.safecrlf` also
+accepts `warn`, without regard to case. `core.autocrlf` also accepts `input`,
+without regard to case.
 A key without a value is true; an empty value is false. Boolean words and
 integers follow Git's boolean rules. The initial read and repository-format
 read do not apply these keys' types. Other typed values from the full config
