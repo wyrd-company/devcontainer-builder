@@ -121,8 +121,9 @@ command-line config environment (`GIT_CONFIG_COUNT` pairs and
 an invalid `core.ignorecase`, `core.filemode`, `core.symlinks`,
 `core.trustctime`, `core.quotepath`, `core.ignorestat`, `core.sparseCheckout`,
 `core.sparseCheckoutCone`, `core.protectHFS`, `core.protectNTFS`,
-`core.precomposeUnicode` or `core.fsyncObjectFiles` boolean gives no Git root,
-so `Resolve` mounts the requested folder.
+`core.precomposeUnicode`, `core.fsyncObjectFiles` or `core.safecrlf` boolean gives
+no Git root, so `Resolve` mounts the requested folder. `core.safecrlf` also
+accepts `warn`, without regard to case.
 See [Workspace mounts](/docs/dcb/usage#workspace-mounts-and-container-selection).
 
 ## Registry credentials
