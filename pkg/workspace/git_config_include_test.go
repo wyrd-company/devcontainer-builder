@@ -117,7 +117,7 @@ func includeChain(n int, last string) map[string]string {
 	return files
 }
 
-var includeCases = append([]includeCase{
+var includeCases = append(append([]includeCase{
 	{name: "global-valid", setup: includeGlobal(includeLine("inc.cfg"), map[string]string{"global/inc.cfg": globalConfigValid}), ok: true},
 	{name: "global-syntax", setup: includeGlobal(includeLine("inc.cfg"), map[string]string{"global/inc.cfg": globalConfigBroken})},
 	{name: "global-absolute-syntax", setup: func(t *testing.T, f includeFixture) map[string]*string {
@@ -306,7 +306,7 @@ var includeCases = append([]includeCase{
 		writeFile(t, filepath.Join(f.admin, "inc.cfg"), globalConfigBroken)
 		return nil
 	}, ok: true},
-}, prefixIncludeCases...)
+}, prefixIncludeCases...), commandConfigCases...)
 
 // includeCaseVars selects no system or global file, so that only the case
 // selects one.
@@ -314,6 +314,11 @@ func includeCaseVars(base string, vars map[string]*string) map[string]*string {
 	all := map[string]*string{
 		"GIT_CONFIG_NOSYSTEM": globalValue("1"), "GIT_CONFIG_SYSTEM": nil,
 		"GIT_CONFIG_GLOBAL": globalValue(os.DevNull), "GIT_CEILING_DIRECTORIES": &base,
+		"GIT_CONFIG_COUNT": nil, "GIT_CONFIG_PARAMETERS": nil,
+	}
+	for i := range 4 {
+		all[fmt.Sprintf("GIT_CONFIG_KEY_%d", i)] = nil
+		all[fmt.Sprintf("GIT_CONFIG_VALUE_%d", i)] = nil
 	}
 	for name, value := range vars {
 		all[name] = value
@@ -486,6 +491,9 @@ func TestGitRootConfigIncludeMatchesGit(t *testing.T) {
 					caseVars[name] = value
 				}
 				env = applyGlobalEnv(t, env, includeCaseVars(base, caseVars))
+				if strings.HasPrefix(c.name, "command-") {
+					assertCommandConfigGitExit(t, git, folder, env, c.ok)
+				}
 				want := ""
 				if c.ok {
 					want = control
