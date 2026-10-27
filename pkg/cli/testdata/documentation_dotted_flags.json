@@ -1,0 +1,144 @@
+{
+  "Cases": [
+    {
+      "Name": "flags-0",
+      "Args": [
+        "--namespace.foo=bar"
+      ],
+      "Exit": 0,
+      "Readme": "\n# sample\n\n\n\n## Example Usage\n\n```json\n\"features\": {\n    \"ghcr.io/[object Object]/sample:latest\": {}\n}\n```\n\n\n\n\n\n---\n\n_Note: This file was auto-generated from the [devcontainer-feature.json](devcontainer-feature.json).  Add additional notes to a `NOTES.md`._\n"
+    },
+    {
+      "Name": "flags-1",
+      "Args": [
+        "--namespace.foo",
+        "bar"
+      ],
+      "Exit": 0,
+      "Readme": "\n# sample\n\n\n\n## Example Usage\n\n```json\n\"features\": {\n    \"ghcr.io/[object Object]/sample:latest\": {}\n}\n```\n\n\n\n\n\n---\n\n_Note: This file was auto-generated from the [devcontainer-feature.json](devcontainer-feature.json).  Add additional notes to a `NOTES.md`._\n"
+    },
+    {
+      "Name": "flags-2",
+      "Args": [
+        "--namespace",
+        "example/collection",
+        "--registry.foo=bar"
+      ],
+      "Exit": 0,
+      "Readme": "\n# sample\n\n\n\n## Example Usage\n\n```json\n\"features\": {\n    \"[object Object]/example/collection/sample:latest\": {}\n}\n```\n\n\n\n\n\n---\n\n_Note: This file was auto-generated from the [devcontainer-feature.json](devcontainer-feature.json).  Add additional notes to a `NOTES.md`._\n"
+    },
+    {
+      "Name": "flags-3",
+      "Args": [
+        "-n",
+        "example/collection",
+        "--githubOwner.foo=bar",
+        "--githubRepo",
+        "example-repo"
+      ],
+      "Exit": 0,
+      "Readme": "\n# sample\n\n\n\n## Example Usage\n\n```json\n\"features\": {\n    \"ghcr.io/example/collection/sample:latest\": {}\n}\n```\n\n\n\n\n\n---\n\n_Note: This file was auto-generated from the [devcontainer-feature.json](https://github.com/[object Object]/example-repo/blob/main/./sample/devcontainer-feature.json).  Add additional notes to a `NOTES.md`._\n"
+    },
+    {
+      "Name": "flags-4",
+      "Args": [
+        "-n",
+        "example/collection",
+        "--projectFolder.foo=bar"
+      ],
+      "Exit": 1,
+      "Readme": "old readme"
+    },
+    {
+      "Name": "flags-5",
+      "Args": [
+        "-n",
+        "example/collection",
+        "--project-folder.foo=bar"
+      ],
+      "Exit": 1,
+      "Readme": "old readme"
+    },
+    {
+      "Name": "flags-6",
+      "Args": [
+        "-n",
+        "example/collection",
+        "--github-owner.foo=bar"
+      ],
+      "Exit": 0,
+      "Readme": "\n# sample\n\n\n\n## Example Usage\n\n```json\n\"features\": {\n    \"ghcr.io/example/collection/sample:latest\": {}\n}\n```\n\n\n\n\n\n---\n\n_Note: This file was auto-generated from the [devcontainer-feature.json](devcontainer-feature.json).  Add additional notes to a `NOTES.md`._\n"
+    },
+    {
+      "Name": "flags-7",
+      "Args": [
+        "-n",
+        "example/collection",
+        "-r.5"
+      ],
+      "Exit": 0,
+      "Readme": "\n# sample\n\n\n\n## Example Usage\n\n```json\n\"features\": {\n    \"[object Object]/example/collection/sample:latest\": {}\n}\n```\n\n\n\n\n\n---\n\n_Note: This file was auto-generated from the [devcontainer-feature.json](devcontainer-feature.json).  Add additional notes to a `NOTES.md`._\n"
+    },
+    {
+      "Name": "flags-8",
+      "Args": [
+        "-n",
+        "example/collection",
+        "-rn.5"
+      ],
+      "Exit": 0,
+      "Readme": "\n# sample\n\n\n\n## Example Usage\n\n```json\n\"features\": {\n    \"ghcr.io/example/collection,.5/sample:latest\": {}\n}\n```\n\n\n\n\n\n---\n\n_Note: This file was auto-generated from the [devcontainer-feature.json](devcontainer-feature.json).  Add additional notes to a `NOTES.md`._\n"
+    },
+    {
+      "Name": "flags-9",
+      "Args": [
+        "-n",
+        "example/collection",
+        "-rn.5",
+        "value"
+      ],
+      "Exit": 2,
+      "Readme": "old readme"
+    },
+    {
+      "Name": "flags-10",
+      "Args": [
+        "-n",
+        "example/collection",
+        "-r1."
+      ],
+      "Exit": 0,
+      "Readme": "\n# sample\n\n\n\n## Example Usage\n\n```json\n\"features\": {\n    \"1./example/collection/sample:latest\": {}\n}\n```\n\n\n\n\n\n---\n\n_Note: This file was auto-generated from the [devcontainer-feature.json](devcontainer-feature.json).  Add additional notes to a `NOTES.md`._\n"
+    },
+    {
+      "Name": "flags-11",
+      "Args": [
+        "-n",
+        "example/collection",
+        "-r1e+2"
+      ],
+      "Exit": 2,
+      "Readme": "old readme"
+    },
+    {
+      "Name": "flags-12",
+      "Args": [
+        "-n",
+        "example/collection",
+        "-r+1"
+      ],
+      "Exit": 0,
+      "Readme": "\n# sample\n\n\n\n## Example Usage\n\n```json\n\"features\": {\n    \"+1/example/collection/sample:latest\": {}\n}\n```\n\n\n\n\n\n---\n\n_Note: This file was auto-generated from the [devcontainer-feature.json](devcontainer-feature.json).  Add additional notes to a `NOTES.md`._\n"
+    },
+    {
+      "Name": "flags-13",
+      "Args": [
+        "-n",
+        "example/collection",
+        "--logLevel=debug"
+      ],
+      "Exit": 0,
+      "Readme": "\n# sample\n\n\n\n## Example Usage\n\n```json\n\"features\": {\n    \"ghcr.io/example/collection/sample:latest\": {}\n}\n```\n\n\n\n\n\n---\n\n_Note: This file was auto-generated from the [devcontainer-feature.json](devcontainer-feature.json).  Add additional notes to a `NOTES.md`._\n"
+    }
+  ]
+}
