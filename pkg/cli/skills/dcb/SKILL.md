@@ -70,6 +70,7 @@ dcb build --workspace-folder . --image-name example:dev
 dcb generate --workspace-folder . --work-dir ./generated
 dcb features --workspace-folder . --out ./staged-features
 dcb features package ./src --output-folder ./packaged
+dcb features generate-docs -p ./src -n example/collection
 dcb server --out ./server --platform linux/amd64
 ```
 
@@ -78,6 +79,14 @@ is required, and output defaults to `./output`. An existing
 output directory is refused unless `-f` removes it first. Use `-o` to choose the
 output folder. The result contains Feature metadata; archives and
 `devcontainer-collection.json` stay in the output folder.
+
+`features generate-docs` writes README.md in visible Feature child folders of
+`--project-folder` (`-p`, default `.`). `--namespace` (`-n`) is required;
+`--registry` (`-r`) defaults to `ghcr.io`. Supply both `--github-owner` and
+`--github-repo` for metadata links. It includes options, VS Code extensions,
+NOTES.md, and deprecation/legacy-ID notices. Missing metadata or IDs are skipped
+with diagnostics; other failures can leave partial results. It replaces existing
+READMEs and returns the normal JSON result. It needs no Docker or registry.
 
 `build` loads into Docker by default and returns an `imageName` array.
 Use `--push` for registry export, `--platform` for target platforms,

@@ -49,6 +49,7 @@ dcb down --workspace-folder .
 | `dcb set-up` | Runs the lifecycle commands of a configuration in a container that `dcb` did not create. |
 | `dcb generate` | Writes the generated Dockerfile and build context, and does not build. |
 | `dcb features` | Resolves and downloads the configuration's features into a directory. |
+| `dcb features generate-docs` | Generates README files from local Feature metadata and notes. |
 | `dcb features package <target>` | Packages a local Feature or collection as archives with collection metadata. |
 | `dcb server` | Downloads a VS Code server archive. |
 | `dcb skills` | Prints or installs the bundled agent skill. |
@@ -69,7 +70,7 @@ These upstream command families are not yet supported:
 
 - [`outdated`](https://github.com/wyrd-company/devcontainer-builder/issues/20)
 - [`upgrade`](https://github.com/wyrd-company/devcontainer-builder/issues/21)
-- [Feature authoring commands other than `features package`](https://github.com/wyrd-company/devcontainer-builder/issues/22)
+- [Feature authoring commands other than `features package` and `features generate-docs`](https://github.com/wyrd-company/devcontainer-builder/issues/22)
 - [`templates`](https://github.com/wyrd-company/devcontainer-builder/issues/23)
 
 ### Workspace flags
@@ -505,6 +506,42 @@ preserved. `dcb` returns its usual JSON result with a `features` metadata array;
 upstream logs progress without a stdout result. Packaging uses local files and
 does not need Docker or a registry. See `TestPackageSingle`,
 `TestPackageCollection`, and `TestFeaturesPackageCommand` for the contract checks.
+
+### Generate Feature documentation
+
+```sh
+dcb features generate-docs --project-folder ./src --namespace example/collection
+```
+
+`--project-folder` (`-p`, default `.`) contains the Feature child folders;
+the command does not append `src` or `test`. Hidden entries are skipped.
+`--namespace` (`-n`) is required, and `--registry` (`-r`) defaults to `ghcr.io`.
+The example reference uses the Feature ID and the major part of its version,
+or `latest` when the version is absent. Supply both `--github-owner` and
+`--github-repo` to link metadata to that repository's `main` branch.
+
+Each README includes the name, description, options in metadata order,
+VS Code extensions, deprecation and legacy-ID notices, and optional `NOTES.md`.
+Numeric option keys follow JavaScript key order. An empty option default is
+`-`; false and zero remain values, and an absent default renders `undefined`,
+as upstream. Markdown and replacement-string dollar patterns are retained with
+upstream's JavaScript replacement semantics. Metadata uses the upstream
+tolerant JSONC recovery behavior.
+
+Existing READMEs are replaced. An existing README symlink is unlinked; a dangling
+symlink is followed, as upstream. Source metadata and notes stay unchanged.
+Missing metadata, unreadable metadata, or a missing ID logs a diagnostic and
+skips that entry with exit `0`. A folder, notes, or README write failure exits
+`1`; other entries can already have completed. There is no collection rollback.
+The command uses local files without Docker or registry access.
+
+Progress and skip diagnostics use stderr. `dcb` retains its JSON result on stdout
+and invocation-error exit `2`; upstream emits no stdout result and uses exit `1`
+for invocation errors. `--log-level` accepts the shared dcb levels, including
+upstream's `info`, `debug`, and `trace`, and `--log-format` remains available.
+Repeated publication strings are comma-joined as upstream; repeated project
+folders fail. See `TestGenerateDocumentationPinnedReadmes`,
+`TestGenerateDocumentationFilesystem`, and `TestFeaturesDocumentationCommand`.
 
 ## Agent skills
 

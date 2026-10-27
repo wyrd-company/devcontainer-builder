@@ -25,13 +25,13 @@ including inherited help/version on each command. It records short aliases but
 scores each canonical long option once. It never subtracts omissions. Registration
 coverage is distinct from behavior parity and does not use these dispositions.
 The pinned `up` table has **44 explicit options**, plus inherited help/version.
-Registered option coverage is **159/253 (62.85%)**;
+Registered option coverage is **167/253 (66.01%)**;
 registration includes the three implemented session-folder pairs.
 
 ## Dispositions
 
-- implemented: **159**.
-- implement: **78**.
+- implemented: **167**.
+- implement: **70**.
 - not applicable by design: **15**.
 - needs Bob's decision: **1**.
 
@@ -132,7 +132,8 @@ containerCollectionsOCI.ts:562.
 
 All 18 upstream leaf commands are included below, with the root and two command
 groups. `dcb features` resolves/stages a configuration; it does not cover upstream's
-feature authoring commands other than `features package`. The `templates` group,
+feature authoring commands other than `features package` and
+`features generate-docs`. The `templates` group,
 all its children, `outdated`, `upgrade`, and the other upstream `features` children
 are absent.
 
@@ -225,16 +226,26 @@ features, dotfiles, environment probing and version support.
 
 ### features generate-docs
 
+`features.GenerateDocumentation` owns local README generation. CLI defaults and
+aliases match the pinned command; metadata and NOTES.md produce byte-for-byte
+README fixtures, including tolerant JSONC recovery, option ordering, dollar
+replacement patterns, deprecation notices, and extensions. Missing metadata/IDs
+skip with success; file operation failures permit sibling completion. README
+replacement preserves the pinned symlink and mode behavior. The CLI retains dcb's
+JSON result, global diagnostic controls, and invocation-error exit 2. Upstream has
+no stdout result and invocation-error exit 1. Tests: `TestGenerateDocumentationPinnedReadmes`,
+`TestGenerateDocumentationFilesystem`, `TestFeaturesDocumentationCommand`.
+
 | Upstream option | dcb equivalent | Disposition | Unit | Reason / source |
 | --- | --- | --- | --- | --- |
-| --project-folder (-p) | none | implement | feature-docs | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: featuresCLI/generateDocs.ts:13. |
-| --registry (-r) | none | implement | feature-docs | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: featuresCLI/generateDocs.ts:14. |
-| --namespace (-n) | none | implement | feature-docs | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: featuresCLI/generateDocs.ts:15. |
-| --github-owner | none | implement | feature-docs | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: featuresCLI/generateDocs.ts:16. |
-| --github-repo | none | implement | feature-docs | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: featuresCLI/generateDocs.ts:17. |
-| --log-level | none | implement | feature-docs | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: featuresCLI/generateDocs.ts:18. |
-| --help | none | implement | feature-docs | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: yargs built-in help. |
-| --version | version command | implement | sibling-unit | dcb registers --version on every command; this command is not implemented yet. Source: devContainersSpecCLI.ts (.version). |
+| --project-folder (-p) | --project-folder | implemented | feature-docs | Registered with the local documentation handler. Source: featuresCLI/generateDocs.ts:13. |
+| --registry (-r) | --registry | implemented | feature-docs | Registered with the local documentation handler. Source: featuresCLI/generateDocs.ts:14. |
+| --namespace (-n) | --namespace | implemented | feature-docs | Registered with the local documentation handler. Source: featuresCLI/generateDocs.ts:15. |
+| --github-owner | --github-owner | implemented | feature-docs | Registered with the local documentation handler. Source: featuresCLI/generateDocs.ts:16. |
+| --github-repo | --github-repo | implemented | feature-docs | Registered with the local documentation handler. Source: featuresCLI/generateDocs.ts:17. |
+| --log-level | --log-level | implemented | feature-docs | Registered with the local documentation handler. Source: featuresCLI/generateDocs.ts:18. |
+| --help | --help | implemented | feature-docs | Registered with the local documentation handler. Source: yargs built-in help. |
+| --version | --version | implemented | sibling-unit | Prints the version in place of the command. Source: devContainersSpecCLI.ts (.version). |
 
 ### features info
 

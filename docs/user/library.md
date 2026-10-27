@@ -24,7 +24,7 @@ credentials that the calling process has at the time of the call; see
 | `pkg/lifecycle` | Plans the lifecycle commands of a configuration and its features. |
 | `pkg/host/runner` | Runs a lifecycle plan with marker files through any exec transport. |
 | `pkg/spec` | Reads `devcontainer.json`. |
-| `pkg/features` | Resolves Features and their install order, and packages local Features. |
+| `pkg/features` | Resolves Features and their install order, packages local Features, and generates their documentation. |
 | `pkg/substitute` | Substitutes configuration variables. |
 | `pkg/workspace` | Places a workspace folder in a container: its Git root, a worktree's common Git folder, and the workspace folder. |
 | `pkg/registryauth` | Reads registry credentials from the Docker client configuration, or holds credentials that the caller supplies. |
@@ -131,6 +131,27 @@ requested folder.
 Native discovery follows current Git for `core.lockfilePid`; Git before 2.54
 ignores that key.
 See [Workspace mounts](/docs/dcb/usage#workspace-mounts-and-container-selection).
+
+## Generate Feature documentation
+
+```go
+err := features.GenerateDocumentation(ctx, features.DocumentationOptions{
+    ProjectFolder: "./src",
+    Registry:      "ghcr.io",
+    Namespace:     "example/collection",
+    GitHubOwner:   "example-owner",
+    GitHubRepo:    "example-repo",
+})
+```
+
+Pass the selected folder and publication strings directly; the CLI supplies its
+`.` and `ghcr.io` defaults. `Logger` is optional and receives progress plus
+`warning:` and `error:` diagnostics. Each visible child with an ID gets a README
+from its metadata and optional NOTES.md. Missing metadata or an ID is skipped;
+other entry failures return an error after the remaining entries are processed.
+Metadata and notes stay unchanged; existing README files are replaced. The
+[usage guide](usage.md#generate-feature-documentation) describes content,
+symlinks, tolerant JSONC parsing, and partial results.
 
 ## Package local Features
 
