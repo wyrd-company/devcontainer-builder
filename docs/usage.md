@@ -687,7 +687,9 @@ installed in, usually the folder above the `bin` folder of the `git` command,
 such as `/usr` for `/usr/bin/git`; Homebrew builds name their `opt` folder,
 such as `/opt/homebrew/opt/git`. `dcb` does not run `git`, so `--git-prefix`
 names that prefix, and `dcb` then reads that path, as Git does. A relative
-prefix gives a relative path, which starts at the including file's folder.
+`--git-prefix` starts at the current folder of the command. A relative
+`Options.GitPrefix` of the library gives a relative path, which starts at the
+including file's folder.
 Without `--git-prefix`, `dcb` does not read such an include, as if the
 included file were missing. When Git rejects that file, the upstream CLI
 mounts the workspace folder, and `dcb` mounts the Git root. This is an

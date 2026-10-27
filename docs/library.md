@@ -109,7 +109,9 @@ placement, err := workspace.Resolve("/path/to/workspace/app", false, false, work
 returns the workspace mount and folder that a host's `UpRequest` takes.
 `Options.GitPrefix` is the prefix of the host Git's build, as `--git-prefix`
 names it; without it, an `include.path` of `%(prefix)/` followed by a relative
-path is not read. `Options.GitRoot` returns the Git root alone. See
+path is not read. A relative `Options.GitPrefix` starts at the including
+file's folder, not at the current folder as a relative `--git-prefix` does.
+`Options.GitRoot` returns the Git root alone. See
 [Workspace mounts](/docs/dcb/usage#workspace-mounts-and-container-selection).
 
 ## Registry credentials
