@@ -22,8 +22,10 @@ import (
 // the read after setup also reads the repository config files, with their
 // includes. A build whose os/user lookup reads /etc/passwd only, as without
 // cgo on Linux, skips a ~name/ include whose account it cannot find, where Git
-// rejects an unknown name. Walking up the physical parents of folder, as
-// Git does from its cwd, a .git folder that is a repository marks the root; the root keeps
+// rejects an unknown name. GitRoot does not know the prefix of Git's build,
+// so it does not read an include.path of %(prefix)/ followed by a relative
+// path; Options.GitRoot reads it below Options.GitPrefix. Walking up the
+// physical parents of folder, as Git does from its cwd, a .git folder that is a repository marks the root; the root keeps
 // folder's lexical names up the same number of steps, as upstream's resolved
 // `git rev-parse --show-cdup` result does; a .git file marks the root when its gitdir is a
 // repository, and otherwise ends discovery, as Git refuses an invalid gitfile.
@@ -49,22 +51,29 @@ import (
 // selects the caller folder unless GIT_WORK_TREE or the repository config
 // selects another. Invalid GIT_DIR stops parent discovery.
 func GitRoot(folder string) (string, error) {
-	if !gitConfigRead(folder, false) {
-		return "", nil
+	return gitRoot(folder, ""), nil
+}
+
+// gitRoot returns the Git root that GitRoot selects from folder, with prefix
+// as the prefix of Git's build, or "" when it is not set.
+func gitRoot(folder, prefix string) string {
+	if !gitConfigRead(folder, false, prefix) {
+		return ""
 	}
 	root, cwd, config := gitSetupRoot(folder)
-	if root == "" || !gitConfigRead(cwd, true) || !config.read(cwd) {
-		return "", nil
+	if root == "" || !gitConfigRead(cwd, true, prefix) || !config.read(cwd, prefix) {
+		return ""
 	}
-	return root, nil
+	return root
 }
 
 // gitConfigRead follows one of Git's reads of its system and global config
-// files, from folder, and reports false when the read stops the probe.
-func gitConfigRead(folder string, second bool) bool {
+// files, from folder, and reports false when the read stops the probe. prefix
+// is the prefix of Git's build for include paths, or "".
+func gitConfigRead(folder string, second bool, prefix string) bool {
 	cwd := newGitConfigCwd(folder)
 	defer cwd.close()
-	return gitSystemConfigRead(cwd, second) && gitGlobalConfigRead(cwd, second)
+	return gitSystemConfigRead(cwd, second, prefix) && gitGlobalConfigRead(cwd, second, prefix)
 }
 
 // gitSetupRoot returns the Git root selected from folder, or "", and cwd, the
