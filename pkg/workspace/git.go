@@ -25,8 +25,9 @@ import (
 // A command-line include must expand to an absolute path; a relative include
 // inside that file starts at its folder. The full read rejects any
 // core.ignorecase, core.filemode, core.symlinks, core.trustctime, core.quotepath,
-// core.ignorestat or core.sparseCheckout value that Git cannot read as a boolean, after all config
-// inputs have been read. Other typed values from this full read and includeIf
+// core.ignorestat, core.sparseCheckout or core.sparseCheckoutCone value that Git
+// cannot read as a boolean, after all config inputs have been read. Other typed
+// values from this full read and includeIf
 // conditions are not applied. A build whose os/user lookup reads /etc/passwd
 // only, as without cgo on Linux, skips a ~name/ include whose account it cannot
 // find, where Git

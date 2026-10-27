@@ -718,9 +718,8 @@ whose folder can be its base, and gives no Git root. A relative include
 inside that file starts at that file's folder. A missing absolute include
 is skipped. After the full read finishes, any `core.ignorecase`,
 `core.filemode`, `core.symlinks`, `core.trustctime`, `core.quotepath`,
-`core.ignorestat` or
-`core.sparseCheckout` value that Git cannot read as a boolean gives no Git root,
-even if a later value is valid.
+`core.ignorestat`, `core.sparseCheckout` or `core.sparseCheckoutCone` value
+that Git cannot read as a boolean gives no Git root, even if a later value is valid.
 A key without a value is true; an empty value is false. Boolean words and
 integers follow Git's boolean rules. The initial read and repository-format
 read do not apply these keys' types. Other typed values from the full config
