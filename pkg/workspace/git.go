@@ -29,7 +29,7 @@ import (
 // core.protectNTFS, core.precomposeUnicode, core.fsyncObjectFiles,
 // core.safecrlf, core.autocrlf or core.lockfilePid value that Git cannot read
 // as a boolean (or warn for core.safecrlf, input for core.autocrlf), after all
-// config inputs have been read.
+// config inputs have been read. Git before 2.54 ignores core.lockfilePid.
 // Other typed values from this full read and includeIf
 // conditions are not applied. A build whose os/user lookup reads /etc/passwd
 // only, as without cgo on Linux, skips a ~name/ include whose account it cannot

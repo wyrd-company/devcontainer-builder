@@ -153,6 +153,15 @@ var lockfilepidCases = func() []includeCase {
 			return e
 		}},
 	)
+	// Git 2.53 and earlier ignore lockfilePid. Other typed keys in these
+	// cross-key cases still reject their invalid values on those releases.
+	for i := range cases {
+		name := strings.TrimPrefix(cases[i].name, "lockfilepid-")
+		cases[i].gitBefore54OK = !strings.HasPrefix(name, "invalid-") || strings.HasPrefix(name, "invalid-before-")
+		if name == "safecrlf-input-remains-invalid" || name == "autocrlf-warn-remains-invalid" {
+			cases[i].gitBefore54OK = false
+		}
+	}
 	return cases
 }()
 
@@ -164,6 +173,7 @@ func TestGitRootLockfilePidOptionsMatchesGit(t *testing.T) {
 	if err != nil {
 		t.Skip("git is not installed")
 	}
+	host := readHostGit(t, git)
 	prefix := hostGitPrefix(t, git)
 	for _, c := range lockfilepidCases {
 		t.Run(c.name, func(t *testing.T) {
@@ -179,8 +189,12 @@ func TestGitRootLockfilePidOptionsMatchesGit(t *testing.T) {
 			if c.ok {
 				want = tree
 			}
-			if got := globalSetupGit(t, git, folder, env); got != want {
-				t.Fatalf("Git root = %q; want %q", got, want)
+			gitWant := want
+			if c.gitBefore54OK && host.minor < 54 {
+				gitWant = tree
+			}
+			if got := globalSetupGit(t, git, folder, env); got != gitWant {
+				t.Fatalf("Git root = %q; want %q", got, gitWant)
 			}
 			opts := Options{GitPrefix: prefix}
 			t.Run("Options.GitRoot", func(t *testing.T) {

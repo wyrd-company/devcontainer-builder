@@ -34,7 +34,8 @@ type includeFixture struct {
 // approved difference, so native discovery gives the root where Git does not.
 // gitPrefix is true when the case includes a file through %(prefix)/, which
 // native discovery reads with Options.GitPrefix; assertGitPrefixCase asserts
-// it with and without the prefix.
+// it with and without the prefix. gitBefore54OK marks a lockfilePid case
+// that Git before 2.54 accepts, when it ignores that key.
 type includeCase struct {
 	name           string
 	setup          func(t *testing.T, f includeFixture) map[string]*string
@@ -42,6 +43,7 @@ type includeCase struct {
 	unprivileged   bool
 	unknownAccount bool
 	gitPrefix      bool
+	gitBefore54OK  bool
 }
 
 // nativeOK reports whether native discovery follows every include of c
@@ -401,6 +403,7 @@ func TestGitRootConfigIncludeMatchesGit(t *testing.T) {
 		t.Skip("git is not installed")
 	}
 	routes := []string{"discovered", "gitfile", "explicit", "explicit-relative", "self", "linked", "common-relative", "symlinked-folder"}
+	host := readHostGit(t, git)
 	prefix := hostGitPrefix(t, git)
 	for _, route := range routes {
 		for _, c := range includeCases {
@@ -498,8 +501,12 @@ func TestGitRootConfigIncludeMatchesGit(t *testing.T) {
 				if c.ok {
 					want = control
 				}
-				if measured := globalSetupGit(t, git, folder, env); measured != want {
-					t.Fatalf("Git root = %q; want %q", measured, want)
+				gitWant := want
+				if c.gitBefore54OK && host.minor < 54 {
+					gitWant = control
+				}
+				if measured := globalSetupGit(t, git, folder, env); measured != gitWant {
+					t.Fatalf("Git root = %q; want %q", measured, gitWant)
 				}
 				if c.gitPrefix {
 					assertGitPrefixCase(t, c, f, folder, control, want)
