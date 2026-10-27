@@ -722,9 +722,10 @@ is skipped. After the full read finishes, any `core.ignorecase`, `core.filemode`
 `core.protectNTFS`, `core.precomposeUnicode`, `core.fsyncObjectFiles`,
 `core.safecrlf`, `core.autocrlf` or `core.lockfilePid` value that Git cannot read
 as a boolean gives no Git root, even if a later value is valid. `core.safecrlf`
-also
-accepts `warn`, without regard to case. `core.autocrlf` also accepts `input`,
+also accepts `warn`, without regard to case. `core.autocrlf` also accepts `input`,
 without regard to case.
+Native discovery follows current Git for `core.lockfilePid`; Git before 2.54
+ignores that key.
 A key without a value is true; an empty value is false. Boolean words and
 integers follow Git's boolean rules. The initial read and repository-format
 read do not apply these keys' types. Other typed values from the full config

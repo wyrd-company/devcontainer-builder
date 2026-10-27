@@ -22,6 +22,7 @@ func TestGitRootLockfilePidReadPhasesMatchesGit(t *testing.T) {
 	if err != nil {
 		t.Skip("git is not installed")
 	}
+	host := readHostGit(t, git)
 	valid := "[core]\nlockfilepid=true\n"
 	invalid := "[core]\nlockfilepid=invalid\n"
 	for _, name := range []string{"early-only-invalid", "format-only-invalid", "worktree-format-only-invalid", "global-invalid-before-repository", "invalid-before-include", "count-invalid-before-include", "count-invalid-before-parameters"} {
@@ -113,8 +114,12 @@ func TestGitRootLockfilePidReadPhasesMatchesGit(t *testing.T) {
 					finish := serveConfigFIFO(t, fifo, segments...)
 					got := route.run()
 					count := finish()
-					if got != want {
-						t.Errorf("root = %q; want %q", got, want)
+					routeWant := want
+					if route.name == "Git" && host.minor < 54 {
+						routeWant = tree
+					}
+					if got != routeWant {
+						t.Errorf("root = %q; want %q", got, routeWant)
 					}
 					if count != reads {
 						t.Errorf("config reads = %d; want %d", count, reads)

@@ -96,6 +96,8 @@ The full config read rejects invalid `core.ignorecase`, `core.filemode`,
 `core.safecrlf`, `core.autocrlf` and `core.lockfilePid` boolean values after
 reading all file, include and command-line inputs. `core.safecrlf` also accepts
 `warn`, without regard to case. `core.autocrlf` also accepts `input`, without regard to case.
+Native discovery follows current Git for `core.lockfilePid`; Git before 2.54
+ignores that key.
 Bob also approved one account-lookup difference: Linux release builds look up
 accounts in `/etc/passwd` only and skip an `include.path` of `~name/` whose
 account is not there; see
