@@ -5,10 +5,17 @@ package cli
 
 import (
 	"fmt"
-	"github.com/spf13/cobra"
-	"github.com/wyrd-company/devcontainer-builder/pkg/features"
+	"regexp"
 	"strings"
+
+	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
+	"github.com/wyrd-company/devcontainer-builder/pkg/features"
 )
+
+// yargs-parser consumes negative decimal strings as option values.
+var documentationNegativeValue = regexp.MustCompile(`^-([0-9]+(\.[0-9]+)?|\.[0-9]+)$`)
+var documentationShortOption = regexp.MustCompile(`^(-|--)[^-]`)
 
 func (a *application) featuresDocumentationCommand() *cobra.Command {
 	var opts features.DocumentationOptions
@@ -47,5 +54,42 @@ func (a *application) featuresDocumentationCommand() *cobra.Command {
 	_ = cmd.MarkFlagRequired("namespace")
 	cmd.Flags().StringArrayVar(&owners, "github-owner", nil, "GitHub owner for metadata links")
 	cmd.Flags().StringArrayVar(&repos, "github-repo", nil, "GitHub repository for metadata links")
+	// yargs supplies the declared default when a string option has no value.
+	// Keep explicit empty strings distinct from absent values.
+	for name, value := range map[string]string{"project-folder": ".", "registry": "ghcr.io", "namespace": "", "github-owner": "", "github-repo": ""} {
+		flag := cmd.Flags().Lookup(name)
+		if flag.Annotations == nil {
+			flag.Annotations = map[string][]string{}
+		}
+		flag.Annotations["documentation-no-value"] = []string{value}
+	}
 	return cmd
+}
+
+// Adapt just this command's string flags before pflag parses them. Its short
+// and long forms use yargs-parser's distinct rules for the following token.
+func documentationOptionArg(flag *pflag.Flag, arg string, next []string) (string, bool) {
+	defaults, ok := flag.Annotations["documentation-no-value"]
+	if !ok {
+		return "", false
+	}
+	if _, value, equals := strings.Cut(arg, "="); equals {
+		// yargs treats a trailing '=' in a short group as an unknown option.
+		if !strings.HasPrefix(arg, "--") && value == "" {
+			return "--=", true
+		}
+		return "--" + flag.Name + "=" + value, true
+	}
+	missing := len(next) == 0
+	if !missing {
+		option := strings.HasPrefix(next[0], "-")
+		if !strings.HasPrefix(arg, "--") {
+			option = documentationShortOption.MatchString(next[0])
+		}
+		missing = option && !documentationNegativeValue.MatchString(next[0])
+	}
+	if missing {
+		return "--" + flag.Name + "=" + defaults[0], true
+	}
+	return "", false
 }

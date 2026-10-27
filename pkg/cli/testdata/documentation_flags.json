@@ -1,0 +1,401 @@
+{
+  "cases": [
+    {
+      "name": "n-bare",
+      "args": [
+        "-n"
+      ],
+      "exit": 0,
+      "readme": "\n# sample\n\n\n\n## Example Usage\n\n```json\n\"features\": {\n    \"ghcr.io//sample:latest\": {}\n}\n```\n\n\n\n\n\n---\n\n_Note: This file was auto-generated from the [devcontainer-feature.json](devcontainer-feature.json).  Add additional notes to a `NOTES.md`._\n"
+    },
+    {
+      "name": "n-before-option",
+      "args": [
+        "-n",
+        "--log-level",
+        "info"
+      ],
+      "exit": 0,
+      "readme": "\n# sample\n\n\n\n## Example Usage\n\n```json\n\"features\": {\n    \"ghcr.io//sample:latest\": {}\n}\n```\n\n\n\n\n\n---\n\n_Note: This file was auto-generated from the [devcontainer-feature.json](devcontainer-feature.json).  Add additional notes to a `NOTES.md`._\n"
+    },
+    {
+      "name": "n-explicit-empty",
+      "args": [
+        "-n",
+        ""
+      ],
+      "exit": 0,
+      "readme": "\n# sample\n\n\n\n## Example Usage\n\n```json\n\"features\": {\n    \"ghcr.io//sample:latest\": {}\n}\n```\n\n\n\n\n\n---\n\n_Note: This file was auto-generated from the [devcontainer-feature.json](devcontainer-feature.json).  Add additional notes to a `NOTES.md`._\n"
+    },
+    {
+      "name": "n-equals-empty",
+      "args": [
+        "-n="
+      ],
+      "exit": 2,
+      "readme": "old readme"
+    },
+    {
+      "name": "namespace-bare",
+      "args": [
+        "--namespace"
+      ],
+      "exit": 0,
+      "readme": "\n# sample\n\n\n\n## Example Usage\n\n```json\n\"features\": {\n    \"ghcr.io//sample:latest\": {}\n}\n```\n\n\n\n\n\n---\n\n_Note: This file was auto-generated from the [devcontainer-feature.json](devcontainer-feature.json).  Add additional notes to a `NOTES.md`._\n"
+    },
+    {
+      "name": "namespace-before-option",
+      "args": [
+        "--namespace",
+        "--log-level",
+        "info"
+      ],
+      "exit": 0,
+      "readme": "\n# sample\n\n\n\n## Example Usage\n\n```json\n\"features\": {\n    \"ghcr.io//sample:latest\": {}\n}\n```\n\n\n\n\n\n---\n\n_Note: This file was auto-generated from the [devcontainer-feature.json](devcontainer-feature.json).  Add additional notes to a `NOTES.md`._\n"
+    },
+    {
+      "name": "namespace-explicit-empty",
+      "args": [
+        "--namespace",
+        ""
+      ],
+      "exit": 0,
+      "readme": "\n# sample\n\n\n\n## Example Usage\n\n```json\n\"features\": {\n    \"ghcr.io//sample:latest\": {}\n}\n```\n\n\n\n\n\n---\n\n_Note: This file was auto-generated from the [devcontainer-feature.json](devcontainer-feature.json).  Add additional notes to a `NOTES.md`._\n"
+    },
+    {
+      "name": "namespace-equals-empty",
+      "args": [
+        "--namespace="
+      ],
+      "exit": 0,
+      "readme": "\n# sample\n\n\n\n## Example Usage\n\n```json\n\"features\": {\n    \"ghcr.io//sample:latest\": {}\n}\n```\n\n\n\n\n\n---\n\n_Note: This file was auto-generated from the [devcontainer-feature.json](devcontainer-feature.json).  Add additional notes to a `NOTES.md`._\n"
+    },
+    {
+      "name": "r-bare",
+      "args": [
+        "-n",
+        "example/collection",
+        "-r"
+      ],
+      "exit": 0,
+      "readme": "\n# sample\n\n\n\n## Example Usage\n\n```json\n\"features\": {\n    \"ghcr.io/example/collection/sample:latest\": {}\n}\n```\n\n\n\n\n\n---\n\n_Note: This file was auto-generated from the [devcontainer-feature.json](devcontainer-feature.json).  Add additional notes to a `NOTES.md`._\n"
+    },
+    {
+      "name": "r-before-option",
+      "args": [
+        "-n",
+        "example/collection",
+        "-r",
+        "--log-level",
+        "info"
+      ],
+      "exit": 0,
+      "readme": "\n# sample\n\n\n\n## Example Usage\n\n```json\n\"features\": {\n    \"ghcr.io/example/collection/sample:latest\": {}\n}\n```\n\n\n\n\n\n---\n\n_Note: This file was auto-generated from the [devcontainer-feature.json](devcontainer-feature.json).  Add additional notes to a `NOTES.md`._\n"
+    },
+    {
+      "name": "r-explicit-empty",
+      "args": [
+        "-n",
+        "example/collection",
+        "-r",
+        ""
+      ],
+      "exit": 0,
+      "readme": "\n# sample\n\n\n\n## Example Usage\n\n```json\n\"features\": {\n    \"/example/collection/sample:latest\": {}\n}\n```\n\n\n\n\n\n---\n\n_Note: This file was auto-generated from the [devcontainer-feature.json](devcontainer-feature.json).  Add additional notes to a `NOTES.md`._\n"
+    },
+    {
+      "name": "r-equals-empty",
+      "args": [
+        "-n",
+        "example/collection",
+        "-r="
+      ],
+      "exit": 2,
+      "readme": "old readme"
+    },
+    {
+      "name": "registry-bare",
+      "args": [
+        "-n",
+        "example/collection",
+        "--registry"
+      ],
+      "exit": 0,
+      "readme": "\n# sample\n\n\n\n## Example Usage\n\n```json\n\"features\": {\n    \"ghcr.io/example/collection/sample:latest\": {}\n}\n```\n\n\n\n\n\n---\n\n_Note: This file was auto-generated from the [devcontainer-feature.json](devcontainer-feature.json).  Add additional notes to a `NOTES.md`._\n"
+    },
+    {
+      "name": "registry-before-option",
+      "args": [
+        "-n",
+        "example/collection",
+        "--registry",
+        "--log-level",
+        "info"
+      ],
+      "exit": 0,
+      "readme": "\n# sample\n\n\n\n## Example Usage\n\n```json\n\"features\": {\n    \"ghcr.io/example/collection/sample:latest\": {}\n}\n```\n\n\n\n\n\n---\n\n_Note: This file was auto-generated from the [devcontainer-feature.json](devcontainer-feature.json).  Add additional notes to a `NOTES.md`._\n"
+    },
+    {
+      "name": "registry-explicit-empty",
+      "args": [
+        "-n",
+        "example/collection",
+        "--registry",
+        ""
+      ],
+      "exit": 0,
+      "readme": "\n# sample\n\n\n\n## Example Usage\n\n```json\n\"features\": {\n    \"/example/collection/sample:latest\": {}\n}\n```\n\n\n\n\n\n---\n\n_Note: This file was auto-generated from the [devcontainer-feature.json](devcontainer-feature.json).  Add additional notes to a `NOTES.md`._\n"
+    },
+    {
+      "name": "registry-equals-empty",
+      "args": [
+        "-n",
+        "example/collection",
+        "--registry="
+      ],
+      "exit": 0,
+      "readme": "\n# sample\n\n\n\n## Example Usage\n\n```json\n\"features\": {\n    \"/example/collection/sample:latest\": {}\n}\n```\n\n\n\n\n\n---\n\n_Note: This file was auto-generated from the [devcontainer-feature.json](devcontainer-feature.json).  Add additional notes to a `NOTES.md`._\n"
+    },
+    {
+      "name": "p-bare",
+      "args": [
+        "-n",
+        "example/collection",
+        "-p"
+      ],
+      "exit": 0,
+      "readme": "\n# sample\n\n\n\n## Example Usage\n\n```json\n\"features\": {\n    \"ghcr.io/example/collection/sample:latest\": {}\n}\n```\n\n\n\n\n\n---\n\n_Note: This file was auto-generated from the [devcontainer-feature.json](devcontainer-feature.json).  Add additional notes to a `NOTES.md`._\n"
+    },
+    {
+      "name": "p-before-option",
+      "args": [
+        "-n",
+        "example/collection",
+        "-p",
+        "--log-level",
+        "info"
+      ],
+      "exit": 0,
+      "readme": "\n# sample\n\n\n\n## Example Usage\n\n```json\n\"features\": {\n    \"ghcr.io/example/collection/sample:latest\": {}\n}\n```\n\n\n\n\n\n---\n\n_Note: This file was auto-generated from the [devcontainer-feature.json](devcontainer-feature.json).  Add additional notes to a `NOTES.md`._\n"
+    },
+    {
+      "name": "p-explicit-empty",
+      "args": [
+        "-n",
+        "example/collection",
+        "-p",
+        ""
+      ],
+      "exit": 1,
+      "readme": "old readme"
+    },
+    {
+      "name": "p-equals-empty",
+      "args": [
+        "-n",
+        "example/collection",
+        "-p="
+      ],
+      "exit": 2,
+      "readme": "old readme"
+    },
+    {
+      "name": "project-folder-bare",
+      "args": [
+        "-n",
+        "example/collection",
+        "--project-folder"
+      ],
+      "exit": 0,
+      "readme": "\n# sample\n\n\n\n## Example Usage\n\n```json\n\"features\": {\n    \"ghcr.io/example/collection/sample:latest\": {}\n}\n```\n\n\n\n\n\n---\n\n_Note: This file was auto-generated from the [devcontainer-feature.json](devcontainer-feature.json).  Add additional notes to a `NOTES.md`._\n"
+    },
+    {
+      "name": "project-folder-before-option",
+      "args": [
+        "-n",
+        "example/collection",
+        "--project-folder",
+        "--log-level",
+        "info"
+      ],
+      "exit": 0,
+      "readme": "\n# sample\n\n\n\n## Example Usage\n\n```json\n\"features\": {\n    \"ghcr.io/example/collection/sample:latest\": {}\n}\n```\n\n\n\n\n\n---\n\n_Note: This file was auto-generated from the [devcontainer-feature.json](devcontainer-feature.json).  Add additional notes to a `NOTES.md`._\n"
+    },
+    {
+      "name": "project-folder-explicit-empty",
+      "args": [
+        "-n",
+        "example/collection",
+        "--project-folder",
+        ""
+      ],
+      "exit": 1,
+      "readme": "old readme"
+    },
+    {
+      "name": "project-folder-equals-empty",
+      "args": [
+        "-n",
+        "example/collection",
+        "--project-folder="
+      ],
+      "exit": 1,
+      "readme": "old readme"
+    },
+    {
+      "name": "github-owner-bare",
+      "args": [
+        "-n",
+        "example/collection",
+        "--github-owner"
+      ],
+      "exit": 0,
+      "readme": "\n# sample\n\n\n\n## Example Usage\n\n```json\n\"features\": {\n    \"ghcr.io/example/collection/sample:latest\": {}\n}\n```\n\n\n\n\n\n---\n\n_Note: This file was auto-generated from the [devcontainer-feature.json](devcontainer-feature.json).  Add additional notes to a `NOTES.md`._\n"
+    },
+    {
+      "name": "github-owner-before-option",
+      "args": [
+        "-n",
+        "example/collection",
+        "--github-owner",
+        "--log-level",
+        "info"
+      ],
+      "exit": 0,
+      "readme": "\n# sample\n\n\n\n## Example Usage\n\n```json\n\"features\": {\n    \"ghcr.io/example/collection/sample:latest\": {}\n}\n```\n\n\n\n\n\n---\n\n_Note: This file was auto-generated from the [devcontainer-feature.json](devcontainer-feature.json).  Add additional notes to a `NOTES.md`._\n"
+    },
+    {
+      "name": "github-owner-explicit-empty",
+      "args": [
+        "-n",
+        "example/collection",
+        "--github-owner",
+        ""
+      ],
+      "exit": 0,
+      "readme": "\n# sample\n\n\n\n## Example Usage\n\n```json\n\"features\": {\n    \"ghcr.io/example/collection/sample:latest\": {}\n}\n```\n\n\n\n\n\n---\n\n_Note: This file was auto-generated from the [devcontainer-feature.json](devcontainer-feature.json).  Add additional notes to a `NOTES.md`._\n"
+    },
+    {
+      "name": "github-owner-equals-empty",
+      "args": [
+        "-n",
+        "example/collection",
+        "--github-owner="
+      ],
+      "exit": 0,
+      "readme": "\n# sample\n\n\n\n## Example Usage\n\n```json\n\"features\": {\n    \"ghcr.io/example/collection/sample:latest\": {}\n}\n```\n\n\n\n\n\n---\n\n_Note: This file was auto-generated from the [devcontainer-feature.json](devcontainer-feature.json).  Add additional notes to a `NOTES.md`._\n"
+    },
+    {
+      "name": "github-repo-bare",
+      "args": [
+        "-n",
+        "example/collection",
+        "--github-repo"
+      ],
+      "exit": 0,
+      "readme": "\n# sample\n\n\n\n## Example Usage\n\n```json\n\"features\": {\n    \"ghcr.io/example/collection/sample:latest\": {}\n}\n```\n\n\n\n\n\n---\n\n_Note: This file was auto-generated from the [devcontainer-feature.json](devcontainer-feature.json).  Add additional notes to a `NOTES.md`._\n"
+    },
+    {
+      "name": "github-repo-before-option",
+      "args": [
+        "-n",
+        "example/collection",
+        "--github-repo",
+        "--log-level",
+        "info"
+      ],
+      "exit": 0,
+      "readme": "\n# sample\n\n\n\n## Example Usage\n\n```json\n\"features\": {\n    \"ghcr.io/example/collection/sample:latest\": {}\n}\n```\n\n\n\n\n\n---\n\n_Note: This file was auto-generated from the [devcontainer-feature.json](devcontainer-feature.json).  Add additional notes to a `NOTES.md`._\n"
+    },
+    {
+      "name": "github-repo-explicit-empty",
+      "args": [
+        "-n",
+        "example/collection",
+        "--github-repo",
+        ""
+      ],
+      "exit": 0,
+      "readme": "\n# sample\n\n\n\n## Example Usage\n\n```json\n\"features\": {\n    \"ghcr.io/example/collection/sample:latest\": {}\n}\n```\n\n\n\n\n\n---\n\n_Note: This file was auto-generated from the [devcontainer-feature.json](devcontainer-feature.json).  Add additional notes to a `NOTES.md`._\n"
+    },
+    {
+      "name": "github-repo-equals-empty",
+      "args": [
+        "-n",
+        "example/collection",
+        "--github-repo="
+      ],
+      "exit": 0,
+      "readme": "\n# sample\n\n\n\n## Example Usage\n\n```json\n\"features\": {\n    \"ghcr.io/example/collection/sample:latest\": {}\n}\n```\n\n\n\n\n\n---\n\n_Note: This file was auto-generated from the [devcontainer-feature.json](devcontainer-feature.json).  Add additional notes to a `NOTES.md`._\n"
+    },
+    {
+      "name": "negative-namespace",
+      "args": [
+        "-n",
+        "-1"
+      ],
+      "exit": 0,
+      "readme": "\n# sample\n\n\n\n## Example Usage\n\n```json\n\"features\": {\n    \"ghcr.io/-1/sample:latest\": {}\n}\n```\n\n\n\n\n\n---\n\n_Note: This file was auto-generated from the [devcontainer-feature.json](devcontainer-feature.json).  Add additional notes to a `NOTES.md`._\n"
+    },
+    {
+      "name": "negative-fraction",
+      "args": [
+        "-n",
+        "-.5"
+      ],
+      "exit": 0,
+      "readme": "\n# sample\n\n\n\n## Example Usage\n\n```json\n\"features\": {\n    \"ghcr.io/-.5/sample:latest\": {}\n}\n```\n\n\n\n\n\n---\n\n_Note: This file was auto-generated from the [devcontainer-feature.json](devcontainer-feature.json).  Add additional notes to a `NOTES.md`._\n"
+    },
+    {
+      "name": "negative-registry",
+      "args": [
+        "-n",
+        "example/collection",
+        "-r",
+        "-1.5"
+      ],
+      "exit": 0,
+      "readme": "\n# sample\n\n\n\n## Example Usage\n\n```json\n\"features\": {\n    \"-1.5/example/collection/sample:latest\": {}\n}\n```\n\n\n\n\n\n---\n\n_Note: This file was auto-generated from the [devcontainer-feature.json](devcontainer-feature.json).  Add additional notes to a `NOTES.md`._\n"
+    },
+    {
+      "name": "repeat-bare-namespace",
+      "args": [
+        "-n",
+        "first",
+        "-n"
+      ],
+      "exit": 0,
+      "readme": "\n# sample\n\n\n\n## Example Usage\n\n```json\n\"features\": {\n    \"ghcr.io/first,/sample:latest\": {}\n}\n```\n\n\n\n\n\n---\n\n_Note: This file was auto-generated from the [devcontainer-feature.json](devcontainer-feature.json).  Add additional notes to a `NOTES.md`._\n"
+    },
+    {
+      "name": "repeat-bare-registry",
+      "args": [
+        "-n",
+        "example/collection",
+        "-r",
+        "first",
+        "-r"
+      ],
+      "exit": 0,
+      "readme": "\n# sample\n\n\n\n## Example Usage\n\n```json\n\"features\": {\n    \"first,ghcr.io/example/collection/sample:latest\": {}\n}\n```\n\n\n\n\n\n---\n\n_Note: This file was auto-generated from the [devcontainer-feature.json](devcontainer-feature.json).  Add additional notes to a `NOTES.md`._\n"
+    },
+    {
+      "name": "missing-namespace",
+      "args": [],
+      "exit": 2,
+      "readme": "old readme"
+    },
+    {
+      "name": "all-bare",
+      "args": [
+        "-n",
+        "-p",
+        "-r",
+        "--github-owner",
+        "--github-repo"
+      ],
+      "exit": 0,
+      "readme": "\n# sample\n\n\n\n## Example Usage\n\n```json\n\"features\": {\n    \"ghcr.io//sample:latest\": {}\n}\n```\n\n\n\n\n\n---\n\n_Note: This file was auto-generated from the [devcontainer-feature.json](devcontainer-feature.json).  Add additional notes to a `NOTES.md`._\n"
+    }
+  ]
+}

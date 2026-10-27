@@ -5,13 +5,15 @@ package features
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"sort"
 	"strconv"
 	"strings"
 	"unicode/utf16"
-	"unicode/utf8"
+
+	"golang.org/x/text/encoding/unicode"
 )
 
 type documentationMissing struct{}
@@ -29,10 +31,17 @@ type documentationObject struct {
 // This reader follows that parser's object/array separator recovery, scoped to
 // documentation; configuration and packaging keep their existing strict readers.
 func documentationJSON(data []byte) any {
-	p := documentationParser{data: string([]rune(string(data)))}
+	p := documentationParser{data: documentationUTF8(data)}
 	p.next()
 	value, _ := p.value()
 	return value
+}
+
+// Use the existing Unicode decoder's maximal-subpart replacement, as Node's
+// UTF-8 file reads do. A truncated multi-byte sequence produces one replacement.
+func documentationUTF8(data []byte) string {
+	text, _ := unicode.UTF8.NewDecoder().Bytes(data)
+	return string(text)
 }
 
 type documentationParser struct {
@@ -102,7 +111,7 @@ func (p *documentationParser) next() {
 						end = p.at
 					}
 				}
-				if p.at < len(p.data) && (p.data[p.at] == 'e' || p.data[p.at] == 'E') {
+				if end == p.at && p.at < len(p.data) && (p.data[p.at] == 'e' || p.data[p.at] == 'E') {
 					p.at++
 					if p.at < len(p.data) && (p.data[p.at] == '+' || p.data[p.at] == '-') {
 						p.at++
@@ -208,7 +217,7 @@ func (p *documentationParser) value() (any, bool) {
 		p.next()
 		return v, true
 	case '{':
-		o := &documentationObject{values: map[string]any{}}
+		o := &documentationObject{values: map[string]any{}, proto: documentationObjectPrototype{}}
 		p.next()
 		for p.token != 0 && p.token != '}' {
 			if p.token == ',' {
@@ -230,8 +239,9 @@ func (p *documentationParser) value() (any, bool) {
 				p.recover('}')
 				continue
 			}
-			if key == "__proto__" {
-				if _, ok := v.(*documentationObject); ok || v == nil {
+			if key == "__proto__" && documentationHasPrototypeSetter(o) {
+				switch v.(type) {
+				case *documentationObject, []any, nil:
 					o.proto = v
 				}
 				continue
@@ -266,6 +276,22 @@ func (p *documentationParser) value() (any, bool) {
 	}
 	return documentationUndefined, false
 }
+
+// jsonc-parser assigns properties to ordinary JavaScript objects. Removing the
+// prototype also removes its __proto__ setter; later assignments are own keys.
+func documentationHasPrototypeSetter(object *documentationObject) bool {
+	if _, own := object.values["__proto__"]; own {
+		return false
+	}
+	switch prototype := object.proto.(type) {
+	case documentationObjectPrototype, []any:
+		return true
+	case *documentationObject:
+		return documentationHasPrototypeSetter(prototype)
+	}
+	return false
+}
+
 func documentationGet(value any, key string) any {
 	switch v := value.(type) {
 	case *documentationObject:
@@ -281,6 +307,17 @@ func documentationGet(value any, key string) any {
 		}
 		if i, err := strconv.Atoi(key); err == nil && i >= 0 && i < len(v) {
 			return v[i]
+		}
+		switch key {
+		case "toString", "join", "map":
+			return documentationMethod("array-" + key)
+		case "valueOf":
+			return documentationMethod("valueOf")
+		}
+	case documentationObjectPrototype:
+		switch key {
+		case "toString", "valueOf":
+			return documentationMethod(key)
 		}
 	case string:
 		if key == "length" {
@@ -333,49 +370,168 @@ func documentationTruthy(value any) bool {
 	}
 	return true
 }
-func documentationLength(value any) int {
-	switch v := value.(type) {
-	case []any:
-		return len(v)
-	case string:
-		return utf8.RuneCountInString(v)
-	}
-	return 0
+func documentationLength(value any) (float64, error) {
+	return documentationNumber(documentationGet(value, "length"))
 }
-func documentationString(value any) string {
-	switch v := value.(type) {
-	case documentationMissing:
-		return "undefined"
+
+// Only built-in methods are reachable from JSONC values. Retain method lookup
+// through own properties and __proto__, including an explicitly null prototype.
+type documentationObjectPrototype struct{}
+type documentationMethod string
+
+// Array.prototype.map also operates on an object inheriting an array. Holes
+// remain empty when the mapped result is joined by the README renderer.
+func documentationMap(value any, prefix, suffix string) ([]string, error) {
+	if documentationGet(value, "map") != documentationMethod("array-map") {
+		return nil, fmt.Errorf("map is not a function")
+	}
+	n, err := documentationLength(value)
+	if err != nil {
+		return nil, err
+	}
+	if math.Floor(n) > math.MaxUint32 {
+		return nil, fmt.Errorf("Invalid array length")
+	}
+	parts := []string{}
+	for i := 0; float64(i) < math.Floor(n); i++ {
+		x := documentationGet(value, strconv.Itoa(i))
+		text := ""
+		if x != documentationUndefined {
+			text, err = documentationString(x)
+			if err != nil {
+				return nil, err
+			}
+			text = prefix + text + suffix
+		}
+		parts = append(parts, text)
+	}
+	return parts, nil
+}
+
+func documentationPrimitive(value any, stringHint bool) (any, error) {
+	switch value.(type) {
+	case *documentationObject, []any:
+	default:
+		return value, nil
+	}
+	methods := []string{"valueOf", "toString"}
+	if stringHint {
+		methods = []string{"toString", "valueOf"}
+	}
+	for _, name := range methods {
+		method, ok := documentationGet(value, name).(documentationMethod)
+		if !ok {
+			continue
+		}
+		switch method {
+		case "toString":
+			return "[object Object]", nil
+		case "array-toString":
+			if documentationGet(value, "join") != documentationMethod("array-join") {
+				return "[object Object]", nil
+			}
+			n, err := documentationLength(value)
+			if err != nil {
+				return nil, err
+			}
+			if math.Floor(n) > math.MaxUint32 {
+				return nil, fmt.Errorf("Invalid array length")
+			}
+			parts := []string{}
+			for i := 0; float64(i) < math.Floor(n); i++ {
+				x := documentationGet(value, strconv.Itoa(i))
+				text := ""
+				if x != nil && x != documentationUndefined {
+					text, err = documentationString(x)
+					if err != nil {
+						return nil, err
+					}
+				}
+				parts = append(parts, text)
+			}
+			return strings.Join(parts, ","), nil
+		}
+	}
+	return nil, fmt.Errorf("Cannot convert object to primitive value")
+}
+
+func documentationNumber(value any) (float64, error) {
+	v, err := documentationPrimitive(value, false)
+	if err != nil {
+		return 0, err
+	}
+	switch x := v.(type) {
 	case nil:
-		return "null"
+		return 0, nil
+	case bool:
+		if x {
+			return 1, nil
+		}
+		return 0, nil
+	case float64:
+		return x, nil
 	case string:
-		return v
-	case *documentationObject:
-		return "[object Object]"
-	case []any:
-		parts := make([]string, len(v))
-		for i, x := range v {
-			if x != nil && x != documentationUndefined {
-				parts[i] = documentationString(x)
+		s := strings.Trim(x, " \t\r\n\v\f\u00a0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u2028\u2029\u202f\u205f\u3000\ufeff")
+		if s == "" {
+			return 0, nil
+		}
+		if len(s) > 2 && s[0] == '0' {
+			base := 0
+			switch s[1] {
+			case 'x', 'X':
+				base = 16
+			case 'b', 'B':
+				base = 2
+			case 'o', 'O':
+				base = 8
+			}
+			if base != 0 {
+				n, err := strconv.ParseUint(s[2:], base, 64)
+				if err == nil || errors.Is(err, strconv.ErrRange) {
+					return float64(n), nil
+				}
+				return math.NaN(), nil
 			}
 		}
-		return strings.Join(parts, ",")
+		if strings.ContainsAny(s, "_xXpPiInN") && s != "Infinity" && s != "+Infinity" && s != "-Infinity" {
+			return math.NaN(), nil
+		}
+		n, err := strconv.ParseFloat(s, 64)
+		if err == nil || errors.Is(err, strconv.ErrRange) {
+			return n, nil
+		}
+	}
+	return math.NaN(), nil
+}
+
+func documentationString(value any) (string, error) {
+	value, err := documentationPrimitive(value, true)
+	if err != nil {
+		return "", err
+	}
+	switch v := value.(type) {
+	case documentationMissing:
+		return "undefined", nil
+	case nil:
+		return "null", nil
+	case string:
+		return v, nil
 	case float64:
 		if math.IsInf(v, 1) {
-			return "Infinity"
+			return "Infinity", nil
 		}
 		if math.IsInf(v, -1) {
-			return "-Infinity"
+			return "-Infinity", nil
 		}
 		if math.IsNaN(v) {
-			return "NaN"
+			return "NaN", nil
 		}
 		if v == 0 {
-			return "0"
+			return "0", nil
 		}
 		data, _ := json.Marshal(v)
-		return string(data)
+		return string(data), nil
 	default:
-		return fmt.Sprint(v)
+		return fmt.Sprint(v), nil
 	}
 }

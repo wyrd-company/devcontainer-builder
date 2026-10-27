@@ -231,10 +231,15 @@ aliases match the pinned command; metadata and NOTES.md produce byte-for-byte
 README fixtures, including tolerant JSONC recovery, option ordering, dollar
 replacement patterns, deprecation notices, and extensions. Missing metadata/IDs
 skip with success; file operation failures permit sibling completion. README
-replacement preserves the pinned symlink and mode behavior. The CLI retains dcb's
+replacement preserves the pinned symlink and mode behavior. Valueless string
+options use upstream defaults; explicit empty values stay empty. UTF-8 maximal
+subparts, malformed-fraction recovery, list-length coercion, and object/prototype
+conversion follow the actual pinned command, including conversion/map failures.
+The CLI retains dcb's
 JSON result, global diagnostic controls, and invocation-error exit 2. Upstream has
 no stdout result and invocation-error exit 1. Tests: `TestGenerateDocumentationPinnedReadmes`,
-`TestGenerateDocumentationFilesystem`, `TestFeaturesDocumentationCommand`.
+`TestGenerateDocumentationFilesystem`, `TestGenerateDocumentationConversionReadmes`,
+`TestFeaturesDocumentationCommand`, `TestFeaturesDocumentationOptionalStringValues`.
 
 | Upstream option | dcb equivalent | Disposition | Unit | Reason / source |
 | --- | --- | --- | --- | --- |
