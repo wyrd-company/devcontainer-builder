@@ -1,5 +1,8 @@
 # dcb
 
+![dcb logo](docs/user/assets/logo.svg#gh-light-mode-only)
+![dcb logo](docs/user/assets/logo-dark.svg#gh-dark-mode-only)
+
 `dcb` builds and runs [development containers](https://containers.dev/) from a
 `devcontainer.json`. It builds images on the Docker daemon's built-in BuildKit,
 and creates, starts, and runs lifecycle commands in containers through the
