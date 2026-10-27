@@ -15,8 +15,8 @@ a working Docker daemon; Kubernetes validation uses kubeconform without a cluste
 Optional upstream fixture tests run when the reference submodules are initialized.
 `task parity` compares `dcb` with the upstream CLI; see the
 [parity harness](test/parity/README.md). Report a parity change in the pull request.
-`task docs:check` checks the public Markdown in `docs/user/` and `DESIGN.md`, which describes
-the logo, favicon and social image.
+`task docs:check` checks the public Markdown in `docs/user/`, and `DESIGN.md`,
+which describes the logo, favicon and social image.
 The docs publish to wyrd.foo through the `Publish docs` workflow, which calls
 the wyrd.foo `publish-docs` workflow, pinned to a 2.0.0 commit SHA. It runs
 after a successful `Release` run for a release tag, on a `dcb-docs@X.Y.Z`
