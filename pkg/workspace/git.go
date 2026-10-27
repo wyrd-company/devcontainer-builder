@@ -29,9 +29,9 @@ import (
 // core.protectNTFS, core.precomposeUnicode, core.fsyncObjectFiles,
 // core.safecrlf, core.autocrlf, core.lockfilePid,
 // sparse.expectFilesOutsideOfPatterns, pager.color, color.pager,
-// user.useConfigOnly or advice.detachedHead value that Git cannot read as a
-// boolean (or warn for core.safecrlf, input for core.autocrlf), after all config inputs
-// have been read. Git before 2.54 ignores core.lockfilePid.
+// user.useConfigOnly, advice.detachedHead or advice.statusHints value that Git
+// cannot read as a boolean (or warn for core.safecrlf, input for core.autocrlf),
+// after all config inputs have been read. Git before 2.54 ignores core.lockfilePid.
 // Other typed values from this full read and includeIf
 // conditions are not applied. A build whose os/user lookup reads /etc/passwd
 // only, as without cgo on Linux, skips a ~name/ include whose account it cannot

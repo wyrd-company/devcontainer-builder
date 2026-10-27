@@ -123,10 +123,9 @@ an invalid `core.ignorecase`, `core.filemode`, `core.symlinks`,
 `core.sparseCheckoutCone`, `core.protectHFS`, `core.protectNTFS`,
 `core.precomposeUnicode`, `core.fsyncObjectFiles`, `core.safecrlf`,
 `core.autocrlf`, `core.lockfilePid`, `sparse.expectFilesOutsideOfPatterns`,
-`pager.color`, `color.pager`, `user.useConfigOnly` or `advice.detachedHead`
-boolean gives no Git root,
-so `Resolve` mounts
-the requested folder.
+`pager.color`, `color.pager`, `user.useConfigOnly`, `advice.detachedHead` or
+`advice.statusHints` boolean gives no Git root, so `Resolve` mounts the
+requested folder.
 `core.safecrlf` also accepts `warn`, without regard to case.
 `core.autocrlf` also accepts `input`, without regard to case.
 Native discovery follows current Git for `core.lockfilePid`; Git before 2.54
