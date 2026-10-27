@@ -93,6 +93,14 @@ Bob also approved one account-lookup difference: Linux release builds look up
 accounts in `/etc/passwd` only and skip an `include.path` of `~name/` whose
 account is not there; see
 [Relation to the Dev Container CLI](../overview.md#relation-to-the-dev-container-cli).
+`dcb` adds `--git-prefix` to up, exec, read-configuration and
+run-user-commands, the commands with mount-workspace-git-root, and
+`Options.GitPrefix` to `pkg/workspace`; upstream has neither. It names the
+prefix of the host Git's build, where Git reads an `include.path` of
+`%(prefix)/` followed by a relative path. Without it, `dcb` does not read that
+file. Bob approved the extension and this default; see
+[Explicit Git prefix setting](../decisions/explicit-git-prefix-setting.yml).
+The extension removes no option and is not counted in the dispositions above.
 Another deliberate difference from the latest stable Git needs Bob's approval.
 The specification recommends mounting the repository root but does not define
 how it is found or what happens when Git rejects the repository. Whether to keep
