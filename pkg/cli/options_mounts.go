@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"os"
 	"path/filepath"
 	"regexp"
 	"runtime"
@@ -16,6 +17,7 @@ import (
 	"github.com/docker/docker/api/types/mount"
 	dockerclient "github.com/docker/docker/client"
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 	hostdocker "github.com/wyrd-company/devcontainer-builder/pkg/host/docker"
 	"github.com/wyrd-company/devcontainer-builder/pkg/spec"
 	"github.com/wyrd-company/devcontainer-builder/pkg/workspace"
@@ -36,7 +38,10 @@ var hostOS = runtime.GOOS
 // without them (build, set-up) mount the workspace folder alone, as upstream.
 type mountOptions struct {
 	gitRoot, worktreeCommonDir bool
-	idLabels                   []string
+	// gitPrefix is not an upstream flag; see workspace.Options.GitPrefix.
+	gitPrefix     string
+	gitPrefixFlag *pflag.Flag
+	idLabels      []string
 	// Only on up.
 	consistency string
 	mounts      []string
@@ -45,6 +50,8 @@ type mountOptions struct {
 func (o *mountOptions) flags(cmd *cobra.Command) {
 	cmd.Flags().BoolVar(&o.gitRoot, "mount-workspace-git-root", true, "Mount the workspace using its Git root (=false mounts the workspace folder alone)")
 	cmd.Flags().BoolVar(&o.worktreeCommonDir, "mount-git-worktree-common-dir", false, "Mount the Git worktree common folder so Git works in the container; needs a worktree added with --relative-paths")
+	cmd.Flags().StringVar(&o.gitPrefix, "git-prefix", "", "Prefix of the host Git's build, where a Git include.path of %(prefix)/ and a relative path is read (default: such includes are not read)")
+	o.gitPrefixFlag = cmd.Flags().Lookup("git-prefix")
 	o.idLabelFlags(cmd)
 	if cmd.Name() == "up" {
 		cmd.Flags().StringVar(&o.consistency, "workspace-mount-consistency", workspace.ConsistencyCached, "Workspace bind mount consistency on Docker Desktop: consistent, cached, or delegated")
@@ -57,8 +64,22 @@ func (o *mountOptions) idLabelFlags(cmd *cobra.Command) {
 	cmd.Flags().StringArrayVar(&o.idLabels, "id-label", nil, "Container id label NAME=VALUE (repeat): select a container carrying every label")
 }
 
-// prepare validates the values and makes them the invocation's selection.
+// prepare validates the values and makes them the invocation's selection. A
+// relative --git-prefix starts at the current folder; its components are kept
+// for the file system to follow.
 func (o *mountOptions) prepare(a *application) error {
+	if o.gitPrefixFlag != nil && o.gitPrefixFlag.Changed {
+		if o.gitPrefix == "" {
+			return usageError("--git-prefix must not be empty")
+		}
+		if !filepath.IsAbs(o.gitPrefix) {
+			cwd, err := os.Getwd()
+			if err != nil {
+				return err
+			}
+			o.gitPrefix = cwd + string(filepath.Separator) + o.gitPrefix
+		}
+	}
 	switch o.consistency {
 	case "", workspace.ConsistencyConsistent, workspace.ConsistencyCached, workspace.ConsistencyDelegated:
 	default:
@@ -122,6 +143,7 @@ func (a *application) placeWorkspace(dc *spec.DevContainer, local string) error 
 		opts.MountGitRoot = a.mounts.gitRoot
 		opts.MountGitWorktreeCommonDir = a.mounts.worktreeCommonDir
 		opts.Consistency = a.mounts.consistency
+		opts.GitPrefix = a.mounts.gitPrefix
 	}
 	hasMount := declaresWorkspaceMount(dc)
 	placement, err := workspace.Resolve(local, dc.WorkspaceFolder != "", hasMount, opts)
