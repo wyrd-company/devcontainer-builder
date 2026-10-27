@@ -51,9 +51,9 @@ func sparsecheckoutconeSource(source, body, value string) func(*testing.T, inclu
 			writeFile(t, filepath.Join(f.admin, "config.worktree"), content)
 			return nil
 		case "count":
-			return commandPairs("CORE.SPARSECHECKOUT", value)(t, f)
+			return commandPairs("CORE.SPARSECHECKOUTCONE", value)(t, f)
 		case "parameters":
-			return commandParameters("'CoRe.SpArSeChEcKoUt'="+commandQuote(value))(t, f)
+			return commandParameters("'CoRe.SpArSeChEcKoUtCoNe'="+commandQuote(value))(t, f)
 		case "command-include":
 			return commandInclude(body, false)(t, f)
 		case "parameters-include":
@@ -84,7 +84,7 @@ var sparsecheckoutconeCases = func() []includeCase {
 		{"subsection", "[core \"other\"]\nsparsecheckoutcone=invalid\n", true},
 		{"old-subsection", "[core.other]\nsparsecheckoutcone=invalid\n", true},
 		{"unrelated-key", "[sample]\nsparsecheckoutcone=invalid\n", true},
-		{"upper-key", "[CORE]\nSPARSECHECKOUT=invalid\n", false},
+		{"upper-key", "[CORE]\nSPARSECHECKOUTCONE=invalid\n", false},
 		{"invalid-before-valid", "[core]\nsparsecheckoutcone=invalid\nsparsecheckoutcone=true\n", false},
 		{"valid-before-invalid", "[core]\nsparsecheckoutcone=true\nsparsecheckoutcone=invalid\n", false},
 		{"invalid-before-valid-symlinks", "[core]\nsparsecheckoutcone=invalid\nsymlinks=true\n", false},
