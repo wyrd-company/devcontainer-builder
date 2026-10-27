@@ -24,9 +24,9 @@ import (
 // GIT_CONFIG_PARAMETERS, rejecting invalid syntax and following include.path.
 // A command-line include must expand to an absolute path; a relative include
 // inside that file starts at its folder. The full read rejects any
-// core.ignorecase or core.filemode value that Git cannot read as a boolean,
-// after all config inputs have been read. Other typed values from this full read and includeIf
-// conditions are not applied. A build whose os/user lookup reads /etc/passwd
+// core.ignorecase, core.filemode or core.symlinks value that Git cannot read
+// as a boolean, after all config inputs have been read. Other typed values
+// from this full read and includeIf conditions are not applied. A build whose os/user lookup reads /etc/passwd
 // only, as without cgo on Linux, skips a ~name/ include whose account it cannot
 // find, where Git
 // rejects an unknown name. GitRoot does not know the prefix of Git's build,
