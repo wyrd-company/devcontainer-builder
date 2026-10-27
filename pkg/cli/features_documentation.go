@@ -21,6 +21,19 @@ func (a *application) featuresDocumentationCommand() *cobra.Command {
 	var opts features.DocumentationOptions
 	var projects, registries, namespaces, owners, repos []string
 	cmd := &cobra.Command{Use: "generate-docs", Short: "Generate READMEs for local Features", Args: cobra.NoArgs}
+	cmd.Flags().SetNormalizeFunc(func(_ *pflag.FlagSet, name string) pflag.NormalizedName {
+		switch name {
+		case "projectFolder":
+			name = "project-folder"
+		case "githubOwner":
+			name = "github-owner"
+		case "githubRepo":
+			name = "github-repo"
+		case "logLevel":
+			name = "log-level"
+		}
+		return pflag.NormalizedName(name)
+	})
 	cmd.RunE = func(cmd *cobra.Command, _ []string) error {
 		if len(projects) != 1 {
 			return fmt.Errorf("project-folder must be a single path")
@@ -64,6 +77,56 @@ func (a *application) featuresDocumentationCommand() *cobra.Command {
 		flag.Annotations["documentation-no-value"] = []string{value}
 	}
 	return cmd
+}
+
+var documentationAttachedNumber = regexp.MustCompile(`^-?\d+(\.\d*)?(e-?\d+)?$`)
+var documentationWord = regexp.MustCompile(`^[A-Za-z0-9_]$`)
+
+// yargs expands a short group even when an earlier letter is a string option.
+// Only numeric or punctuation suffixes attach to that letter; the final flag
+// uses the same following-token rules as its ungrouped spelling.
+func documentationGroupedArgs(cmd *cobra.Command, arg string, next []string) ([]string, int, bool) {
+	if cmd.Name() != "generate-docs" || cmd.Parent() == nil || cmd.Parent().Name() != "features" || len(arg) < 3 || arg[0] != '-' || arg[1] == '-' {
+		return nil, 0, false
+	}
+	// Dotted shorthand names set a property on a boxed option value in yargs.
+	// That object is converted to text alongside repeated string values.
+	if len(arg) > 3 && arg[2] == '.' {
+		if flag := cmd.Flags().ShorthandLookup(arg[1:2]); flag != nil && flag.Annotations["documentation-no-value"] != nil {
+			consumed := 0
+			if !strings.Contains(arg, "=") && len(next) > 0 && !strings.HasPrefix(next[0], "-") {
+				consumed = 1
+			}
+			return []string{"--" + flag.Name + "=[object Object]"}, consumed, true
+		}
+	}
+	var out []string
+	for j := 1; j < len(arg); j++ {
+		letter := arg[j : j+1]
+		flag := cmd.Flags().ShorthandLookup(letter)
+		if flag == nil || flag.Annotations["documentation-no-value"] == nil {
+			out = append(out, "-"+arg[j:])
+			return out, 0, true
+		}
+		rest := arg[j+1:]
+		if rest == "" {
+			if value, handled := documentationOptionArg(flag, "-"+letter, next); handled {
+				out = append(out, value)
+			} else {
+				out = append(out, "-"+letter)
+			}
+			return out, 0, true
+		}
+		if strings.HasPrefix(rest, "=") {
+			value, _ := documentationOptionArg(flag, "-"+letter+rest, next)
+			return append(out, value), 0, true
+		}
+		if rest == "-" || documentationAttachedNumber.MatchString(rest) || !documentationWord.MatchString(rest[:1]) {
+			return append(out, "--"+flag.Name+"="+rest), 0, true
+		}
+		out = append(out, "--"+flag.Name+"="+flag.Annotations["documentation-no-value"][0])
+	}
+	return out, 0, true
 }
 
 // Adapt just this command's string flags before pflag parses them. Its short

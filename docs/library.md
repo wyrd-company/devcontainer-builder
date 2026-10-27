@@ -151,7 +151,8 @@ from its metadata and optional NOTES.md. Missing metadata or an ID is skipped;
 other entry failures return an error after the remaining entries are processed.
 Metadata and notes stay unchanged; existing README files are replaced. The reader
 retains upstream UTF-8 replacement, tolerant number recovery, and JavaScript
-property/prototype conversion. Conversion or map errors preserve that entry's
+property/prototype conversion, including UTF-16 string property indices.
+Conversion or map errors preserve that entry's
 README and return an operation error after sibling processing. The
 [usage guide](usage.md#generate-feature-documentation) describes content,
 symlinks, tolerant JSONC parsing, and partial results.
