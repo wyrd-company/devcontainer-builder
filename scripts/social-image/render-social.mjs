@@ -20,5 +20,5 @@ const browser = await chromium.launch();
 const tab = await browser.newPage({ viewport: { width: 1200, height: 630 } });
 await tab.goto(pathToFileURL(page).href);
 await tab.evaluate(() => document.fonts.ready);
-await tab.screenshot({ path: join(here, "../../user/assets/social.png") });
+await tab.screenshot({ path: join(here, "../../docs/user/assets/social.png") });
 await browser.close();

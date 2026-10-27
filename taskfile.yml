@@ -29,7 +29,7 @@ tasks:
   docs:check:
     desc: Check public Markdown
     cmds:
-      - rumdl check README.md CONTRIBUTING.md docs/user/*.md
+      - rumdl check README.md CONTRIBUTING.md DESIGN.md docs/user/*.md
   intentional:check:
     desc: Validate release metadata, including the pre-release inventory
     cmds:
