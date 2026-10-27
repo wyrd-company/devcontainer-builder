@@ -25,13 +25,13 @@ including inherited help/version on each command. It records short aliases but
 scores each canonical long option once. It never subtracts omissions. Registration
 coverage is distinct from behavior parity and does not use these dispositions.
 The pinned `up` table has **44 explicit options**, plus inherited help/version.
-Registered option coverage is **154/253 (60.87%)**;
+Registered option coverage is **159/253 (62.85%)**;
 registration includes the three implemented session-folder pairs.
 
 ## Dispositions
 
-- implemented: **154**.
-- implement: **83**.
+- implemented: **159**.
+- implement: **78**.
 - not applicable by design: **15**.
 - needs Bob's decision: **1**.
 
@@ -132,14 +132,15 @@ containerCollectionsOCI.ts:562.
 
 All 18 upstream leaf commands are included below, with the root and two command
 groups. `dcb features` resolves/stages a configuration; it does not cover upstream's
-feature authoring commands. The `templates` group, all its children, `outdated`,
-`upgrade`, and all upstream `features` children are absent.
+feature authoring commands other than `features package`. The `templates` group,
+all its children, `outdated`, `upgrade`, and the other upstream `features` children
+are absent.
 
 Positional arguments are part of each command unit but do not add flag score units:
 `build [path]` maps to `build --workspace-folder`; `exec <cmd> [args..]` maps to
 `exec <cmd> [args..]` (an explicit `--` also works). Missing units must also
 implement `features test [target]`
-(deprecated target; project-folder preferred), `features package <target>`,
+(deprecated target; project-folder preferred),
 `features publish <target>`, `features info <mode> <feature>`,
 `templates publish <target>`, and `templates metadata <templateId>`.
 Mode choices for feature info are manifest, tags, dependencies and verbose.
@@ -246,13 +247,22 @@ features, dotfiles, environment probing and version support.
 
 ### features package
 
+`features.Package` implements single-Feature and collection packaging. The CLI
+accepts `<target>`, preserves existing output unless
+force is explicit, and writes plain tar archives with the upstream `.tgz` name.
+Single archives use the metadata ID; collection archives use folder names.
+Nonempty `legacyIds` adds `currentId` in packaged metadata without source edits.
+The CLI retains dcb's JSON-result contract. `TestPackageSingle`,
+`TestPackageCollection`, `TestPackageOutput`, and `TestFeaturesPackageCommand`
+cover the behavior; the external pinned-CLI workflow comparison checks artifacts.
+
 | Upstream option | dcb equivalent | Disposition | Unit | Reason / source |
 | --- | --- | --- | --- | --- |
-| --output-folder (-o) | none | implement | feature-package | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: collectionCommonUtils/package.ts:16. |
-| --force-clean-output-folder (-f) | none | implement | feature-package | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: collectionCommonUtils/package.ts:17. |
-| --log-level | none | implement | feature-package | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: collectionCommonUtils/package.ts:18. |
-| --help | none | implement | feature-package | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: yargs built-in help. |
-| --version | version command | implement | sibling-unit | dcb registers --version on every command; this command is not implemented yet. Source: devContainersSpecCLI.ts (.version). |
+| --output-folder (-o) | --output-folder (-o) | implemented | feature-package | Destination defaults to ./output. Source: collectionCommonUtils/package.ts:16. |
+| --force-clean-output-folder (-f) | --force-clean-output-folder (-f) | implemented | feature-package | Existing output is removed only when requested. Source: collectionCommonUtils/package.ts:17. |
+| --log-level | --log-level | implemented | feature-package | Uses the existing diagnostic level. Source: collectionCommonUtils/package.ts:18. |
+| --help | --help | implemented | feature-package | Describes target and packaging flags. Source: yargs built-in help. |
+| --version | --version | implemented | sibling-unit | The inherited version flag runs in place of packaging. Source: devContainersSpecCLI.ts (.version). |
 
 ### features publish
 

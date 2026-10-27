@@ -24,7 +24,7 @@ credentials that the calling process has at the time of the call; see
 | `pkg/lifecycle` | Plans the lifecycle commands of a configuration and its features. |
 | `pkg/host/runner` | Runs a lifecycle plan with marker files through any exec transport. |
 | `pkg/spec` | Reads `devcontainer.json`. |
-| `pkg/features` | Resolves features and their install order. |
+| `pkg/features` | Resolves Features and their install order, and packages local Features. |
 | `pkg/substitute` | Substitutes configuration variables. |
 | `pkg/workspace` | Places a workspace folder in a container: its Git root, a worktree's common Git folder, and the workspace folder. |
 | `pkg/registryauth` | Reads registry credentials from the Docker client configuration, or holds credentials that the caller supplies. |
@@ -131,6 +131,21 @@ requested folder.
 Native discovery follows current Git for `core.lockfilePid`; Git before 2.54
 ignores that key.
 See [Workspace mounts](/docs/dcb/usage#workspace-mounts-and-container-selection).
+
+## Package local Features
+
+`features.Package(ctx, features.PackageOptions{Target: "./src", OutputDir: "./output"})`
+writes Feature archives and `devcontainer-collection.json`. Empty paths use the
+current folder and `./output`. `ForceCleanOutputDir` permits removal of an
+existing output directory. The returned `*features.Collection` contains raw
+Feature metadata, including unknown properties. Sources stay unchanged.
+
+The operation returns an error for an invalid source, existing output without
+force, missing required metadata, or a collection entry without `install.sh`.
+It can leave earlier archives on failure. It closes files and removes staging
+before returning. Cancellation uses the supplied context. See
+`TestPackageArchiveCanBeResolved` for packaging followed by archive resolution,
+and [Usage](/docs/dcb/usage#package-local-features) for archive naming and flags.
 
 ## Registry credentials
 
