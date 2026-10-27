@@ -44,7 +44,8 @@ import (
 // objects signature, both relative to folder. Git's repository format check
 // then reads the repository config: core.bare selects the caller folder,
 // core.worktree selects the working tree, and config that Git rejects gives no
-// root.
+// root. Repository-format config can be a stream, such as a FIFO: each read
+// waits for a writer without a time limit, and stops at an error or EOF.
 // Gitfiles use a literal prefix and path payload, with Git's 1 MiB size limit.
 // A relative gitfile target keeps its components until filesystem traversal.
 // GIT_CEILING_DIRECTORIES limits parent discovery as in Git. Parent discovery

@@ -111,7 +111,10 @@ returns the workspace mount and folder that a host's `UpRequest` takes.
 names it; without it, an `include.path` of `%(prefix)/` followed by a relative
 path is not read. A relative `Options.GitPrefix` starts at the including
 file's folder, not at the current folder as a relative `--git-prefix` does.
-`Options.GitRoot` returns the Git root alone. Discovery also reads the
+`Options.GitRoot` returns the Git root alone. Repository-format
+config files can be streams, such as FIFOs. Discovery waits for a writer
+without a time limit, and reads the file again after setup, as Git does.
+Discovery also reads the
 command-line config environment (`GIT_CONFIG_COUNT` pairs and
 `GIT_CONFIG_PARAMETERS`) after repository setup. A command-line
 `include.path` must expand to an absolute path. See

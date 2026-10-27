@@ -781,7 +781,12 @@ rejects gives no Git root: a syntax error, a directory or an unreadable file,
 a `core.repositoryformatversion` that is not an integer or is above 1, an
 invalid `core.bare`, `extensions.worktreeConfig` or `extensions.preciousObjects`
 boolean, and `core.worktree` or `extensions.partialClone` without a value. A
-special file such as a FIFO is not read and also gives no Git root.
+special file, such as a FIFO or a device, is read as a stream. A FIFO waits
+for a writer with no time limit. The format check stops at the first syntax
+or typed value error, or at the end of the stream; a read error also ends the
+stream.
+The format check does not follow includes. The full read after setup opens
+these files again and follows their includes.
 Extensions follow Git 2.55 built without Rust. Git checks each extension value
 whatever the repository version: `extensions.objectFormat` and
 `extensions.compatObjectFormat` must be `sha1` or `sha256`,
