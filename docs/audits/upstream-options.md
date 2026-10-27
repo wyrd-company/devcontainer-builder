@@ -90,7 +90,7 @@ paths differently and accept other repository extensions, so the upstream CLI
 can mount a different folder; see
 [Workspace mounts](../usage.md#workspace-mounts-and-container-selection).
 The full config read rejects invalid `core.ignorecase`, `core.filemode`,
-`core.symlinks`, `core.trustctime`, `core.quotepath` and `core.ignorestat`
+`core.symlinks`, `core.trustctime`, `core.quotepath`, `core.ignorestat` and `core.sparseCheckout`
 boolean values after reading all file, include and command-line inputs.
 Bob also approved one account-lookup difference: Linux release builds look up
 accounts in `/etc/passwd` only and skip an `include.path` of `~name/` whose
