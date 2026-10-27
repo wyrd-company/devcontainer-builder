@@ -308,7 +308,7 @@ var includeCases = append(append(append([]includeCase{
 		writeFile(t, filepath.Join(f.admin, "inc.cfg"), globalConfigBroken)
 		return nil
 	}, ok: true},
-}, prefixIncludeCases...), commandConfigCases...), append(append(append(ignoreCaseCases, fileModeCases...), symlinksCases...), append(trustctimeCases, append(quotepathCases, append(ignorestatCases, append(sparsecheckoutCases, append(sparsecheckoutconeCases, append(protecthfsCases, append(protectntfsCases, append(precomposeunicodeCases, append(fsyncobjectfilesCases, append(safecrlfCases, append(autocrlfCases, append(lockfilepidCases, append(sparseOutsideCases, append(pagerColorCases, useConfigOnlyCases...)...)...)...)...)...)...)...)...)...)...)...)...)...)...)...)
+}, prefixIncludeCases...), commandConfigCases...), append(append(append(ignoreCaseCases, fileModeCases...), symlinksCases...), append(trustctimeCases, append(quotepathCases, append(ignorestatCases, append(sparsecheckoutCases, append(sparsecheckoutconeCases, append(protecthfsCases, append(protectntfsCases, append(precomposeunicodeCases, append(fsyncobjectfilesCases, append(safecrlfCases, append(autocrlfCases, append(lockfilepidCases, append(sparseOutsideCases, append(pagerColorCases, append(useConfigOnlyCases, detachedHeadCases...)...)...)...)...)...)...)...)...)...)...)...)...)...)...)...)...)
 
 // includeCaseVars selects no system or global file, so that only the case
 // selects one.
