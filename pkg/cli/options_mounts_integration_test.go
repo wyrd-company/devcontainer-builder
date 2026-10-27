@@ -320,6 +320,8 @@ func TestAttachedWorkspaceDockerIntegration(t *testing.T) {
 		{"git root", nil, false, "/workspaces/repo/app"},
 		{"workspace folder", []string{"--mount-workspace-git-root=false"}, true, "/workspaces/app"},
 		{"worktree common folder", []string{"--mount-git-worktree-common-dir"}, false, "/workspaces/topic/pkg"},
+		// The --git-prefix value is added below.
+		{"git prefix", []string{"--git-prefix"}, false, "/workspaces/app"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			repo, local := gitWorkspace(t, config)
@@ -332,6 +334,12 @@ func TestAttachedWorkspaceDockerIntegration(t *testing.T) {
 				local = filepath.Join(tree, "pkg")
 				writeTestFile(t, filepath.Join(local, ".devcontainer.json"), config)
 			}
+			upArgs := tc.upArgs
+			if tc.name == "git prefix" {
+				// Git rejects the file below the prefix, so the workspace
+				// folder is mounted.
+				upArgs = []string{"--git-prefix", filepath.Join(gitPrefixWorkspace(t), "deep", "prefix")}
+			}
 			t.Cleanup(func() {
 				owned, _ := cli.ContainerList(ctx, container.ListOptions{All: true, Filters: filters.NewArgs(filters.Arg("label", hostdocker.LabelLocalFolder))})
 				for _, c := range owned {
@@ -341,7 +349,7 @@ func TestAttachedWorkspaceDockerIntegration(t *testing.T) {
 				}
 			})
 			ws := []string{"--workspace-folder", local}
-			up, _ := invoke(t, 0, append(append([]string{"up"}, ws...), tc.upArgs...)...)
+			up, _ := invoke(t, 0, append(append([]string{"up"}, ws...), upArgs...)...)
 			id := up["containerId"].(string)
 			if up["remoteWorkspaceFolder"] != tc.want {
 				t.Fatalf("up result=%v, want folder %s", up, tc.want)
