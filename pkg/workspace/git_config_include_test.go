@@ -306,7 +306,7 @@ var includeCases = append(append(append([]includeCase{
 		writeFile(t, filepath.Join(f.admin, "inc.cfg"), globalConfigBroken)
 		return nil
 	}, ok: true},
-}, prefixIncludeCases...), commandConfigCases...), ignoreCaseCases...)
+}, prefixIncludeCases...), commandConfigCases...), append(ignoreCaseCases, fileModeCases...)...)
 
 // includeCaseVars selects no system or global file, so that only the case
 // selects one.

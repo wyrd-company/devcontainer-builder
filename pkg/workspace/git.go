@@ -24,8 +24,8 @@ import (
 // GIT_CONFIG_PARAMETERS, rejecting invalid syntax and following include.path.
 // A command-line include must expand to an absolute path; a relative include
 // inside that file starts at its folder. The full read rejects any
-// core.ignorecase value that Git cannot read as a boolean, after all config
-// inputs have been read. Other typed values from this full read and includeIf
+// core.ignorecase or core.filemode value that Git cannot read as a boolean,
+// after all config inputs have been read. Other typed values from this full read and includeIf
 // conditions are not applied. A build whose os/user lookup reads /etc/passwd
 // only, as without cgo on Linux, skips a ~name/ include whose account it cannot
 // find, where Git
@@ -70,7 +70,7 @@ func gitRoot(folder, prefix string) string {
 	}
 	root, cwd, config := gitSetupRoot(folder)
 	var values gitConfigValues
-	if root == "" || !gitConfigRead(cwd, true, prefix, &values) || !config.read(cwd, prefix, &values) || !gitCommandConfigRead(cwd, prefix, &values) || values.invalidIgnoreCase {
+	if root == "" || !gitConfigRead(cwd, true, prefix, &values) || !config.read(cwd, prefix, &values) || !gitCommandConfigRead(cwd, prefix, &values) || values.invalidBoolean {
 		return ""
 	}
 	return root
