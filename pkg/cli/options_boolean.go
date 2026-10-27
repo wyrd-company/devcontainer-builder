@@ -39,6 +39,12 @@ func booleanOptionArgs(root *cobra.Command, args []string) []string {
 		} else if strings.HasPrefix(name, "-") && len(name) == 2 {
 			flag = cmd.Flags().ShorthandLookup(name[1:])
 		}
+		if flag != nil {
+			if value, handled := documentationOptionArg(flag, arg, args[i+1:]); handled {
+				out = append(out, value)
+				continue
+			}
+		}
 		if flag != nil && !equals && i+1 < len(args) {
 			next := args[i+1]
 			if flag.Value.Type() == "bool" && (next == "true" || next == "false") {

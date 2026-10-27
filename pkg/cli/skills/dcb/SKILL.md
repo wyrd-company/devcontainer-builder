@@ -87,6 +87,9 @@ output folder. The result contains Feature metadata; archives and
 NOTES.md, and deprecation/legacy-ID notices. Missing metadata or IDs are skipped
 with diagnostics; other failures can leave partial results. It replaces existing
 READMEs and returns the normal JSON result. It needs no Docker or registry.
+String flags without values use their declared defaults; explicit empty strings
+stay empty. Conversion/map errors preserve that entry's README while sibling
+entries can complete.
 
 `build` loads into Docker by default and returns an `imageName` array.
 Use `--push` for registry export, `--platform` for target platforms,

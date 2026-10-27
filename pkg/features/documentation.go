@@ -119,6 +119,14 @@ func documentationLog(opts DocumentationOptions, format string, args ...any) {
 
 func renderFeatureDocumentation(meta any, opts DocumentationOptions, folder string) (string, error) {
 	get := func(key string) any { return documentationGet(meta, key) }
+	var conversionErr error
+	stringValue := func(value any) string {
+		text, err := documentationString(value)
+		if err != nil && conversionErr == nil {
+			conversionErr = err
+		}
+		return text
+	}
 	version := "latest"
 	if v := get("version"); documentationTruthy(v) {
 		s, ok := v.(string)
@@ -145,7 +153,7 @@ func renderFeatureDocumentation(meta any, opts DocumentationOptions, folder stri
 			if def == "" {
 				def = "-"
 			}
-			rows = append(rows, fmt.Sprintf("| %s | %s | %s | %s |", key, documentationString(desc), documentationString(typ), documentationString(def)))
+			rows = append(rows, fmt.Sprintf("| %s | %s | %s | %s |", key, stringValue(desc), stringValue(typ), stringValue(def)))
 		}
 		options = "## Options\n\n| Options Id | Description | Type | Default Value |\n|-----|-----|-----|-----|\n" + strings.Join(rows, "\n")
 	}
@@ -156,7 +164,7 @@ func renderFeatureDocumentation(meta any, opts DocumentationOptions, folder stri
 		if err != nil {
 			return "", err
 		}
-		notes = string([]rune(string(data)))
+		notes = documentationUTF8(data)
 	}
 	url := "devcontainer-feature.json"
 	if opts.GitHubOwner != "" && opts.GitHubRepo != "" {
@@ -165,49 +173,52 @@ func renderFeatureDocumentation(meta any, opts DocumentationOptions, folder stri
 	}
 	header := ""
 	legacy := get("legacyIds")
-	hasLegacy := documentationTruthy(legacy) && documentationLength(legacy) > 0
+	legacyLength, err := documentationLength(legacy)
+	if err != nil {
+		return "", err
+	}
+	hasLegacy := documentationTruthy(legacy) && legacyLength > 0
 	if documentationTruthy(get("deprecated")) || hasLegacy {
 		header = "### **IMPORTANT NOTE**\n"
 		if documentationTruthy(get("deprecated")) {
 			header += "- **This Feature is deprecated, and will no longer receive any further updates/support.**\n"
 		}
 		if hasLegacy {
-			ids, ok := legacy.([]any)
-			if !ok {
-				return "", fmt.Errorf("legacyIds.map is not a function")
-			}
-			values := make([]string, len(ids))
-			for i, id := range ids {
-				values[i] = "'" + documentationString(id) + "'"
+			values, err := documentationMap(legacy, "'", "'")
+			if err != nil {
+				return "", fmt.Errorf("legacyIds.%w", err)
 			}
 			header += "- **Ids used to publish this Feature in the past - " + strings.Join(values, ", ") + "**\n"
 		}
 	}
 	extensions := ""
 	ext := documentationGet(documentationGet(get("customizations"), "vscode"), "extensions")
-	if documentationTruthy(ext) && documentationLength(ext) > 0 {
-		list, ok := ext.([]any)
-		if !ok {
-			return "", fmt.Errorf("extensions.map is not a function")
-		}
-		items := make([]string, len(list))
-		for i, item := range list {
-			items[i] = "- `" + documentationString(item) + "`"
+	extensionLength, err := documentationLength(ext)
+	if err != nil {
+		return "", err
+	}
+	if documentationTruthy(ext) && extensionLength > 0 {
+		items, err := documentationMap(ext, "- `", "`")
+		if err != nil {
+			return "", fmt.Errorf("extensions.%w", err)
 		}
 		extensions = "\n## Customizations\n\n### VS Code Extensions\n\n" + strings.Join(items, "\n") + "\n"
 	}
-	id := documentationString(get("id"))
+	id := stringValue(get("id"))
 	name := id
 	if documentationTruthy(get("name")) {
-		name = documentationString(get("name")) + " (" + id + ")"
+		name = stringValue(get("name")) + " (" + id + ")"
 	}
 	desc := get("description")
 	if desc == nil || desc == documentationUndefined {
 		desc = ""
 	}
 	text := featureReadmeTemplate
-	for _, r := range [][2]string{{"Id", id}, {"Name", name}, {"Description", documentationString(desc)}, {"OptionsTable", options}, {"Notes", notes}, {"RepoUrl", url}, {"Registry", opts.Registry}, {"Namespace", opts.Namespace}, {"Version", version}, {"Customizations", extensions}} {
+	for _, r := range [][2]string{{"Id", id}, {"Name", name}, {"Description", stringValue(desc)}, {"OptionsTable", options}, {"Notes", notes}, {"RepoUrl", url}, {"Registry", opts.Registry}, {"Namespace", opts.Namespace}, {"Version", version}, {"Customizations", extensions}} {
 		text = documentationReplace(text, "#{"+r[0]+"}", r[1])
+	}
+	if conversionErr != nil {
+		return "", conversionErr
 	}
 	return header + text, nil
 }
