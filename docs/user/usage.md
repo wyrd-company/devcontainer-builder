@@ -720,8 +720,9 @@ is skipped. After the full read finishes, any `core.ignorecase`, `core.filemode`
 `core.symlinks`, `core.trustctime`, `core.quotepath`, `core.ignorestat`,
 `core.sparseCheckout`, `core.sparseCheckoutCone`, `core.protectHFS`,
 `core.protectNTFS`, `core.precomposeUnicode`, `core.fsyncObjectFiles`,
-`core.safecrlf`, `core.autocrlf` or `core.lockfilePid` value that Git cannot read
-as a boolean gives no Git root, even if a later value is valid. `core.safecrlf`
+`core.safecrlf`, `core.autocrlf`, `core.lockfilePid` or
+`sparse.expectFilesOutsideOfPatterns` value that Git cannot read as a boolean
+gives no Git root, even if a later value is valid. `core.safecrlf`
 also accepts `warn`, without regard to case. `core.autocrlf` also accepts `input`,
 without regard to case.
 Native discovery follows current Git for `core.lockfilePid`; Git before 2.54

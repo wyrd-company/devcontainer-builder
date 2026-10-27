@@ -93,8 +93,9 @@ The full config read rejects invalid `core.ignorecase`, `core.filemode`,
 `core.symlinks`, `core.trustctime`, `core.quotepath`, `core.ignorestat`,
 `core.sparseCheckout`, `core.sparseCheckoutCone`, `core.protectHFS`,
 `core.protectNTFS`, `core.precomposeUnicode`, `core.fsyncObjectFiles`,
-`core.safecrlf`, `core.autocrlf` and `core.lockfilePid` boolean values after
-reading all file, include and command-line inputs. `core.safecrlf` also accepts
+`core.safecrlf`, `core.autocrlf`, `core.lockfilePid` and
+`sparse.expectFilesOutsideOfPatterns` boolean values after reading all file,
+include and command-line inputs. `core.safecrlf` also accepts
 `warn`, without regard to case. `core.autocrlf` also accepts `input`, without regard to case.
 Native discovery follows current Git for `core.lockfilePid`; Git before 2.54
 ignores that key.
