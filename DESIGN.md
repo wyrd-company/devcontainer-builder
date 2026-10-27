@@ -195,14 +195,10 @@ the wyrd.foo "W" tile.
 - **Social image.** `docs/user/assets/social.png`, 1200×630, dark. From the
   top: the dark logo and the `dcb` wordmark in `primary`, the headline, the
   subline, and the address, with `social-accent-bar` along the bottom edge.
-  It is rendered from `scripts/social-image/social.html` by
-  `scripts/social-image/render-social.mjs`, which takes the path of a wyrd.foo
-  checkout for its Playwright and fonts:
-
-  ```sh
-  node scripts/social-image/render-social.mjs <path to wyrd.foo>
-  ```
-
+  It is rendered from `scripts/social-image/social.html` by `task docs:social`.
+  The task uses the Playwright and the fonts of a wyrd.foo checkout, which
+  defaults to `/workspaces/tools/wyrd.foo`. Pass another with
+  `WYRD_FOO=<path>`.
 - **README header.** The light and dark logos, shown by GitHub's
   `#gh-light-mode-only` and `#gh-dark-mode-only` image fragments.
 
@@ -212,7 +208,8 @@ the wyrd.foo "W" tile.
   as strokes.
 - Do use `logo-dark.svg` on dark backgrounds and `logo.svg` on light ones.
 - Do set the name as `dcb`, lower case, in Geist Mono.
-- Do re-render `social.png` when the tagline or the headline text changes.
+- Do re-render `social.png` with `task docs:social` when the tagline or the
+  headline text changes.
 - Don't add a second accent hue, a gradient or a shadow to the mark.
 - Don't put the logo on a tile. The favicon is the only tiled form.
 - Don't recolour the lower layers to the accent.

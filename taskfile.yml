@@ -30,6 +30,15 @@ tasks:
     desc: Check public Markdown
     cmds:
       - rumdl check README.md CONTRIBUTING.md DESIGN.md docs/user/*.md
+  docs:social:
+    desc: Render docs/user/assets/social.png (WYRD_FOO=<wyrd.foo checkout>)
+    vars:
+      WYRD_FOO: '{{default "/workspaces/tools/wyrd.foo" .WYRD_FOO}}'
+    preconditions:
+      - sh: test -d "{{.WYRD_FOO}}/node_modules/@playwright"
+        msg: "WYRD_FOO must be a wyrd.foo checkout with dependencies installed: {{.WYRD_FOO}}"
+    cmds:
+      - node scripts/social-image/render-social.mjs "{{.WYRD_FOO}}"
   intentional:check:
     desc: Validate release metadata, including the pre-release inventory
     cmds:
