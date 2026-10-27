@@ -86,7 +86,20 @@ var documentationWord = regexp.MustCompile(`^[A-Za-z0-9_]$`)
 // Only numeric or punctuation suffixes attach to that letter; the final flag
 // uses the same following-token rules as its ungrouped spelling.
 func documentationGroupedArgs(cmd *cobra.Command, arg string, next []string) ([]string, int, bool) {
-	if cmd.Name() != "generate-docs" || cmd.Parent() == nil || cmd.Parent().Name() != "features" || len(arg) < 3 || arg[0] != '-' || arg[1] == '-' {
+	if cmd.Name() != "generate-docs" || cmd.Parent() == nil || cmd.Parent().Name() != "features" || len(arg) < 3 || arg[0] != '-' {
+		return nil, 0, false
+	}
+	if strings.HasPrefix(arg, "--") {
+		name, _, equals := strings.Cut(strings.TrimPrefix(arg, "--"), "=")
+		if key, _, dotted := strings.Cut(name, "."); dotted {
+			if flag := cmd.Flags().Lookup(key); flag != nil && flag.Annotations["documentation-no-value"] != nil {
+				consumed := 0
+				if !equals && len(next) > 0 && (!strings.HasPrefix(next[0], "-") || documentationNegativeValue.MatchString(next[0])) {
+					consumed = 1
+				}
+				return []string{"--" + flag.Name + "=[object Object]"}, consumed, true
+			}
+		}
 		return nil, 0, false
 	}
 	// Dotted shorthand names set a property on a boxed option value in yargs.

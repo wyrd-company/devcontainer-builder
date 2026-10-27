@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"unicode/utf16"
 )
 
 // DocumentationOptions selects the collection folder and published references.
@@ -220,7 +221,7 @@ func renderFeatureDocumentation(meta any, opts DocumentationOptions, folder stri
 	if conversionErr != nil {
 		return "", conversionErr
 	}
-	return header + text, nil
+	return string(utf16.Decode(documentationUnits(header + text))), nil
 }
 
 // String.replace's replacement strings expand dollar patterns, including those

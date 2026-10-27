@@ -538,6 +538,8 @@ property and prototype conversion, including operation errors when conversion
 fails. A list's length property controls whether its map operation is attempted;
 invalid map operations also fail before replacing that entry's README.
 String-valued options enumerate UTF-16 indices, as upstream.
+Distinct escaped UTF-16 property keys remain distinct; isolated surrogate units
+become replacement characters when the README is written.
 
 Existing READMEs are replaced. An existing README symlink is unlinked; a dangling
 symlink is followed, as upstream. Source metadata and notes stay unchanged.

@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"unicode/utf16"
+	"unicode/utf8"
 
 	"golang.org/x/text/encoding/unicode"
 )
@@ -42,6 +43,34 @@ func documentationJSON(data []byte) any {
 func documentationUTF8(data []byte) string {
 	text, _ := unicode.UTF8.NewDecoder().Bytes(data)
 	return string(text)
+}
+
+// WTF-8 retains isolated UTF-16 code units while property names are compared.
+// JavaScript strings keep those units distinct; UTF-8 replacement belongs at
+// the final file-write boundary, after key lookup and interpolation.
+func documentationWriteRune(b *strings.Builder, r rune) {
+	if r >= 0xd800 && r <= 0xdfff {
+		b.WriteByte(byte(0xe0 | r>>12))
+		b.WriteByte(byte(0x80 | (r>>6)&0x3f))
+		b.WriteByte(byte(0x80 | r&0x3f))
+		return
+	}
+	b.WriteRune(r)
+}
+
+func documentationUnits(s string) []uint16 {
+	var units []uint16
+	for len(s) > 0 {
+		if len(s) >= 3 && s[0] == 0xed && s[1] >= 0xa0 && s[1] <= 0xbf && s[2]&0xc0 == 0x80 {
+			units = append(units, uint16(s[0]&0x0f)<<12|uint16(s[1]&0x3f)<<6|uint16(s[2]&0x3f))
+			s = s[3:]
+			continue
+		}
+		r, n := utf8.DecodeRuneInString(s)
+		units = append(units, utf16.Encode([]rune{r})...)
+		s = s[n:]
+	}
+	return units
 }
 
 type documentationParser struct {
@@ -199,7 +228,7 @@ func (p *documentationParser) str() string {
 						p.at += 6
 					}
 				}
-				b.WriteRune(r)
+				documentationWriteRune(&b, r)
 			}
 		}
 	}
@@ -321,11 +350,13 @@ func documentationGet(value any, key string) any {
 		}
 	case string:
 		if key == "length" {
-			return float64(len(utf16.Encode([]rune(v))))
+			return float64(len(documentationUnits(v)))
 		}
-		units := utf16.Encode([]rune(v))
+		units := documentationUnits(v)
 		if i, err := strconv.Atoi(key); err == nil && i >= 0 && i < len(units) && strconv.Itoa(i) == key {
-			return string(utf16.Decode(units[i : i+1]))
+			var b strings.Builder
+			documentationWriteRune(&b, rune(units[i]))
+			return b.String()
 		}
 	}
 	return documentationUndefined
@@ -340,7 +371,7 @@ func documentationKeys(value any) []string {
 			keys = append(keys, strconv.Itoa(i))
 		}
 	case string:
-		for i := 0; i < len(utf16.Encode([]rune(v))); i++ {
+		for i := 0; i < len(documentationUnits(v)); i++ {
 			keys = append(keys, strconv.Itoa(i))
 		}
 	}
