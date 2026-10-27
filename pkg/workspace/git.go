@@ -20,8 +20,12 @@ import (
 // starts and again from its working folder after setup, and a file or value
 // that it rejects gives no root. Both reads follow include.path entries, and
 // the read after setup also reads the repository config files, with their
-// includes. A build whose os/user lookup reads /etc/passwd only, as without
-// cgo on Linux, skips a ~name/ include whose account it cannot find, where Git
+// includes. It then reads GIT_CONFIG_COUNT/KEY_n/VALUE_n and
+// GIT_CONFIG_PARAMETERS, rejecting invalid syntax and following include.path.
+// A command-line include must expand to an absolute path; a relative include
+// inside that file starts at its folder. Typed values from this full read and
+// includeIf conditions are not applied. A build whose os/user lookup reads
+// /etc/passwd only, as without cgo on Linux, skips a ~name/ include whose account it cannot find, where Git
 // rejects an unknown name. GitRoot does not know the prefix of Git's build,
 // so it does not read an include.path of %(prefix)/ followed by a relative
 // path; Options.GitRoot reads it below Options.GitPrefix. Walking up the
@@ -61,7 +65,7 @@ func gitRoot(folder, prefix string) string {
 		return ""
 	}
 	root, cwd, config := gitSetupRoot(folder)
-	if root == "" || !gitConfigRead(cwd, true, prefix) || !config.read(cwd, prefix) {
+	if root == "" || !gitConfigRead(cwd, true, prefix) || !config.read(cwd, prefix) || !gitCommandConfigRead(cwd, prefix) {
 		return ""
 	}
 	return root

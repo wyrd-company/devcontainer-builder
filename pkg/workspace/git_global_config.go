@@ -20,7 +20,7 @@ import (
 // reads them again after setup, second, from its working folder, where a file
 // that it cannot open is also fatal. gitSystemConfigRead reads the system file
 // first. Both reads follow include.path entries. includeIf conditions, typed
-// values and the command-line config are not applied.
+// values are not applied. gitCommandConfigRead reads command-line config last.
 // Reference: https://github.com/git/git/blob/master/config.c
 func gitGlobalConfigRead(folder *gitConfigCwd, second bool, prefix string) bool {
 	for _, path := range gitGlobalConfigPaths() {

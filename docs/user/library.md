@@ -111,7 +111,10 @@ returns the workspace mount and folder that a host's `UpRequest` takes.
 names it; without it, an `include.path` of `%(prefix)/` followed by a relative
 path is not read. A relative `Options.GitPrefix` starts at the including
 file's folder, not at the current folder as a relative `--git-prefix` does.
-`Options.GitRoot` returns the Git root alone. See
+`Options.GitRoot` returns the Git root alone. Discovery also reads the
+command-line config environment (`GIT_CONFIG_COUNT` pairs and
+`GIT_CONFIG_PARAMETERS`) after repository setup. A command-line
+`include.path` must expand to an absolute path. See
 [Workspace mounts](/docs/dcb/usage#workspace-mounts-and-container-selection).
 
 ## Registry credentials
