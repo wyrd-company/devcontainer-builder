@@ -119,7 +119,8 @@ command-line config environment (`GIT_CONFIG_COUNT` pairs and
 `GIT_CONFIG_PARAMETERS`) after repository setup. A command-line
 `include.path` must expand to an absolute path. After all full-read inputs,
 an invalid `core.ignorecase`, `core.filemode`, `core.symlinks`,
-`core.trustctime`, `core.quotepath` or `core.ignorestat` boolean gives no Git root,
+`core.trustctime`, `core.quotepath`, `core.ignorestat` or `core.sparseCheckout`
+boolean gives no Git root,
 so `Resolve` mounts the requested folder. See [Workspace mounts](/docs/dcb/usage#workspace-mounts-and-container-selection).
 
 ## Registry credentials
