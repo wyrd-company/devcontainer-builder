@@ -93,6 +93,25 @@ writers if the output is shown or kept.
 if it is stopped, and runs only the lifecycle commands that the marker files
 show as not yet done.
 
+## Place a workspace
+
+```go
+import "github.com/wyrd-company/devcontainer-builder/pkg/workspace"
+
+placement, err := workspace.Resolve("/path/to/workspace/app", false, false, workspace.Options{
+    MountGitRoot: true,
+    Platform:     runtime.GOOS,
+    GitPrefix:    "/usr",
+})
+```
+
+`Resolve` finds the Git root as `dcb up` does, without running `git`, and
+returns the workspace mount and folder that a host's `UpRequest` takes.
+`Options.GitPrefix` is the prefix of the host Git's build, as `--git-prefix`
+names it; without it, an `include.path` of `%(prefix)/` followed by a relative
+path is not read. `Options.GitRoot` returns the Git root alone. See
+[Workspace mounts](/docs/dcb/usage#workspace-mounts-and-container-selection).
+
 ## Registry credentials
 
 One credential source can serve every registry request of a workspace:
