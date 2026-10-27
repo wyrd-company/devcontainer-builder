@@ -200,6 +200,10 @@ func packageFeature(ctx context.Context, source, out, name string, collection bo
 		name = id
 	}
 	archive := filepath.Join(out, "devcontainer-feature-"+name+".tgz")
+	relative, err := filepath.Rel(out, archive)
+	if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
+		return nil, fmt.Errorf("Feature id %q would write outside output directory", id)
+	}
 	if err := packageTar(ctx, staged, archive); err != nil {
 		return nil, err
 	}

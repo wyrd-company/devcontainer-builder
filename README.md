@@ -27,9 +27,10 @@ APT and RPM need the [repo.wyrd.foo](https://repo.wyrd.foo) package
 repository. [Installation](https://wyrd.foo/docs/dcb/install) gives the setup
 commands and the release archives.
 
-`dcb` runs on Linux and macOS, on `amd64` and `arm64`. It needs a Docker Engine
-that it can reach through the standard `DOCKER_HOST` environment; the `docker`
-command is not needed. Podman is not supported.
+`dcb` runs on Linux and macOS, on `amd64` and `arm64`. Container operations need
+a Docker Engine reachable through the standard `DOCKER_HOST` environment; the
+`docker` command is not needed. Local Feature packaging does not need Docker.
+Podman is not supported.
 
 ## Use
 
