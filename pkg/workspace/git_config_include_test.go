@@ -117,7 +117,7 @@ func includeChain(n int, last string) map[string]string {
 	return files
 }
 
-var includeCases = append(append([]includeCase{
+var includeCases = append(append(append([]includeCase{
 	{name: "global-valid", setup: includeGlobal(includeLine("inc.cfg"), map[string]string{"global/inc.cfg": globalConfigValid}), ok: true},
 	{name: "global-syntax", setup: includeGlobal(includeLine("inc.cfg"), map[string]string{"global/inc.cfg": globalConfigBroken})},
 	{name: "global-absolute-syntax", setup: func(t *testing.T, f includeFixture) map[string]*string {
@@ -306,7 +306,7 @@ var includeCases = append(append([]includeCase{
 		writeFile(t, filepath.Join(f.admin, "inc.cfg"), globalConfigBroken)
 		return nil
 	}, ok: true},
-}, prefixIncludeCases...), commandConfigCases...)
+}, prefixIncludeCases...), commandConfigCases...), ignoreCaseCases...)
 
 // includeCaseVars selects no system or global file, so that only the case
 // selects one.
