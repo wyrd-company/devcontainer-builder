@@ -51,30 +51,26 @@ func gitRepositoryFormat(dir, folder string) (gitFormat, error) {
 		return gitFormat{}, err
 	}
 	format := gitFormat{config: gitRepositoryConfig{common: common + string(os.PathSeparator) + "config"}}
-	entries, err := readGitConfig(format.config.common)
-	if err != nil {
-		return gitFormat{}, err
-	}
 	version := -1
 	var extensions gitExtensions
 	settings := gitWorktreeSettings{bare: -1}
-	for _, entry := range entries {
+	err = readGitConfig(format.config.common, func(entry gitConfigEntry) bool {
 		switch {
 		case entry.name == "core.repositoryformatversion":
 			value, ok := gitParseInt(entry.value)
 			if !ok {
-				return gitFormat{}, errGitConfig
+				return false
 			}
 			version = value
 		case strings.HasPrefix(entry.name, "extensions."):
-			if !extensions.add(strings.TrimPrefix(entry.name, "extensions."), entry.value) {
-				return gitFormat{}, errGitConfig
-			}
+			return extensions.add(strings.TrimPrefix(entry.name, "extensions."), entry.value)
 		default:
-			if !gitWorktreeConfig(entry, &settings) {
-				return gitFormat{}, errGitConfig
-			}
+			return gitWorktreeConfig(entry, &settings)
 		}
+		return true
+	})
+	if err != nil {
+		return gitFormat{}, err
 	}
 	if version < 0 {
 		return format, nil
@@ -84,14 +80,11 @@ func gitRepositoryFormat(dir, folder string) (gitFormat, error) {
 	}
 	if extensions.worktreeConfig {
 		worktree := dir + string(os.PathSeparator) + "config.worktree"
-		entries, err := readGitConfig(worktree)
+		err := readGitConfig(worktree, func(entry gitConfigEntry) bool {
+			return gitWorktreeConfig(entry, &settings)
+		})
 		if err != nil {
 			return gitFormat{}, err
-		}
-		for _, entry := range entries {
-			if !gitWorktreeConfig(entry, &settings) {
-				return gitFormat{}, errGitConfig
-			}
 		}
 		format.config.worktree = worktree
 		shared = false
@@ -127,27 +120,25 @@ func gitWorktreeConfig(entry gitConfigEntry, settings *gitWorktreeSettings) bool
 	return true
 }
 
-// readGitConfig reads a Git config file. A missing file has no entries.
-// Git rejects other access failures and a directory. Git would block reading
-// a FIFO; special files are rejected here without reading.
-func readGitConfig(path string) ([]gitConfigEntry, error) {
-	info, err := os.Stat(path)
+// readGitConfig reads one repository-format config stream, giving each entry
+// to entry as it is parsed. A missing file has no entries. A directory or
+// another access failure is rejected. Like Git, it opens a FIFO without a
+// time limit, stops at the first syntax or typed-value error, and treats a
+// read error as the end of the file. Includes are not followed in this read.
+func readGitConfig(path string, entry func(gitConfigEntry) bool) error {
+	file, err := os.Open(path)
 	if errors.Is(err, fs.ErrNotExist) || errors.Is(err, syscall.ENOTDIR) {
-		return nil, nil
+		return nil
 	}
 	if err != nil {
-		return nil, err
+		return err
 	}
-	if !info.Mode().IsRegular() {
-		return nil, errGitConfig
+	defer file.Close()
+	if info, err := file.Stat(); err != nil || info.IsDir() {
+		return errGitConfig
 	}
-	content, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
+	if !parseGitConfigReader(file, entry) {
+		return errGitConfig
 	}
-	entries, ok := parseGitConfig(content)
-	if !ok {
-		return nil, errGitConfig
-	}
-	return entries, nil
+	return nil
 }
