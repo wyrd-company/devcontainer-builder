@@ -367,3 +367,30 @@ func TestPackageFailures(t *testing.T) {
 		}
 	})
 }
+
+func TestPackagePreservesStickyDirectory(t *testing.T) {
+	source := filepath.Join(t.TempDir(), "sample")
+	packageFixture(t, source, packageMetadata, true)
+	directory := filepath.Join(source, "shared")
+	if err := os.Mkdir(directory, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(directory, 0o755|os.ModeSticky); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(directory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode()&os.ModeSticky == 0 {
+		t.Fatal("fixture sticky mode unavailable")
+	}
+	out := filepath.Join(t.TempDir(), "output")
+	if _, err := Package(t.Context(), PackageOptions{Target: source, OutputDir: out}); err != nil {
+		t.Fatal(err)
+	}
+	member := packageMembers(t, filepath.Join(out, "devcontainer-feature-sample.tgz"))["shared"]
+	if member.header.Mode != 0o1755 {
+		t.Fatalf("directory mode = %#o; want upstream %#o", member.header.Mode, 0o1755)
+	}
+}

@@ -237,7 +237,10 @@ func packageCopy(ctx context.Context, source, dest string) error {
 		}
 		switch {
 		case d.IsDir():
-			return os.MkdirAll(target, info.Mode().Perm())
+			if err := os.MkdirAll(target, info.Mode().Perm()); err != nil {
+				return err
+			}
+			return os.Chmod(target, info.Mode())
 		case d.Type()&fs.ModeSymlink != 0:
 			link, err := os.Readlink(path)
 			if err != nil {
