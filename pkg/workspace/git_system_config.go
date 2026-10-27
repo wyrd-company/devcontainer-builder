@@ -16,7 +16,7 @@ import "os"
 // stops on it. Without GIT_CONFIG_SYSTEM, Git reads the system file that its
 // build names; that file is not read.
 // Reference: https://github.com/git/git/blob/master/config.c
-func gitSystemConfigRead(folder *gitConfigCwd, second bool, prefix string) bool {
+func gitSystemConfigRead(folder *gitConfigCwd, second bool, prefix string, values *gitConfigValues) bool {
 	if value, set := os.LookupEnv("GIT_CONFIG_NOSYSTEM"); set {
 		skip, ok := gitParseBool(&value)
 		if !ok {
@@ -30,7 +30,7 @@ func gitSystemConfigRead(folder *gitConfigCwd, second bool, prefix string) bool 
 	if !set {
 		return true
 	}
-	return gitConfigFileRead(folder, gitNormalizePath(path), !second, second, prefix)
+	return gitConfigFileRead(folder, gitNormalizePath(path), !second, second, prefix, values)
 }
 
 // gitNormalizePath follows normalize_path_copy in Git's path.c, which

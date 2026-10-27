@@ -35,7 +35,7 @@ type gitRepositoryConfig struct {
 // that Git cannot open, stops the probe; a missing file is skipped. prefix is
 // the prefix of Git's build for include paths.
 // Reference: https://github.com/git/git/blob/master/config.c
-func (c gitRepositoryConfig) read(cwd, prefix string) bool {
+func (c gitRepositoryConfig) read(cwd, prefix string, values *gitConfigValues) bool {
 	common := c.common
 	if dir, set := os.LookupEnv("GIT_COMMON_DIR"); set {
 		common = dir + string(os.PathSeparator) + "config"
@@ -43,7 +43,7 @@ func (c gitRepositoryConfig) read(cwd, prefix string) bool {
 	folder := newGitConfigCwd(cwd)
 	defer folder.close()
 	for _, path := range []string{common, c.worktree} {
-		if path != "" && gitConfigFile(folder, path, false, prefix) != gitConfigFileAdmitted {
+		if path != "" && gitConfigFile(folder, path, false, prefix, values) != gitConfigFileAdmitted {
 			return false
 		}
 	}
@@ -53,8 +53,9 @@ func (c gitRepositoryConfig) read(cwd, prefix string) bool {
 // gitConfigParse opens the config file at path, from folder, which Git reads
 // at include depth depth, and parses it as Git reads it. It follows each
 // include.path entry when Git reads it, before the rest of the file, with
-// prefix as the prefix of Git's build.
-func gitConfigParse(folder *gitConfigCwd, path string, depth int, prefix string) gitConfigFileResult {
+// prefix as the prefix of Git's build. values collects typed-value failures
+// for the callbacks after the full read, or is nil for the very-early read.
+func gitConfigParse(folder *gitConfigCwd, path string, depth int, prefix string, values *gitConfigValues) gitConfigFileResult {
 	file, err := folder.open(path)
 	if err != nil {
 		return gitConfigFileUnopened
@@ -64,7 +65,8 @@ func gitConfigParse(folder *gitConfigCwd, path string, depth int, prefix string)
 		return gitConfigFileUnopened
 	}
 	if !parseGitConfigReader(file, func(entry gitConfigEntry) bool {
-		return entry.name != "include.path" || gitConfigInclude(folder, path, entry.value, depth, prefix)
+		values.add(entry)
+		return entry.name != "include.path" || gitConfigInclude(folder, path, entry.value, depth, prefix, values)
 	}) {
 		return gitConfigFileRejected
 	}
@@ -80,7 +82,7 @@ func gitConfigParse(folder *gitConfigCwd, path string, depth int, prefix string)
 // from, as named, so it stays relative to folder, Git's working folder, when
 // from is. prefix is the prefix of Git's build, as gitIncludePath takes it.
 // includeIf conditions are not evaluated.
-func gitConfigInclude(folder *gitConfigCwd, from string, value *string, depth int, prefix string) bool {
+func gitConfigInclude(folder *gitConfigCwd, from string, value *string, depth int, prefix string, values *gitConfigValues) bool {
 	if value == nil {
 		return false
 	}
@@ -96,19 +98,19 @@ func gitConfigInclude(folder *gitConfigCwd, from string, value *string, depth in
 			path = from[:slash+1] + path
 		}
 	}
-	return gitConfigIncludeRead(folder, path, depth, prefix)
+	return gitConfigIncludeRead(folder, path, depth, prefix, values)
 }
 
 // gitConfigIncludeRead follows an expanded include path. Both file and
 // command-line config use Git's access, depth and file parsing rules.
-func gitConfigIncludeRead(folder *gitConfigCwd, path string, depth int, prefix string) bool {
+func gitConfigIncludeRead(folder *gitConfigCwd, path string, depth int, prefix string, values *gitConfigValues) bool {
 	if err := folder.access(path); err != nil {
 		return errors.Is(err, fs.ErrNotExist) || errors.Is(err, syscall.ENOTDIR)
 	}
 	if depth >= gitConfigIncludeDepth {
 		return false
 	}
-	return gitConfigParse(folder, path, depth+1, prefix) == gitConfigFileAdmitted
+	return gitConfigParse(folder, path, depth+1, prefix, values) == gitConfigFileAdmitted
 }
 
 // gitIncludePath follows interpolate_path in Git's path.c for an include
