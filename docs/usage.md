@@ -487,6 +487,7 @@ The target is required. A target with
 `devcontainer-feature.json` is one Feature; otherwise its non-hidden child
 folders with that file form a collection. Collection entries must have
 `install.sh`. Each Feature must have `id`, `version`, and `name` metadata.
+An ID that would put an archive outside the output folder is rejected.
 Other metadata properties and source files are retained. Nonempty `legacyIds`
 adds `currentId` with the Feature ID to the packaged metadata. Source files
 are unchanged.

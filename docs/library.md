@@ -142,6 +142,7 @@ Feature metadata, including unknown properties. Sources stay unchanged.
 
 The operation returns an error for an invalid source, existing output without
 force, missing required metadata, or a collection entry without `install.sh`.
+An ID that would write outside the output directory is also rejected.
 It can leave earlier archives on failure. It closes files and removes staging
 before returning. Cancellation uses the supplied context. See
 `TestPackageArchiveCanBeResolved` for packaging followed by archive resolution,

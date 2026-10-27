@@ -55,3 +55,25 @@ func TestFeaturesPackageTarget(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestFeaturesPackageArchiveTraversal(t *testing.T) {
+	root := t.TempDir()
+	source, out, outside := filepath.Join(root, "input"), filepath.Join(root, "output"), filepath.Join(root, "outside.tgz")
+	if err := os.Mkdir(source, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(source, "devcontainer-feature.json"), []byte(`{"id":"../../../outside","version":"1.2.3","name":"Sample tool"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(outside, []byte("keep"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	result, _ := invoke(t, 1, "features", "package", source, "-o", out)
+	if !strings.Contains(result["message"].(string), "outside output directory") {
+		t.Fatalf("wrong operation error: %v", result)
+	}
+	data, err := os.ReadFile(outside)
+	if err != nil || string(data) != "keep" {
+		t.Fatal("CLI packaging wrote outside output")
+	}
+}
