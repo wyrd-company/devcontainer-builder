@@ -1,0 +1,55 @@
+$schema: https://refinery.systems/ontology/decision-record
+name: Explicit Git prefix setting
+relationships:
+  contextualizes:
+    - ../overview
+    - ../usage
+    - ../library
+    - ../audits/upstream-options
+description: >-
+  A Git config file can include another file with an `include.path` of
+  `%(prefix)/` followed by a relative path. Git reads that file at the prefix
+  of its own build: a folder compiled into the `git` executable or, in some
+  builds, derived from its location. The upstream CLI runs `git` and gets that
+  result. Native discovery does not run `git`, and no file or environment
+  variable names the prefix. Git builds differ: on one host, three builds
+  had three prefixes, and the same config file made one of them reject the
+  repository and the others accept it.
+considered-options:
+  1: >-
+    Compile one prefix into `dcb` release builds.
+  2: >-
+    An explicit setting, a `pkg/workspace` option and a `dcb` flag, that names
+    the prefix; without it, such an include is not read, as if the file were
+    missing.
+  3: >-
+    No setting; such an include is never read.
+  4: >-
+    Find no Git root when such an include is present.
+decision-outcome:
+  chosen-option: 2
+  justification: >-
+    A user who has such an include expects Git's behavior from it, and without
+    a setting cannot make `dcb` read the file that their Git reads. A setting
+    gives the exact Git result to a user who knows their Git's prefix, and
+    `dcb` does not guess one: a compiled prefix is wrong for every Git that was
+    built with another prefix, and a prefix derived from the `git` found on
+    `PATH` is wrong for builds whose prefix is compiled in, such as Homebrew
+    builds. Without the setting, `dcb` reads such an include as a missing file.
+    It then differs from Git only when a file exists at that path below the
+    host Git's prefix and Git rejects it. Finding no Git root would differ from
+    Git in the common case, where no file is there. The setting applies to
+    `include.path` values only. It does not select the system config file that
+    a Git build names, and it does not apply to other configuration values
+    that Git expands with `%(prefix)/`. The setting is not an upstream option.
+expected-outcomes:
+  positive:
+    - A user who sets the prefix gets the Git result for these includes.
+    - Native discovery still needs no Git subprocess, probe or build-specific default.
+    - Users without such an include see no change.
+  negative:
+    - "`dcb` has an option that the upstream CLI does not have."
+    - >-
+      Without the setting, a file that Git rejects below its prefix gives a Git
+      root where the upstream CLI gives none.
+    - Users must find their Git's prefix themselves.

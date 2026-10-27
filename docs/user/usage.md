@@ -630,6 +630,7 @@ primary Compose service.
 | --- | --- | --- | --- |
 | `--mount-workspace-git-root` | `up`, `exec`, `read-configuration`, `run-user-commands` | `true` | Mount the top folder of the workspace's Git working tree at `/workspaces/<name>`. The workspace folder is its subfolder there, for example `/workspaces/repository/app`. Outside a Git working tree, the workspace folder is mounted. `--mount-workspace-git-root=false` mounts only the workspace folder. |
 | `--mount-git-worktree-common-dir` | `up`, `exec`, `read-configuration`, `run-user-commands` | `false` | For a linked worktree added with `git worktree add --relative-paths`, also mount the repository's common Git folder, so Git works in the container. Applies only with Git-root mounting. |
+| `--git-prefix` | `up`, `exec`, `read-configuration`, `run-user-commands` | none | The prefix of the host Git's build: the folder that Git puts in place of `%(prefix)` in an `include.path`. Without it, such an include followed by a relative path is not read. A relative value starts at the current folder. The upstream CLI has no such flag; it runs `git`, which knows its prefix. |
 | `--workspace-mount-consistency` | `up` | `cached` | `consistent`, `cached`, or `delegated`. On macOS and Windows hosts the workspace mount gets this consistency; Linux hosts ignore it, as upstream does. |
 | `--mount` | `up` | none | An additional mount, `type=<bind\|volume>,source=<source>,target=<target>[,external=<true\|false>]`. Repeat the flag for more mounts. `external=true` marks a Compose named volume as external. |
 | `--id-label` | `up`, `exec`, `read-configuration`, `run-user-commands`, `down`, `inspect` | none | A `name=value` label. Repeat the flag for more labels. |
@@ -679,10 +680,20 @@ the workspace folder, and `dcb` mounts the Git root. This is an approved
 difference; see
 [Relation to the Dev Container CLI](/docs/dcb/overview#relation-to-the-dev-container-cli).
 Builds with cgo and macOS builds ask the account services, as Git does. A
-`%(prefix)/` path followed by an
-absolute path names that path, as in Git. Git reads another `%(prefix)/` path
-below the prefix that its build names; `dcb` does not read that file. A missing
-included file is skipped.
+`%(prefix)/` path followed by an absolute path names that path, as in Git.
+Git reads `%(prefix)/` followed by a relative path at the prefix of its build,
+a separator and the rest. That prefix is the folder that Git was built to be
+installed in, usually the folder above the `bin` folder of the `git` command,
+such as `/usr` for `/usr/bin/git`; Homebrew builds name their `opt` folder,
+such as `/opt/homebrew/opt/git`. `dcb` does not run `git`, so `--git-prefix`
+names that prefix, and `dcb` then reads that path, as Git does. A relative
+prefix gives a relative path, which starts at the including file's folder.
+Without `--git-prefix`, `dcb` does not read such an include, as if the
+included file were missing. When Git rejects that file, the upstream CLI
+mounts the workspace folder, and `dcb` mounts the Git root. This is an
+approved difference; see
+[Relation to the Dev Container CLI](/docs/dcb/overview#relation-to-the-dev-container-cli).
+A missing included file is skipped.
 An include without a value, a `~` path that cannot be expanded, an access
 failure other than a missing file, a file that Git cannot open, such as a
 folder, a syntax error, and more than 10 nested includes give no Git root. As
