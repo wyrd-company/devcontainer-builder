@@ -26,8 +26,8 @@ import (
 // inside that file starts at its folder. The full read rejects any
 // core.ignorecase, core.filemode, core.symlinks, core.trustctime, core.quotepath,
 // core.ignorestat, core.sparseCheckout, core.sparseCheckoutCone, core.protectHFS,
-// core.protectNTFS or core.precomposeUnicode value that Git cannot read as a
-// boolean, after all config inputs have been read.
+// core.protectNTFS, core.precomposeUnicode or core.fsyncObjectFiles value that
+// Git cannot read as a boolean, after all config inputs have been read.
 // Other typed values from this full read and includeIf
 // conditions are not applied. A build whose os/user lookup reads /etc/passwd
 // only, as without cgo on Linux, skips a ~name/ include whose account it cannot

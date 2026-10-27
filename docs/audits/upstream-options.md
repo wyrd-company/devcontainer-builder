@@ -92,8 +92,8 @@ can mount a different folder; see
 The full config read rejects invalid `core.ignorecase`, `core.filemode`,
 `core.symlinks`, `core.trustctime`, `core.quotepath`, `core.ignorestat`,
 `core.sparseCheckout`, `core.sparseCheckoutCone`, `core.protectHFS`,
-`core.protectNTFS` and `core.precomposeUnicode` boolean values after reading all
-file, include and command-line inputs.
+`core.protectNTFS`, `core.precomposeUnicode` and `core.fsyncObjectFiles` boolean
+values after reading all file, include and command-line inputs.
 Bob also approved one account-lookup difference: Linux release builds look up
 accounts in `/etc/passwd` only and skip an `include.path` of `~name/` whose
 account is not there; see
