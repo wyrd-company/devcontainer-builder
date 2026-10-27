@@ -237,6 +237,8 @@ subparts, malformed-fraction recovery, list-length coercion, and object/prototyp
 conversion follow the actual pinned command, including conversion/map failures.
 String option indices, grouped short flags, and camel-case option aliases also
 follow the pinned command.
+Long dotted options retain the same object conversion and file-operation errors
+as dotted shorthand; escaped surrogate keys retain their identity until output.
 The CLI retains dcb's
 JSON result, global diagnostic controls, and invocation-error exit 2. Upstream has
 no stdout result and invocation-error exit 1. Tests: `TestGenerateDocumentationPinnedReadmes`,
