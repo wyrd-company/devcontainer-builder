@@ -1,0 +1,484 @@
+{
+  "relationships": {
+    "references": [
+      "../../documentation",
+      "../../documentation_test",
+      "../../../../reference/cli/src/spec-node/collectionCommonUtils/generateDocsCommandImpl"
+    ]
+  },
+  "cases": [
+    {
+      "name": "defaults",
+      "metadata": "{\"id\": \"sample\", \"name\": \"Sample tool\", \"version\": \"2.3.4\", \"description\": \"A useful tool.\"}",
+      "notes": null,
+      "args": [],
+      "project": "input",
+      "exit": 0,
+      "readme": "\n# Sample tool (sample)\n\nA useful tool.\n\n## Example Usage\n\n```json\n\"features\": {\n    \"ghcr.io/example/collection/sample:2\": {}\n}\n```\n\n\n\n\n\n---\n\n_Note: This file was auto-generated from the [devcontainer-feature.json](devcontainer-feature.json).  Add additional notes to a `NOTES.md`._\n"
+    },
+    {
+      "name": "rich",
+      "metadata": "{\"id\": \"sample\", \"name\": \"Sample tool\", \"version\": \"2.3.4\", \"description\": \"A useful tool.\", \"deprecated\": true, \"legacyIds\": [\"old\", \"older\"], \"options\": {\"second\": {\"type\": \"string\", \"description\": \"A value\", \"default\": \"chosen\"}, \"first\": {\"type\": \"boolean\", \"default\": false}, \"empty\": {\"default\": \"\"}, \"missing\": {}, \"null\": {\"default\": null}, \"zero\": {\"default\": 0}}, \"customizations\": {\"vscode\": {\"extensions\": [\"vendor.tool\", \"vendor.other\"]}}}",
+      "notes": "## More\n\nKeep these notes.\n",
+      "args": [
+        "-r",
+        "registry.example",
+        "--github-owner",
+        "example-owner",
+        "--github-repo",
+        "example-repo"
+      ],
+      "project": "input",
+      "exit": 0,
+      "readme": "### **IMPORTANT NOTE**\n- **This Feature is deprecated, and will no longer receive any further updates/support.**\n- **Ids used to publish this Feature in the past - 'old', 'older'**\n\n# Sample tool (sample)\n\nA useful tool.\n\n## Example Usage\n\n```json\n\"features\": {\n    \"registry.example/example/collection/sample:2\": {}\n}\n```\n\n## Options\n\n| Options Id | Description | Type | Default Value |\n|-----|-----|-----|-----|\n| second | A value | string | chosen |\n| first | - | boolean | false |\n| empty | - | - | - |\n| missing | - | - | undefined |\n| null | - | - | null |\n| zero | - | - | 0 |\n\n## Customizations\n\n### VS Code Extensions\n\n- `vendor.tool`\n- `vendor.other`\n\n## More\n\nKeep these notes.\n\n\n---\n\n_Note: This file was auto-generated from the [devcontainer-feature.json](https://github.com/example-owner/example-repo/blob/main/input/sample/devcontainer-feature.json).  Add additional notes to a `NOTES.md`._\n"
+    },
+    {
+      "name": "no-version",
+      "metadata": "{\"id\": \"sample\"}",
+      "notes": null,
+      "args": [],
+      "project": "input",
+      "exit": 0,
+      "readme": "\n# sample\n\n\n\n## Example Usage\n\n```json\n\"features\": {\n    \"ghcr.io/example/collection/sample:latest\": {}\n}\n```\n\n\n\n\n\n---\n\n_Note: This file was auto-generated from the [devcontainer-feature.json](devcontainer-feature.json).  Add additional notes to a `NOTES.md`._\n"
+    },
+    {
+      "name": "empty-options",
+      "metadata": "{\"id\": \"sample\", \"options\": {}}",
+      "notes": null,
+      "args": [],
+      "project": "input",
+      "exit": 0,
+      "readme": "\n# sample\n\n\n\n## Example Usage\n\n```json\n\"features\": {\n    \"ghcr.io/example/collection/sample:latest\": {}\n}\n```\n\n## Options\n\n| Options Id | Description | Type | Default Value |\n|-----|-----|-----|-----|\n\n\n\n\n---\n\n_Note: This file was auto-generated from the [devcontainer-feature.json](devcontainer-feature.json).  Add additional notes to a `NOTES.md`._\n"
+    },
+    {
+      "name": "numeric-order",
+      "metadata": "{\"id\": \"sample\", \"options\": {\"9\": {\"default\": \"nine\"}, \"2\": {\"default\": \"two\"}, \"01\": {\"default\": \"one\"}, \"4294967295\": {\"default\": \"last\"}}}",
+      "notes": null,
+      "args": [],
+      "project": "input",
+      "exit": 0,
+      "readme": "\n# sample\n\n\n\n## Example Usage\n\n```json\n\"features\": {\n    \"ghcr.io/example/collection/sample:latest\": {}\n}\n```\n\n## Options\n\n| Options Id | Description | Type | Default Value |\n|-----|-----|-----|-----|\n| 2 | - | - | two |\n| 9 | - | - | nine |\n| 01 | - | - | one |\n| 4294967295 | - | - | last |\n\n\n\n---\n\n_Note: This file was auto-generated from the [devcontainer-feature.json](devcontainer-feature.json).  Add additional notes to a `NOTES.md`._\n"
+    },
+    {
+      "name": "missing-id",
+      "metadata": "{\"name\": \"Sample\"}",
+      "notes": null,
+      "args": [],
+      "project": "input",
+      "exit": 0,
+      "readme": "old readme"
+    },
+    {
+      "name": "missing-metadata",
+      "metadata": null,
+      "notes": null,
+      "args": [],
+      "project": "input",
+      "exit": 0,
+      "readme": "old readme"
+    },
+    {
+      "name": "empty-json",
+      "metadata": "",
+      "notes": null,
+      "args": [],
+      "project": "input",
+      "exit": 0,
+      "readme": "old readme"
+    },
+    {
+      "name": "jsonc",
+      "metadata": "// comment\n{\"id\":\"sample\",\"options\":{\"a\":{\"default\":true,},},}",
+      "notes": null,
+      "args": [],
+      "project": "input",
+      "exit": 0,
+      "readme": "\n# sample\n\n\n\n## Example Usage\n\n```json\n\"features\": {\n    \"ghcr.io/example/collection/sample:latest\": {}\n}\n```\n\n## Options\n\n| Options Id | Description | Type | Default Value |\n|-----|-----|-----|-----|\n| a | - | - | true |\n\n\n\n---\n\n_Note: This file was auto-generated from the [devcontainer-feature.json](devcontainer-feature.json).  Add additional notes to a `NOTES.md`._\n"
+    },
+    {
+      "name": "recovery",
+      "metadata": "{\"id\":\"sample\", bad \"version\":\"7.2\" \"description\":\"Recovered\"}",
+      "notes": null,
+      "args": [],
+      "project": "input",
+      "exit": 0,
+      "readme": "\n# sample\n\nRecovered\n\n## Example Usage\n\n```json\n\"features\": {\n    \"ghcr.io/example/collection/sample:7\": {}\n}\n```\n\n\n\n\n\n---\n\n_Note: This file was auto-generated from the [devcontainer-feature.json](devcontainer-feature.json).  Add additional notes to a `NOTES.md`._\n"
+    },
+    {
+      "name": "incomplete",
+      "metadata": "{\"id\":\"sample\",\"options\":{\"x\":{\"default\":\"v\"",
+      "notes": null,
+      "args": [],
+      "project": "input",
+      "exit": 0,
+      "readme": "\n# sample\n\n\n\n## Example Usage\n\n```json\n\"features\": {\n    \"ghcr.io/example/collection/sample:latest\": {}\n}\n```\n\n## Options\n\n| Options Id | Description | Type | Default Value |\n|-----|-----|-----|-----|\n| x | - | - | v |\n\n\n\n---\n\n_Note: This file was auto-generated from the [devcontainer-feature.json](devcontainer-feature.json).  Add additional notes to a `NOTES.md`._\n"
+    },
+    {
+      "name": "duplicate",
+      "metadata": "{\"id\":\"old\",\"id\":\"sample\",\"options\":{\"x\":{\"default\":\"old\"},\"x\":{\"default\":\"new\"}}}",
+      "notes": null,
+      "args": [],
+      "project": "input",
+      "exit": 0,
+      "readme": "\n# sample\n\n\n\n## Example Usage\n\n```json\n\"features\": {\n    \"ghcr.io/example/collection/sample:latest\": {}\n}\n```\n\n## Options\n\n| Options Id | Description | Type | Default Value |\n|-----|-----|-----|-----|\n| x | - | - | new |\n\n\n\n---\n\n_Note: This file was auto-generated from the [devcontainer-feature.json](devcontainer-feature.json).  Add additional notes to a `NOTES.md`._\n"
+    },
+    {
+      "name": "null-json",
+      "metadata": "null",
+      "notes": null,
+      "args": [],
+      "project": "input",
+      "exit": 0,
+      "readme": "old readme"
+    },
+    {
+      "name": "empty-id",
+      "metadata": "{\"id\": \"\"}",
+      "notes": null,
+      "args": [],
+      "project": "input",
+      "exit": 0,
+      "readme": "old readme"
+    },
+    {
+      "name": "dollar",
+      "metadata": "{\"id\": \"sample\", \"name\": \"Sample tool\", \"version\": \"2.3.4\", \"description\": \"$$ $& $` $' #{Registry}\", \"options\": {\"a\": {\"default\": \"$&\"}}}",
+      "notes": "## Note\n$$ $& $` $' #{Version}\n",
+      "args": [],
+      "project": "input",
+      "exit": 0,
+      "readme": "\n# Sample tool (sample)\n\n$ #{Description} \n# Sample tool (sample)\n\n \n\n## Example Usage\n\n```json\n\"features\": {\n    \"ghcr.io/example/collection/sample:2\": {}\n}\n```\n\n## Options\n\n| Options Id | Description | Type | Default Value |\n|-----|-----|-----|-----|\n| a | - | - | #{OptionsTable} |\n\n## Note\n$ #{Notes} \n# Sample tool (sample)\n\n$ #{Description} \n# Sample tool (sample)\n\n \n\n## Example Usage\n\n```json\n\"features\": {\n    \"#{Registry}/#{Namespace}/sample:#{Version}\": {}\n}\n```\n\n## Options\n\n| Options Id | Description | Type | Default Value |\n|-----|-----|-----|-----|\n| a | - | - | #{OptionsTable} |\n#{Customizations}\n \n\n---\n\n_Note: This file was auto-generated from the [devcontainer-feature.json](devcontainer-feature.json).  Add additional notes to a `NOTES.md`._\n #{Registry}\n\n## Example Usage\n\n```json\n\"features\": {\n    \"#{Registry}/#{Namespace}/sample:#{Version}\": {}\n}\n```\n\n#{OptionsTable}\n#{Customizations}\n#{Notes}\n\n---\n\n_Note: This file was auto-generated from the [devcontainer-feature.json](#{RepoUrl}).  Add additional notes to a `NOTES.md`._\n #{Version}\n\n\n---\n\n_Note: This file was auto-generated from the [devcontainer-feature.json](#{RepoUrl}).  Add additional notes to a `NOTES.md`._\n #{Registry}\n\n## Example Usage\n\n```json\n\"features\": {\n    \"#{Registry}/#{Namespace}/sample:#{Version}\": {}\n}\n```\n\n#{OptionsTable}\n#{Customizations}\n#{Notes}\n\n---\n\n_Note: This file was auto-generated from the [devcontainer-feature.json](#{RepoUrl}).  Add additional notes to a `NOTES.md`._\n"
+    },
+    {
+      "name": "bad-version",
+      "metadata": "{\"id\": \"sample\", \"version\": 2}",
+      "notes": null,
+      "args": [],
+      "project": "input",
+      "exit": 1,
+      "readme": "old readme"
+    },
+    {
+      "name": "bad-option",
+      "metadata": "{\"id\": \"sample\", \"options\": {\"a\": null}}",
+      "notes": null,
+      "args": [],
+      "project": "input",
+      "exit": 1,
+      "readme": "old readme"
+    },
+    {
+      "name": "bad-legacy",
+      "metadata": "{\"id\": \"sample\", \"legacyIds\": \"old\"}",
+      "notes": null,
+      "args": [],
+      "project": "input",
+      "exit": 1,
+      "readme": "old readme"
+    },
+    {
+      "name": "bad-extensions",
+      "metadata": "{\"id\": \"sample\", \"customizations\": {\"vscode\": {\"extensions\": \"abc\"}}}",
+      "notes": null,
+      "args": [],
+      "project": "input",
+      "exit": 1,
+      "readme": "old readme"
+    },
+    {
+      "name": "empty-registry",
+      "metadata": "{\"id\": \"sample\", \"name\": \"Sample tool\", \"version\": \"2.3.4\", \"description\": \"A useful tool.\"}",
+      "notes": null,
+      "args": [
+        "--registry",
+        ""
+      ],
+      "project": "input",
+      "exit": 0,
+      "readme": "\n# Sample tool (sample)\n\nA useful tool.\n\n## Example Usage\n\n```json\n\"features\": {\n    \"/example/collection/sample:2\": {}\n}\n```\n\n\n\n\n\n---\n\n_Note: This file was auto-generated from the [devcontainer-feature.json](devcontainer-feature.json).  Add additional notes to a `NOTES.md`._\n"
+    },
+    {
+      "name": "empty-namespace",
+      "metadata": "{\"id\": \"sample\", \"name\": \"Sample tool\", \"version\": \"2.3.4\", \"description\": \"A useful tool.\"}",
+      "notes": null,
+      "args": [
+        "--namespace",
+        ""
+      ],
+      "project": "input",
+      "exit": 0,
+      "readme": "\n# Sample tool (sample)\n\nA useful tool.\n\n## Example Usage\n\n```json\n\"features\": {\n    \"ghcr.io/example/collection,/sample:2\": {}\n}\n```\n\n\n\n\n\n---\n\n_Note: This file was auto-generated from the [devcontainer-feature.json](devcontainer-feature.json).  Add additional notes to a `NOTES.md`._\n"
+    },
+    {
+      "name": "partial-github",
+      "metadata": "{\"id\": \"sample\", \"name\": \"Sample tool\", \"version\": \"2.3.4\", \"description\": \"A useful tool.\"}",
+      "notes": null,
+      "args": [
+        "--github-owner",
+        "example-owner"
+      ],
+      "project": "input",
+      "exit": 0,
+      "readme": "\n# Sample tool (sample)\n\nA useful tool.\n\n## Example Usage\n\n```json\n\"features\": {\n    \"ghcr.io/example/collection/sample:2\": {}\n}\n```\n\n\n\n\n\n---\n\n_Note: This file was auto-generated from the [devcontainer-feature.json](devcontainer-feature.json).  Add additional notes to a `NOTES.md`._\n"
+    },
+    {
+      "name": "dot-project",
+      "metadata": "{\"id\": \"sample\", \"name\": \"Sample tool\", \"version\": \"2.3.4\", \"description\": \"A useful tool.\"}",
+      "notes": null,
+      "args": [
+        "--github-owner",
+        "example-owner",
+        "--github-repo",
+        "example-repo"
+      ],
+      "project": "./input/",
+      "exit": 0,
+      "readme": "\n# Sample tool (sample)\n\nA useful tool.\n\n## Example Usage\n\n```json\n\"features\": {\n    \"ghcr.io/example/collection/sample:2\": {}\n}\n```\n\n\n\n\n\n---\n\n_Note: This file was auto-generated from the [devcontainer-feature.json](https://github.com/example-owner/example-repo/blob/main/input//sample/devcontainer-feature.json).  Add additional notes to a `NOTES.md`._\n"
+    },
+    {
+      "name": "debug",
+      "metadata": "{\"id\": \"sample\", \"name\": \"Sample tool\", \"version\": \"2.3.4\", \"description\": \"A useful tool.\"}",
+      "notes": null,
+      "args": [
+        "--log-level",
+        "debug"
+      ],
+      "project": "input",
+      "exit": 0,
+      "readme": "\n# Sample tool (sample)\n\nA useful tool.\n\n## Example Usage\n\n```json\n\"features\": {\n    \"ghcr.io/example/collection/sample:2\": {}\n}\n```\n\n\n\n\n\n---\n\n_Note: This file was auto-generated from the [devcontainer-feature.json](devcontainer-feature.json).  Add additional notes to a `NOTES.md`._\n"
+    },
+    {
+      "name": "trace",
+      "metadata": "{\"id\": \"sample\", \"name\": \"Sample tool\", \"version\": \"2.3.4\", \"description\": \"A useful tool.\"}",
+      "notes": null,
+      "args": [
+        "--log-level",
+        "trace"
+      ],
+      "project": "input",
+      "exit": 0,
+      "readme": "\n# Sample tool (sample)\n\nA useful tool.\n\n## Example Usage\n\n```json\n\"features\": {\n    \"ghcr.io/example/collection/sample:2\": {}\n}\n```\n\n\n\n\n\n---\n\n_Note: This file was auto-generated from the [devcontainer-feature.json](devcontainer-feature.json).  Add additional notes to a `NOTES.md`._\n"
+    },
+    {
+      "name": "proto-option",
+      "metadata": "{\"id\": \"sample\", \"options\": {\"__proto__\": {\"type\": \"string\", \"default\": \"ignored\"}, \"a\": {\"default\": \"visible\"}}}",
+      "notes": null,
+      "args": [],
+      "project": "input",
+      "exit": 0,
+      "readme": "\n# sample\n\n\n\n## Example Usage\n\n```json\n\"features\": {\n    \"ghcr.io/example/collection/sample:latest\": {}\n}\n```\n\n## Options\n\n| Options Id | Description | Type | Default Value |\n|-----|-----|-----|-----|\n| a | - | - | visible |\n\n\n\n---\n\n_Note: This file was auto-generated from the [devcontainer-feature.json](devcontainer-feature.json).  Add additional notes to a `NOTES.md`._\n"
+    },
+    {
+      "name": "jsonc-corpus-0",
+      "metadata": "{\"id\":\"sample\" \"version\":\"4.5\"}",
+      "notes": null,
+      "args": [],
+      "project": "input",
+      "exit": 0,
+      "readme": "\n# sample\n\n\n\n## Example Usage\n\n```json\n\"features\": {\n    \"ghcr.io/example/collection/sample:4\": {}\n}\n```\n\n\n\n\n\n---\n\n_Note: This file was auto-generated from the [devcontainer-feature.json](devcontainer-feature.json).  Add additional notes to a `NOTES.md`._\n"
+    },
+    {
+      "name": "jsonc-corpus-1",
+      "metadata": "{\"id\":\"sample\", \"bad\":, \"description\":\"after\"}",
+      "notes": null,
+      "args": [],
+      "project": "input",
+      "exit": 0,
+      "readme": "\n# sample\n\nafter\n\n## Example Usage\n\n```json\n\"features\": {\n    \"ghcr.io/example/collection/sample:latest\": {}\n}\n```\n\n\n\n\n\n---\n\n_Note: This file was auto-generated from the [devcontainer-feature.json](devcontainer-feature.json).  Add additional notes to a `NOTES.md`._\n"
+    },
+    {
+      "name": "jsonc-corpus-2",
+      "metadata": "{\"id\":\"sample\", \"bad\" 2, \"description\":\"after\"}",
+      "notes": null,
+      "args": [],
+      "project": "input",
+      "exit": 0,
+      "readme": "\n# sample\n\nafter\n\n## Example Usage\n\n```json\n\"features\": {\n    \"ghcr.io/example/collection/sample:latest\": {}\n}\n```\n\n\n\n\n\n---\n\n_Note: This file was auto-generated from the [devcontainer-feature.json](devcontainer-feature.json).  Add additional notes to a `NOTES.md`._\n"
+    },
+    {
+      "name": "jsonc-corpus-3",
+      "metadata": "{\"id\":\"sample\", \"options\":{\"a\":{\"default\":[true,null,\"x\"]},\"b\":{\"default\":{\"x\":1}}}}",
+      "notes": null,
+      "args": [],
+      "project": "input",
+      "exit": 0,
+      "readme": "\n# sample\n\n\n\n## Example Usage\n\n```json\n\"features\": {\n    \"ghcr.io/example/collection/sample:latest\": {}\n}\n```\n\n## Options\n\n| Options Id | Description | Type | Default Value |\n|-----|-----|-----|-----|\n| a | - | - | true,,x |\n| b | - | - | [object Object] |\n\n\n\n---\n\n_Note: This file was auto-generated from the [devcontainer-feature.json](devcontainer-feature.json).  Add additional notes to a `NOTES.md`._\n"
+    },
+    {
+      "name": "jsonc-corpus-4",
+      "metadata": "{\"id\":\"sample\", \"description\":\"line\\nnext\\tend\"}",
+      "notes": null,
+      "args": [],
+      "project": "input",
+      "exit": 0,
+      "readme": "\n# sample\n\nline\nnext\tend\n\n## Example Usage\n\n```json\n\"features\": {\n    \"ghcr.io/example/collection/sample:latest\": {}\n}\n```\n\n\n\n\n\n---\n\n_Note: This file was auto-generated from the [devcontainer-feature.json](devcontainer-feature.json).  Add additional notes to a `NOTES.md`._\n"
+    },
+    {
+      "name": "jsonc-corpus-5",
+      "metadata": "{\"id\":\"sample\", \"description\":\"escaped \\u263a \\ud83d\\ude00\"}",
+      "notes": null,
+      "args": [],
+      "project": "input",
+      "exit": 0,
+      "readme": "\n# sample\n\nescaped \u263a \ud83d\ude00\n\n## Example Usage\n\n```json\n\"features\": {\n    \"ghcr.io/example/collection/sample:latest\": {}\n}\n```\n\n\n\n\n\n---\n\n_Note: This file was auto-generated from the [devcontainer-feature.json](devcontainer-feature.json).  Add additional notes to a `NOTES.md`._\n"
+    },
+    {
+      "name": "jsonc-corpus-6",
+      "metadata": "{\"id\":\"sample\", \"description\":\"bad\\qescape\"}",
+      "notes": null,
+      "args": [],
+      "project": "input",
+      "exit": 0,
+      "readme": "\n# sample\n\nbadescape\n\n## Example Usage\n\n```json\n\"features\": {\n    \"ghcr.io/example/collection/sample:latest\": {}\n}\n```\n\n\n\n\n\n---\n\n_Note: This file was auto-generated from the [devcontainer-feature.json](devcontainer-feature.json).  Add additional notes to a `NOTES.md`._\n"
+    },
+    {
+      "name": "jsonc-corpus-7",
+      "metadata": "{\"id\":\"sample\", \"description\":\"bad\\u00zz\"}",
+      "notes": null,
+      "args": [],
+      "project": "input",
+      "exit": 0,
+      "readme": "\n# sample\n\nbadzz\n\n## Example Usage\n\n```json\n\"features\": {\n    \"ghcr.io/example/collection/sample:latest\": {}\n}\n```\n\n\n\n\n\n---\n\n_Note: This file was auto-generated from the [devcontainer-feature.json](devcontainer-feature.json).  Add additional notes to a `NOTES.md`._\n"
+    },
+    {
+      "name": "jsonc-corpus-8",
+      "metadata": "{\"id\":\"sample\", \"description\":\"unterminated",
+      "notes": null,
+      "args": [],
+      "project": "input",
+      "exit": 0,
+      "readme": "\n# sample\n\nunterminated\n\n## Example Usage\n\n```json\n\"features\": {\n    \"ghcr.io/example/collection/sample:latest\": {}\n}\n```\n\n\n\n\n\n---\n\n_Note: This file was auto-generated from the [devcontainer-feature.json](devcontainer-feature.json).  Add additional notes to a `NOTES.md`._\n"
+    },
+    {
+      "name": "jsonc-corpus-9",
+      "metadata": "{\"id\":\"sample\", \"description\":1e+}",
+      "notes": null,
+      "args": [],
+      "project": "input",
+      "exit": 0,
+      "readme": "\n# sample\n\n1\n\n## Example Usage\n\n```json\n\"features\": {\n    \"ghcr.io/example/collection/sample:latest\": {}\n}\n```\n\n\n\n\n\n---\n\n_Note: This file was auto-generated from the [devcontainer-feature.json](devcontainer-feature.json).  Add additional notes to a `NOTES.md`._\n"
+    },
+    {
+      "name": "jsonc-corpus-10",
+      "metadata": "{\"id\":\"sample\", \"description\":1.}",
+      "notes": null,
+      "args": [],
+      "project": "input",
+      "exit": 0,
+      "readme": "\n# sample\n\n1\n\n## Example Usage\n\n```json\n\"features\": {\n    \"ghcr.io/example/collection/sample:latest\": {}\n}\n```\n\n\n\n\n\n---\n\n_Note: This file was auto-generated from the [devcontainer-feature.json](devcontainer-feature.json).  Add additional notes to a `NOTES.md`._\n"
+    },
+    {
+      "name": "jsonc-corpus-11",
+      "metadata": "{\"id\":\"sample\", \"description\":-0}",
+      "notes": null,
+      "args": [],
+      "project": "input",
+      "exit": 0,
+      "readme": "\n# sample\n\n0\n\n## Example Usage\n\n```json\n\"features\": {\n    \"ghcr.io/example/collection/sample:latest\": {}\n}\n```\n\n\n\n\n\n---\n\n_Note: This file was auto-generated from the [devcontainer-feature.json](devcontainer-feature.json).  Add additional notes to a `NOTES.md`._\n"
+    },
+    {
+      "name": "jsonc-corpus-12",
+      "metadata": "{\"id\":\"sample\", \"description\":1e300}",
+      "notes": null,
+      "args": [],
+      "project": "input",
+      "exit": 0,
+      "readme": "\n# sample\n\n1e+300\n\n## Example Usage\n\n```json\n\"features\": {\n    \"ghcr.io/example/collection/sample:latest\": {}\n}\n```\n\n\n\n\n\n---\n\n_Note: This file was auto-generated from the [devcontainer-feature.json](devcontainer-feature.json).  Add additional notes to a `NOTES.md`._\n"
+    },
+    {
+      "name": "jsonc-corpus-13",
+      "metadata": "{\"id\":\"sample\", \"description\":true}",
+      "notes": null,
+      "args": [],
+      "project": "input",
+      "exit": 0,
+      "readme": "\n# sample\n\ntrue\n\n## Example Usage\n\n```json\n\"features\": {\n    \"ghcr.io/example/collection/sample:latest\": {}\n}\n```\n\n\n\n\n\n---\n\n_Note: This file was auto-generated from the [devcontainer-feature.json](devcontainer-feature.json).  Add additional notes to a `NOTES.md`._\n"
+    },
+    {
+      "name": "jsonc-corpus-14",
+      "metadata": "{\"id\":\"sample\", \"name\":false, \"version\":false, \"description\":0}",
+      "notes": null,
+      "args": [],
+      "project": "input",
+      "exit": 0,
+      "readme": "\n# sample\n\n0\n\n## Example Usage\n\n```json\n\"features\": {\n    \"ghcr.io/example/collection/sample:latest\": {}\n}\n```\n\n\n\n\n\n---\n\n_Note: This file was auto-generated from the [devcontainer-feature.json](devcontainer-feature.json).  Add additional notes to a `NOTES.md`._\n"
+    },
+    {
+      "name": "jsonc-corpus-15",
+      "metadata": "{\"id\":\"sample\", \"options\":{\"a\":{\"default\":false},\"b\":{\"default\":true}}}",
+      "notes": null,
+      "args": [],
+      "project": "input",
+      "exit": 0,
+      "readme": "\n# sample\n\n\n\n## Example Usage\n\n```json\n\"features\": {\n    \"ghcr.io/example/collection/sample:latest\": {}\n}\n```\n\n## Options\n\n| Options Id | Description | Type | Default Value |\n|-----|-----|-----|-----|\n| a | - | - | false |\n| b | - | - | true |\n\n\n\n---\n\n_Note: This file was auto-generated from the [devcontainer-feature.json](devcontainer-feature.json).  Add additional notes to a `NOTES.md`._\n"
+    },
+    {
+      "name": "jsonc-corpus-16",
+      "metadata": "{\"__proto__\":{\"id\":\"sample\"}}",
+      "notes": null,
+      "args": [],
+      "project": "input",
+      "exit": 0,
+      "readme": "\n# sample\n\n\n\n## Example Usage\n\n```json\n\"features\": {\n    \"ghcr.io/example/collection/sample:latest\": {}\n}\n```\n\n\n\n\n\n---\n\n_Note: This file was auto-generated from the [devcontainer-feature.json](devcontainer-feature.json).  Add additional notes to a `NOTES.md`._\n"
+    },
+    {
+      "name": "jsonc-corpus-17",
+      "metadata": "{\"id\":\"sample\", \"options\":{\"10\":{},\"2\":{},\"x\":{},\"1\":{}}}",
+      "notes": null,
+      "args": [],
+      "project": "input",
+      "exit": 0,
+      "readme": "\n# sample\n\n\n\n## Example Usage\n\n```json\n\"features\": {\n    \"ghcr.io/example/collection/sample:latest\": {}\n}\n```\n\n## Options\n\n| Options Id | Description | Type | Default Value |\n|-----|-----|-----|-----|\n| 1 | - | - | undefined |\n| 2 | - | - | undefined |\n| 10 | - | - | undefined |\n| x | - | - | undefined |\n\n\n\n---\n\n_Note: This file was auto-generated from the [devcontainer-feature.json](devcontainer-feature.json).  Add additional notes to a `NOTES.md`._\n"
+    },
+    {
+      "name": "jsonc-corpus-18",
+      "metadata": "{\"id\":\"sample\", \"options\":[], \"customizations\":{\"vscode\":{\"extensions\":[]}}, \"legacyIds\":[]}",
+      "notes": null,
+      "args": [],
+      "project": "input",
+      "exit": 0,
+      "readme": "\n# sample\n\n\n\n## Example Usage\n\n```json\n\"features\": {\n    \"ghcr.io/example/collection/sample:latest\": {}\n}\n```\n\n## Options\n\n| Options Id | Description | Type | Default Value |\n|-----|-----|-----|-----|\n\n\n\n\n---\n\n_Note: This file was auto-generated from the [devcontainer-feature.json](devcontainer-feature.json).  Add additional notes to a `NOTES.md`._\n"
+    },
+    {
+      "name": "jsonc-corpus-19",
+      "metadata": "garbage {\"id\":\"sample\"} trailing garbage",
+      "notes": null,
+      "args": [],
+      "project": "input",
+      "exit": 0,
+      "readme": "\n# sample\n\n\n\n## Example Usage\n\n```json\n\"features\": {\n    \"ghcr.io/example/collection/sample:latest\": {}\n}\n```\n\n\n\n\n\n---\n\n_Note: This file was auto-generated from the [devcontainer-feature.json](devcontainer-feature.json).  Add additional notes to a `NOTES.md`._\n"
+    },
+    {
+      "name": "jsonc-corpus-20",
+      "metadata": "{/* comment */\"id\":\"sample\",/* comment */\"version\":\"5.4\",}",
+      "notes": null,
+      "args": [],
+      "project": "input",
+      "exit": 0,
+      "readme": "\n# sample\n\n\n\n## Example Usage\n\n```json\n\"features\": {\n    \"ghcr.io/example/collection/sample:5\": {}\n}\n```\n\n\n\n\n\n---\n\n_Note: This file was auto-generated from the [devcontainer-feature.json](devcontainer-feature.json).  Add additional notes to a `NOTES.md`._\n"
+    },
+    {
+      "name": "jsonc-corpus-21",
+      "metadata": "{\"id\":\"sample\", \"options\":{\"a\":{\"default\":\"one\"},bad,\"b\":{\"default\":\"two\"}}}",
+      "notes": null,
+      "args": [],
+      "project": "input",
+      "exit": 0,
+      "readme": "\n# sample\n\n\n\n## Example Usage\n\n```json\n\"features\": {\n    \"ghcr.io/example/collection/sample:latest\": {}\n}\n```\n\n## Options\n\n| Options Id | Description | Type | Default Value |\n|-----|-----|-----|-----|\n| a | - | - | one |\n| b | - | - | two |\n\n\n\n---\n\n_Note: This file was auto-generated from the [devcontainer-feature.json](devcontainer-feature.json).  Add additional notes to a `NOTES.md`._\n"
+    },
+    {
+      "name": "repeat-registry",
+      "metadata": "{\"id\": \"sample\", \"name\": \"Sample tool\", \"version\": \"2.3.4\", \"description\": \"A useful tool.\"}",
+      "notes": null,
+      "args": [
+        "-r",
+        "one",
+        "-r",
+        "two"
+      ],
+      "project": "input",
+      "exit": 0,
+      "readme": "\n# Sample tool (sample)\n\nA useful tool.\n\n## Example Usage\n\n```json\n\"features\": {\n    \"one,two/example/collection/sample:2\": {}\n}\n```\n\n\n\n\n\n---\n\n_Note: This file was auto-generated from the [devcontainer-feature.json](devcontainer-feature.json).  Add additional notes to a `NOTES.md`._\n"
+    }
+  ]
+}
