@@ -118,8 +118,8 @@ Discovery also reads the
 command-line config environment (`GIT_CONFIG_COUNT` pairs and
 `GIT_CONFIG_PARAMETERS`) after repository setup. A command-line
 `include.path` must expand to an absolute path. After all full-read inputs,
-an invalid `core.ignorecase` or `core.filemode` boolean gives no Git root,
-so `Resolve` mounts the requested folder. See
+an invalid `core.ignorecase`, `core.filemode` or `core.symlinks` boolean gives
+no Git root, so `Resolve` mounts the requested folder. See
 [Workspace mounts](/docs/dcb/usage#workspace-mounts-and-container-selection).
 
 ## Registry credentials
