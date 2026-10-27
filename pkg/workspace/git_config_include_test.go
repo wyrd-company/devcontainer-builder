@@ -19,9 +19,10 @@ import (
 
 // includeFixture is the layout that an include case writes into. common is
 // the repository's common folder, which holds its config, and admin is the
-// repository folder, which holds config.worktree.
+// repository folder, which holds config.worktree. prefix is the prefix of
+// Git's build that a gitPrefix case reads.
 type includeFixture struct {
-	base, folder, common, admin string
+	base, folder, common, admin, prefix string
 }
 
 // includeCase writes config files that include others and returns the
@@ -31,12 +32,16 @@ type includeFixture struct {
 // unknownAccount is true when the case names an account that no lookup finds:
 // a build whose lookup reads /etc/passwd only skips that include, the
 // approved difference, so native discovery gives the root where Git does not.
+// gitPrefix is true when the case includes a file through %(prefix)/, which
+// native discovery reads with Options.GitPrefix; assertGitPrefixCase asserts
+// it with and without the prefix.
 type includeCase struct {
 	name           string
 	setup          func(t *testing.T, f includeFixture) map[string]*string
 	ok             bool
 	unprivileged   bool
 	unknownAccount bool
+	gitPrefix      bool
 }
 
 // nativeOK reports whether native discovery follows every include of c
@@ -112,7 +117,7 @@ func includeChain(n int, last string) map[string]string {
 	return files
 }
 
-var includeCases = []includeCase{
+var includeCases = append([]includeCase{
 	{name: "global-valid", setup: includeGlobal(includeLine("inc.cfg"), map[string]string{"global/inc.cfg": globalConfigValid}), ok: true},
 	{name: "global-syntax", setup: includeGlobal(includeLine("inc.cfg"), map[string]string{"global/inc.cfg": globalConfigBroken})},
 	{name: "global-absolute-syntax", setup: func(t *testing.T, f includeFixture) map[string]*string {
@@ -301,7 +306,7 @@ var includeCases = []includeCase{
 		writeFile(t, filepath.Join(f.admin, "inc.cfg"), globalConfigBroken)
 		return nil
 	}, ok: true},
-}
+}, prefixIncludeCases...)
 
 // includeCaseVars selects no system or global file, so that only the case
 // selects one.
@@ -320,6 +325,13 @@ func includeCaseVars(base string, vars map[string]*string) map[string]*string {
 // when want is "".
 func assertIncludeResolve(t *testing.T, folder, want string) {
 	t.Helper()
+	assertIncludeResolveOptions(t, folder, want, Options{})
+}
+
+// assertIncludeResolveOptions asserts that Resolve with opts' GitPrefix
+// mounts want from folder, or folder when want is "".
+func assertIncludeResolveOptions(t *testing.T, folder, want string, opts Options) {
+	t.Helper()
 	source := want
 	if source == "" {
 		source = folder
@@ -329,7 +341,7 @@ func assertIncludeResolve(t *testing.T, folder, want string) {
 		t.Fatal(err)
 	}
 	target := path.Join("/workspaces", filepath.Base(source))
-	resolved, err := Resolve(folder, false, false, Options{MountGitRoot: true, Platform: "linux"})
+	resolved, err := Resolve(folder, false, false, Options{MountGitRoot: true, Platform: "linux", GitPrefix: opts.GitPrefix})
 	if err != nil || resolved.WorkspaceMount == nil || resolved.WorkspaceMount.Source != source ||
 		resolved.WorkspaceMount.Target != target || resolved.WorkspaceFolder != path.Join(target, filepath.ToSlash(rel)) {
 		t.Fatalf("Resolve = %+v %+v, %v; want source %q target %q", resolved, resolved.WorkspaceMount, err, source, target)
@@ -354,10 +366,15 @@ func TestGitRootConfigIncludeContract(t *testing.T) {
 			admin := filepath.Join(tree, ".git")
 			// makeRepo writes no config; Git's own repositories have one.
 			writeFile(t, filepath.Join(admin, "config"), "[core]\n\trepositoryformatversion = 0\n")
-			applyGlobalEnv(t, nil, includeCaseVars(base, c.setup(t, includeFixture{base: base, folder: folder, common: admin, admin: admin})))
+			f := includeFixture{base: base, folder: folder, common: admin, admin: admin, prefix: mkdir(t, filepath.Join(base, "prefix", "git"))}
+			applyGlobalEnv(t, nil, includeCaseVars(base, c.setup(t, f)))
 			want := ""
 			if c.nativeOK() {
 				want = tree
+			}
+			if c.gitPrefix {
+				assertGitPrefixCase(t, c, f, folder, tree, want)
+				return
 			}
 			if got, err := GitRoot(folder); err != nil || got != want {
 				t.Fatalf("GitRoot = %q, %v; want %q", got, err, want)
@@ -379,6 +396,7 @@ func TestGitRootConfigIncludeMatchesGit(t *testing.T) {
 		t.Skip("git is not installed")
 	}
 	routes := []string{"discovered", "gitfile", "explicit", "explicit-relative", "self", "linked", "common-relative", "symlinked-folder"}
+	prefix := hostGitPrefix(t, git)
 	for _, route := range routes {
 		for _, c := range includeCases {
 			t.Run(c.name+"/"+route, func(t *testing.T) {
@@ -460,7 +478,8 @@ func TestGitRootConfigIncludeMatchesGit(t *testing.T) {
 					t.Fatal("Git finds no root before the case")
 				}
 				caseVars := map[string]*string{}
-				for name, value := range c.setup(t, includeFixture{base: base, folder: folder, common: common, admin: admin}) {
+				f := includeFixture{base: base, folder: folder, common: common, admin: admin, prefix: prefix}
+				for name, value := range c.setup(t, f) {
 					caseVars[name] = value
 				}
 				for name, value := range vars {
@@ -473,6 +492,10 @@ func TestGitRootConfigIncludeMatchesGit(t *testing.T) {
 				}
 				if measured := globalSetupGit(t, git, folder, env); measured != want {
 					t.Fatalf("Git root = %q; want %q", measured, want)
+				}
+				if c.gitPrefix {
+					assertGitPrefixCase(t, c, f, folder, control, want)
+					return
 				}
 				if c.nativeOK() {
 					want = control

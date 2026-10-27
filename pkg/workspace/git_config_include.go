@@ -32,9 +32,10 @@ type gitRepositoryConfig struct {
 // the probe. Git reads them after the system and global files, as the format
 // check did, and also follows their includes. Git keeps GIT_COMMON_DIR as
 // given, so a relative value starts at cwd. A file that access(2) denies, or
-// that Git cannot open, stops the probe; a missing file is skipped.
+// that Git cannot open, stops the probe; a missing file is skipped. prefix is
+// the prefix of Git's build for include paths.
 // Reference: https://github.com/git/git/blob/master/config.c
-func (c gitRepositoryConfig) read(cwd string) bool {
+func (c gitRepositoryConfig) read(cwd, prefix string) bool {
 	common := c.common
 	if dir, set := os.LookupEnv("GIT_COMMON_DIR"); set {
 		common = dir + string(os.PathSeparator) + "config"
@@ -42,7 +43,7 @@ func (c gitRepositoryConfig) read(cwd string) bool {
 	folder := newGitConfigCwd(cwd)
 	defer folder.close()
 	for _, path := range []string{common, c.worktree} {
-		if path != "" && gitConfigFile(folder, path, false) != gitConfigFileAdmitted {
+		if path != "" && gitConfigFile(folder, path, false, prefix) != gitConfigFileAdmitted {
 			return false
 		}
 	}
@@ -51,8 +52,9 @@ func (c gitRepositoryConfig) read(cwd string) bool {
 
 // gitConfigParse opens the config file at path, from folder, which Git reads
 // at include depth depth, and parses it as Git reads it. It follows each
-// include.path entry when Git reads it, before the rest of the file.
-func gitConfigParse(folder *gitConfigCwd, path string, depth int) gitConfigFileResult {
+// include.path entry when Git reads it, before the rest of the file, with
+// prefix as the prefix of Git's build.
+func gitConfigParse(folder *gitConfigCwd, path string, depth int, prefix string) gitConfigFileResult {
 	file, err := folder.open(path)
 	if err != nil {
 		return gitConfigFileUnopened
@@ -62,7 +64,7 @@ func gitConfigParse(folder *gitConfigCwd, path string, depth int) gitConfigFileR
 		return gitConfigFileUnopened
 	}
 	if !parseGitConfigReader(file, func(entry gitConfigEntry) bool {
-		return entry.name != "include.path" || gitConfigInclude(folder, path, entry.value, depth)
+		return entry.name != "include.path" || gitConfigInclude(folder, path, entry.value, depth, prefix)
 	}) {
 		return gitConfigFileRejected
 	}
@@ -76,12 +78,13 @@ func gitConfigParse(folder *gitConfigCwd, path string, depth int) gitConfigFileR
 // a file that Git cannot open or parse, and nesting deeper than
 // gitConfigIncludeDepth are fatal. A relative path starts at the folder of
 // from, as named, so it stays relative to folder, Git's working folder, when
-// from is. includeIf conditions are not evaluated.
-func gitConfigInclude(folder *gitConfigCwd, from string, value *string, depth int) bool {
+// from is. prefix is the prefix of Git's build, as gitIncludePath takes it.
+// includeIf conditions are not evaluated.
+func gitConfigInclude(folder *gitConfigCwd, from string, value *string, depth int, prefix string) bool {
 	if value == nil {
 		return false
 	}
-	path, follow, ok := gitIncludePath(*value)
+	path, follow, ok := gitIncludePath(*value, prefix)
 	if !ok {
 		return false
 	}
@@ -99,16 +102,17 @@ func gitConfigInclude(folder *gitConfigCwd, from string, value *string, depth in
 	if depth >= gitConfigIncludeDepth {
 		return false
 	}
-	return gitConfigParse(folder, path, depth+1) == gitConfigFileAdmitted
+	return gitConfigParse(folder, path, depth+1, prefix) == gitConfigFileAdmitted
 }
 
 // gitIncludePath follows interpolate_path in Git's path.c for an include
 // path. A leading ~ names HOME, which must be set, and ~name names that
 // account's home folder, which must exist. A %(prefix)/ path names the rest
 // of the path, as system_path in Git's exec-cmd.c does: an absolute rest as
-// it is, and a relative one below the prefix that Git's build names. follow
-// is false for that relative rest, which is not read. ok is false for a path
-// that Git cannot expand.
+// it is, and a relative one joined to prefix, the prefix that Git's build
+// names, with a separator and without cleaning. When prefix is "", follow is
+// false for a relative rest, which is not read. ok is false for a path that
+// Git cannot expand.
 //
 // A build whose account lookup reads /etc/passwd only cannot see an account
 // that only another account service knows, so it skips a ~name path whose
@@ -117,9 +121,15 @@ func gitConfigInclude(folder *gitConfigCwd, from string, value *string, depth in
 // This difference is approved; see the Differences from upstream table in
 // docs/overview.md.
 // Reference: https://github.com/git/git/blob/master/path.c
-func gitIncludePath(value string) (path string, follow, ok bool) {
+func gitIncludePath(value, prefix string) (path string, follow, ok bool) {
 	if rest, prefixed := strings.CutPrefix(value, "%(prefix)/"); prefixed {
-		return rest, strings.HasPrefix(rest, "/"), true
+		if strings.HasPrefix(rest, "/") {
+			return rest, true, true
+		}
+		if prefix == "" {
+			return "", false, true
+		}
+		return prefix + "/" + rest, true, true
 	}
 	if !strings.HasPrefix(value, "~") {
 		return value, true, true

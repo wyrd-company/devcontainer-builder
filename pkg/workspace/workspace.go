@@ -38,6 +38,19 @@ type Options struct {
 	// Platform is the host's GOOS. Linux mounts carry no consistency option,
 	// as upstream omits it there.
 	Platform string
+	// GitPrefix is the prefix that the host Git's build names, the folder
+	// that Git puts in place of %(prefix) in an include.path value. As in
+	// Git, a %(prefix)/ value with a relative rest names GitPrefix, a
+	// separator and the rest, a path that starts at the including file's
+	// folder when it is relative. Empty means not set: such an include is
+	// not read, as if the file were missing. An absolute rest does not use
+	// GitPrefix.
+	GitPrefix string
+}
+
+// GitRoot is GitRoot with these options' GitPrefix.
+func (o Options) GitRoot(folder string) (string, error) {
+	return gitRoot(folder, o.GitPrefix), nil
 }
 
 // BindConsistency is the consistency option for these options' bind mounts:
@@ -95,7 +108,7 @@ func Resolve(localWorkspace string, hasWorkspaceFolder, hasWorkspaceMount bool, 
 	}
 	hostMountFolder := localWorkspace
 	if opts.MountGitRoot {
-		root, err := GitRoot(localWorkspace)
+		root, err := opts.GitRoot(localWorkspace)
 		if err != nil {
 			return out, err
 		}
