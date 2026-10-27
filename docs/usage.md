@@ -516,6 +516,9 @@ dcb features generate-docs --project-folder ./src --namespace example/collection
 `--project-folder` (`-p`, default `.`) contains the Feature child folders;
 the command does not append `src` or `test`. Hidden entries are skipped.
 `--namespace` (`-n`) is required, and `--registry` (`-r`) defaults to `ghcr.io`.
+A string flag without a value uses its declared default: an empty namespace or
+GitHub owner/repository, `.` for the project folder, and `ghcr.io` for the registry.
+An explicit empty string stays empty.
 The example reference uses the Feature ID and the major part of its version,
 or `latest` when the version is absent. Supply both `--github-owner` and
 `--github-repo` to link metadata to that repository's `main` branch.
@@ -526,7 +529,11 @@ Numeric option keys follow JavaScript key order. An empty option default is
 `-`; false and zero remain values, and an absent default renders `undefined`,
 as upstream. Markdown and replacement-string dollar patterns are retained with
 upstream's JavaScript replacement semantics. Metadata uses the upstream
-tolerant JSONC recovery behavior.
+tolerant JSONC recovery behavior. Metadata and notes use Node-compatible UTF-8
+replacement for malformed byte sequences. Object values retain JavaScript own
+property and prototype conversion, including operation errors when conversion
+fails. A list's length property controls whether its map operation is attempted;
+invalid map operations also fail before replacing that entry's README.
 
 Existing READMEs are replaced. An existing README symlink is unlinked; a dangling
 symlink is followed, as upstream. Source metadata and notes stay unchanged.
@@ -541,7 +548,8 @@ for invocation errors. `--log-level` accepts the shared dcb levels, including
 upstream's `info`, `debug`, and `trace`, and `--log-format` remains available.
 Repeated publication strings are comma-joined as upstream; repeated project
 folders fail. See `TestGenerateDocumentationPinnedReadmes`,
-`TestGenerateDocumentationFilesystem`, and `TestFeaturesDocumentationCommand`.
+`TestGenerateDocumentationFilesystem`, `TestGenerateDocumentationConversionReadmes`,
+`TestFeaturesDocumentationCommand`, and `TestFeaturesDocumentationOptionalStringValues`.
 
 ## Agent skills
 
