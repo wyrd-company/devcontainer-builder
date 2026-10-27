@@ -34,6 +34,7 @@ command is not needed. Podman is not supported.
 dcb up --workspace-folder .
 dcb exec --workspace-folder . -- sh -c 'id && pwd'
 dcb down --workspace-folder .
+dcb features package ./src --output-folder ./packaged
 ```
 
 ```json
@@ -78,7 +79,7 @@ These upstream command families are not yet supported:
 
 - [`outdated`](https://github.com/wyrd-company/devcontainer-builder/issues/20)
 - [`upgrade`](https://github.com/wyrd-company/devcontainer-builder/issues/21)
-- [Feature authoring commands under `features`](https://github.com/wyrd-company/devcontainer-builder/issues/22)
+- [Feature authoring commands other than `features package`](https://github.com/wyrd-company/devcontainer-builder/issues/22)
 - [`templates`](https://github.com/wyrd-company/devcontainer-builder/issues/23)
 
 ## Go libraries

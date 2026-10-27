@@ -36,8 +36,8 @@ func booleanOptionArgs(root *cobra.Command, args []string) []string {
 		if strings.HasPrefix(name, "--") {
 			name = strings.TrimPrefix(name, "--")
 			flag = cmd.Flags().Lookup(name)
-		} else if arg == "-h" {
-			flag = cmd.Flags().ShorthandLookup("h")
+		} else if strings.HasPrefix(name, "-") && len(name) == 2 {
+			flag = cmd.Flags().ShorthandLookup(name[1:])
 		}
 		if flag != nil && !equals && i+1 < len(args) {
 			next := args[i+1]
