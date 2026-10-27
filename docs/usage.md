@@ -721,8 +721,8 @@ is skipped. After the full read finishes, any `core.ignorecase`, `core.filemode`
 `core.sparseCheckout`, `core.sparseCheckoutCone`, `core.protectHFS`,
 `core.protectNTFS`, `core.precomposeUnicode`, `core.fsyncObjectFiles`,
 `core.safecrlf`, `core.autocrlf`, `core.lockfilePid`,
-`sparse.expectFilesOutsideOfPatterns`, `pager.color`, `color.pager` or
-`user.useConfigOnly` value that
+`sparse.expectFilesOutsideOfPatterns`, `pager.color`, `color.pager`,
+`user.useConfigOnly` or `advice.detachedHead` value that
 Git cannot read as a boolean
 gives no Git root, even if a later value is valid. `core.safecrlf`
 also accepts `warn`, without regard to case. `core.autocrlf` also accepts `input`,

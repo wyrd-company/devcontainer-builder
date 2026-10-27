@@ -123,7 +123,8 @@ an invalid `core.ignorecase`, `core.filemode`, `core.symlinks`,
 `core.sparseCheckoutCone`, `core.protectHFS`, `core.protectNTFS`,
 `core.precomposeUnicode`, `core.fsyncObjectFiles`, `core.safecrlf`,
 `core.autocrlf`, `core.lockfilePid`, `sparse.expectFilesOutsideOfPatterns`,
-`pager.color`, `color.pager` or `user.useConfigOnly` boolean gives no Git root,
+`pager.color`, `color.pager`, `user.useConfigOnly` or `advice.detachedHead`
+boolean gives no Git root,
 so `Resolve` mounts
 the requested folder.
 `core.safecrlf` also accepts `warn`, without regard to case.
