@@ -28,8 +28,8 @@ import (
 // core.ignorestat, core.sparseCheckout, core.sparseCheckoutCone, core.protectHFS,
 // core.protectNTFS, core.precomposeUnicode, core.fsyncObjectFiles,
 // core.safecrlf, core.autocrlf, core.lockfilePid,
-// sparse.expectFilesOutsideOfPatterns, pager.color or color.pager value that
-// Git cannot read as a boolean (or warn for core.safecrlf, input for
+// sparse.expectFilesOutsideOfPatterns, pager.color, color.pager or
+// user.useConfigOnly value that Git cannot read as a boolean (or warn for core.safecrlf, input for
 // core.autocrlf), after all config inputs
 // have been read. Git before 2.54 ignores core.lockfilePid.
 // Other typed values from this full read and includeIf
