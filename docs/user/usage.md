@@ -689,7 +689,8 @@ such as `/opt/homebrew/opt/git`. `dcb` does not run `git`, so `--git-prefix`
 names that prefix, and `dcb` then reads that path, as Git does. A relative
 `--git-prefix` starts at the current folder of the command. A relative
 `Options.GitPrefix` of the library gives a relative path, which starts at the
-including file's folder.
+including file's folder. A command-line include has no including file, so
+a relative expanded path is rejected.
 Without `--git-prefix`, `dcb` does not read such an include, as if the
 included file were missing. When Git rejects that file, the upstream CLI
 mounts the workspace folder, and `dcb` mounts the Git root. This is an
@@ -706,9 +707,17 @@ on that folder, as Git's `chdir` does. On macOS, a thread of its own changes
 to that folder to look the name up. On hosts other than Linux and macOS, `dcb`
 joins the name to the folder's path instead. The read after setup then also
 reads the repository config files of the format check, described below, with
-their includes.
-`includeIf` conditions, typed values, and the command-line config are not
-applied.
+their includes. Last, it reads command-line config from the environment:
+`GIT_CONFIG_COUNT` pairs named `GIT_CONFIG_KEY_0` and `GIT_CONFIG_VALUE_0`,
+and the following indices, then `GIT_CONFIG_PARAMETERS`. A count, missing
+pair, key or parameter quoting that Git rejects gives no Git root.
+`GIT_CONFIG_PARAMETERS` accepts both `'key=value'` and `'key'='value'` forms.
+These entries also follow `include.path`, with the account and prefix rules
+above. The expanded path must be absolute: a relative include has no file
+whose folder can be its base, and gives no Git root. A relative include
+inside that file starts at that file's folder. A missing absolute include
+is skipped. `includeIf` conditions and typed values from the full config read
+are not applied.
 As Git does, discovery walks the physical parent folders, after symbolic links
 in the workspace folder's path are resolved. The Git root keeps the workspace
 folder's path, up as many folders as Git walked, as the upstream CLI resolves

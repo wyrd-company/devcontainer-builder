@@ -42,8 +42,9 @@ type Options struct {
 	// that Git puts in place of %(prefix) in an include.path value. As in
 	// Git, a %(prefix)/ value with a relative rest names GitPrefix, a
 	// separator and the rest, a path that starts at the including file's
-	// folder when it is relative. Empty means not set: such an include is
-	// not read, as if the file were missing. An absolute rest does not use
+	// folder when it is relative. A command-line include has no including
+	// file and must expand to an absolute path. Empty means not set: such an
+	// include is not read, as if the file were missing. An absolute rest does not use
 	// GitPrefix.
 	GitPrefix string
 }

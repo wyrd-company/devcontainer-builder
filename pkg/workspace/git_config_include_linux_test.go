@@ -17,23 +17,24 @@ import (
 )
 
 // TestGitRootConfigIncludeFIFOStream includes a FIFO from a global config
-// file and from the repository config. Git opens an included FIFO each time it
-// reads the including file, and waits for a writer: twice for a global file,
+// file, repository config and command-line config. Git opens an included FIFO
+// each time it reads the including file, and waits for a writer: twice for a global file,
 // when it starts and after setup, and once for the repository config, in its
-// full read after setup. Native discovery and the host Git must both give each
+// full read after setup. Command-line config is also read once after setup.
+// Native discovery and the host Git must both give each
 // case's root, and take the same number of streams.
 func TestGitRootConfigIncludeFIFOStream(t *testing.T) {
 	git, _ := exec.LookPath("git")
-	for _, from := range []string{"global", "repository"} {
+	for _, from := range []string{"global", "repository", "command-count", "command-parameters"} {
 		for _, c := range []struct {
 			name     string
 			segments []string
 			ok       bool
 			reads    map[string]int
 		}{
-			{name: "valid", segments: []string{globalConfigValid, globalConfigValid}, ok: true, reads: map[string]int{"global": 2, "repository": 1}},
-			{name: "syntax", segments: []string{globalConfigBroken}, reads: map[string]int{"global": 1, "repository": 1}},
-			{name: "second-syntax", segments: []string{globalConfigValid, globalConfigBroken}, ok: from == "repository", reads: map[string]int{"global": 2, "repository": 1}},
+			{name: "valid", segments: []string{globalConfigValid, globalConfigValid}, ok: true, reads: map[string]int{"global": 2, "repository": 1, "command-count": 1, "command-parameters": 1}},
+			{name: "syntax", segments: []string{globalConfigBroken}, reads: map[string]int{"global": 1, "repository": 1, "command-count": 1, "command-parameters": 1}},
+			{name: "second-syntax", segments: []string{globalConfigValid, globalConfigBroken}, ok: from != "global", reads: map[string]int{"global": 2, "repository": 1, "command-count": 1, "command-parameters": 1}},
 		} {
 			t.Run(from+"/"+c.name, func(t *testing.T) {
 				base, err := filepath.EvalSymlinks(t.TempDir())
@@ -52,11 +53,19 @@ func TestGitRootConfigIncludeFIFOStream(t *testing.T) {
 				if from == "global" {
 					global = filepath.Join(base, "global.cfg")
 					writeFile(t, global, includeLine(fifo))
-				} else {
+				} else if from == "repository" {
 					config += includeLine(fifo)
 				}
 				writeFile(t, filepath.Join(tree, ".git", "config"), config)
-				env := applyGlobalEnv(t, testgit.Env(), includeCaseVars(base, map[string]*string{"GIT_CONFIG_GLOBAL": &global}))
+				vars := map[string]*string{"GIT_CONFIG_GLOBAL": &global}
+				if from == "command-count" {
+					vars["GIT_CONFIG_COUNT"] = globalValue("1")
+					vars["GIT_CONFIG_KEY_0"] = globalValue("include.path")
+					vars["GIT_CONFIG_VALUE_0"] = &fifo
+				} else if from == "command-parameters" {
+					vars["GIT_CONFIG_PARAMETERS"] = globalValue("'include.path'=" + commandQuote(fifo))
+				}
+				env := applyGlobalEnv(t, testgit.Env(), includeCaseVars(base, vars))
 				want := ""
 				if c.ok {
 					want = tree

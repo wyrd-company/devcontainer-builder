@@ -96,6 +96,12 @@ func gitConfigInclude(folder *gitConfigCwd, from string, value *string, depth in
 			path = from[:slash+1] + path
 		}
 	}
+	return gitConfigIncludeRead(folder, path, depth, prefix)
+}
+
+// gitConfigIncludeRead follows an expanded include path. Both file and
+// command-line config use Git's access, depth and file parsing rules.
+func gitConfigIncludeRead(folder *gitConfigCwd, path string, depth int, prefix string) bool {
 	if err := folder.access(path); err != nil {
 		return errors.Is(err, fs.ErrNotExist) || errors.Is(err, syscall.ENOTDIR)
 	}
