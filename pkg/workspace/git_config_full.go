@@ -16,7 +16,7 @@ type gitConfigValues struct {
 }
 
 func (v *gitConfigValues) add(entry gitConfigEntry) {
-	if v != nil && (entry.name == "core.ignorecase" || entry.name == "core.filemode" || entry.name == "core.symlinks" || entry.name == "core.trustctime") {
+	if v != nil && (entry.name == "core.ignorecase" || entry.name == "core.filemode" || entry.name == "core.symlinks" || entry.name == "core.trustctime" || entry.name == "core.quotepath") {
 		if _, ok := gitParseBool(entry.value); !ok {
 			v.invalidBoolean = true
 		}
