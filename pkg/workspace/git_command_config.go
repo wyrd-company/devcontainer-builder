@@ -13,10 +13,10 @@ import (
 // gitCommandConfigRead follows git_config_from_parameters in Git's config.c.
 // Git reads the count-indexed environment pairs, then GIT_CONFIG_PARAMETERS,
 // last in its full config read after setup. Invalid syntax or an include
-// failure stops the probe. Other keys' typed values and includeIf conditions
-// are not applied. No file owns a command-line include, so its expanded path
+// failure stops the probe. values records typed-value failures for the
+// callbacks after the full read. includeIf conditions are not applied. No file owns a command-line include, so its expanded path
 // must be absolute; includes inside that file keep their own relative base.
-func gitCommandConfigRead(cwd, prefix string) bool {
+func gitCommandConfigRead(cwd, prefix string, values *gitConfigValues) bool {
 	folder := newGitConfigCwd(cwd)
 	defer folder.close()
 	pair := func(key string, value *string) bool {
@@ -24,6 +24,7 @@ func gitCommandConfigRead(cwd, prefix string) bool {
 		if !ok {
 			return false
 		}
+		values.add(gitConfigEntry{name: name, value: value})
 		if name != "include.path" {
 			return true
 		}
@@ -34,7 +35,7 @@ func gitCommandConfigRead(cwd, prefix string) bool {
 		if !ok || !follow {
 			return ok
 		}
-		return filepath.IsAbs(path) && gitConfigIncludeRead(folder, path, 0, prefix)
+		return filepath.IsAbs(path) && gitConfigIncludeRead(folder, path, 0, prefix, values)
 	}
 	if raw, set := os.LookupEnv("GIT_CONFIG_COUNT"); set {
 		count, ok := gitCommandConfigCount(raw)

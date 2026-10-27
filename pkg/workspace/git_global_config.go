@@ -19,12 +19,13 @@ import (
 // read_very_early_config, before repository discovery, from the probe cwd. It
 // reads them again after setup, second, from its working folder, where a file
 // that it cannot open is also fatal. gitSystemConfigRead reads the system file
-// first. Both reads follow include.path entries. includeIf conditions, typed
-// values are not applied. gitCommandConfigRead reads command-line config last.
+// first. Both reads follow include.path entries. values records
+// typed-value failures only for the full read; nil leaves them unapplied in
+// the very-early read. gitCommandConfigRead reads command-line config last.
 // Reference: https://github.com/git/git/blob/master/config.c
-func gitGlobalConfigRead(folder *gitConfigCwd, second bool, prefix string) bool {
+func gitGlobalConfigRead(folder *gitConfigCwd, second bool, prefix string, values *gitConfigValues) bool {
 	for _, path := range gitGlobalConfigPaths() {
-		if !gitConfigFileRead(folder, path, true, second, prefix) {
+		if !gitConfigFileRead(folder, path, true, second, prefix, values) {
 			return false
 		}
 	}
@@ -35,12 +36,12 @@ func gitGlobalConfigRead(folder *gitConfigCwd, second bool, prefix string) bool 
 // and reports false when the read stops the probe. eaccesOK skips a file that
 // access(2) denies. The second read, after setup, also stops on a file that
 // Git cannot open. prefix is the prefix of Git's build for include paths.
-func gitConfigFileRead(folder *gitConfigCwd, path string, eaccesOK, second bool, prefix string) bool {
+func gitConfigFileRead(folder *gitConfigCwd, path string, eaccesOK, second bool, prefix string, values *gitConfigValues) bool {
 	if path == "" {
 		// access(2) reports an empty path missing.
 		return true
 	}
-	switch gitConfigFile(folder, path, eaccesOK, prefix) {
+	switch gitConfigFile(folder, path, eaccesOK, prefix, values) {
 	case gitConfigFileRejected:
 		return false
 	case gitConfigFileUnopened:
@@ -90,12 +91,12 @@ func gitGlobalConfigPaths() []string {
 // reads it: the open waits for a writer, and the file ends when its last
 // writer closes it. Git follows include.path entries, as gitConfigInclude
 // does, with prefix. A relative path starts at folder, Git's working folder.
-func gitConfigFile(folder *gitConfigCwd, path string, eaccesOK bool, prefix string) gitConfigFileResult {
+func gitConfigFile(folder *gitConfigCwd, path string, eaccesOK bool, prefix string, values *gitConfigValues) gitConfigFileResult {
 	if err := folder.access(path); err != nil {
 		if errors.Is(err, fs.ErrNotExist) || errors.Is(err, syscall.ENOTDIR) || eaccesOK && errors.Is(err, syscall.EACCES) {
 			return gitConfigFileAdmitted
 		}
 		return gitConfigFileRejected
 	}
-	return gitConfigParse(folder, path, 0, prefix)
+	return gitConfigParse(folder, path, 0, prefix, values)
 }
