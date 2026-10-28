@@ -519,6 +519,7 @@ the command does not append `src` or `test`. Hidden entries are skipped.
 A string flag without a value uses its declared default: an empty namespace or
 GitHub owner/repository, `.` for the project folder, and `ghcr.io` for the registry.
 An explicit empty string stays empty.
+Arguments after `--` are ignored; positional arguments before it are rejected.
 Grouped short flags use the upstream defaults for earlier flags in the group.
 The camel-case aliases `--projectFolder`, `--githubOwner`, `--githubRepo`, and
 `--logLevel` select the same values as their hyphenated names.
