@@ -5672,6 +5672,354 @@
         "zz-sibling/README.md": "6f6c64207369626c696e67",
         "zz-sibling/devcontainer-feature.json": "7b226964223a227369626c696e67227d"
       }
+    },
+    {
+      "Name": "property-multi-dash",
+      "Args": [
+        "--namespace.to--string=value"
+      ],
+      "Values": {
+        "Namespace": {
+          "Text": "",
+          "Properties": {
+            "to--string": {
+              "Text": "value"
+            },
+            "toString": {
+              "Text": "value"
+            }
+          }
+        }
+      },
+      "Stage": "valid",
+      "Metadata": null,
+      "Exit": 1,
+      "Files": {
+        "sample/README.md": "6f6c6420726561646d65",
+        "sample/devcontainer-feature.json": "7b226964223a2273616d706c65227d",
+        "zz-sibling/README.md": "6f6c64207369626c696e67",
+        "zz-sibling/devcontainer-feature.json": "7b226964223a227369626c696e67227d"
+      },
+      "ErrorClass": "Cannot convert object to primitive value",
+      "Before": {
+        "sample/README.md": "6f6c6420726561646d65",
+        "sample/devcontainer-feature.json": "7b226964223a2273616d706c65227d",
+        "zz-sibling/README.md": "6f6c64207369626c696e67",
+        "zz-sibling/devcontainer-feature.json": "7b226964223a227369626c696e67227d"
+      }
+    },
+    {
+      "Name": "property-mixed-separators",
+      "Args": [
+        "--namespace.to-_string=value"
+      ],
+      "Values": {
+        "Namespace": {
+          "Text": "",
+          "Properties": {
+            "to-_string": {
+              "Text": "value"
+            },
+            "toString": {
+              "Text": "value"
+            }
+          }
+        }
+      },
+      "Stage": "valid",
+      "Metadata": null,
+      "Exit": 1,
+      "Files": {
+        "sample/README.md": "6f6c6420726561646d65",
+        "sample/devcontainer-feature.json": "7b226964223a2273616d706c65227d",
+        "zz-sibling/README.md": "6f6c64207369626c696e67",
+        "zz-sibling/devcontainer-feature.json": "7b226964223a227369626c696e67227d"
+      },
+      "ErrorClass": "Cannot convert object to primitive value",
+      "Before": {
+        "sample/README.md": "6f6c6420726561646d65",
+        "sample/devcontainer-feature.json": "7b226964223a2273616d706c65227d",
+        "zz-sibling/README.md": "6f6c64207369626c696e67",
+        "zz-sibling/devcontainer-feature.json": "7b226964223a227369626c696e67227d"
+      }
+    },
+    {
+      "Name": "property-uppercase",
+      "Args": [
+        "-n",
+        "example/collection",
+        "--registry.TO-STRING=value"
+      ],
+      "Values": {
+        "Registry": {
+          "Text": "",
+          "Properties": {
+            "TO-STRING": {
+              "Text": "value"
+            },
+            "toString": {
+              "Text": "value"
+            }
+          }
+        }
+      },
+      "Stage": "valid",
+      "Metadata": null,
+      "Exit": 1,
+      "Files": {
+        "sample/README.md": "6f6c6420726561646d65",
+        "sample/devcontainer-feature.json": "7b226964223a2273616d706c65227d",
+        "zz-sibling/README.md": "6f6c64207369626c696e67",
+        "zz-sibling/devcontainer-feature.json": "7b226964223a227369626c696e67227d"
+      },
+      "ErrorClass": "Cannot convert object to primitive value",
+      "Before": {
+        "sample/README.md": "6f6c6420726561646d65",
+        "sample/devcontainer-feature.json": "7b226964223a2273616d706c65227d",
+        "zz-sibling/README.md": "6f6c64207369626c696e67",
+        "zz-sibling/devcontainer-feature.json": "7b226964223a227369626c696e67227d"
+      }
+    },
+    {
+      "Name": "property-leading-double",
+      "Args": [
+        "--namespace.--to-string=value"
+      ],
+      "Values": {
+        "Namespace": {
+          "Text": "",
+          "Properties": {
+            "--to-string": {
+              "Text": "value"
+            },
+            "toString": {
+              "Text": "value"
+            }
+          }
+        }
+      },
+      "Stage": "valid",
+      "Metadata": null,
+      "Exit": 1,
+      "Files": {
+        "sample/README.md": "6f6c6420726561646d65",
+        "sample/devcontainer-feature.json": "7b226964223a2273616d706c65227d",
+        "zz-sibling/README.md": "6f6c64207369626c696e67",
+        "zz-sibling/devcontainer-feature.json": "7b226964223a227369626c696e67227d"
+      },
+      "ErrorClass": "Cannot convert object to primitive value",
+      "Before": {
+        "sample/README.md": "6f6c6420726561646d65",
+        "sample/devcontainer-feature.json": "7b226964223a2273616d706c65227d",
+        "zz-sibling/README.md": "6f6c64207369626c696e67",
+        "zz-sibling/devcontainer-feature.json": "7b226964223a227369626c696e67227d"
+      }
+    },
+    {
+      "Name": "property-mixed-case",
+      "Args": [
+        "--namespace.to-STRING=value"
+      ],
+      "Values": {
+        "Namespace": {
+          "Text": "",
+          "Properties": {
+            "to-STRING": {
+              "Text": "value"
+            }
+          }
+        }
+      },
+      "Stage": "valid",
+      "Metadata": null,
+      "Exit": 0,
+      "Files": {
+        "sample/README.md": "0a232073616d706c650a0a0a0a2323204578616d706c652055736167650a0a6060606a736f6e0a226665617475726573223a207b0a2020202022676863722e696f2f5b6f626a656374204f626a6563745d2f73616d706c653a6c6174657374223a207b7d0a7d0a6060600a0a0a0a0a0a2d2d2d0a0a5f4e6f74653a20546869732066696c6520776173206175746f2d67656e6572617465642066726f6d20746865205b646576636f6e7461696e65722d666561747572652e6a736f6e5d28646576636f6e7461696e65722d666561747572652e6a736f6e292e2020416464206164646974696f6e616c206e6f74657320746f206120604e4f5445532e6d64602e5f0a",
+        "sample/devcontainer-feature.json": "7b226964223a2273616d706c65227d",
+        "zz-sibling/README.md": "0a23207369626c696e670a0a0a0a2323204578616d706c652055736167650a0a6060606a736f6e0a226665617475726573223a207b0a2020202022676863722e696f2f5b6f626a656374204f626a6563745d2f7369626c696e673a6c6174657374223a207b7d0a7d0a6060600a0a0a0a0a0a2d2d2d0a0a5f4e6f74653a20546869732066696c6520776173206175746f2d67656e6572617465642066726f6d20746865205b646576636f6e7461696e65722d666561747572652e6a736f6e5d28646576636f6e7461696e65722d666561747572652e6a736f6e292e2020416464206164646974696f6e616c206e6f74657320746f206120604e4f5445532e6d64602e5f0a",
+        "zz-sibling/devcontainer-feature.json": "7b226964223a227369626c696e67227d"
+      },
+      "ErrorClass": "",
+      "Before": {
+        "sample/README.md": "6f6c6420726561646d65",
+        "sample/devcontainer-feature.json": "7b226964223a2273616d706c65227d",
+        "zz-sibling/README.md": "6f6c64207369626c696e67",
+        "zz-sibling/devcontainer-feature.json": "7b226964223a227369626c696e67227d"
+      }
+    },
+    {
+      "Name": "property-no-hyphen-underscore",
+      "Args": [
+        "--namespace.to_string=value"
+      ],
+      "Values": {
+        "Namespace": {
+          "Text": "",
+          "Properties": {
+            "to_string": {
+              "Text": "value"
+            }
+          }
+        }
+      },
+      "Stage": "valid",
+      "Metadata": null,
+      "Exit": 0,
+      "Files": {
+        "sample/README.md": "0a232073616d706c650a0a0a0a2323204578616d706c652055736167650a0a6060606a736f6e0a226665617475726573223a207b0a2020202022676863722e696f2f5b6f626a656374204f626a6563745d2f73616d706c653a6c6174657374223a207b7d0a7d0a6060600a0a0a0a0a0a2d2d2d0a0a5f4e6f74653a20546869732066696c6520776173206175746f2d67656e6572617465642066726f6d20746865205b646576636f6e7461696e65722d666561747572652e6a736f6e5d28646576636f6e7461696e65722d666561747572652e6a736f6e292e2020416464206164646974696f6e616c206e6f74657320746f206120604e4f5445532e6d64602e5f0a",
+        "sample/devcontainer-feature.json": "7b226964223a2273616d706c65227d",
+        "zz-sibling/README.md": "0a23207369626c696e670a0a0a0a2323204578616d706c652055736167650a0a6060606a736f6e0a226665617475726573223a207b0a2020202022676863722e696f2f5b6f626a656374204f626a6563745d2f7369626c696e673a6c6174657374223a207b7d0a7d0a6060600a0a0a0a0a0a2d2d2d0a0a5f4e6f74653a20546869732066696c6520776173206175746f2d67656e6572617465642066726f6d20746865205b646576636f6e7461696e65722d666561747572652e6a736f6e5d28646576636f6e7461696e65722d666561747572652e6a736f6e292e2020416464206164646974696f6e616c206e6f74657320746f206120604e4f5445532e6d64602e5f0a",
+        "zz-sibling/devcontainer-feature.json": "7b226964223a227369626c696e67227d"
+      },
+      "ErrorClass": "",
+      "Before": {
+        "sample/README.md": "6f6c6420726561646d65",
+        "sample/devcontainer-feature.json": "7b226964223a2273616d706c65227d",
+        "zz-sibling/README.md": "6f6c64207369626c696e67",
+        "zz-sibling/devcontainer-feature.json": "7b226964223a227369626c696e67227d"
+      }
+    },
+    {
+      "Name": "property-short-alias",
+      "Args": [
+        "-n.to--string=value"
+      ],
+      "Values": {
+        "Namespace": {
+          "Text": "",
+          "Properties": {
+            "to--string": {
+              "Text": "value"
+            }
+          }
+        }
+      },
+      "Stage": "valid",
+      "Metadata": null,
+      "Exit": 0,
+      "Files": {
+        "sample/README.md": "0a232073616d706c650a0a0a0a2323204578616d706c652055736167650a0a6060606a736f6e0a226665617475726573223a207b0a2020202022676863722e696f2f5b6f626a656374204f626a6563745d2f73616d706c653a6c6174657374223a207b7d0a7d0a6060600a0a0a0a0a0a2d2d2d0a0a5f4e6f74653a20546869732066696c6520776173206175746f2d67656e6572617465642066726f6d20746865205b646576636f6e7461696e65722d666561747572652e6a736f6e5d28646576636f6e7461696e65722d666561747572652e6a736f6e292e2020416464206164646974696f6e616c206e6f74657320746f206120604e4f5445532e6d64602e5f0a",
+        "sample/devcontainer-feature.json": "7b226964223a2273616d706c65227d",
+        "zz-sibling/README.md": "0a23207369626c696e670a0a0a0a2323204578616d706c652055736167650a0a6060606a736f6e0a226665617475726573223a207b0a2020202022676863722e696f2f5b6f626a656374204f626a6563745d2f7369626c696e673a6c6174657374223a207b7d0a7d0a6060600a0a0a0a0a0a2d2d2d0a0a5f4e6f74653a20546869732066696c6520776173206175746f2d67656e6572617465642066726f6d20746865205b646576636f6e7461696e65722d666561747572652e6a736f6e5d28646576636f6e7461696e65722d666561747572652e6a736f6e292e2020416464206164646974696f6e616c206e6f74657320746f206120604e4f5445532e6d64602e5f0a",
+        "zz-sibling/devcontainer-feature.json": "7b226964223a227369626c696e67227d"
+      },
+      "ErrorClass": "",
+      "Before": {
+        "sample/README.md": "6f6c6420726561646d65",
+        "sample/devcontainer-feature.json": "7b226964223a2273616d706c65227d",
+        "zz-sibling/README.md": "6f6c64207369626c696e67",
+        "zz-sibling/devcontainer-feature.json": "7b226964223a227369626c696e67227d"
+      }
+    },
+    {
+      "Name": "property-dashed-root",
+      "Args": [
+        "-n",
+        "example/collection",
+        "--github-owner.to--string=value",
+        "--github-repo",
+        "sample-repo"
+      ],
+      "Values": {
+        "GitHubOwner": {
+          "Text": "",
+          "Properties": {
+            "to--string": {
+              "Text": "value"
+            }
+          }
+        },
+        "GitHubRepo": {
+          "Text": "sample-repo"
+        }
+      },
+      "Stage": "valid",
+      "Metadata": null,
+      "Exit": 0,
+      "Files": {
+        "sample/README.md": "0a232073616d706c650a0a0a0a2323204578616d706c652055736167650a0a6060606a736f6e0a226665617475726573223a207b0a2020202022676863722e696f2f6578616d706c652f636f6c6c656374696f6e2f73616d706c653a6c6174657374223a207b7d0a7d0a6060600a0a0a0a0a0a2d2d2d0a0a5f4e6f74653a20546869732066696c6520776173206175746f2d67656e6572617465642066726f6d20746865205b646576636f6e7461696e65722d666561747572652e6a736f6e5d2868747470733a2f2f6769746875622e636f6d2f5b6f626a656374204f626a6563745d2f73616d706c652d7265706f2f626c6f622f6d61696e2f2e2f73616d706c652f646576636f6e7461696e65722d666561747572652e6a736f6e292e2020416464206164646974696f6e616c206e6f74657320746f206120604e4f5445532e6d64602e5f0a",
+        "sample/devcontainer-feature.json": "7b226964223a2273616d706c65227d",
+        "zz-sibling/README.md": "0a23207369626c696e670a0a0a0a2323204578616d706c652055736167650a0a6060606a736f6e0a226665617475726573223a207b0a2020202022676863722e696f2f6578616d706c652f636f6c6c656374696f6e2f7369626c696e673a6c6174657374223a207b7d0a7d0a6060600a0a0a0a0a0a2d2d2d0a0a5f4e6f74653a20546869732066696c6520776173206175746f2d67656e6572617465642066726f6d20746865205b646576636f6e7461696e65722d666561747572652e6a736f6e5d2868747470733a2f2f6769746875622e636f6d2f5b6f626a656374204f626a6563745d2f73616d706c652d7265706f2f626c6f622f6d61696e2f2e2f7a7a2d7369626c696e672f646576636f6e7461696e65722d666561747572652e6a736f6e292e2020416464206164646974696f6e616c206e6f74657320746f206120604e4f5445532e6d64602e5f0a",
+        "zz-sibling/devcontainer-feature.json": "7b226964223a227369626c696e67227d"
+      },
+      "ErrorClass": "",
+      "Before": {
+        "sample/README.md": "6f6c6420726561646d65",
+        "sample/devcontainer-feature.json": "7b226964223a2273616d706c65227d",
+        "zz-sibling/README.md": "6f6c64207369626c696e67",
+        "zz-sibling/devcontainer-feature.json": "7b226964223a227369626c696e67227d"
+      }
+    },
+    {
+      "Name": "property-camel-root",
+      "Args": [
+        "-n",
+        "example/collection",
+        "--githubOwner.to--string=value",
+        "--githubRepo",
+        "sample-repo"
+      ],
+      "Values": {
+        "GitHubOwner": {
+          "Text": "",
+          "Properties": {
+            "to--string": {
+              "Text": "value"
+            }
+          }
+        },
+        "GitHubRepo": {
+          "Text": "sample-repo"
+        }
+      },
+      "Stage": "valid",
+      "Metadata": null,
+      "Exit": 0,
+      "Files": {
+        "sample/README.md": "0a232073616d706c650a0a0a0a2323204578616d706c652055736167650a0a6060606a736f6e0a226665617475726573223a207b0a2020202022676863722e696f2f6578616d706c652f636f6c6c656374696f6e2f73616d706c653a6c6174657374223a207b7d0a7d0a6060600a0a0a0a0a0a2d2d2d0a0a5f4e6f74653a20546869732066696c6520776173206175746f2d67656e6572617465642066726f6d20746865205b646576636f6e7461696e65722d666561747572652e6a736f6e5d2868747470733a2f2f6769746875622e636f6d2f5b6f626a656374204f626a6563745d2f73616d706c652d7265706f2f626c6f622f6d61696e2f2e2f73616d706c652f646576636f6e7461696e65722d666561747572652e6a736f6e292e2020416464206164646974696f6e616c206e6f74657320746f206120604e4f5445532e6d64602e5f0a",
+        "sample/devcontainer-feature.json": "7b226964223a2273616d706c65227d",
+        "zz-sibling/README.md": "0a23207369626c696e670a0a0a0a2323204578616d706c652055736167650a0a6060606a736f6e0a226665617475726573223a207b0a2020202022676863722e696f2f6578616d706c652f636f6c6c656374696f6e2f7369626c696e673a6c6174657374223a207b7d0a7d0a6060600a0a0a0a0a0a2d2d2d0a0a5f4e6f74653a20546869732066696c6520776173206175746f2d67656e6572617465642066726f6d20746865205b646576636f6e7461696e65722d666561747572652e6a736f6e5d2868747470733a2f2f6769746875622e636f6d2f5b6f626a656374204f626a6563745d2f73616d706c652d7265706f2f626c6f622f6d61696e2f2e2f7a7a2d7369626c696e672f646576636f6e7461696e65722d666561747572652e6a736f6e292e2020416464206164646974696f6e616c206e6f74657320746f206120604e4f5445532e6d64602e5f0a",
+        "zz-sibling/devcontainer-feature.json": "7b226964223a227369626c696e67227d"
+      },
+      "ErrorClass": "",
+      "Before": {
+        "sample/README.md": "6f6c6420726561646d65",
+        "sample/devcontainer-feature.json": "7b226964223a2273616d706c65227d",
+        "zz-sibling/README.md": "6f6c64207369626c696e67",
+        "zz-sibling/devcontainer-feature.json": "7b226964223a227369626c696e67227d"
+      }
+    },
+    {
+      "Name": "property-unicode-lower",
+      "Args": [
+        "--namespace.TO-STR\u0130NG=value"
+      ],
+      "Values": {
+        "Namespace": {
+          "Text": "",
+          "Properties": {
+            "TO-STR\u0130NG": {
+              "Text": "value"
+            }
+          }
+        }
+      },
+      "Stage": "valid",
+      "Metadata": null,
+      "Exit": 0,
+      "Files": {
+        "sample/README.md": "0a232073616d706c650a0a0a0a2323204578616d706c652055736167650a0a6060606a736f6e0a226665617475726573223a207b0a2020202022676863722e696f2f5b6f626a656374204f626a6563745d2f73616d706c653a6c6174657374223a207b7d0a7d0a6060600a0a0a0a0a0a2d2d2d0a0a5f4e6f74653a20546869732066696c6520776173206175746f2d67656e6572617465642066726f6d20746865205b646576636f6e7461696e65722d666561747572652e6a736f6e5d28646576636f6e7461696e65722d666561747572652e6a736f6e292e2020416464206164646974696f6e616c206e6f74657320746f206120604e4f5445532e6d64602e5f0a",
+        "sample/devcontainer-feature.json": "7b226964223a2273616d706c65227d",
+        "zz-sibling/README.md": "0a23207369626c696e670a0a0a0a2323204578616d706c652055736167650a0a6060606a736f6e0a226665617475726573223a207b0a2020202022676863722e696f2f5b6f626a656374204f626a6563745d2f7369626c696e673a6c6174657374223a207b7d0a7d0a6060600a0a0a0a0a0a2d2d2d0a0a5f4e6f74653a20546869732066696c6520776173206175746f2d67656e6572617465642066726f6d20746865205b646576636f6e7461696e65722d666561747572652e6a736f6e5d28646576636f6e7461696e65722d666561747572652e6a736f6e292e2020416464206164646974696f6e616c206e6f74657320746f206120604e4f5445532e6d64602e5f0a",
+        "zz-sibling/devcontainer-feature.json": "7b226964223a227369626c696e67227d"
+      },
+      "ErrorClass": "",
+      "Before": {
+        "sample/README.md": "6f6c6420726561646d65",
+        "sample/devcontainer-feature.json": "7b226964223a2273616d706c65227d",
+        "zz-sibling/README.md": "6f6c64207369626c696e67",
+        "zz-sibling/devcontainer-feature.json": "7b226964223a227369626c696e67227d"
+      }
     }
   ]
 }
