@@ -11,6 +11,8 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/wyrd-company/devcontainer-builder/pkg/features"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
 
 // yargs-parser consumes negative decimal strings as option values.
@@ -88,7 +90,36 @@ func (a *application) featuresDocumentationCommand() *cobra.Command {
 
 var documentationAttachedNumber = regexp.MustCompile(`^-?\d+(\.\d*)?(e-?\d+)?$`)
 var documentationWord = regexp.MustCompile(`^[A-Za-z0-9_]$`)
-var documentationDashedProperty = regexp.MustCompile(`-([a-zA-Z])`)
+
+// yargs-parser expands each component of a dashed key independently. Preserve
+// mixed case, repeated separators, leading hyphens and full Unicode casing.
+func documentationCamelProperty(path string) string {
+	parts := strings.Split(path, ".")
+	lowerCase, upperCase := cases.Lower(language.Und), cases.Upper(language.Und)
+	for i, part := range parts {
+		lower, upper := lowerCase.String(part), upperCase.String(part)
+		if part == lower || part == upper {
+			part = lower
+		}
+		start := len(part) - len(strings.TrimLeft(part, "-"))
+		var text strings.Builder
+		nextUpper := false
+		for index, ch := range part[start:] {
+			letter := string(ch)
+			if nextUpper {
+				letter = upperCase.String(letter)
+				nextUpper = false
+			}
+			if index+start != 0 && (letter == "-" || letter == "_") {
+				nextUpper = true
+			} else if letter != "-" && letter != "_" {
+				text.WriteString(letter)
+			}
+		}
+		parts[i] = text.String()
+	}
+	return strings.Join(parts, ".")
+}
 
 // Keep pflag's ordinary string parsing and required-flag checks while retaining
 // the structured argument for the library's deferred publication conversion.
@@ -163,7 +194,10 @@ func documentationProperty(flag *pflag.Flag, arg string, next []string) {
 	}
 	set(path)
 	// yargs expands dashed property names as well as dashed option names.
-	camel := documentationDashedProperty.ReplaceAllStringFunc(path, func(s string) string { return strings.ToUpper(s[1:]) })
+	camel := path
+	if strings.Contains(path, "-") {
+		camel = documentationCamelProperty(path)
+	}
 	// Full-key expansion writes the camel-case root. First-element aliases
 	// receive only the original property path, as in yargs-parser's setArg.
 	root, _, _ := strings.Cut(strings.TrimLeft(name, "-"), ".")
