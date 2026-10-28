@@ -542,6 +542,10 @@ Distinct escaped UTF-16 property keys remain distinct; isolated surrogate units
 become replacement characters when the README is written.
 Equivalent recovered UTF-16 keys select the same property. Repeated dotted
 option assignments update one object until ordinary repeated values form an array.
+Dotted properties are retained until a README uses the publication value.
+An own `toString` property fails conversion and preserves that entry's README.
+Empty collections and skipped entries do not convert publication values.
+An owner or repository value is unused when its counterpart is the empty string.
 
 Existing READMEs are replaced. An existing README symlink is unlinked; a dangling
 symlink is followed, as upstream. Source metadata and notes stay unchanged.
@@ -557,7 +561,8 @@ upstream's `info`, `debug`, and `trace`, and `--log-format` remains available.
 Repeated publication strings are comma-joined as upstream; repeated project
 folders fail. See `TestGenerateDocumentationPinnedReadmes`,
 `TestGenerateDocumentationFilesystem`, `TestGenerateDocumentationConversionReadmes`,
-`TestFeaturesDocumentationCommand`, and `TestFeaturesDocumentationOptionalStringValues`.
+`TestFeaturesDocumentationCommand`, `TestFeaturesDocumentationOptionalStringValues`,
+`TestGenerateDocumentationDeferredValues`, and `TestFeaturesDocumentationDeferredValues`.
 
 ## Agent skills
 
