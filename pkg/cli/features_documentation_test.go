@@ -84,3 +84,53 @@ func TestFeaturesDocumentationDiagnostics(t *testing.T) {
 		t.Fatal("missing ID generated a README")
 	}
 }
+
+func TestFeaturesDocumentationDelimiterTail(t *testing.T) {
+	for _, row := range []struct {
+		name string
+		args []string
+		exit int
+	}{
+		{"positional", []string{"extra"}, 2},
+		{"tail", []string{"--", "extra"}, 0},
+		{"ignored-shadow", []string{"--", "--namespace.toString=x"}, 0},
+		{"empty", []string{"--"}, 0},
+		{"positional-before-tail", []string{"extra", "--", "ignored"}, 2},
+		{"conversion-before-tail", []string{"--namespace.toString=x", "--", "extra"}, 1},
+	} {
+		t.Run(row.name, func(t *testing.T) {
+			t.Chdir(t.TempDir())
+			for _, name := range []string{"sample", "sibling"} {
+				if err := os.Mkdir(name, 0o755); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(filepath.Join(name, "devcontainer-feature.json"), []byte(`{"id":"`+name+`","version":"1.0.0"}`), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := os.WriteFile("sample/README.md", []byte("retained"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			invoke(t, row.exit, append([]string{"features", "generate-docs", "-n", "plain"}, row.args...)...)
+			data, err := os.ReadFile("sample/README.md")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if row.exit == 0 {
+				if !strings.Contains(string(data), "ghcr.io/plain/sample:1") {
+					t.Fatalf("unexpected README: %s", data)
+				}
+				if _, err := os.Stat("sibling/README.md"); err != nil {
+					t.Fatal(err)
+				}
+			} else {
+				if string(data) != "retained" {
+					t.Fatalf("README replaced: %s", data)
+				}
+				if _, err := os.Stat("sibling/README.md"); !os.IsNotExist(err) {
+					t.Fatalf("unexpected sibling README: %v", err)
+				}
+			}
+		})
+	}
+}
