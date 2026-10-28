@@ -67,6 +67,13 @@ func (a *application) featuresDocumentationCommand() *cobra.Command {
 	_ = cmd.MarkFlagRequired("namespace")
 	cmd.Flags().StringArrayVar(&owners, "github-owner", nil, "GitHub owner for metadata links")
 	cmd.Flags().StringArrayVar(&repos, "github-repo", nil, "GitHub repository for metadata links")
+	for name, target := range map[string]**features.DocumentationValue{
+		"registry": &opts.RegistryValue, "namespace": &opts.NamespaceValue,
+		"github-owner": &opts.GitHubOwnerValue, "github-repo": &opts.GitHubRepoValue,
+	} {
+		flag := cmd.Flags().Lookup(name)
+		flag.Value = &documentationFlagValue{Value: flag.Value, target: target}
+	}
 	// yargs supplies the declared default when a string option has no value.
 	// Keep explicit empty strings distinct from absent values.
 	for name, value := range map[string]string{"project-folder": ".", "registry": "ghcr.io", "namespace": "", "github-owner": "", "github-repo": ""} {
@@ -81,6 +88,89 @@ func (a *application) featuresDocumentationCommand() *cobra.Command {
 
 var documentationAttachedNumber = regexp.MustCompile(`^-?\d+(\.\d*)?(e-?\d+)?$`)
 var documentationWord = regexp.MustCompile(`^[A-Za-z0-9_]$`)
+var documentationDashedProperty = regexp.MustCompile(`-([a-zA-Z])`)
+
+// Keep pflag's ordinary string parsing and required-flag checks while retaining
+// the structured argument for the library's deferred publication conversion.
+type documentationFlagValue struct {
+	pflag.Value
+	target **features.DocumentationValue
+}
+
+func documentationScalar(flag *pflag.Flag, text string) {
+	value, ok := flag.Value.(*documentationFlagValue)
+	if !ok {
+		return
+	}
+	next := features.DocumentationValue{Text: text}
+	if *value.target == nil {
+		*value.target = &next
+	} else if (*value.target).Elements != nil {
+		(*value.target).Elements = append((*value.target).Elements, next)
+	} else {
+		*value.target = &features.DocumentationValue{Elements: []features.DocumentationValue{**value.target, next}}
+	}
+}
+
+func documentationProperty(flag *pflag.Flag, arg string, next []string) {
+	value, ok := flag.Value.(*documentationFlagValue)
+	if !ok {
+		return
+	}
+	name, text, equals := strings.Cut(arg, "=")
+	_, path, _ := strings.Cut(name, ".")
+	if !equals && len(next) > 0 && (!strings.HasPrefix(next[0], "-") || strings.HasPrefix(arg, "--") && documentationNegativeValue.MatchString(next[0])) {
+		text = next[0]
+	}
+	object := *value.target
+	if object == nil || object.Properties == nil {
+		object = &features.DocumentationValue{Properties: map[string]features.DocumentationValue{}}
+		if *value.target == nil {
+			*value.target = object
+		} else if (*value.target).Elements != nil {
+			(*value.target).Elements = append((*value.target).Elements, *object)
+		} else {
+			*value.target = &features.DocumentationValue{Elements: []features.DocumentationValue{**value.target, *object}}
+		}
+	}
+	set := func(path string) {
+		properties := object.Properties
+		keys := strings.Split(path, ".")
+		for i, key := range keys {
+			// yargs-parser sanitizes this key rather than changing a prototype.
+			if key == "__proto__" {
+				key = "___proto___"
+			}
+			if i == len(keys)-1 {
+				item := features.DocumentationValue{Text: text}
+				if old, exists := properties[key]; exists {
+					if old.Elements != nil {
+						item.Elements = append(old.Elements, item)
+					} else {
+						item.Elements = []features.DocumentationValue{old, item}
+					}
+				}
+				properties[key] = item
+				return
+			}
+			child := properties[key]
+			if child.Properties == nil {
+				child = features.DocumentationValue{Properties: map[string]features.DocumentationValue{}}
+				properties[key] = child
+			}
+			properties = child.Properties
+		}
+	}
+	set(path)
+	// yargs expands dashed property names as well as dashed option names.
+	camel := documentationDashedProperty.ReplaceAllStringFunc(path, func(s string) string { return strings.ToUpper(s[1:]) })
+	// Full-key expansion writes the camel-case root. First-element aliases
+	// receive only the original property path, as in yargs-parser's setArg.
+	root, _, _ := strings.Cut(strings.TrimLeft(name, "-"), ".")
+	if camel != path && root == flag.Name && !strings.Contains(root, "-") {
+		set(camel)
+	}
+}
 
 func documentationDottedFlag(cmd *cobra.Command, arg string) *pflag.Flag {
 	if cmd.Name() != "generate-docs" || cmd.Parent() == nil || cmd.Parent().Name() != "features" {

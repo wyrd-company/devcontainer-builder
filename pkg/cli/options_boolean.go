@@ -34,6 +34,9 @@ func booleanOptionArgs(root *cobra.Command, args []string) []string {
 		// Cobra also merges inherited persistent flags here.
 		cmd.InitDefaultHelpFlag()
 		dotted := documentationDottedFlag(cmd, arg)
+		if dotted != nil {
+			documentationProperty(dotted, arg, args[i+1:])
+		}
 		if group, consumed, handled := documentationGroupedArgs(cmd, arg, args[i+1:]); handled {
 			// Repeated property writes mutate a sole object. Once an ordinary
 			// repeated value makes an array, yargs appends each dotted object.
@@ -55,6 +58,14 @@ func booleanOptionArgs(root *cobra.Command, args []string) []string {
 		}
 		if flag != nil {
 			if flag.Annotations["documentation-no-value"] != nil {
+				if dotted == nil {
+					if value, handled := documentationOptionArg(flag, arg, args[i+1:]); handled {
+						_, text, _ := strings.Cut(value, "=")
+						documentationScalar(flag, text)
+					} else if len(args[i+1:]) > 0 {
+						documentationScalar(flag, args[i+1])
+					}
+				}
 				singleDocumentationObject[flag] = dotted != nil && !seenDocumentation[flag]
 				seenDocumentation[flag] = true
 			}
