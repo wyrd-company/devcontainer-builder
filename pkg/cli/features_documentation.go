@@ -22,7 +22,13 @@ var documentationShortOption = regexp.MustCompile(`^(-|--)[^-]`)
 func (a *application) featuresDocumentationCommand() *cobra.Command {
 	var opts features.DocumentationOptions
 	var projects, registries, namespaces, owners, repos []string
-	cmd := &cobra.Command{Use: "generate-docs", Short: "Generate READMEs for local Features", Args: cobra.NoArgs}
+	cmd := &cobra.Command{Use: "generate-docs", Short: "Generate READMEs for local Features", Args: func(cmd *cobra.Command, args []string) error {
+		// yargs ignores the delimiter tail, but rejects ordinary positionals.
+		if end := cmd.ArgsLenAtDash(); end >= 0 {
+			args = args[:end]
+		}
+		return cobra.NoArgs(cmd, args)
+	}}
 	cmd.Flags().SetNormalizeFunc(func(_ *pflag.FlagSet, name string) pflag.NormalizedName {
 		switch name {
 		case "projectFolder":
