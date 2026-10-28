@@ -152,6 +152,15 @@ other entry failures return an error after the remaining entries are processed.
 Metadata and notes stay unchanged; existing README files are replaced. The reader
 retains upstream UTF-8 replacement, tolerant number recovery, and JavaScript
 property/prototype conversion, including UTF-16 string property indices.
+Optional `RegistryValue`, `NamespaceValue`, `GitHubOwnerValue`, and
+`GitHubRepoValue` override their corresponding strings with a `DocumentationValue`.
+Use `Text` for a string, a non-nil `Properties` map for an object with own
+properties, or a non-nil `Elements` slice for an array. Objects take precedence
+over arrays, and arrays over text. Values convert when rendering uses them.
+An own `toString` property can fail conversion. Skipped entries and an empty
+collection do not convert publication values. Owner and repository values are
+used only when both differ from the empty string; arrays and objects differ
+from it even when their text conversion is empty.
 Conversion or map errors preserve that entry's
 README and return an operation error after sibling processing. The
 [usage guide](usage.md#generate-feature-documentation) describes content,

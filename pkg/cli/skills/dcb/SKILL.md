@@ -90,6 +90,9 @@ READMEs and returns the normal JSON result. It needs no Docker or registry.
 String flags without values use their declared defaults; explicit empty strings
 stay empty. Conversion/map errors preserve that entry's README while sibling
 entries can complete.
+Dotted publication properties convert only when used. A shadowed `toString`
+method can fail the operation; empty collections, skipped entries, and unused
+GitHub link values do not perform that conversion.
 
 `build` loads into Docker by default and returns an `imageName` array.
 Use `--push` for registry export, `--platform` for target platforms,

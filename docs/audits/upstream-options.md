@@ -239,12 +239,16 @@ String option indices, grouped short flags, and camel-case option aliases also
 follow the pinned command.
 Long dotted options retain the same object conversion and file-operation errors
 as dotted shorthand; escaped surrogate keys retain their identity until output.
+Dotted publication values retain own properties and repeated arrays until the
+library uses them. Shadowed conversion methods fail at that stage; empty or
+skipped collections and unused GitHub link fields retain the pinned behavior.
 The CLI retains dcb's
 JSON result, global diagnostic controls, and invocation-error exit 2. Upstream has
 no stdout result and invocation-error exit 1. Tests: `TestGenerateDocumentationPinnedReadmes`,
 `TestGenerateDocumentationFilesystem`, `TestGenerateDocumentationConversionReadmes`,
 `TestFeaturesDocumentationCommand`, `TestFeaturesDocumentationOptionalStringValues`,
-`TestGenerateDocumentationStringOptions`, `TestFeaturesDocumentationGroupedAndCamelFlags`.
+`TestGenerateDocumentationStringOptions`, `TestFeaturesDocumentationGroupedAndCamelFlags`,
+`TestGenerateDocumentationDeferredValues`, `TestFeaturesDocumentationDeferredValues`.
 
 | Upstream option | dcb equivalent | Disposition | Unit | Reason / source |
 | --- | --- | --- | --- | --- |

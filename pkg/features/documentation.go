@@ -19,6 +19,9 @@ import (
 type DocumentationOptions struct {
 	ProjectFolder, Registry, Namespace, GitHubOwner, GitHubRepo string
 	Logger                                                      func(format string, args ...any)
+	// Non-nil values override the corresponding string. Conversion is deferred
+	// until rendering uses the value; skipped entries do not convert it.
+	RegistryValue, NamespaceValue, GitHubOwnerValue, GitHubRepoValue *DocumentationValue
 }
 
 const featureReadmeTemplate = `
@@ -136,41 +139,52 @@ func renderFeatureDocumentation(meta any, opts DocumentationOptions, folder stri
 		}
 		version = strings.Split(s, ".")[0]
 	}
-	options := ""
-	if value := get("options"); documentationTruthy(value) {
-		rows := []string{}
-		for _, key := range documentationKeys(value) {
-			val := documentationGet(value, key)
-			if val == nil || val == documentationUndefined {
-				return "", fmt.Errorf("cannot read option %s", key)
+	generateOptions := func() (string, error) {
+		options := ""
+		if value := get("options"); documentationTruthy(value) {
+			rows := []string{}
+			for _, key := range documentationKeys(value) {
+				val := documentationGet(value, key)
+				if val == nil || val == documentationUndefined {
+					return "", fmt.Errorf("cannot read option %s", key)
+				}
+				desc, typ, def := documentationGet(val, "description"), documentationGet(val, "type"), documentationGet(val, "default")
+				if !documentationTruthy(desc) {
+					desc = "-"
+				}
+				if !documentationTruthy(typ) {
+					typ = "-"
+				}
+				if def == "" {
+					def = "-"
+				}
+				rows = append(rows, fmt.Sprintf("| %s | %s | %s | %s |", key, stringValue(desc), stringValue(typ), stringValue(def)))
 			}
-			desc, typ, def := documentationGet(val, "description"), documentationGet(val, "type"), documentationGet(val, "default")
-			if !documentationTruthy(desc) {
-				desc = "-"
-			}
-			if !documentationTruthy(typ) {
-				typ = "-"
-			}
-			if def == "" {
-				def = "-"
-			}
-			rows = append(rows, fmt.Sprintf("| %s | %s | %s | %s |", key, stringValue(desc), stringValue(typ), stringValue(def)))
+			options = "## Options\n\n| Options Id | Description | Type | Default Value |\n|-----|-----|-----|-----|\n" + strings.Join(rows, "\n")
 		}
-		options = "## Options\n\n| Options Id | Description | Type | Default Value |\n|-----|-----|-----|-----|\n" + strings.Join(rows, "\n")
+		return options, conversionErr
 	}
-	notes := ""
-	notesPath := filepath.Join(opts.ProjectFolder, folder, "NOTES.md")
-	if _, err := os.Stat(notesPath); err == nil {
-		data, err := os.ReadFile(notesPath)
-		if err != nil {
-			return "", err
+	generateNotes := func() (string, error) {
+		notes := ""
+		notesPath := filepath.Join(opts.ProjectFolder, folder, "NOTES.md")
+		if _, err := os.Stat(notesPath); err == nil {
+			data, err := os.ReadFile(notesPath)
+			if err != nil {
+				return "", err
+			}
+			notes = documentationUTF8(data)
 		}
-		notes = documentationUTF8(data)
+		return notes, nil
 	}
 	url := "devcontainer-feature.json"
-	if opts.GitHubOwner != "" && opts.GitHubRepo != "" {
+	owner := documentationPublicationValue(opts.GitHubOwnerValue, opts.GitHubOwner)
+	repo := documentationPublicationValue(opts.GitHubRepoValue, opts.GitHubRepo)
+	if owner != "" && repo != "" {
 		base := strings.TrimPrefix(opts.ProjectFolder, "./")
-		url = fmt.Sprintf("https://github.com/%s/%s/blob/main/%s/%s/devcontainer-feature.json", opts.GitHubOwner, opts.GitHubRepo, base, folder)
+		url = fmt.Sprintf("https://github.com/%s/%s/blob/main/%s/%s/devcontainer-feature.json", stringValue(owner), stringValue(repo), base, folder)
+		if conversionErr != nil {
+			return "", conversionErr
+		}
 	}
 	header := ""
 	legacy := get("legacyIds")
@@ -214,8 +228,20 @@ func renderFeatureDocumentation(meta any, opts DocumentationOptions, folder stri
 	if desc == nil || desc == documentationUndefined {
 		desc = ""
 	}
+	description := stringValue(desc)
+	if conversionErr != nil {
+		return "", conversionErr
+	}
+	options, err := generateOptions()
+	if err != nil {
+		return "", err
+	}
+	notes, err := generateNotes()
+	if err != nil {
+		return "", err
+	}
 	text := featureReadmeTemplate
-	for _, r := range [][2]string{{"Id", id}, {"Name", name}, {"Description", stringValue(desc)}, {"OptionsTable", options}, {"Notes", notes}, {"RepoUrl", url}, {"Registry", opts.Registry}, {"Namespace", opts.Namespace}, {"Version", version}, {"Customizations", extensions}} {
+	for _, r := range [][2]string{{"Id", id}, {"Name", name}, {"Description", description}, {"OptionsTable", options}, {"Notes", notes}, {"RepoUrl", url}, {"Registry", stringValue(documentationPublicationValue(opts.RegistryValue, opts.Registry))}, {"Namespace", stringValue(documentationPublicationValue(opts.NamespaceValue, opts.Namespace))}, {"Version", version}, {"Customizations", extensions}} {
 		text = documentationReplace(text, "#{"+r[0]+"}", r[1])
 	}
 	if conversionErr != nil {
