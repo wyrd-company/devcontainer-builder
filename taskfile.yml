@@ -75,7 +75,7 @@ tasks:
       - go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
       - go install github.com/yannh/kubeconform/cmd/kubeconform@v0.6.7
       - go install github.com/evilmartians/lefthook/v2@v2.1.4
-      - npm install --global --allow-scripts=@wyrd-company/intentional --@wyrd-company:registry=https://registry.npmjs.org @wyrd-company/intentional@0.2.0
+      - npm install --global --allow-scripts=@wyrd-company/intentional --@wyrd-company:registry=https://registry.npmjs.org @wyrd-company/intentional@0.4.0
   docs:tools:
     desc: Install public documentation check tools
     cmds:
