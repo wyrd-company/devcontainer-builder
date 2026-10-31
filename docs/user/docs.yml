@@ -5,12 +5,20 @@
 # ---
 schemaVersion: 1
 assets:
+  - assets/favicon.svg
+  - assets/logo-dark.svg
+  - assets/logo.svg
+  - assets/social.png
   - assets/up-exec-down.png
 products:
   dcb:
     name: dcb
     version: 0.2.0
     docs-version: 0.1.0
+    logo: assets/logo.svg
+    logo-dark: assets/logo-dark.svg
+    favicon: assets/favicon.svg
+    social-image: assets/social.png
     tagline: Build and run development containers from devcontainer.json.
     blurb: >-
       A single Go binary that builds devcontainer images on Docker's built-in

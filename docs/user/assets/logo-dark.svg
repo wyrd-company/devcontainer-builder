@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+  <title>dcb</title>
+  <path d="M32 8 58 20 32 32 6 20Z" fill="#6aa5ff" stroke="#6aa5ff"/>
+  <path d="M6 32 32 44 58 32M6 44 32 56 58 44" stroke="#ededef"/>
+</svg>
