@@ -158,7 +158,7 @@ type infoField struct {
 
 func infoJSON(v any) json.RawMessage { b, _ := json.Marshal(v); return infoNormalize(b) }
 func infoNormalize(b []byte) json.RawMessage {
-	return collectiondocs.StringifyJSONCValue(b)
+	return collectiondocs.StringifyJSONValue(b)
 }
 func infoObject(fields ...infoField) json.RawMessage {
 	var b bytes.Buffer
@@ -307,7 +307,7 @@ func (n *infoNode) load(c *oci.Client, merge bool) (json.RawMessage, error) {
 	_ = json.Unmarshal(body, &manifest)
 	meta := json.RawMessage(nil)
 	if annotation := manifest.Annotations["dev.containers.metadata"]; annotation != "" {
-		meta = infoNormalize([]byte(annotation))
+		meta = collectiondocs.StringifyJSONCValue([]byte(annotation))
 	} else {
 		dir, e := os.MkdirTemp("", "dcb-feature-info-")
 		if e != nil {
@@ -324,7 +324,7 @@ func (n *infoNode) load(c *oci.Client, merge bool) (json.RawMessage, error) {
 		if e != nil {
 			return nil, e
 		}
-		meta = infoNormalize(b)
+		meta = collectiondocs.StringifyJSONCValue(b)
 	}
 	var metadata Metadata
 	_ = json.Unmarshal(meta, &metadata)
@@ -398,7 +398,7 @@ func (n *infoNode) loadTarball(c *oci.Client, merge bool) (json.RawMessage, erro
 	if err != nil {
 		return nil, err
 	}
-	meta := infoNormalize(data)
+	meta := collectiondocs.StringifyJSONCValue(data)
 	var metadata Metadata
 	_ = json.Unmarshal(meta, &metadata)
 	n.aliases = metadata.aliases()
