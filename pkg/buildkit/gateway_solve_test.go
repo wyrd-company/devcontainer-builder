@@ -85,6 +85,20 @@ func baseConfigJSON(t *testing.T) []byte {
 
 var amd64 = ocispecs.Platform{OS: "linux", Architecture: "amd64"}
 
+func TestBuildOnePlatform_ResolvesBaseImageForTargetPlatform(t *testing.T) {
+	arm64 := ocispecs.Platform{OS: "linux", Architecture: "arm64", Variant: "v8"}
+	gc := &fakeGateway{baseConfig: baseConfigJSON(t)}
+	if _, _, err := buildOnePlatform(context.Background(), gc, imageBaseSpec(), arm64, buildSettings{}); err != nil {
+		t.Fatalf("buildOnePlatform: %v", err)
+	}
+	if len(gc.resolveOpts) != 1 || gc.resolveOpts[0].ImageOpt == nil || gc.resolveOpts[0].ImageOpt.Platform == nil {
+		t.Fatalf("ResolveImageConfig opts = %+v, want an image platform", gc.resolveOpts)
+	}
+	if got := *gc.resolveOpts[0].ImageOpt.Platform; !reflect.DeepEqual(got, arm64) {
+		t.Fatalf("ResolveImageConfig platform = %+v, want %+v", got, arm64)
+	}
+}
+
 func TestBuildOnePlatform_ResolvesBaseImageWithResolveMode(t *testing.T) {
 	for _, mode := range []string{
 		pb.AttrImageResolveModePreferLocal,
