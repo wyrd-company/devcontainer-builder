@@ -221,6 +221,20 @@ func ResolveDependencies(client *oci.Client, workspace string) (string, error) {
 	if len(all) == 0 {
 		return out.String(), fmt.Errorf("No viable installation order!")
 	}
+	entries, err := dependencyInstallOrder(all)
+	if err != nil {
+		return out.String(), err
+	}
+	pretty, err := infoPretty(infoObject(infoField{"installOrder", infoJSON(entries)}), 2)
+	if err != nil {
+		return out.String(), err
+	}
+	return out.String() + pretty + "\n", nil
+}
+
+// dependencyInstallOrder links the resolved graph and serializes each installation
+// round in report order. It leaves diagram output to the caller.
+func dependencyInstallOrder(all []*infoNode) ([]json.RawMessage, error) {
 	nodes := []*node{}
 	for _, n := range all {
 		nodes = append(nodes, n.compare)
@@ -248,7 +262,7 @@ func ResolveDependencies(client *oci.Client, workspace string) (string, error) {
 	for len(remaining) > 0 {
 		round := nextRound(remaining, installed)
 		if len(round) == 0 {
-			return out.String(), fmt.Errorf("No viable installation order!")
+			return nil, fmt.Errorf("No viable installation order!")
 		}
 		next := []*node{}
 		for _, n := range remaining {
@@ -286,11 +300,7 @@ func ResolveDependencies(client *oci.Client, workspace string) (string, error) {
 			}
 		}
 	}
-	pretty, err := infoPretty(infoObject(infoField{"installOrder", infoJSON(entries)}), 2)
-	if err != nil {
-		return out.String(), err
-	}
-	return out.String() + pretty + "\n", nil
+	return entries, nil
 }
 
 func (n *infoNode) loadLocal(merge bool) (json.RawMessage, error) {
