@@ -40,6 +40,7 @@ dcb exec --workspace-folder . -- sh -c 'id && pwd'
 dcb down --workspace-folder .
 dcb features package ./src --output-folder ./packaged
 dcb features generate-docs -p ./src -n example/collection
+dcb templates generate-docs -p ./templates
 ```
 
 ```json
@@ -85,7 +86,7 @@ These upstream command families are not yet supported:
 - [`outdated`](https://github.com/wyrd-company/devcontainer-builder/issues/20)
 - [`upgrade`](https://github.com/wyrd-company/devcontainer-builder/issues/21)
 - [Feature authoring commands other than `features package` and `features generate-docs`](https://github.com/wyrd-company/devcontainer-builder/issues/22)
-- [Template commands other than `templates metadata`](https://github.com/wyrd-company/devcontainer-builder/issues/23)
+- [Template commands other than `templates metadata` and `templates generate-docs`](https://github.com/wyrd-company/devcontainer-builder/issues/23)
 
 ## Go libraries
 

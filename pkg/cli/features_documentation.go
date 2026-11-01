@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/wyrd-company/devcontainer-builder/pkg/features"
+	"github.com/wyrd-company/devcontainer-builder/pkg/templates"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
 )
@@ -20,6 +21,14 @@ var documentationNegativeValue = regexp.MustCompile(`^-([0-9]+(\.[0-9]+)?|\.[0-9
 var documentationShortOption = regexp.MustCompile(`^(-|--)[^-]`)
 
 func (a *application) featuresDocumentationCommand() *cobra.Command {
+	return a.documentationCommand(false)
+}
+
+func (a *application) templatesDocumentationCommand() *cobra.Command {
+	return a.documentationCommand(true)
+}
+
+func (a *application) documentationCommand(template bool) *cobra.Command {
 	var opts features.DocumentationOptions
 	var projects, registries, namespaces, owners, repos []string
 	cmd := &cobra.Command{Use: "generate-docs", Short: "Generate READMEs for local Features", Args: func(cmd *cobra.Command, args []string) error {
@@ -67,12 +76,18 @@ func (a *application) featuresDocumentationCommand() *cobra.Command {
 			}
 			a.diagnostic(level, text)
 		}
+		if template {
+			a.exportStdout = true
+			return templates.GenerateDocumentation(cmd.Context(), templates.DocumentationOptions{ProjectFolder: opts.ProjectFolder, GitHubOwner: opts.GitHubOwner, GitHubRepo: opts.GitHubRepo, GitHubOwnerValue: opts.GitHubOwnerValue, GitHubRepoValue: opts.GitHubRepoValue, Logger: opts.Logger})
+		}
 		return features.GenerateDocumentation(cmd.Context(), opts)
 	}
 	cmd.Flags().StringArrayVarP(&projects, "project-folder", "p", []string{"."}, "Folder containing Feature directories")
-	cmd.Flags().StringArrayVarP(&registries, "registry", "r", []string{"ghcr.io"}, "OCI registry name")
-	cmd.Flags().StringArrayVarP(&namespaces, "namespace", "n", nil, "Feature collection namespace")
-	_ = cmd.MarkFlagRequired("namespace")
+	if !template {
+		cmd.Flags().StringArrayVarP(&registries, "registry", "r", []string{"ghcr.io"}, "OCI registry name")
+		cmd.Flags().StringArrayVarP(&namespaces, "namespace", "n", nil, "Feature collection namespace")
+		_ = cmd.MarkFlagRequired("namespace")
+	}
 	cmd.Flags().StringArrayVar(&owners, "github-owner", nil, "GitHub owner for metadata links")
 	cmd.Flags().StringArrayVar(&repos, "github-repo", nil, "GitHub repository for metadata links")
 	for name, target := range map[string]**features.DocumentationValue{
@@ -80,16 +95,25 @@ func (a *application) featuresDocumentationCommand() *cobra.Command {
 		"github-owner": &opts.GitHubOwnerValue, "github-repo": &opts.GitHubRepoValue,
 	} {
 		flag := cmd.Flags().Lookup(name)
+		if flag == nil {
+			continue
+		}
 		flag.Value = &documentationFlagValue{Value: flag.Value, target: target}
 	}
 	// yargs supplies the declared default when a string option has no value.
 	// Keep explicit empty strings distinct from absent values.
 	for name, value := range map[string]string{"project-folder": ".", "registry": "ghcr.io", "namespace": "", "github-owner": "", "github-repo": ""} {
 		flag := cmd.Flags().Lookup(name)
+		if flag == nil {
+			continue
+		}
 		if flag.Annotations == nil {
 			flag.Annotations = map[string][]string{}
 		}
 		flag.Annotations["documentation-no-value"] = []string{value}
+	}
+	if template {
+		cmd.Short = "Generate READMEs for local Templates"
 	}
 	return cmd
 }
@@ -213,7 +237,7 @@ func documentationProperty(flag *pflag.Flag, arg string, next []string) {
 }
 
 func documentationDottedFlag(cmd *cobra.Command, arg string) *pflag.Flag {
-	if cmd.Name() != "generate-docs" || cmd.Parent() == nil || cmd.Parent().Name() != "features" {
+	if cmd.Name() != "generate-docs" || cmd.Parent() == nil || (cmd.Parent().Name() != "features" && cmd.Parent().Name() != "templates") {
 		return nil
 	}
 	name, _, _ := strings.Cut(arg, "=")
@@ -235,7 +259,7 @@ func documentationDottedFlag(cmd *cobra.Command, arg string) *pflag.Flag {
 // Only numeric or punctuation suffixes attach to that letter; the final flag
 // uses the same following-token rules as its ungrouped spelling.
 func documentationGroupedArgs(cmd *cobra.Command, arg string, next []string) ([]string, int, bool) {
-	if cmd.Name() != "generate-docs" || cmd.Parent() == nil || cmd.Parent().Name() != "features" || len(arg) < 3 || arg[0] != '-' {
+	if cmd.Name() != "generate-docs" || cmd.Parent() == nil || (cmd.Parent().Name() != "features" && cmd.Parent().Name() != "templates") || len(arg) < 3 || arg[0] != '-' {
 		return nil, 0, false
 	}
 	if strings.HasPrefix(arg, "--") {

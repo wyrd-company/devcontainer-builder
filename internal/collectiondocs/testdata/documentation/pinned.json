@@ -3,7 +3,7 @@
     "references": [
       "../../documentation",
       "../../documentation_test",
-      "../../../../reference/cli/src/spec-node/collectionCommonUtils/generateDocsCommandImpl"
+      "../../../../../reference/cli/src/spec-node/collectionCommonUtils/generateDocsCommandImpl"
     ]
   },
   "cases": [

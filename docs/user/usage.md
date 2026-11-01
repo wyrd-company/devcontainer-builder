@@ -51,6 +51,7 @@ dcb down --workspace-folder .
 | `dcb features` | Resolves and downloads the configuration's features into a directory. |
 | `dcb features generate-docs` | Generates README files from local Feature metadata and notes. |
 | `dcb features package <target>` | Packages a local Feature or collection as archives with collection metadata. |
+| `dcb templates generate-docs` | Generates README files from local Template metadata and notes. |
 | `dcb templates metadata <templateId>` | Fetches a published Template's metadata as JSON. |
 | `dcb server` | Downloads a VS Code server archive. |
 | `dcb skills` | Prints or installs the bundled agent skill. |
@@ -72,7 +73,7 @@ These upstream command families are not yet supported:
 - [`outdated`](https://github.com/wyrd-company/devcontainer-builder/issues/20)
 - [`upgrade`](https://github.com/wyrd-company/devcontainer-builder/issues/21)
 - [Feature authoring commands other than `features package` and `features generate-docs`](https://github.com/wyrd-company/devcontainer-builder/issues/22)
-- [Template commands other than `templates metadata`](https://github.com/wyrd-company/devcontainer-builder/issues/23)
+- [Template commands other than `templates metadata` and `templates generate-docs`](https://github.com/wyrd-company/devcontainer-builder/issues/23)
 
 ### Workspace flags
 
@@ -1103,3 +1104,18 @@ lowercased, as upstream. A reference includes a collection namespace before its
 Template name. Registry authentication uses Docker client credentials; exactly
 `localhost` uses plain HTTP, as upstream. Malformed metadata, missing manifest
 configuration, and digest mismatches exit 1 without JSON on stdout.
+
+### Generate Template documentation
+
+```sh
+dcb templates generate-docs --project-folder ./templates
+```
+
+Each visible child of `--project-folder` (alias `-p`, default `.`) supplies a
+`devcontainer-template.json` and optional `NOTES.md`. The command replaces its
+README.md with the Template name, description, options, notes and metadata link.
+It skips children without an ID or metadata file. It does not search `src`
+automatically. `--github-owner` and `--github-repo` set the metadata link.
+Existing README symlinks are unlinked before writing. A failure can leave other
+children already written. Success writes no stdout; progress uses stderr.
+The library entry point is `templates.GenerateDocumentation`.
