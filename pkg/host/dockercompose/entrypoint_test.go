@@ -32,7 +32,7 @@ func TestWrapServiceCommand(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			svc := types.ServiceConfig{Entrypoint: c.entrypoint, Command: c.command}
+			svc := types.ServiceConfig{ContainerSpec: types.ContainerSpec{Entrypoint: c.entrypoint, Command: c.command}}
 			wrapServiceCommand(&svc, []string{"/usr/local/share/alpha-init.sh"}, imageEntrypoint, imageCmd)
 			if len(svc.Entrypoint) < 4 || svc.Entrypoint[0] != "/bin/sh" || svc.Entrypoint[1] != "-c" || svc.Entrypoint[3] != "-" {
 				t.Fatalf("entrypoint = %q", svc.Entrypoint)
@@ -99,7 +99,7 @@ func fakeImageDaemon(t *testing.T, imageConfig string) (*Host, func() int) {
 
 func TestWrapPrimaryCommand_UsesImageCommandWhenOverrideCommandFalse(t *testing.T) {
 	h, requests := fakeImageDaemon(t, `{"Entrypoint":["/image-entrypoint.sh"],"Cmd":["image-cmd"]}`)
-	proj := &types.Project{Services: types.Services{"app": {Name: "app", Image: "img:latest"}}}
+	proj := &types.Project{Services: types.Services{"app": {Name: "app", ContainerSpec: types.ContainerSpec{Image: "img:latest"}}}}
 	in := OverrideInputs{Spec: &spec.DevContainer{Service: "app"}, Entrypoints: []string{"/usr/local/share/alpha-init.sh"}}
 	if err := h.wrapPrimaryCommand(context.Background(), proj, in); err != nil {
 		t.Fatalf("wrapPrimaryCommand: %v", err)
@@ -119,7 +119,7 @@ func TestWrapPrimaryCommand_NoOpWithoutEntrypointsOrWhenOverriding(t *testing.T)
 		{Spec: &spec.DevContainer{Service: "app"}},
 		{Spec: &spec.DevContainer{Service: "app"}, OverrideCommand: true, Entrypoints: []string{"/usr/local/share/alpha-init.sh"}},
 	} {
-		proj := &types.Project{Services: types.Services{"app": {Name: "app", Image: "img:latest"}}}
+		proj := &types.Project{Services: types.Services{"app": {Name: "app", ContainerSpec: types.ContainerSpec{Image: "img:latest"}}}}
 		if err := h.wrapPrimaryCommand(context.Background(), proj, in); err != nil {
 			t.Fatal(err)
 		}
@@ -135,8 +135,12 @@ func TestWrapPrimaryCommand_NoOpWithoutEntrypointsOrWhenOverriding(t *testing.T)
 func TestWrapPrimaryCommand_ServiceEntrypointAndCommandNeedNoInspect(t *testing.T) {
 	h, requests := fakeImageDaemon(t, `{}`)
 	proj := &types.Project{Services: types.Services{"app": {
-		Name: "app", Image: "img:latest",
-		Entrypoint: types.ShellCommand{"/svc-entrypoint.sh"}, Command: types.ShellCommand{"svc-cmd"},
+		Name: "app",
+		ContainerSpec: types.ContainerSpec{
+			Image:      "img:latest",
+			Entrypoint: types.ShellCommand{"/svc-entrypoint.sh"},
+			Command:    types.ShellCommand{"svc-cmd"},
+		},
 	}}}
 	in := OverrideInputs{Spec: &spec.DevContainer{Service: "app"}, Entrypoints: []string{"/usr/local/share/alpha-init.sh"}}
 	if err := h.wrapPrimaryCommand(context.Background(), proj, in); err != nil {

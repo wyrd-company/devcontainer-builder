@@ -87,9 +87,11 @@ func TestResourceName_DefaultsToProjectPrefix(t *testing.T) {
 
 func TestDependsOnList_SortedAndDefaulted(t *testing.T) {
 	svc := types.ServiceConfig{
-		DependsOn: types.DependsOnConfig{
-			"zeta":  types.ServiceDependency{Condition: types.ServiceConditionHealthy, Required: true},
-			"alpha": types.ServiceDependency{Required: true}, // condition empty -> service_started
+		WorkloadSpec: types.WorkloadSpec{
+			DependsOn: types.DependsOnConfig{
+				"zeta":  types.ServiceDependency{Condition: types.ServiceConditionHealthy, Required: true},
+				"alpha": types.ServiceDependency{Required: true}, // condition empty -> service_started
+			},
 		},
 	}
 	got := dependsOnList(svc)

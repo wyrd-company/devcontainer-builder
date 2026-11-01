@@ -13,7 +13,7 @@ import (
 
 func TestComposeServiceSyntaxControl(t *testing.T) {
 	for _, omit := range []bool{false, true} {
-		build, _, err := serviceBuild(&types.Project{WorkingDir: t.TempDir()}, types.ServiceConfig{Name: "app", Build: &types.BuildConfig{}}, "example:latest", nil, BuildServiceImagesInputs{OmitSyntaxDirective: omit})
+		build, _, err := serviceBuild(&types.Project{WorkingDir: t.TempDir()}, types.ServiceConfig{Name: "app", WorkloadSpec: types.WorkloadSpec{Build: &types.BuildConfig{}}}, "example:latest", nil, BuildServiceImagesInputs{OmitSyntaxDirective: omit})
 		if err != nil {
 			t.Fatal(err)
 		}

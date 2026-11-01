@@ -82,7 +82,7 @@ func TestComposeMetadataRuntimeMappings(t *testing.T) {
 				entries[0].Init = &falsity
 				entries[0].Privileged = &falsity
 			}
-			svc := types.ServiceConfig{Name: "app", Image: "alpine", User: "native", Command: types.ShellCommand{"serve"}, Environment: types.MappingWithEquals{"NATIVE": stringPtr("native"), "PRIORITY": stringPtr("native")}, Volumes: []types.ServiceVolumeConfig{{Type: "volume", Source: "native", Target: "/cache"}}}
+			svc := types.ServiceConfig{Name: "app", ContainerSpec: types.ContainerSpec{Image: "alpine", User: "native", Command: types.ShellCommand{"serve"}, Environment: types.MappingWithEquals{"NATIVE": stringPtr("native"), "PRIORITY": stringPtr("native")}, Volumes: []types.ServiceVolumeConfig{{Type: "volume", Source: "native", Target: "/cache"}}}}
 			if native {
 				truth := true
 				svc.Init = &truth
@@ -129,7 +129,7 @@ func TestComposeMetadataRuntimeMappings(t *testing.T) {
 }
 
 func TestComposeAbsentMetadataPreservesNativeScalars(t *testing.T) {
-	svc := types.ServiceConfig{Name: "app", User: "native", Environment: types.MappingWithEquals{"NATIVE": stringPtr("value")}, Command: types.ShellCommand{"serve"}}
+	svc := types.ServiceConfig{Name: "app", ContainerSpec: types.ContainerSpec{User: "native", Environment: types.MappingWithEquals{"NATIVE": stringPtr("value")}, Command: types.ShellCommand{"serve"}}}
 	proj := &types.Project{Services: types.Services{"app": svc}}
 	merged, _ := runtimeMetadata(&spec.DevContainer{Service: "app"}, nil, substitute.Context{})
 	applyPrimaryMetadata(proj, merged.DevContainer, UpRequest{}, substitute.Context{})
@@ -142,7 +142,7 @@ func TestComposeFeatureEnvironmentPrecedence(t *testing.T) {
 	resolved := []features.Resolved{{Metadata: features.Metadata{ContainerEnv: map[string]string{"A": "one", "B": "${localEnv:VALUE}", "C": "feature"}}}, {Metadata: features.Metadata{ContainerEnv: map[string]string{"A": "two"}}}}
 	for _, built := range []bool{false, true} {
 		t.Run(map[bool]string{false: "unbuilt", true: "built"}[built], func(t *testing.T) {
-			proj := &types.Project{Services: types.Services{"app": {Environment: types.MappingWithEquals{"NATIVE": stringPtr("native")}}}}
+			proj := &types.Project{Services: types.Services{"app": {ContainerSpec: types.ContainerSpec{Environment: types.MappingWithEquals{"NATIVE": stringPtr("native")}}}}}
 			applyPrimaryMetadata(proj, &spec.DevContainer{Service: "app", ContainerEnv: map[string]any{"C": "config"}}, UpRequest{Features: resolved, ImageBuilt: built}, substitute.Context{LocalEnv: map[string]string{"VALUE": "hello"}})
 			env := envToStringMap(proj.Services["app"].Environment)
 			if env["C"] != "config" || env["NATIVE"] != "native" {
@@ -222,7 +222,7 @@ func stringPtr(s string) *string { return &s }
 
 func TestComposeMetadataLabelAffectsConfigHash(t *testing.T) {
 	native := types.Labels{"sample.label": "native"}
-	proj := &types.Project{Services: types.Services{"app": {Image: "alpine", Labels: native}}}
+	proj := &types.Project{Services: types.Services{"app": {ContainerSpec: types.ContainerSpec{Image: "alpine", Labels: native}}}}
 	before := serviceConfigHash(proj.Services["app"])
 	entries := []metadata.Entry{{PostCreate: spec.Command{Shell: "first"}}}
 	if err := setPrimaryMetadata(proj, "app", entries); err != nil {
@@ -246,7 +246,7 @@ func TestComposeMetadataLabelAffectsConfigHash(t *testing.T) {
 }
 
 func TestComposeMetadataVolumeDeclarations(t *testing.T) {
-	proj := &types.Project{Name: "sample-project", Services: types.Services{"app": {Image: "alpine", Volumes: []types.ServiceVolumeConfig{{Type: "volume", Source: "native", Target: "/native"}}}}, Volumes: types.Volumes{"native": {Name: "native-scoped"}}}
+	proj := &types.Project{Name: "sample-project", Services: types.Services{"app": {ContainerSpec: types.ContainerSpec{Image: "alpine", Volumes: []types.ServiceVolumeConfig{{Type: "volume", Source: "native", Target: "/native"}}}}}, Volumes: types.Volumes{"native": {Name: "native-scoped"}}}
 	dc := &spec.DevContainer{Service: "app", Mounts: []any{
 		"type=volume,source=native,target=/reuse",
 		"type=volume,source=scoped,target=/scoped",
@@ -274,7 +274,7 @@ func TestComposeMetadataVolumeDeclarations(t *testing.T) {
 
 // Request mounts follow the metadata mounts and declare their named volumes.
 func TestComposeRequestMounts(t *testing.T) {
-	proj := &types.Project{Name: "sample-project", WorkingDir: "/project", Services: types.Services{"app": {Image: "alpine"}}}
+	proj := &types.Project{Name: "sample-project", WorkingDir: "/project", Services: types.Services{"app": {ContainerSpec: types.ContainerSpec{Image: "alpine"}}}}
 	dc := &spec.DevContainer{Service: "app", Mounts: []any{"type=bind,source=/host/data,target=/data"}}
 	req := UpRequest{Mounts: []string{
 		"type=volume,source=cache,target=/cache",
@@ -298,7 +298,7 @@ func TestComposeRequestMounts(t *testing.T) {
 		t.Fatalf("declarations=%+v", proj.Volumes)
 	}
 	// Without request mounts the service keeps only its configured mounts.
-	plain := &types.Project{Name: "sample-project", Services: types.Services{"app": {Image: "alpine"}}}
+	plain := &types.Project{Name: "sample-project", Services: types.Services{"app": {ContainerSpec: types.ContainerSpec{Image: "alpine"}}}}
 	applyPrimaryMetadata(plain, dc, UpRequest{}, substitute.Context{})
 	if v := plain.Services["app"].Volumes; len(v) != 1 || v[0].Source != "/host/data" || plain.Volumes != nil {
 		t.Fatalf("plain volumes=%+v declarations=%+v", v, plain.Volumes)
@@ -308,7 +308,7 @@ func TestComposeRequestMounts(t *testing.T) {
 func TestComposeEmptyMetadataByImagePath(t *testing.T) {
 	for _, built := range []bool{false, true} {
 		t.Run(map[bool]string{false: "direct-image", true: "built-image"}[built], func(t *testing.T) {
-			proj := &types.Project{Services: types.Services{"app": {Image: "alpine", Labels: types.Labels{"sample.label": "keep"}}}}
+			proj := &types.Project{Services: types.Services{"app": {ContainerSpec: types.ContainerSpec{Image: "alpine", Labels: types.Labels{"sample.label": "keep"}}}}}
 			before := serviceConfigHash(proj.Services["app"])
 			entries := imageMetadataEntries(UpRequest{Spec: &spec.DevContainer{}, ImageBuilt: built}, nil, func(string, ...any) { t.Fatal("absent metadata logged an error") })
 			if len(entries) != 0 {
@@ -333,7 +333,7 @@ func TestComposeEmptyMetadataByImagePath(t *testing.T) {
 }
 
 func TestComposeDockerfileEmptyMetadata(t *testing.T) {
-	proj := &types.Project{Services: types.Services{"app": {Image: "alpine", Build: &types.BuildConfig{Context: "."}}}}
+	proj := &types.Project{Services: types.Services{"app": {ContainerSpec: types.ContainerSpec{Image: "alpine"}, WorkloadSpec: types.WorkloadSpec{Build: &types.BuildConfig{Context: "."}}}}}
 	before := serviceConfigHash(proj.Services["app"])
 	entries := imageMetadataEntries(UpRequest{Spec: &spec.DevContainer{}}, nil, nil)
 	if err := setPrimaryMetadata(proj, "app", entries); err != nil {

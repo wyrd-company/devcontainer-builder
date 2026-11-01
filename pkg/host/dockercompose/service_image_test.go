@@ -82,7 +82,7 @@ func TestComposeServiceImagePull(t *testing.T) {
 				t.Fatal(err)
 			}
 			defer cli.Close()
-			svc := types.ServiceConfig{Name: "sidecar", Image: "registry.example.test/sample:latest"}
+			svc := types.ServiceConfig{Name: "sidecar", ContainerSpec: types.ContainerSpec{Image: "registry.example.test/sample:latest"}}
 			if tc.build {
 				svc.Build = &types.BuildConfig{Context: "."}
 			}
