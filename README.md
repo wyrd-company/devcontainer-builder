@@ -6,7 +6,8 @@
 `dcb` builds and runs [development containers](https://containers.dev/) from a
 `devcontainer.json`. It builds images on the Docker daemon's built-in BuildKit,
 and creates, starts, and runs lifecycle commands in containers through the
-Docker Engine API. Every command writes one JSON result line to stdout, except
+Docker Engine API. Commands other than `outdated` write one JSON result line
+to stdout, except
 help, a valid `exec` invocation, and archive exports to stdout.
 
 Documentation is at [wyrd.foo/docs/dcb](https://wyrd.foo/docs/dcb), published
@@ -83,10 +84,12 @@ matched. [Overview](https://wyrd.foo/docs/dcb/overview) lists the differences.
 
 These upstream command families are not yet supported:
 
-- [`outdated`](https://github.com/wyrd-company/devcontainer-builder/issues/20)
 - [`upgrade`](https://github.com/wyrd-company/devcontainer-builder/issues/21)
 - [Feature authoring commands other than `features package` and `features generate-docs`](https://github.com/wyrd-company/devcontainer-builder/issues/22)
 - [Template commands other than `templates metadata` and `templates generate-docs`](https://github.com/wyrd-company/devcontainer-builder/issues/23)
+
+`dcb outdated` reports current, wanted, and latest OCI Feature versions as a text
+table or with `--output-format json`. It does not need Docker or change lockfiles.
 
 ## Go libraries
 

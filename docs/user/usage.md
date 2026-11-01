@@ -44,6 +44,7 @@ dcb down --workspace-folder .
 | `dcb down` | Stops and removes the workspace container. |
 | `dcb inspect` | Returns the Docker inspection of the workspace container. |
 | `dcb build` | Builds the image and loads, pushes, or exports it. |
+| `dcb outdated` | Reports declared OCI Feature versions as text or JSON. |
 | `dcb read-configuration` | Returns the configuration with variables substituted. |
 | `dcb run-user-commands` | Runs the lifecycle commands in the existing workspace container. |
 | `dcb set-up` | Runs the lifecycle commands of a configuration in a container that `dcb` did not create. |
@@ -70,7 +71,6 @@ boolean flags, as upstream. Arguments after `--` pass through unchanged.
 
 These upstream command families are not yet supported:
 
-- [`outdated`](https://github.com/wyrd-company/devcontainer-builder/issues/20)
 - [`upgrade`](https://github.com/wyrd-company/devcontainer-builder/issues/21)
 - [Feature authoring commands other than `features package` and `features generate-docs`](https://github.com/wyrd-company/devcontainer-builder/issues/22)
 - [Template commands other than `templates metadata` and `templates generate-docs`](https://github.com/wyrd-company/devcontainer-builder/issues/23)
@@ -124,7 +124,8 @@ lifecycle command leaves the existing lockfile unchanged.
 
 ## Results
 
-Every command writes exactly one JSON object on one line to stdout, except
+Commands other than `outdated` write exactly one JSON object on one line to
+stdout, except
 help, a valid `exec` invocation, and archive exports to stdout (see
 [Build exporters](#build-exporters)). An invalid invocation, including one of
 `exec`, writes a JSON error result and exits with `2`. The `outcome` field is
@@ -1119,3 +1120,36 @@ automatically. `--github-owner` and `--github-repo` set the metadata link.
 Existing README symlinks are unlinked before writing. A failure can leave other
 children already written. Success writes no stdout; progress uses stderr.
 The library entry point is `templates.GenerateDocumentation`.
+
+## Report Feature versions
+
+```sh
+dcb outdated --workspace-folder .
+dcb outdated --config .devcontainer/devcontainer.json --output-format json
+```
+
+The default text table has Feature, Current, Wanted, and Latest columns.
+Unavailable values appear as `-`. JSON returns a `features` object keyed by the
+configured identifiers, in configuration order. Each entry can have `current`,
+`wanted`, `wantedMajor`, `latest`, and `latestMajor`; unavailable fields are omitted.
+The report has no `outcome` field. Operation failures use stderr and exit 1.
+
+Current is the lockfile version, or wanted when there is no locked version.
+Wanted is the newest full semver tag that satisfies the configured tag; `latest`
+selects the highest published semver, including prereleases. Latest is the
+highest published full semver regardless of the configured tag. Major and minor
+alias tags are excluded from the version list. Digest references use the locked
+version, then manifest metadata, then metadata in the first Feature layer.
+Local paths and identifiers that cannot be versioned are omitted. Unavailable
+or malformed registry tag lists leave version fields unavailable.
+
+Discovery checks `.devcontainer/devcontainer.json`, then `.devcontainer.json` in
+`--workspace-folder` (default current folder). `--config` is relative to the
+current folder. A reporting configuration does not require image or build fields.
+Feature identifiers are object keys and are not substituted; options do not
+change the report. Lockfiles are read beside the configuration and are unchanged.
+
+`--user-data-folder` is accepted and unused, as upstream. `--log-level` accepts
+info, debug, or trace; `--log-format` accepts text or json. `--terminal-columns`
+and `--terminal-rows` must be supplied together. Reporting uses native OCI HTTP
+and existing registry credentials; no Docker daemon is needed.

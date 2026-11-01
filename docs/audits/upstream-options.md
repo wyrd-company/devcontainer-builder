@@ -25,13 +25,13 @@ including inherited help/version on each command. It records short aliases but
 scores each canonical long option once. It never subtracts omissions. Registration
 coverage is distinct from behavior parity and does not use these dispositions.
 The pinned `up` table has **44 explicit options**, plus inherited help/version.
-Registered option coverage is **178/253 (70.36%)**;
+Registered option coverage is **188/253 (74.31%)**;
 registration includes the three implemented session-folder pairs.
 
 ## Dispositions
 
-- implemented: **178**.
-- implement: **59**.
+- implemented: **188**.
+- implement: **49**.
 - not applicable by design: **15**.
 - needs Bob's decision: **1**.
 
@@ -79,7 +79,7 @@ A stricter policy requires Bob's decision; an additive opt-in does not itself
 authorize changing the default. The approved process-credential requirement
 governs native Git discovery: it reads with the credentials of its own process,
 not those of a started `git`; see
-[Process credentials](../overview.md#process-credentials). It removes no option.
+[Process credentials](../user/overview.md#process-credentials). It removes no option.
 Native Git discovery follows the latest stable Git release, which Bob
 approved in
 [Follow latest stable Git behavior](../decisions/follow-latest-stable-git-behavior.yml).
@@ -88,7 +88,7 @@ Bob approved, whatever Git is installed; it does not check the host Git's
 version or start `git`. Other Git versions and builds read some configuration
 paths differently and accept other repository extensions, so the upstream CLI
 can mount a different folder; see
-[Workspace mounts](../usage.md#workspace-mounts-and-container-selection).
+[Workspace mounts](../user/usage.md#workspace-mounts-and-container-selection).
 The full config read rejects invalid `core.ignorecase`, `core.filemode`,
 `core.symlinks`, `core.trustctime`, `core.quotepath`, `core.ignorestat`,
 `core.sparseCheckout`, `core.sparseCheckoutCone`, `core.protectHFS`,
@@ -96,14 +96,16 @@ The full config read rejects invalid `core.ignorecase`, `core.filemode`,
 `core.safecrlf`, `core.autocrlf`, `core.lockfilePid`,
 `sparse.expectFilesOutsideOfPatterns`, `pager.color`, `color.pager`,
 `user.useConfigOnly`, `advice.detachedHead` and `advice.statusHints` boolean
-values after reading all file, include and command-line inputs. `core.safecrlf` also accepts
-`warn`, without regard to case. `core.autocrlf` also accepts `input`, without regard to case.
+values after reading all file, include and command-line inputs.
+`core.safecrlf` also accepts
+`warn`, without regard to case. `core.autocrlf` also accepts `input`,
+without regard to case.
 Native discovery follows current Git for `core.lockfilePid`; Git before 2.54
 ignores that key.
 Bob also approved one account-lookup difference: Linux release builds look up
 accounts in `/etc/passwd` only and skip an `include.path` of `~name/` whose
 account is not there; see
-[Relation to the Dev Container CLI](../overview.md#relation-to-the-dev-container-cli).
+[Relation to the Dev Container CLI](../user/overview.md#relation-to-the-dev-container-cli).
 `dcb` adds `--git-prefix` to up, exec, read-configuration and
 run-user-commands, the commands with mount-workspace-git-root, and
 `Options.GitPrefix` to `pkg/workspace`; upstream has neither. It names the
@@ -133,9 +135,9 @@ containerCollectionsOCI.ts:562.
 All 18 upstream leaf commands are included below, with the root and two command
 groups. `dcb features` resolves/stages a configuration; it does not cover upstream's
 feature authoring commands other than `features package` and
-`features generate-docs`. The `templates` group,
-all its children, `outdated`, `upgrade`, and the other upstream `features` children
-are absent.
+`features generate-docs`. The `templates` group
+supports metadata and generate-docs. `outdated` reports Feature versions.
+`upgrade` and the other upstream `features` children are absent.
 
 Positional arguments are part of each command unit but do not add flag score units:
 `build [path]` maps to `build --workspace-folder`; `exec <cmd> [args..]` maps to
@@ -143,7 +145,7 @@ Positional arguments are part of each command unit but do not add flag score uni
 implement `features test [target]`
 (deprecated target; project-folder preferred),
 `features publish <target>`, `features info <mode> <feature>`,
-`templates publish <target>`, and `templates metadata <templateId>`.
+`templates publish <target>`.
 Mode choices for feature info are manifest, tags, dependencies and verbose.
 Command-shape differences alone are not an omission under the epic contract.
 
@@ -331,18 +333,24 @@ cover the behavior; the external pinned-CLI workflow comparison checks artifacts
 
 ### outdated
 
-| Upstream option | dcb equivalent | Disposition | Unit | Reason / source |
+`features.LoadVersionInfo` implements the report; `features.ReadVersionConfig`
+reads reporting configs. The CLI formats text/JSON. Registry access is native
+OCI HTTP with existing credentials. Lockfiles remain unchanged. Differential
+fixtures exercise tags, locks, digests, metadata fallback, failures, order,
+configuration discovery, and explicit paths.
+
+| Upstream option | dcb equivalent | Disposition | Unit | Evidence |
 | --- | --- | --- | --- | --- |
-| --user-data-folder | none | implement | outdated | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: devContainersSpecCLI.ts:1119. |
-| --workspace-folder | none | implement | outdated | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: devContainersSpecCLI.ts:1120. |
-| --config | none | implement | outdated | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: devContainersSpecCLI.ts:1121. |
-| --output-format | none | implement | outdated | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: devContainersSpecCLI.ts:1122. |
-| --log-level | none | implement | outdated | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: devContainersSpecCLI.ts:1123. |
-| --log-format | none | implement | outdated | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: devContainersSpecCLI.ts:1124. |
-| --terminal-columns | none | implement | outdated | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: devContainersSpecCLI.ts:1125. |
-| --terminal-rows | none | implement | outdated | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: devContainersSpecCLI.ts:1126. |
-| --help | none | implement | outdated | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: yargs built-in help. |
-| --version | version command | implement | sibling-unit | dcb registers --version on every command; this command is not implemented yet. Source: devContainersSpecCLI.ts (.version). |
+| --user-data-folder | --user-data-folder | implemented | outdated | Accepted and unused upstream. |
+| --workspace-folder | --workspace-folder | implemented | outdated | Defaults to current folder. |
+| --config | --config | implemented | outdated | Explicit path or workspace discovery. |
+| --output-format | --output-format | implemented | outdated | Text table or ordered JSON. |
+| --log-level | --log-level | implemented | outdated | info/debug/trace. |
+| --log-format | --log-format | implemented | outdated | text/json. |
+| --terminal-columns | --terminal-columns | implemented | outdated | Requires terminal-rows. |
+| --terminal-rows | --terminal-rows | implemented | outdated | Requires terminal-columns. |
+| --help | --help | implemented | outdated | Command help. |
+| --version | --version | implemented | sibling-unit | Shared version handler. |
 
 ### read-configuration
 
