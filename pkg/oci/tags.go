@@ -59,3 +59,34 @@ func (c *Client) PublishedTags(ref Reference) ([]string, error) {
 	}
 	return tags, nil
 }
+
+// PublishedTagValue reads the registry tag value without dropping non-string
+// members. Reporting commands preserve the upstream JSON value.
+func (c *Client) PublishedTagValue(ref Reference) (json.RawMessage, error) {
+	req, err := http.NewRequest(http.MethodGet, "https://"+ref.Registry+"/v2/"+ref.Repository+"/tags/list", nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Accept", "application/json")
+	resp, err := c.do(req, ref)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusNotFound {
+		return json.RawMessage(`[]`), nil
+	}
+	if resp.StatusCode > 299 {
+		return nil, c.refused(ref, fmt.Errorf("published tags: %s", resp.Status))
+	}
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	var result map[string]json.RawMessage
+	if err := json.Unmarshal(data, &result); err != nil {
+		return nil, err
+	}
+	return result["tags"], nil
+}

@@ -20,6 +20,9 @@ passes through unchanged. An explicit `--` before the command also works.
 
 Invocations except help and exec normally emit one JSON object on one stdout line.
 `outdated` emits its version report instead.
+`features info <mode> <feature>` emits published Feature information as text
+or JSON (`--output-format json`). Modes are manifest, tags, dependencies, and
+verbose. Every mode requires a manifest; JSON dependencies returns `{}`.
 Archive exports to stdout emit only archive bytes. An interactive terminal is
 refused with exit code 2 and a JSON error result; use a pipe or file destination.
 Check `outcome`: `success` or `error`. Errors include `message` and
@@ -73,6 +76,7 @@ dcb generate --workspace-folder . --work-dir ./generated
 dcb features --workspace-folder . --out ./staged-features
 dcb features package ./src --output-folder ./packaged
 dcb features generate-docs -p ./src -n example/collection
+dcb features info verbose ghcr.io/example/collection/sample:1
 dcb templates generate-docs -p ./templates
 dcb server --out ./server --platform linux/amd64
 ```

@@ -302,3 +302,9 @@ registry credentials, or supply an `oci.Client` with an HTTP client and credenti
 source. The operation reads the manifest without fetching layers. Digest
 references verify the manifest bytes. Missing or malformed metadata returns an
 error.
+
+`features.Info(client, mode, identifier, format)` returns a published Feature
+report as text or JSON. A nil client uses Docker registry credentials.
+`features.ErrInfoUnavailable` accompanies upstream failure output for missing
+manifests or tags. Dependency reports reuse the registry and graph comparison
+code without installing Features.

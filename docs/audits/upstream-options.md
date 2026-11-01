@@ -25,13 +25,13 @@ including inherited help/version on each command. It records short aliases but
 scores each canonical long option once. It never subtracts omissions. Registration
 coverage is distinct from behavior parity and does not use these dispositions.
 The pinned `up` table has **44 explicit options**, plus inherited help/version.
-Registered option coverage is **188/253 (74.31%)**;
+Registered option coverage is **192/253 (75.89%)**;
 registration includes the three implemented session-folder pairs.
 
 ## Dispositions
 
-- implemented: **188**.
-- implement: **49**.
+- implemented: **192**.
+- implement: **45**.
 - not applicable by design: **15**.
 - needs Bob's decision: **1**.
 
@@ -135,7 +135,7 @@ containerCollectionsOCI.ts:562.
 All 18 upstream leaf commands are included below, with the root and two command
 groups. `dcb features` resolves/stages a configuration; it does not cover upstream's
 feature authoring commands other than `features package` and
-`features generate-docs`. The `templates` group
+`features generate-docs`, and `features info`. The `templates` group
 supports metadata and generate-docs. `outdated` reports Feature versions.
 `upgrade` and the other upstream `features` children are absent.
 
@@ -144,7 +144,7 @@ Positional arguments are part of each command unit but do not add flag score uni
 `exec <cmd> [args..]` (an explicit `--` also works). Missing units must also
 implement `features test [target]`
 (deprecated target; project-folder preferred),
-`features publish <target>`, `features info <mode> <feature>`,
+`features publish <target>`,
 `templates publish <target>`.
 Mode choices for feature info are manifest, tags, dependencies and verbose.
 Command-shape differences alone are not an omission under the epic contract.
@@ -267,10 +267,10 @@ no stdout result and invocation-error exit 1. Tests: `TestGenerateDocumentationP
 
 | Upstream option | dcb equivalent | Disposition | Unit | Reason / source |
 | --- | --- | --- | --- | --- |
-| --log-level | none | implement | feature-info | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: featuresCLI/info.ts:15. |
-| --output-format | none | implement | feature-info | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: featuresCLI/info.ts:16. |
-| --help | none | implement | feature-info | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: yargs built-in help. |
-| --version | version command | implement | sibling-unit | dcb registers --version on every command; this command is not implemented yet. Source: devContainersSpecCLI.ts (.version). |
+| --log-level | --log-level | implemented | feature-info | Registered for published Feature reporting in all four modes. Source: featuresCLI/info.ts:15. |
+| --output-format | --output-format | implemented | feature-info | Registered for published Feature reporting in all four modes. Source: featuresCLI/info.ts:16. |
+| --help | --help | implemented | feature-info | Registered for published Feature reporting in all four modes. Source: yargs built-in help. |
+| --version | version command | implemented | sibling-unit | dcb registers --version on every command; info reports the CLI version. Source: devContainersSpecCLI.ts (.version). |
 
 ### features package
 
