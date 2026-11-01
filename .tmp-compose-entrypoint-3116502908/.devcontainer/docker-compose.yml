@@ -1,5 +1,0 @@
-services:
-  app:
-    image: alpine:3.24
-    volumes: ["..:/workspace"]
-    command: ["sh", "-c", "echo app-command > /tmp/app-command; while true; do sleep 1; done"]

@@ -22,7 +22,7 @@ uses the macOS lookup of relative Git config file names on Linux.
 which describes the logo, favicon and social image. `task docs:social` renders
 the social image.
 The docs publish to wyrd.foo through the `Publish docs` workflow, which calls
-the wyrd.foo `publish-docs` workflow, pinned to a 2.0.0 commit SHA. It runs
+the wyrd.foo `publish-docs` workflow, pinned to a commit SHA. It runs
 after a successful `Release` run for a release tag, on a `dcb-docs@X.Y.Z`
 record, and on a manual run with a `ref`. A push to `main` does not publish.
 The `dcb-docs` unit is tag-only and has no GitHub Release. Keep `version` and
