@@ -29,3 +29,27 @@ func TransformJSONStrings(data []byte, transform func(string) string) json.RawMe
 	}
 	return stringifyValue(walk(value))
 }
+
+// JSONComparisonValue keeps string code units in runtime option comparisons.
+func JSONComparisonValue(data []byte) any {
+	p := documentationParser{data: documentationUTF8(data), ownProperties: true}
+	p.next()
+	value, _ := p.value()
+	var convert func(any) any
+	convert = func(value any) any {
+		switch v := value.(type) {
+		case *documentationObject:
+			m := map[string]any{}
+			for _, key := range documentationKeys(v) {
+				m[key] = convert(v.values[key])
+			}
+			return m
+		case []any:
+			for i, item := range v {
+				v[i] = convert(item)
+			}
+		}
+		return value
+	}
+	return convert(value)
+}

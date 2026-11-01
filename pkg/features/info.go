@@ -14,6 +14,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/wyrd-company/devcontainer-builder/internal/collectiondocs"
@@ -347,7 +348,7 @@ func (n *infoNode) load(c *oci.Client, merge bool) (json.RawMessage, error) {
 	var metadata Metadata
 	_ = json.Unmarshal(meta, &metadata)
 	n.setReportAliases(meta, metadata)
-	_, value := decodeOptions(n.options)
+	value := collectiondocs.JSONComparisonValue(n.options)
 	n.compare = &node{res: Resolved{Source: n.id, Reference: &ref, Digest: digest, Metadata: metadata}, optionsValue: value}
 	resource := ref.Registry + "/" + ref.Repository
 	version := ref.Tag
@@ -367,7 +368,7 @@ func (n *infoNode) load(c *oci.Client, merge bool) (json.RawMessage, error) {
 	if merge {
 		var a, b spec.OrderedMap
 		_ = json.Unmarshal(feature, &a)
-		_ = json.Unmarshal(meta, &b)
+		b = infoMetadataProperties(meta)
 		for _, k := range b.Keys {
 			if _, exists := a.Values[k]; !exists {
 				a.Keys = append(a.Keys, k)
@@ -397,7 +398,7 @@ func (n *infoNode) loadTarball(c *oci.Client, merge bool) (json.RawMessage, erro
 	feature := infoObject(infoField{"id", infoJSON(match[1])}, infoField{"name", infoJSON(n.id)}, infoField{"value", n.options}, infoField{"included", infoJSON(true)})
 	n.plainSet = infoObject(infoField{"sourceInformation", source}, infoField{"features", infoJSON([]json.RawMessage{feature})})
 	n.set = n.plainSet
-	_, value := decodeOptions(n.options)
+	value := collectiondocs.JSONComparisonValue(n.options)
 	n.compare = &node{res: Resolved{Source: n.id, localPath: n.id}, optionsValue: value}
 	if !merge {
 		return nil, nil
@@ -426,7 +427,7 @@ func (n *infoNode) loadTarball(c *oci.Client, merge bool) (json.RawMessage, erro
 	n.compare.res.Metadata = metadata
 	var a, b spec.OrderedMap
 	_ = json.Unmarshal(feature, &a)
-	_ = json.Unmarshal(meta, &b)
+	b = infoMetadataProperties(meta)
 	for _, k := range b.Keys {
 		if _, ok := a.Values[k]; !ok {
 			a.Keys = append(a.Keys, k)
@@ -446,9 +447,41 @@ func (n *infoNode) setReportAliases(meta json.RawMessage, metadata Metadata) {
 	if len(meta) == 0 || string(meta) == "null" {
 		return
 	}
-	n.aliases = metadata.aliases()
-	if len(n.aliases) == 0 {
-		n.aliases = []string{""}
-		n.aliasesValue = json.RawMessage(`[null]`)
+	properties := infoMetadataProperties(meta)
+	current := properties.Values["currentId"]
+	var value any
+	_ = json.Unmarshal(current, &value)
+	if !reportTruthy(value) {
+		current = properties.Values["id"]
 	}
+	if current == nil {
+		current = json.RawMessage(`null`)
+	}
+	aliases := []json.RawMessage{current}
+	var legacy []json.RawMessage
+	_ = json.Unmarshal(properties.Values["legacyIds"], &legacy)
+	aliases = append(aliases, legacy...)
+	n.aliasesValue = infoJSON(aliases)
+	n.aliases = make([]string, len(aliases))
+	for i, raw := range aliases {
+		_ = json.Unmarshal(raw, &n.aliases[i])
+	}
+}
+
+// infoMetadataProperties models the enumerable fields used by object spread.
+func infoMetadataProperties(meta json.RawMessage) spec.OrderedMap {
+	var fields spec.OrderedMap
+	if json.Unmarshal(meta, &fields) == nil {
+		return fields
+	}
+	var items []json.RawMessage
+	if json.Unmarshal(meta, &items) == nil {
+		fields = spec.OrderedMap{Values: map[string]json.RawMessage{}}
+		for i, item := range items {
+			key := strconv.Itoa(i)
+			fields.Keys = append(fields.Keys, key)
+			fields.Values[key] = item
+		}
+	}
+	return fields
 }

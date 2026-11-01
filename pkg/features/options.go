@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"sort"
 	"strconv"
+	"strings"
+	"unicode/utf8"
 
 	"golang.org/x/text/collate"
 	"golang.org/x/text/language"
@@ -144,4 +146,26 @@ func parseOptions(raw json.RawMessage) (opts map[string]any, scalar bool, err er
 }
 
 // compareFeatureStrings follows the upstream CLI default English collation.
-func compareFeatureStrings(a, b string) int { return collate.New(language.English).CompareString(a, b) }
+func compareFeatureStrings(a, b string) int {
+	// Replace each unpaired code unit once for collation, then distinguish
+	// equal replacement weights by the retained code units.
+	clean := func(s string) string {
+		var b strings.Builder
+		for len(s) > 0 {
+			if len(s) >= 3 && s[0] == 0xed && s[1] >= 0xa0 && s[1] <= 0xbf && s[2]&0xc0 == 0x80 {
+				b.WriteRune('�')
+				s = s[3:]
+				continue
+			}
+			_, size := utf8.DecodeRuneInString(s)
+			b.WriteString(s[:size])
+			s = s[size:]
+		}
+		return b.String()
+	}
+	order := collate.New(language.English).CompareString(clean(a), clean(b))
+	if order == 0 && (!utf8.ValidString(a) || !utf8.ValidString(b)) {
+		return strings.Compare(a, b)
+	}
+	return order
+}

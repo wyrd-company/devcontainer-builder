@@ -306,7 +306,7 @@ func (n *infoNode) loadLocal(merge bool) (json.RawMessage, error) {
 	feature := infoObject(infoField{"id", infoJSON(filepath.Base(resolved))}, infoField{"name", infoJSON(n.id)}, infoField{"value", n.options}, infoField{"included", infoJSON(true)})
 	n.plainSet = infoObject(infoField{"sourceInformation", source}, infoField{"features", infoJSON([]json.RawMessage{feature})})
 	n.set = n.plainSet
-	_, value := decodeOptions(n.options)
+	value := collectiondocs.JSONComparisonValue(n.options)
 	n.compare = &node{res: Resolved{Source: n.id, localPath: resolved}, optionsValue: value}
 	if !merge {
 		return nil, nil
@@ -326,7 +326,7 @@ func (n *infoNode) loadLocal(merge bool) (json.RawMessage, error) {
 	n.compare.res.Metadata = m
 	var a, b spec.OrderedMap
 	_ = json.Unmarshal(feature, &a)
-	_ = json.Unmarshal(meta, &b)
+	b = infoMetadataProperties(meta)
 	for _, k := range b.Keys {
 		if _, ok := a.Values[k]; !ok {
 			a.Keys = append(a.Keys, k)
