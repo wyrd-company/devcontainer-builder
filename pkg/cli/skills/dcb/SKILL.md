@@ -15,6 +15,11 @@ alternate content while relative paths stay based on `--config` (or the
 workspace configuration path). For commands other than `exec`, flags can
 follow positional arguments.
 
+Use upstream configuration forms: `build.dockerfile` with `build.context`, or
+`dockerFile` with top-level `context`. Both paths resolve from `devcontainer.json`.
+`dockerComposeFile` and `build.cacheFrom` accept strings or string arrays;
+parallel lifecycle command values are strings or string arrays.
+
 `exec` stops reading options at the container command; every later argument
 passes through unchanged. An explicit `--` before the command also works.
 

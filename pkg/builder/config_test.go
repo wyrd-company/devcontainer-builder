@@ -59,3 +59,25 @@ func TestConfigurationSnapshotIsValidated(t *testing.T) {
 		t.Fatal("Build accepted invalid snapshot")
 	}
 }
+
+func TestLegacyDockerfileContextReachesBuildFrontend(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "devcontainer.json")
+	if err := os.WriteFile(p, []byte(`{"dockerFile":"docker/Dockerfile","context":"payload","build":{"args":{"VALUE":"sample"},"target":"final","cacheFrom":"alpine"}}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	dc, err := spec.Load(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, frontend, err := prepareBaseImage(dc, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if frontend.ContextDir != filepath.Join(dir, "payload") || frontend.DockerfileDir != filepath.Join(dir, "docker") || frontend.Filename != "Dockerfile" || frontend.Target != "final" || frontend.BuildArgs["VALUE"] != "sample" {
+		t.Fatalf("frontend=%+v", frontend)
+	}
+	if got := buildCacheFrom(dc); len(got) != 1 || got[0] != "alpine" {
+		t.Fatalf("cache=%v", got)
+	}
+}
