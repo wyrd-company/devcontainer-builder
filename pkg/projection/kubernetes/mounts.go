@@ -156,28 +156,17 @@ func parseMountString(s, nameOverride string) (*corev1.Volume, *corev1.VolumeMou
 }
 
 func parseMountObject(o map[string]any, nameOverride string) (*corev1.Volume, *corev1.VolumeMount, error) {
-	mf := mountFields{}
-	for k, raw := range o {
-		switch k {
-		case "type":
-			if s, ok := raw.(string); ok {
-				mf.typ = s
-			}
-		case "source":
-			if s, ok := raw.(string); ok {
-				mf.source = s
-			}
-		case "target", "destination":
-			if s, ok := raw.(string); ok {
-				mf.target = s
-			}
-		case "readonly":
-			if b, ok := raw.(bool); ok {
-				mf.readOnly = b
-			}
-		}
+	if err := (&spec.DevContainer{Mounts: []any{o}}).ValidateMounts(); err != nil {
+		return nil, nil, err
 	}
-	return projectMount(mf, nameOverride)
+	typ, _ := o["type"].(string)
+	source, _ := o["source"].(string)
+	target, _ := o["target"].(string)
+	args := "type=" + typ + ","
+	if source != "" {
+		args += "src=" + source + ","
+	}
+	return parseMountString(args+"dst="+target, nameOverride)
 }
 
 func projectMount(mf mountFields, nameOverride string) (*corev1.Volume, *corev1.VolumeMount, error) {

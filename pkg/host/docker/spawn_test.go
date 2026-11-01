@@ -47,16 +47,43 @@ func TestParseMountString_NoTargetReturnsNil(t *testing.T) {
 	}
 }
 
-func TestParseMountObject_ReadonlyBool(t *testing.T) {
-	got := parseMountObject(map[string]any{
-		"type":     "bind",
-		"source":   "/host/secrets",
-		"target":   "/run/secrets",
-		"readonly": true,
-	})
-	want := &mount.Mount{Type: mount.TypeBind, Source: "/host/secrets", Target: "/run/secrets", ReadOnly: true}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("parseMountObject readonly:\n got  %+v\n want %+v", got, want)
+func TestBuildContainerConfigObjectMounts(t *testing.T) {
+	for _, tc := range []struct {
+		name, typ, source, target, wantTarget string
+		readonly                              bool
+	}{
+		{"bind_readwrite", "bind", "/host/data", "/data", "/data", false},
+		{"bind_readonly_target", "bind", "/host/data", "/data,readonly", "/data", true},
+		{"bind_ro_target", "bind", "/host/data", "/data,ro", "/data", true},
+		{"bind_readonly_false", "bind", "/host/data", "/data,readonly=false", "/data", false},
+		{"named_volume_readwrite", "volume", "sample-cache", "/cache", "/cache", false},
+		{"named_volume_readonly_target", "volume", "sample-cache", "/cache,readonly", "/cache", true},
+		{"anonymous_volume_readonly_target", "volume", "", "/cache,readonly", "/cache", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			object := map[string]any{"type": tc.typ, "target": tc.target}
+			if tc.source != "" {
+				object["source"] = tc.source
+			}
+			dc := &spec.DevContainer{Mounts: []any{object}}
+			_, host, _, err := buildContainerConfig(dc, nil, "alpine", "/workspace", "", "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := []mount.Mount{{Type: mount.Type(tc.typ), Source: tc.source, Target: tc.wantTarget, ReadOnly: tc.readonly}}
+			if !reflect.DeepEqual(host.Mounts, want) {
+				t.Fatalf("object %v: mounts=%+v, want %+v", object, host.Mounts, want)
+			}
+		})
+	}
+}
+
+func TestBuildContainerConfigRejectsObjectMountExtensions(t *testing.T) {
+	for _, key := range []string{"readOnly", "readonly", "ro", "external", "consistency", "destination"} {
+		dc := &spec.DevContainer{Mounts: []any{map[string]any{"type": "bind", "source": "/host/data", "target": "/data", key: true}}}
+		if _, _, _, err := buildContainerConfig(dc, nil, "alpine", "/workspace", "/sample", ""); err == nil || !strings.Contains(err.Error(), key) {
+			t.Fatalf("%s: %v", key, err)
+		}
 	}
 }
 

@@ -151,6 +151,9 @@ func ProjectCompose(req ComposeProjectRequest) (*ComposeProjection, error) {
 	if req.Spec == nil {
 		return nil, errors.New("kubernetes projection: ComposeProjectRequest.Spec is required")
 	}
+	if err := req.Spec.ValidateMounts(); err != nil {
+		return nil, err
+	}
 	if req.Spec.Mode() != spec.ModeCompose {
 		return nil, errors.New("kubernetes projection: spec is not in compose mode")
 	}

@@ -289,12 +289,15 @@ func (d *DevContainer) Mode() Mode {
 	return ModeSingle
 }
 
-// Validate enforces the discriminator: a spec is either single-container
+// Validate checks mount objects and the discriminator: a spec is either single-container
 // (image / build / dockerFile) or compose (dockerComposeFile + service),
 // and the two sets of fields cannot mix. Validate is invoked from Load
 // so callers using Load never see a malformed spec; tests and other
 // in-memory construction paths can call it directly.
 func (d *DevContainer) Validate() error {
+	if err := d.ValidateMounts(); err != nil {
+		return err
+	}
 	hasCompose := len(d.DockerComposeFile) > 0 || d.Service != ""
 	hasSingle := d.Image != "" || d.Dockerfile != "" || d.Build != nil
 
