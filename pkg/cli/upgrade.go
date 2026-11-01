@@ -30,6 +30,7 @@ func (a *application) upgradeCommand() *cobra.Command {
 		if err := features.ValidateUpgradeOptions(o); err != nil {
 			return usageError("%v", err)
 		}
+		a.logLevel = level
 		a.exportStdout = true
 		resolver := features.New()
 		resolver.Logger = a.logf

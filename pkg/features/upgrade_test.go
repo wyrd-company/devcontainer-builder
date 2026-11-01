@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -208,6 +209,78 @@ func TestUpgradeUpstreamRegistryDifferential(t *testing.T) {
 					}
 				})
 			}
+		}
+	}
+}
+
+func TestUpgradeLocalSourceContract(t *testing.T) {
+	for _, kind := range []string{"root", "dependency"} {
+		for _, form := range []string{"inside", "escape", "absolute", "file-url", "dot-dot-name", "root-config"} {
+			t.Run(kind+"/"+form, func(t *testing.T) {
+				w := t.TempDir()
+				d := filepath.Join(w, ".devcontainer")
+				if err := os.MkdirAll(d, 0755); err != nil {
+					t.Fatal(err)
+				}
+				p := filepath.Join(d, "devcontainer.json")
+				source := "./sample"
+				target := filepath.Join(d, "sample")
+				switch form {
+				case "escape":
+					source = "../sample"
+					target = filepath.Join(w, "sample")
+				case "absolute":
+					source = target
+				case "file-url":
+					source = "file://" + target
+				case "dot-dot-name":
+					source = "./sample..value"
+					target = filepath.Join(d, "sample..value")
+				case "root-config":
+					p = filepath.Join(w, ".devcontainer.json")
+					target = filepath.Join(w, "sample")
+				}
+				if err := os.MkdirAll(target, 0755); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(filepath.Join(target, "devcontainer-feature.json"), []byte(`{"id":"sample","version":"1.0.0"}`), 0644); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(filepath.Join(target, "install.sh"), []byte("#!/bin/sh\n"), 0755); err != nil {
+					t.Fatal(err)
+				}
+				root := source
+				if kind == "dependency" {
+					root = "./parent"
+					parent := filepath.Join(filepath.Dir(p), "parent")
+					if err := os.MkdirAll(parent, 0755); err != nil {
+						t.Fatal(err)
+					}
+					metadata := `{"id":"parent","version":"1.0.0","dependsOn":{` + strconv.Quote(source) + `:{}}}`
+					if err := os.WriteFile(filepath.Join(parent, "devcontainer-feature.json"), []byte(metadata), 0644); err != nil {
+						t.Fatal(err)
+					}
+					if err := os.WriteFile(filepath.Join(parent, "install.sh"), []byte("#!/bin/sh\n"), 0755); err != nil {
+						t.Fatal(err)
+					}
+				}
+				if err := os.WriteFile(p, []byte(`{"features":{`+strconv.Quote(root)+`:true}}`), 0644); err != nil {
+					t.Fatal(err)
+				}
+				_, err := New().Upgrade(context.Background(), UpgradeOptions{Workspace: w})
+				if form == "inside" {
+					if err != nil {
+						t.Fatal(err)
+					}
+				} else {
+					if err == nil {
+						t.Fatal("unsupported local path accepted")
+					}
+					if _, e := os.Stat(LockfilePath(p)); !os.IsNotExist(e) {
+						t.Fatalf("rejection wrote lockfile: %v", e)
+					}
+				}
+			})
 		}
 	}
 }

@@ -111,6 +111,8 @@ type Resolved struct {
 
 // Resolver pulls and stages features.
 type Resolver struct {
+	// upgradeWorkspace applies the pinned upgrade command local-source contract.
+	upgradeWorkspace string
 	// SkipAutoMapping leaves legacy shorthand identifiers unchanged.
 	SkipAutoMapping bool
 	// CacheDir, if non-empty, is used to cache pulled OCI artifacts
@@ -256,6 +258,11 @@ func (r *Resolver) resolveOne(ctx context.Context, source string, opts map[strin
 	dir := filepath.Join(stagingDir, safeID)
 
 	if isLocalSource(source) {
+		if r.upgradeWorkspace != "" {
+			if err := validateUpgradeLocalSource(source, localBaseDir, r.upgradeWorkspace); err != nil {
+				return nil, err
+			}
+		}
 		abs, err := localSourcePath(source, localBaseDir)
 		if err != nil {
 			return nil, err

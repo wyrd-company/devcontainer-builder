@@ -66,3 +66,21 @@ func TestUpgradeCommand(t *testing.T) {
 		t.Fatalf("failure code=%d out=%s logs=%s", code, &out, &logs)
 	}
 }
+
+func TestUpgradeErrorLogSuppressesProgress(t *testing.T) {
+	w := t.TempDir()
+	p := filepath.Join(w, ".devcontainer.json")
+	if err := os.WriteFile(p, []byte(`{"features":{"127.0.0.1:1/collection/sample:1":true}}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	for _, level := range []string{"error", "info"} {
+		var out, logs bytes.Buffer
+		code := Run(context.Background(), []string{"upgrade", "--workspace-folder", w, "--dry-run", "--log-level", level}, "test", nil, &out, &logs)
+		if code != 1 || out.Len() != 0 || logs.Len() == 0 {
+			t.Fatalf("level=%s code=%d out=%s logs=%s", level, code, &out, &logs)
+		}
+		if strings.Contains(logs.String(), "pulling feature") != (level == "info") {
+			t.Fatalf("level=%s progress filter: %s", level, &logs)
+		}
+	}
+}
