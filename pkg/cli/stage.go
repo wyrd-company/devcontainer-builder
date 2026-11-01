@@ -86,7 +86,7 @@ func (a *application) featuresCommand() *cobra.Command {
 		a.result["features"] = staged
 		return nil
 	}
-	cmd.AddCommand(a.featuresPackageCommand(), a.featuresDocumentationCommand())
+	cmd.AddCommand(a.featuresPackageCommand(), a.featuresDocumentationCommand(), a.featuresInfoCommand())
 	return cmd
 }
 

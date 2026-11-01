@@ -41,6 +41,7 @@ dcb exec --workspace-folder . -- sh -c 'id && pwd'
 dcb down --workspace-folder .
 dcb features package ./src --output-folder ./packaged
 dcb features generate-docs -p ./src -n example/collection
+dcb features info verbose ghcr.io/example/collection/sample:1
 dcb templates generate-docs -p ./templates
 ```
 
@@ -85,7 +86,7 @@ matched. [Overview](https://wyrd.foo/docs/dcb/overview) lists the differences.
 These upstream command families are not yet supported:
 
 - [`upgrade`](https://github.com/wyrd-company/devcontainer-builder/issues/21)
-- [Feature authoring commands other than `features package` and `features generate-docs`](https://github.com/wyrd-company/devcontainer-builder/issues/22)
+- [Feature authoring commands other than `features package`, `features generate-docs`, and `features info`](https://github.com/wyrd-company/devcontainer-builder/issues/22)
 - [Template commands other than `templates metadata` and `templates generate-docs`](https://github.com/wyrd-company/devcontainer-builder/issues/23)
 
 `dcb outdated` reports current, wanted, and latest OCI Feature versions as a text

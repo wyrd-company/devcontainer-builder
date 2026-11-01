@@ -50,6 +50,7 @@ dcb down --workspace-folder .
 | `dcb set-up` | Runs the lifecycle commands of a configuration in a container that `dcb` did not create. |
 | `dcb generate` | Writes the generated Dockerfile and build context, and does not build. |
 | `dcb features` | Resolves and downloads the configuration's features into a directory. |
+| `dcb features info <mode> <feature>` | Reports a published Feature manifest, tags, or dependency graph. |
 | `dcb features generate-docs` | Generates README files from local Feature metadata and notes. |
 | `dcb features package <target>` | Packages a local Feature or collection as archives with collection metadata. |
 | `dcb templates generate-docs` | Generates README files from local Template metadata and notes. |
@@ -72,7 +73,7 @@ boolean flags, as upstream. Arguments after `--` pass through unchanged.
 These upstream command families are not yet supported:
 
 - [`upgrade`](https://github.com/wyrd-company/devcontainer-builder/issues/21)
-- [Feature authoring commands other than `features package` and `features generate-docs`](https://github.com/wyrd-company/devcontainer-builder/issues/22)
+- [Feature authoring commands other than `features package`, `features generate-docs`, and `features info`](https://github.com/wyrd-company/devcontainer-builder/issues/22)
 - [Template commands other than `templates metadata` and `templates generate-docs`](https://github.com/wyrd-company/devcontainer-builder/issues/23)
 
 ### Workspace flags
@@ -1155,3 +1156,21 @@ change the report. Lockfiles are read beside the configuration and are unchanged
 info, debug, or trace; `--log-format` accepts text or json. `--terminal-columns`
 and `--terminal-rows` must be supplied together. Reporting uses native OCI HTTP
 and existing registry credentials; no Docker daemon is needed.
+
+### Published Feature information
+
+```sh
+dcb features info manifest ghcr.io/example/collection/sample:1 --output-format json
+dcb features info tags ghcr.io/example/collection/sample:1
+dcb features info dependencies ghcr.io/example/collection/sample:1
+dcb features info verbose ghcr.io/example/collection/sample:1
+```
+
+Every mode requires a published Feature manifest. `manifest` includes the
+canonical digest identifier. `tags` preserves registry order and duplicate tags.
+`dependencies` renders a Mermaid flowchart with hard and soft dependencies.
+`verbose` combines these reports. Text is the default; `--output-format json`
+emits manifest, canonicalId, and publishedTags when requested. JSON dependencies
+emits `{}` without loading dependency metadata. Registry authentication uses the
+existing Docker credential configuration. These reports do not stage Features
+or write a lockfile.
