@@ -39,7 +39,7 @@ class RecoveryTests(unittest.TestCase):
             self.assertFalse(any(k.startswith("GIT_") for k in call.kwargs["env"]))
 
     def test_wrong_tag_dirty_source_and_changed_assets_fail_before_packaging(self):
-        for outputs, message in [([COMMIT+"\n", "b"*40+"\n"], "requested release tag"),
+        for outputs, message in [([COMMIT+"\n", "b"*40+"\n", ""], "requested release tag"),
                                  ([COMMIT+"\n", COMMIT+"\n", " M README.md\n"], "must be clean")]:
             with self.subTest(message=message), patch.object(recovery.subprocess, "check_output", side_effect=outputs), patch.object(recovery.stage, "stage") as stage:
                 with self.assertRaisesRegex(ValueError, message):
