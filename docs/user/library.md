@@ -187,7 +187,8 @@ and [Usage](/docs/dcb/usage#package-local-features) for archive naming and flags
 
 `features.ReadVersionConfig(workspace, configPath)` discovers or reads a JSONC
 reporting configuration without requiring build fields. It reuses the collection
-reader's JavaScript-compatible JSONC recovery and object enumeration. Empty `configPath` uses
+reader's JavaScript-compatible JSONC recovery and object enumeration.
+Empty `configPath` uses
 workspace discovery. `features.LoadVersionInfo(client, config)` returns a
 `VersionReport` with `Features` and configuration `Order`. Its JSON marshaler
 preserves this order and omits unavailable fields. A nil client uses the existing
