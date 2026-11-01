@@ -18,7 +18,7 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
-      - uses: go-task/setup-task@01a4adf9db2d14c1de7a560f09170b6e0df736aa # v2
+      - uses: go-task/setup-task@a00fbb05ce67b35648be3c78cbc9fd85354c757e # v2
       - name: Audit repository
         uses: wyrd-company/airlock@d017112364f31440e22b88d6621bb24d115b6f93 # 0.0.0 (unreleased)
         env:
