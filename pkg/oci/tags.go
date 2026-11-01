@@ -5,9 +5,15 @@ package oci
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
 )
+
+// ErrTagListShape identifies a truthy non-array tags value which upstream
+// cannot filter as a version list. Syntax and transport errors remain unavailable.
+var ErrTagListShape = errors.New("published tags must be an array")
 
 // PublishedTags lists the registry's tags as-is using the client's registry
 // authentication. A missing repository has no tags. Pagination is intentionally
@@ -29,9 +35,27 @@ func (c *Client) PublishedTags(ref Reference) ([]string, error) {
 	if resp.StatusCode > 299 {
 		return nil, c.refused(ref, fmt.Errorf("published tags: %s", resp.Status))
 	}
-	var result struct {
-		Tags []string `json:"tags"`
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
 	}
-	err = json.NewDecoder(resp.Body).Decode(&result)
-	return result.Tags, err
+	var result map[string]any
+	if err := json.Unmarshal(data, &result); err != nil {
+		return nil, err
+	}
+	value := result["tags"]
+	if value == nil || value == false || value == "" || value == float64(0) {
+		return nil, nil
+	}
+	items, ok := value.([]any)
+	if !ok {
+		return nil, ErrTagListShape
+	}
+	tags := []string{}
+	for _, item := range items {
+		if tag, ok := item.(string); ok {
+			tags = append(tags, tag)
+		}
+	}
+	return tags, nil
 }

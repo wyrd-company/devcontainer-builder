@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/Masterminds/semver/v3"
@@ -23,7 +24,7 @@ import (
 
 // FeatureVersionInfo omits unavailable values, as upstream JSON.stringify does.
 type FeatureVersionInfo struct {
-	Current     string `json:"current,omitempty"`
+	Current     any    `json:"current,omitempty"`
 	Wanted      string `json:"wanted,omitempty"`
 	WantedMajor string `json:"wantedMajor,omitempty"`
 	Latest      string `json:"latest,omitempty"`
@@ -89,7 +90,7 @@ func versionReference(id string) (oci.Reference, bool) {
 		return oci.Reference{}, false
 	}
 	parts := strings.Split(resource, "/")
-	if len(parts) < 2 {
+	if len(parts) < 3 {
 		return oci.Reference{}, false
 	}
 	if parts[1] == "devcontainers-contrib" {
@@ -128,7 +129,7 @@ func StrictSortedVersions(tags []string) []string {
 	sort.SliceStable(out, func(i, j int) bool {
 		a, _ := strictVersion(out[i])
 		b, _ := strictVersion(out[j])
-		return a.LessThan(b)
+		return compareReportVersions(a, b) < 0
 	})
 	return out
 }
@@ -142,7 +143,7 @@ func LoadVersionInfo(client *oci.Client, config *spec.DevContainer) (VersionRepo
 	if config.Features.Len() == 0 {
 		return result, nil
 	}
-	state, err := ReadLockfile(config.Path, false, false)
+	lockfile, err := readReportLockfile(config.Path)
 	if err != nil {
 		return result, err
 	}
@@ -154,17 +155,27 @@ func LoadVersionInfo(client *oci.Client, config *spec.DevContainer) (VersionRepo
 		if !ok {
 			continue
 		}
-		tags, _ := client.PublishedTags(ref)
+		tags, tagErr := client.PublishedTags(ref)
+		if errors.Is(tagErr, oci.ErrTagListShape) {
+			return result, tagErr
+		}
 		versions := StrictSortedVersions(tags)
 		v := FeatureVersionInfo{}
-		if state.Lockfile != nil {
-			v.Current = state.Lockfile.Features[id].Version
+		v.Current, err = reportLockedVersion(lockfile, id)
+		if err != nil {
+			return result, err
 		}
 		if len(versions) > 0 {
 			v.Latest = versions[len(versions)-1]
 		}
 		if ref.Digest != "" {
-			v.Wanted = v.Current
+			if reportTruthy(v.Current) {
+				var ok bool
+				v.Wanted, ok = v.Current.(string)
+				if !ok {
+					return result, fmt.Errorf("invalid Feature version %v", v.Current)
+				}
+			}
 			if v.Wanted == "" {
 				v.Wanted, err = digestVersion(client, ref)
 				if err != nil {
@@ -178,15 +189,22 @@ func LoadVersionInfo(client *oci.Client, config *spec.DevContainer) (VersionRepo
 			if e == nil {
 				for i := len(versions) - 1; i >= 0; i-- {
 					candidate, _ := strictVersion(versions[i])
-					if constraint.Check(candidate) {
+					matches := constraint.Check(candidate)
+					if exact, e := strictVersion(ref.Tag); e == nil {
+						matches = compareReportVersions(candidate, exact) == 0
+					}
+					if matches {
 						v.Wanted = versions[i]
 						break
 					}
 				}
 			}
 		}
-		if v.Current == "" {
-			v.Current = v.Wanted
+		if !reportTruthy(v.Current) {
+			v.Current = nil
+			if v.Wanted != "" {
+				v.Current = v.Wanted
+			}
 		}
 		for _, field := range []struct {
 			value  string
@@ -339,4 +357,113 @@ func validateReportSubstitutions(value any) error {
 		}
 	}
 	return nil
+}
+
+// Compare prerelease numeric identifiers after JavaScript Number conversion.
+// Equal rounded values preserve input order, including above MAX_SAFE_INTEGER.
+func compareReportVersions(a, b *semver.Version) int {
+	for _, pair := range [][2]uint64{{a.Major(), b.Major()}, {a.Minor(), b.Minor()}, {a.Patch(), b.Patch()}} {
+		if pair[0] < pair[1] {
+			return -1
+		}
+		if pair[0] > pair[1] {
+			return 1
+		}
+	}
+	ap, bp := a.Prerelease(), b.Prerelease()
+	if ap == bp {
+		return 0
+	}
+	if ap == "" {
+		return 1
+	}
+	if bp == "" {
+		return -1
+	}
+	aa, bb := strings.Split(ap, "."), strings.Split(bp, ".")
+	numeric := regexp.MustCompile(`^[0-9]+$`)
+	for i := 0; i < len(aa) && i < len(bb); i++ {
+		x, y := aa[i], bb[i]
+		xn, yn := numeric.MatchString(x), numeric.MatchString(y)
+		if xn && yn {
+			xf, _ := strconv.ParseFloat(x, 64)
+			yf, _ := strconv.ParseFloat(y, 64)
+			if xf < yf {
+				return -1
+			}
+			if xf > yf {
+				return 1
+			}
+		} else {
+			if xn != yn {
+				if xn {
+					return -1
+				}
+				return 1
+			}
+			if x < y {
+				return -1
+			}
+			if x > y {
+				return 1
+			}
+		}
+	}
+	if len(aa) < len(bb) {
+		return -1
+	}
+	if len(aa) > len(bb) {
+		return 1
+	}
+	return 0
+}
+
+// Reporting reads JSON values without imposing the build lockfile field types.
+func readReportLockfile(path string) (any, error) {
+	data, err := os.ReadFile(LockfilePath(path))
+	if os.IsNotExist(err) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	if len(bytes.TrimSpace(data)) == 0 {
+		return nil, nil
+	}
+	var value any
+	err = json.Unmarshal(data, &value)
+	return value, err
+}
+
+func reportLockedVersion(lockfile any, id string) (any, error) {
+	if lockfile == nil {
+		return nil, nil
+	}
+	obj, _ := lockfile.(map[string]any)
+	features := obj["features"]
+	if features == nil {
+		return nil, fmt.Errorf("lockfile features is unavailable")
+	}
+	entries, _ := features.(map[string]any)
+	entry, _ := entries[id].(map[string]any)
+	value := entry["version"]
+	if !reportTruthy(value) {
+		return nil, nil
+	}
+	return value, nil
+}
+
+func reportTruthy(value any) bool {
+	switch v := value.(type) {
+	case nil:
+		return false
+	case string:
+		return v != ""
+	case bool:
+		return v
+	case float64:
+		return v != 0
+	default:
+		return true
+	}
 }
