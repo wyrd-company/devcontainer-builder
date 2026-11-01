@@ -24,13 +24,13 @@ jobs:
       GORELEASER_CURRENT_TAG: ${{ github.ref_name }}
       PYTHONDONTWRITEBYTECODE: '1'
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
           persist-credentials: false
       - uses: go-task/setup-task@a00fbb05ce67b35648be3c78cbc9fd85354c757e # v2
       - run: task release:publisher-pin
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           repository: wyrd-company/repo.wyrd.foo
           ref: ${{ env.REPO_WYRD_FOO_PUBLISHER_COMMIT }}
@@ -65,7 +65,7 @@ jobs:
       GORELEASER_CURRENT_TAG: ${{ github.ref_name }}
       PYTHONDONTWRITEBYTECODE: '1'
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -109,7 +109,7 @@ jobs:
       - run: task release:npm
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           repository: wyrd-company/homebrew-tools
           ref: main
