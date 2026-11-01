@@ -52,13 +52,13 @@ jobs:
       - run: task release:compatibility
         env:
           PUBLISHER_ROOT: .repo-wyrd-foo-contract
-  release:
+  build:
+    name: Build and verify release
     needs: compatibility
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
-      contents: write
-      id-token: write
+      contents: read
     env:
       RELEASE_VERSION: ${{ github.ref_name }}
       # Both release units can tag one commit; GoReleaser must not pick the docs tag.
@@ -76,21 +76,11 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '22'
-          registry-url: https://registry.npmjs.org
       # ryl disable-line rule:line-length
       - uses: goreleaser/goreleaser-action@a4f02ab5355a589de60d917a659ce617ed19b3de # v7
         with:
           version: v2.17.0
           install-only: true
-      - run: task release:preflight
-        env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-          FORMULAE_PUBLISH_KEY: ${{ secrets.FORMULAE_PUBLISH_KEY }}
-          REPO_WYRD_FOO_PUBLISHER_APP_ID: ${{ secrets.REPO_WYRD_FOO_PUBLISHER_APP_ID }}
-          REPO_WYRD_FOO_PUBLISHER_PRIVATE_KEY: ${{ secrets.REPO_WYRD_FOO_PUBLISHER_PRIVATE_KEY }}
-          WYRD_TOOLS_DOCS_PUBLISHER_APP_ID: ${{ secrets.WYRD_TOOLS_DOCS_PUBLISHER_APP_ID }}
-          # ryl disable-line rule:line-length
-          WYRD_TOOLS_DOCS_PUBLISHER_PRIVATE_KEY: ${{ secrets.WYRD_TOOLS_DOCS_PUBLISHER_PRIVATE_KEY }}
       - run: task release:yaml-tool
       - run: task release:check
       - run: task release:inspectors
@@ -103,12 +93,67 @@ jobs:
           path: dist/release-manifest.json
           if-no-files-found: error
           retention-days: 90
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: release-bundle
+          overwrite: true
+          path: dist/
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 90
+  # A failed publisher reruns only this job, using the verified original bytes.
+  release:
+    name: Publish verified assets
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      actions: read
+      id-token: write
+    env:
+      RELEASE_VERSION: ${{ github.ref_name }}
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: go-task/setup-task@a00fbb05ce67b35648be3c78cbc9fd85354c757e # v2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+          registry-url: https://registry.npmjs.org
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: release-bundle
+          path: dist
+      - run: task release:preflight
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          FORMULAE_PUBLISH_KEY: ${{ secrets.FORMULAE_PUBLISH_KEY }}
+          REPO_WYRD_FOO_PUBLISHER_APP_ID: ${{ secrets.REPO_WYRD_FOO_PUBLISHER_APP_ID }}
+          REPO_WYRD_FOO_PUBLISHER_PRIVATE_KEY: ${{ secrets.REPO_WYRD_FOO_PUBLISHER_PRIVATE_KEY }}
+          WYRD_TOOLS_DOCS_PUBLISHER_APP_ID: ${{ secrets.WYRD_TOOLS_DOCS_PUBLISHER_APP_ID }}
+          # ryl disable-line rule:line-length
+          WYRD_TOOLS_DOCS_PUBLISHER_PRIVATE_KEY: ${{ secrets.WYRD_TOOLS_DOCS_PUBLISHER_PRIVATE_KEY }}
+      - run: task release:restore-receipts
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - run: task release:github
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - run: task release:npm
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        if: always()
+        with:
+          name: npm-publication-receipts
+          overwrite: true
+          path: dist/npm-publication-receipts.json
+          if-no-files-found: ignore
+          retention-days: 90
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           repository: wyrd-company/homebrew-tools

@@ -15,17 +15,7 @@ case "$channel" in
     ;;
   homebrew)
     tap="${2:?checked-out homebrew tap required}"
-    python3 scripts/release/channels.py homebrew "$tap"
-    mkdir -p "$tap/Formula"
-    cp dist/dcb.rb "$tap/Formula/dcb.rb"
-    git -C "$tap" config user.name 'dcb release bot'
-    git -C "$tap" config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-    git -C "$tap" add Formula/dcb.rb
-    if ! git -C "$tap" diff --cached --quiet; then
-      git -C "$tap" commit -m "Brew formula update for dcb version $RELEASE_VERSION"
-    fi
-    # Retry a previously committed but unpushed update even when no file changed.
-    git -C "$tap" push origin HEAD:main
+    python3 scripts/release/channels.py homebrew-publish "$tap"
     ;;
   *) echo "unknown publication channel: $channel" >&2; exit 2 ;;
 esac

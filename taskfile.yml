@@ -178,6 +178,26 @@ tasks:
       - python3 scripts/release/check-tag.py
       - goreleaser release --clean --skip=publish
       - task: release:stage
+  release:restore-receipts:
+    desc: Restore accepted npm publication receipts from this workflow run
+    cmds:
+      - python3 scripts/release/receipts.py
+  release:recover-download:
+    desc: Download and validate original final GitHub release assets
+    cmds:
+      - python3 scripts/release/recovery.py download --version "$RELEASE_VERSION"
+  release:recover-prepare:
+    desc: Repack original release binaries without compiling
+    cmds:
+      - python3 scripts/release/recovery.py prepare --version "$RELEASE_VERSION" --source "${RELEASE_SOURCE:?original release checkout required}"
+  release:recover-npm:
+    desc: Publish npm from verified original release bytes
+    cmds:
+      - python3 scripts/release/recovery.py npm --version "$RELEASE_VERSION" --source "${RELEASE_SOURCE:?original release checkout required}"
+  release:recover-homebrew:
+    desc: Publish the Homebrew formula from verified original archives
+    cmds:
+      - python3 scripts/release/recovery.py homebrew --version "$RELEASE_VERSION" --source "${RELEASE_SOURCE:?original release checkout required}" --tap "${RELEASE_TAP:?tap checkout required}"
   release:github:
     desc: Publish prepared assets to GitHub (Bob's release only)
     cmds:

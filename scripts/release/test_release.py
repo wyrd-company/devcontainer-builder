@@ -330,13 +330,9 @@ if name == 'git' and 'diff' in sys.argv:
             ],
         )
 
-    def test_homebrew_pushes_even_without_a_new_diff(self):
-        self.env["DIFF_STATUS"] = "0"
+    def test_homebrew_dispatches_through_shared_publisher(self):
         self.assertEqual(self.execute("homebrew", "tap").returncode, 0)
-        self.assertEqual((self.root / "tap/Formula/dcb.rb").read_text(), "formula")
-        self.assertEqual(
-            self.calls()[-1], ["git", "-C", "tap", "push", "origin", "HEAD:main"]
-        )
+        self.assertEqual(self.calls(), [["python3", "scripts/release/check-tag.py"], ["python3", "scripts/release/channels.py", "homebrew-publish", "tap"]])
 
     def test_homebrew_comparison_failure_stops_copy_commit_and_push(self):
         self.env["CHANNEL_STATUS"] = "1"
@@ -346,7 +342,7 @@ if name == 'git' and 'diff' in sys.argv:
             self.calls(),
             [
                 ["python3", "scripts/release/check-tag.py"],
-                ["python3", "scripts/release/channels.py", "homebrew", "tap"],
+                ["python3", "scripts/release/channels.py", "homebrew-publish", "tap"],
             ],
         )
 
@@ -508,25 +504,23 @@ class IdentityTests(unittest.TestCase):
 
     def test_workflows_share_retained_artifact_and_run_identity(self):
         release = yaml_file(ROOT / ".github/workflows/release.yml")
+        build = release["jobs"]["build"]["steps"]
         steps = release["jobs"]["release"]["steps"]
-        gate_order = [
-            "task release:preflight",
-            "task release:build",
-            "task release:verify",
-            "task release:github",
-            "task release:npm",
-            "task release:homebrew",
-        ]
-        positions = [
-            next(i for i, step in enumerate(steps) if step.get("run") == gate)
-            for gate in gate_order
-        ]
-        self.assertEqual(positions, sorted(positions))
-        producer = next(
-            step
-            for step in steps
-            if step.get("uses", "").startswith("actions/upload-artifact@")
-        )
+        self.assertEqual(release["jobs"]["build"]["needs"], "compatibility")
+        self.assertEqual(release["jobs"]["release"]["needs"], "build")
+        for gate in ["task release:build", "task release:verify"]:
+            self.assertTrue(any(s.get("run") == gate for s in build))
+            self.assertFalse(any(s.get("run") == gate for s in steps))
+        self.assertFalse(any("goreleaser" in s.get("uses", "") or "setup-go" in s.get("uses", "") for s in steps))
+        producer = next(s for s in build if s.get("with", {}).get("name") == "package-release-manifest")
+        bundle = next(s for s in build if s.get("with", {}).get("name") == "release-bundle")
+        consumer = next(s for s in steps if s.get("with", {}).get("name") == "release-bundle")
+        self.assertEqual(bundle["with"]["path"], "dist/")
+        self.assertEqual(consumer["with"]["path"], "dist")
+        self.assertLess(steps.index(consumer), next(i for i,s in enumerate(steps) if s.get("run") == "task release:github"))
+        receipt = next(s for s in steps if s.get("with", {}).get("name") == "npm-publication-receipts")
+        self.assertEqual(receipt["if"], "always()")
+        self.assertTrue(any(s.get("run") == "task release:restore-receipts" for s in steps))
         self.assertIs(producer["with"]["overwrite"], True)
         for filename in ["submit-package", "publish-docs"]:
             workflow = yaml_file(ROOT / f".github/workflows/{filename}.yml")
@@ -566,7 +560,7 @@ class IdentityTests(unittest.TestCase):
                 )["env"]["RELEASE_COMMIT"],
                 "${{ steps.release_run.outputs.head_sha }}",
             )
-        for filename in ["release", "release-check", "submit-package", "publish-docs"]:
+        for filename in ["release", "release-check", "submit-package", "publish-docs", "recover-release"]:
             workflow = yaml_file(ROOT / f".github/workflows/{filename}.yml")
             self.assertEqual(workflow["permissions"], {})
             for job in workflow["jobs"].values():

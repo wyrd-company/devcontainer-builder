@@ -65,7 +65,8 @@ class CompatibilityTests(unittest.TestCase):
             if s.get("uses", "").startswith("wyrd-company/repo.wyrd.foo/")
         )
         self.assertEqual(submit["env"]["REPO_WYRD_FOO_PUBLISHER_COMMIT"], pin)
-        self.assertEqual(release["jobs"]["release"]["needs"], "compatibility")
+        self.assertEqual(release["jobs"]["build"]["needs"], "compatibility")
+        self.assertEqual(release["jobs"]["release"]["needs"], "build")
         submit_gate = next(
             s for s in submit["steps"] if s.get("run") == "task release:publisher-pin"
         )

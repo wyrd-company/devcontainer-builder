@@ -1,0 +1,80 @@
+# relationships:
+#   references: [release, recovery, channels]
+name: Recover release publication
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Existing final GitHub release version to publish
+        required: true
+        type: string
+permissions: {}
+concurrency:
+  group: release-refs/tags/${{ inputs.version }}
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+    env:
+      RELEASE_VERSION: ${{ inputs.version }}
+      PYTHONDONTWRITEBYTECODE: '1'
+      RELEASE_SOURCE: ../release-source
+      RELEASE_TAP: ../homebrew-tools
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: publisher
+          persist-credentials: false
+      - uses: go-task/setup-task@a00fbb05ce67b35648be3c78cbc9fd85354c757e # v2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+          registry-url: https://registry.npmjs.org
+      - name: Download and validate original release assets
+        working-directory: publisher
+        run: task release:recover-download
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: refs/tags/${{ inputs.version }}
+          fetch-depth: 0
+          path: release-source
+          persist-credentials: false
+      - name: Repack original binaries without rebuilding
+        working-directory: publisher
+        run: task release:recover-prepare
+      - name: Restore accepted publication receipts
+        working-directory: publisher
+        run: task release:restore-receipts
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publish and verify npm packages
+        working-directory: publisher
+        run: task release:recover-npm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        if: always()
+        with:
+          name: npm-publication-receipts
+          overwrite: true
+          path: publisher/dist/npm-publication-receipts.json
+          if-no-files-found: ignore
+          retention-days: 90
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          repository: wyrd-company/homebrew-tools
+          ref: main
+          path: homebrew-tools
+          ssh-key: ${{ secrets.FORMULAE_PUBLISH_KEY }}
+          persist-credentials: true
+      - name: Publish Homebrew formula from original archives
+        working-directory: publisher
+        run: task release:recover-homebrew
