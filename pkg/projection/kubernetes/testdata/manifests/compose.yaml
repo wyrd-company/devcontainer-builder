@@ -2,7 +2,6 @@
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  creationTimestamp: null
   labels:
     app.kubernetes.io/name: devcontainer
   name: compose-workspace-data
@@ -20,7 +19,6 @@ binaryData:
   app-config: bW9kZT1kZXYK
 kind: ConfigMap
 metadata:
-  creationTimestamp: null
   labels:
     app.kubernetes.io/name: devcontainer
   name: test-proj-app-config
@@ -31,7 +29,6 @@ data:
   api-token: c2VjcmV0LXZhbHVl
 kind: Secret
 metadata:
-  creationTimestamp: null
   labels:
     app.kubernetes.io/name: devcontainer
   name: test-proj-api-token
@@ -46,7 +43,6 @@ metadata:
     devcontainer.compose.service: app
     devcontainer.config_file: /repo/.devcontainer/devcontainer.json
     devcontainer.local_folder: /repo
-  creationTimestamp: null
   labels:
     app.kubernetes.io/name: devcontainer
   name: compose-workspace

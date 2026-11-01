@@ -6,7 +6,6 @@ metadata:
     devcontainer.config_file: /repo/.devcontainer/devcontainer.json
     devcontainer.local_folder: /repo
     example.com/owner: devtools
-  creationTimestamp: null
   labels:
     app.kubernetes.io/component: workspace
   name: runargs-workspace

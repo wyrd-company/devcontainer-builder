@@ -5,7 +5,6 @@ metadata:
   annotations:
     devcontainer.config_file: /repo/.devcontainer/devcontainer.json
     devcontainer.local_folder: /repo
-  creationTimestamp: null
   name: dockerfile-workspace
   namespace: dev
 spec:
