@@ -20,7 +20,7 @@ jobs:
           persist-credentials: false
       - uses: go-task/setup-task@a00fbb05ce67b35648be3c78cbc9fd85354c757e # v2
       - name: Audit repository
-        uses: wyrd-company/airlock@d017112364f31440e22b88d6621bb24d115b6f93 # 0.0.0 (unreleased)
+        uses: wyrd-company/airlock@ae9b9c36406bd83b8f70cc0e18e2a48297c968a2 # 0.0.0 (unreleased)
         env:
           AIRLOCK_TOKEN: ${{ secrets.AIRLOCK_TOKEN }}
         with:
