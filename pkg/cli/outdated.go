@@ -65,9 +65,9 @@ func outdatedTable(report features.VersionReport) string {
 	rows := [][]string{{"Feature", "Current", "Wanted", "Latest"}}
 	for _, id := range report.Order {
 		v := report.Features[id]
-		row := []string{features.FeatureIDWithoutVersion(id), v.Current, v.Wanted, v.Latest}
+		row := []string{features.FeatureIDWithoutVersion(id), versionText(v.Current), v.Wanted, v.Latest}
 		for i := range row {
-			if row[i] == "" {
+			if i >= 2 && row[i] == "" {
 				row[i] = "-"
 			}
 		}
@@ -94,4 +94,26 @@ func outdatedTable(report features.VersionReport) string {
 		lines[j] = b.String()
 	}
 	return strings.Join(lines, "\n")
+}
+
+// versionText uses JavaScript string conversion for the text report cells.
+func versionText(value any) string {
+	switch v := value.(type) {
+	case nil:
+		return "-"
+	case string:
+		return v
+	case []any:
+		parts := make([]string, len(v))
+		for i, item := range v {
+			if item != nil {
+				parts[i] = versionText(item)
+			}
+		}
+		return strings.Join(parts, ",")
+	case map[string]any:
+		return "[object Object]"
+	default:
+		return fmt.Sprint(v)
+	}
 }

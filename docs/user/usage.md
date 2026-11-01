@@ -1141,7 +1141,9 @@ highest published full semver regardless of the configured tag. Major and minor
 alias tags are excluded from the version list. Digest references use the locked
 version, then manifest metadata, then metadata in the first Feature layer.
 Local paths and identifiers that cannot be versioned are omitted. Unavailable
-or malformed registry tag lists leave version fields unavailable.
+or syntactically invalid registry tag responses leave version fields unavailable.
+A valid response with a non-array tags value fails the operation when that value
+is truthy, as upstream does.
 
 Discovery checks `.devcontainer/devcontainer.json`, then `.devcontainer.json` in
 `--workspace-folder` (default current folder). `--config` is relative to the
