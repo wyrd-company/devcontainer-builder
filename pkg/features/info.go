@@ -62,7 +62,11 @@ func Info(client *oci.Client, mode, identifier, format string) (string, error) {
 	if mode == "manifest" || mode == "verbose" {
 		canonical := ref.Registry + "/" + ref.Repository + "@" + digest
 		if format == "text" {
-			fmt.Fprintf(&text, "%s\n%s\n\n%s\n%s\n\n", infoBox("Manifest"), infoPretty(body, 2), infoBox("Canonical Identifier"), canonical)
+			pretty, e := infoPretty(body, 2)
+			if e != nil {
+				return "", e
+			}
+			fmt.Fprintf(&text, "%s\n%s\n\n%s\n%s\n\n", infoBox("Manifest"), pretty, infoBox("Canonical Identifier"), canonical)
 		} else {
 			fields = append(fields, infoField{"manifest", body}, infoField{"canonicalId", infoJSON(canonical)})
 		}
@@ -93,7 +97,7 @@ func Info(client *oci.Client, mode, identifier, format string) (string, error) {
 			}
 			fmt.Fprintf(&text, "%s\n%s\n", infoBox("Published Tags"), strings.Join(rendered, "\n   "))
 		} else {
-			fields = append(fields, infoField{"publishedTags", infoNormalize(collectiondocs.ReadJSONCValue(tags))})
+			fields = append(fields, infoField{"publishedTags", infoNormalize(tags)})
 		}
 	}
 	if (mode == "dependencies" || mode == "verbose") && format == "text" {
@@ -104,7 +108,11 @@ func Info(client *oci.Client, mode, identifier, format string) (string, error) {
 		fmt.Fprintf(&text, "%s\n%s\n", infoBox("Dependency Tree (Render with https://mermaid.live/)"), diagram)
 	}
 	if format == "json" {
-		return infoPretty(infoObject(fields...), 4) + "\n", nil
+		pretty, e := infoPretty(infoObject(fields...), 4)
+		if e != nil {
+			return "", e
+		}
+		return pretty + "\n", nil
 	}
 	return text.String(), nil
 }
@@ -140,7 +148,7 @@ func infoManifest(c *oci.Client, ref oci.Reference) (json.RawMessage, string, er
 	if m.Config.MediaType != "application/vnd.devcontainers" {
 		return nil, "", ErrInfoUnavailable
 	}
-	return infoNormalize(collectiondocs.ReadJSONCValue(body)), digest, nil
+	return infoNormalize(body), digest, nil
 }
 
 type infoField struct {
@@ -150,9 +158,7 @@ type infoField struct {
 
 func infoJSON(v any) json.RawMessage { b, _ := json.Marshal(v); return infoNormalize(b) }
 func infoNormalize(b []byte) json.RawMessage {
-	b = bytes.ReplaceAll(b, []byte(`\u003c`), []byte("<"))
-	b = bytes.ReplaceAll(b, []byte(`\u003e`), []byte(">"))
-	return bytes.ReplaceAll(b, []byte(`\u0026`), []byte("&"))
+	return collectiondocs.StringifyJSONCValue(b)
 }
 func infoObject(fields ...infoField) json.RawMessage {
 	var b bytes.Buffer
@@ -168,10 +174,12 @@ func infoObject(fields ...infoField) json.RawMessage {
 	b.WriteByte('}')
 	return b.Bytes()
 }
-func infoPretty(b []byte, n int) string {
+func infoPretty(b []byte, n int) (string, error) {
 	var out bytes.Buffer
-	_ = json.Indent(&out, b, "", strings.Repeat(" ", n))
-	return out.String()
+	if err := json.Indent(&out, b, "", strings.Repeat(" ", n)); err != nil {
+		return "", err
+	}
+	return out.String(), nil
 }
 func infoBox(s string) string {
 	return "┌" + strings.Repeat("─", len(s)) + "┐\n│\x1b[1m" + s + "\x1b[22m│\n└" + strings.Repeat("─", len(s)) + "┘"
@@ -243,7 +251,7 @@ func infoGraph(c *oci.Client, id string) (string, error) {
 		var m Metadata
 		_ = json.Unmarshal(meta, &m)
 		for _, dep := range m.DependsOn.Keys {
-			d := &infoNode{id: dep, kind: "resolved", options: infoNormalize(collectiondocs.ReadJSONCValue(m.DependsOn.Values[dep]))}
+			d := &infoNode{id: dep, kind: "resolved", options: infoNormalize(m.DependsOn.Values[dep])}
 			n.hard = append(n.hard, d)
 			queue = append(queue, d)
 		}
@@ -299,7 +307,7 @@ func (n *infoNode) load(c *oci.Client, merge bool) (json.RawMessage, error) {
 	_ = json.Unmarshal(body, &manifest)
 	meta := json.RawMessage(nil)
 	if annotation := manifest.Annotations["dev.containers.metadata"]; annotation != "" {
-		meta = collectiondocs.ReadJSONCValue([]byte(annotation))
+		meta = infoNormalize([]byte(annotation))
 	} else {
 		dir, e := os.MkdirTemp("", "dcb-feature-info-")
 		if e != nil {
@@ -316,7 +324,7 @@ func (n *infoNode) load(c *oci.Client, merge bool) (json.RawMessage, error) {
 		if e != nil {
 			return nil, e
 		}
-		meta = collectiondocs.ReadJSONCValue(b)
+		meta = infoNormalize(b)
 	}
 	var metadata Metadata
 	_ = json.Unmarshal(meta, &metadata)
@@ -390,7 +398,7 @@ func (n *infoNode) loadTarball(c *oci.Client, merge bool) (json.RawMessage, erro
 	if err != nil {
 		return nil, err
 	}
-	meta := collectiondocs.ReadJSONCValue(data)
+	meta := infoNormalize(data)
 	var metadata Metadata
 	_ = json.Unmarshal(meta, &metadata)
 	n.aliases = metadata.aliases()
