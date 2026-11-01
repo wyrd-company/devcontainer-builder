@@ -186,13 +186,15 @@ func infoBox(s string) string {
 }
 
 type infoNode struct {
-	plainSet   json.RawMessage
-	id, kind   string
-	options    json.RawMessage
-	set        json.RawMessage
-	aliases    []string
-	hard, soft []*infoNode
-	compare    *node
+	configPath, workspace, integrity string
+	priority                         int
+	plainSet                         json.RawMessage
+	id, kind                         string
+	options                          json.RawMessage
+	set                              json.RawMessage
+	aliases                          []string
+	hard, soft                       []*infoNode
+	compare                          *node
 }
 
 func (n *infoNode) raw() json.RawMessage {
@@ -207,7 +209,7 @@ func (n *infoNode) raw() json.RawMessage {
 	if n.kind != "user-provided" && n.set != nil {
 		fields = append(fields, infoField{"featureSet", n.set})
 	}
-	fields = append(fields, infoField{"dependsOn", infoJSON(hard)}, infoField{"installsAfter", infoJSON(soft)}, infoField{"roundPriority", infoJSON(0)})
+	fields = append(fields, infoField{"dependsOn", infoJSON(hard)}, infoField{"installsAfter", infoJSON(soft)}, infoField{"roundPriority", infoJSON(n.priority)})
 	if n.kind == "user-provided" && n.set != nil {
 		fields = append(fields, infoField{"featureSet", n.set})
 	}
@@ -222,7 +224,7 @@ func (n *infoNode) label() string {
 	if len(n.aliases) > 0 {
 		aliases = "<br>aliases: " + strings.Join(n.aliases, ", ")
 	}
-	return fmt.Sprintf("%x[%s<br/><0>%s]", sum[:3], n.id, aliases)
+	return fmt.Sprintf("%x[%s<br/><%d>%s]", sum[:3], n.id, n.priority, aliases)
 }
 
 func infoGraph(c *oci.Client, id string) (string, error) {
@@ -292,6 +294,9 @@ func infoGraph(c *oci.Client, id string) (string, error) {
 	return out.String(), nil
 }
 func (n *infoNode) load(c *oci.Client, merge bool) (json.RawMessage, error) {
+	if n.configPath != "" && (strings.HasPrefix(n.id, ".") || filepath.IsAbs(n.id)) {
+		return n.loadLocal(merge)
+	}
 	if strings.HasPrefix(n.id, "https://") && strings.HasSuffix(n.id, ".tgz") {
 		return n.loadTarball(c, merge)
 	}
@@ -299,7 +304,12 @@ func (n *infoNode) load(c *oci.Client, merge bool) (json.RawMessage, error) {
 	if !ok {
 		return nil, fmt.Errorf("Feature '%s' could not be processed", n.id)
 	}
-	body, digest, err := infoManifest(c, ref)
+	fetchRef := ref
+	if n.integrity != "" {
+		fetchRef.Tag = ""
+		fetchRef.Digest = n.integrity
+	}
+	body, digest, err := infoManifest(c, fetchRef)
 	if err != nil {
 		return nil, err
 	}
@@ -390,8 +400,11 @@ func (n *infoNode) loadTarball(c *oci.Client, merge bool) (json.RawMessage, erro
 	}
 	defer os.RemoveAll(dir)
 	r := &Resolver{OCI: c}
-	_, err = r.resolveTarball(context.Background(), n.id, nil, dir, "", "")
+	_, err = r.resolveTarball(context.Background(), n.id, nil, dir, "", n.integrity)
 	if err != nil {
+		if n.configPath != "" {
+			return nil, nil
+		} // Reporting keeps an unexpanded archive node when metadata retrieval fails.
 		return nil, err
 	}
 	data, err := os.ReadFile(filepath.Join(dir, "devcontainer-feature.json"))

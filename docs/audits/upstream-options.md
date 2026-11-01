@@ -25,13 +25,13 @@ including inherited help/version on each command. It records short aliases but
 scores each canonical long option once. It never subtracts omissions. Registration
 coverage is distinct from behavior parity and does not use these dispositions.
 The pinned `up` table has **44 explicit options**, plus inherited help/version.
-Registered option coverage is **192/253 (75.89%)**;
+Registered option coverage is **196/253 (77.47%)**;
 registration includes the three implemented session-folder pairs.
 
 ## Dispositions
 
-- implemented: **192**.
-- implement: **45**.
+- implemented: **196**.
+- implement: **41**.
 - not applicable by design: **15**.
 - needs Bob's decision: **1**.
 
@@ -134,8 +134,9 @@ containerCollectionsOCI.ts:562.
 
 All 18 upstream leaf commands are included below, with the root and two command
 groups. `dcb features` resolves/stages a configuration; it does not cover upstream's
-feature authoring commands other than `features package` and
-`features generate-docs`, and `features info`. The `templates` group
+feature authoring commands other than `features package`,
+`features generate-docs`, `features info`, and `features resolve-dependencies`.
+The `templates` group
 supports metadata and generate-docs. `outdated` reports Feature versions.
 `upgrade` and the other upstream `features` children are absent.
 
@@ -304,12 +305,20 @@ cover the behavior; the external pinned-CLI workflow comparison checks artifacts
 
 ### features resolve-dependencies
 
+`features.ResolveDependencies` discovers the reporting configuration, substitutes
+values, and uses the native OCI client, local metadata and HTTPS archives.
+The graph shares the `features info` node serialization and hashes. Installation
+rounds preserve hard and soft dependencies, aliases, duplicates, scalar options,
+lockfile integrity and override priorities. Cycles print the graph before failure.
+`TestResolveDependencies*` and `TestFeatureDependenciesCommand` cover the workflow;
+the fresh external differential harness compares exact stdout and exit status.
+
 | Upstream option | dcb equivalent | Disposition | Unit | Reason / source |
 | --- | --- | --- | --- | --- |
-| --log-level | none | implement | feature-dependencies | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: featuresCLI/resolveDependencies.ts:32. |
-| --workspace-folder | none | implement | feature-dependencies | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: featuresCLI/resolveDependencies.ts:33. |
-| --help | none | implement | feature-dependencies | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: yargs built-in help. |
-| --version | version command | implement | sibling-unit | dcb registers --version on every command; this command is not implemented yet. Source: devContainersSpecCLI.ts (.version). |
+| --log-level | --log-level | implemented | feature-dependencies | Registered for the dependency reporting workflow. Source: featuresCLI/resolveDependencies.ts:32. |
+| --workspace-folder | --workspace-folder | implemented | feature-dependencies | Registered for the dependency reporting workflow. Source: featuresCLI/resolveDependencies.ts:33. |
+| --help | --help | implemented | feature-dependencies | Registered for the dependency reporting workflow. Source: yargs built-in help. |
+| --version | version command | implemented | sibling-unit | dcb registers --version on every command; this command reports the CLI version. Source: devContainersSpecCLI.ts (.version). |
 
 ### features test
 
@@ -567,3 +576,8 @@ upstream collection parser semantics. The command reads no layers.
 | --target-version (-v) [hidden] | none | implement | upgrade | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: upgradeCommand.ts:34. |
 | --help | none | implement | upgrade | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: yargs built-in help. |
 | --version | version command | implement | sibling-unit | dcb registers --version on every command; this command is not implemented yet. Source: devContainersSpecCLI.ts (.version). |
+
+Dependency reporting follows the upstream HTTPS metadata fallback: retrieval or
+integrity failure leaves an unexpanded archive node. OCI digest mismatch fails
+resolution. Locale collation applies to installation ordering; object option
+keys retain JavaScript's sorted-key comparison and output insertion order.

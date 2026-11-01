@@ -135,10 +135,10 @@ func (a *node) equals(b *node) bool {
 func compareNodes(a, b *node) int {
 	ar, br := a.ref(), b.ref()
 	if ar.local != br.local {
-		return strings.Compare(a.res.Source, b.res.Source)
+		return compareFeatureStrings(a.res.Source, b.res.Source)
 	}
 	if ar.local {
-		if c := strings.Compare(ar.resource, br.resource); c != 0 {
+		if c := compareFeatureStrings(ar.resource, br.resource); c != 0 {
 			return c
 		}
 		return compareOptions(a.optionsValue, b.optionsValue)
@@ -152,17 +152,17 @@ func compareNodes(a, b *node) int {
 	}
 	at, bt := a.res.Reference.Tag, b.res.Reference.Tag
 	if at != "" && bt != "" && at != bt {
-		return strings.Compare(at, bt)
+		return compareFeatureStrings(at, bt)
 	}
 	if c := compareOptions(a.optionsValue, b.optionsValue); c != 0 {
 		return c
 	}
-	return strings.Compare(ad, bd)
+	return compareFeatureStrings(ad, bd)
 }
 
 func compareOCIResource(a, b *node) int {
 	ar, br := a.ref().resource, b.ref().resource
-	if c := strings.Compare(path.Dir(ar), path.Dir(br)); c != 0 {
+	if c := compareFeatureStrings(path.Dir(ar), path.Dir(br)); c != 0 {
 		return c
 	}
 	aIDs, bIDs := a.aliases(), b.aliases()
@@ -179,7 +179,7 @@ func compareOCIResource(a, b *node) int {
 			}
 		}
 	}
-	return strings.Compare(path.Base(ar), path.Base(br))
+	return compareFeatureStrings(path.Base(ar), path.Base(br))
 }
 
 // linkSoftDependencies records each node's installsAfter entries that

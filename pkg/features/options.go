@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
-	"strings"
+
+	"golang.org/x/text/collate"
+	"golang.org/x/text/language"
 )
 
 // compareOptions mirrors upstream's optionsCompareTo: strings and
@@ -15,7 +17,7 @@ func compareOptions(a, b any) int {
 	switch av := a.(type) {
 	case string:
 		if bv, ok := b.(string); ok {
-			return strings.Compare(av, bv)
+			return compareFeatureStrings(av, bv)
 		}
 	case bool:
 		if bv, ok := b.(bool); ok {
@@ -26,7 +28,7 @@ func compareOptions(a, b any) int {
 			return compareOptionObjects(av, bv)
 		}
 	}
-	return strings.Compare(jsTypeOf(a), jsTypeOf(b))
+	return compareFeatureStrings(jsTypeOf(a), jsTypeOf(b))
 }
 
 func compareOptionObjects(a, b map[string]any) int {
@@ -36,12 +38,12 @@ func compareOptionObjects(a, b map[string]any) int {
 	aKeys, bKeys := sortedKeys(a), sortedKeys(b)
 	for i := range aKeys {
 		if aKeys[i] != bKeys[i] {
-			return strings.Compare(aKeys[i], bKeys[i])
+			return compareFeatureStrings(aKeys[i], bKeys[i])
 		}
 		switch av := a[aKeys[i]].(type) {
 		case string:
 			if bv, ok := b[bKeys[i]].(string); ok {
-				if c := strings.Compare(av, bv); c != 0 {
+				if c := compareFeatureStrings(av, bv); c != 0 {
 					return c
 				}
 			}
@@ -121,3 +123,6 @@ func parseOptions(raw json.RawMessage) (opts map[string]any, scalar bool, err er
 	}
 	return opts, false, nil
 }
+
+// compareFeatureStrings follows the upstream CLI default English collation.
+func compareFeatureStrings(a, b string) int { return collate.New(language.English).CompareString(a, b) }
