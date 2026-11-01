@@ -12,8 +12,8 @@ commit and does not start another build.
 ## Build and publish
 
 The compatibility job proves the package-publisher contract. The build job
-builds, stages and verifies all outputs, then retains the complete `dist`
-bundle for 90 days. It also retains the separate package handoff manifest.
+builds, stages and verifies all outputs, then retains all publication-ready archives, packages, npm tarballs and
+metadata for 90 days. It also retains the separate package handoff manifest.
 
 The publication job downloads those exact bytes. A failed publication job can
 be rerun with **Re-run failed jobs**. The successful build and compatibility

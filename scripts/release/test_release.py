@@ -515,7 +515,7 @@ class IdentityTests(unittest.TestCase):
         producer = next(s for s in build if s.get("with", {}).get("name") == "package-release-manifest")
         bundle = next(s for s in build if s.get("with", {}).get("name") == "release-bundle")
         consumer = next(s for s in steps if s.get("with", {}).get("name") == "release-bundle")
-        self.assertEqual(bundle["with"]["path"], "dist/")
+        self.assertEqual(set(bundle["with"]["path"].splitlines()), {"dist/*.tar.gz", "dist/*.deb", "dist/*.rpm", "dist/checksums.txt", "dist/release-manifest.json", "dist/release-notes.md", "dist/dcb.rb", "dist/npm/tarballs/*.tgz"})
         self.assertEqual(consumer["with"]["path"], "dist")
         self.assertLess(steps.index(consumer), next(i for i,s in enumerate(steps) if s.get("run") == "task release:github"))
         receipt = next(s for s in steps if s.get("with", {}).get("name") == "npm-publication-receipts")
