@@ -74,32 +74,22 @@ func ResolveDependencies(client *oci.Client, workspace string) (string, error) {
 	ctx := substitute.Context{LocalWorkspaceFolder: workspace, LocalEnv: env}
 	var containerFolder string
 	_ = json.Unmarshal(document.Values["workspaceFolder"], &containerFolder)
-	if _, compose := document.Values["dockerComposeFile"]; !compose && containerFolder == "" {
-		containerFolder = "/workspaces/" + filepath.Base(workspace)
+	if _, compose := document.Values["dockerComposeFile"]; containerFolder == "" {
+		if compose {
+			containerFolder = "/"
+		} else {
+			containerFolder = "/workspaces/" + filepath.Base(workspace)
+		}
 	}
 	ctx.ContainerWorkspaceFolder = containerFolder
-	var subst func(json.RawMessage) json.RawMessage
-	subst = func(raw json.RawMessage) json.RawMessage {
-		var s string
-		if len(raw) > 0 && raw[0] == '"' && json.Unmarshal(raw, &s) == nil {
-			return infoJSON(substitute.Substitute(ctx, s))
-		}
-		var obj spec.OrderedMap
-		if len(raw) > 0 && raw[0] == '{' && json.Unmarshal(raw, &obj) == nil {
-			fields := []infoField{}
-			for _, k := range obj.Keys {
-				fields = append(fields, infoField{k, subst(obj.Values[k])})
+	ctx.ContainerWorkspaceFolder = substitute.Substitute(ctx, containerFolder)
+	subst := func(raw json.RawMessage) json.RawMessage {
+		return collectiondocs.TransformJSONStrings(raw, func(s string) string {
+			if ctx.ContainerWorkspaceFolder == "/" {
+				s = strings.ReplaceAll(s, "${containerWorkspaceFolderBasename}", "")
 			}
-			return infoObject(fields...)
-		}
-		var arr []json.RawMessage
-		if len(raw) > 0 && raw[0] == '[' && json.Unmarshal(raw, &arr) == nil {
-			for i := range arr {
-				arr[i] = subst(arr[i])
-			}
-			return infoJSON(arr)
-		}
-		return raw
+			return substitute.Substitute(ctx, s)
+		})
 	}
 	for _, id := range config.Features.Keys {
 		config.Features.Values[id] = subst(config.Features.Values[id])
@@ -156,11 +146,12 @@ func ResolveDependencies(client *oci.Client, workspace string) (string, error) {
 		}
 		if duplicate {
 			n.aliases = nil
+			n.aliasesValue = nil
 			n.set = n.plainSet
 			continue
 		}
 		var m Metadata
-		if len(meta) > 0 {
+		if len(meta) > 0 && meta[0] != '[' {
 			if e = json.Unmarshal(meta, &m); e != nil {
 				return "", e
 			}
@@ -326,10 +317,12 @@ func (n *infoNode) loadLocal(merge bool) (json.RawMessage, error) {
 	}
 	meta := collectiondocs.StringifyJSONCValue(data)
 	var m Metadata
-	if err = json.Unmarshal(meta, &m); err != nil {
-		return nil, err
+	if len(meta) > 0 && meta[0] != '[' {
+		if err = json.Unmarshal(meta, &m); err != nil {
+			return nil, err
+		}
 	}
-	n.aliases = m.aliases()
+	n.setReportAliases(meta, m)
 	n.compare.res.Metadata = m
 	var a, b spec.OrderedMap
 	_ = json.Unmarshal(feature, &a)
