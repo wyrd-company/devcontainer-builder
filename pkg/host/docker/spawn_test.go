@@ -47,16 +47,12 @@ func TestParseMountString_NoTargetReturnsNil(t *testing.T) {
 	}
 }
 
-func TestParseMountObject_ReadonlyBool(t *testing.T) {
-	got := parseMountObject(map[string]any{
-		"type":     "bind",
-		"source":   "/host/secrets",
-		"target":   "/run/secrets",
-		"readonly": true,
-	})
-	want := &mount.Mount{Type: mount.TypeBind, Source: "/host/secrets", Target: "/run/secrets", ReadOnly: true}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("parseMountObject readonly:\n got  %+v\n want %+v", got, want)
+func TestBuildContainerConfigRejectsObjectMountExtensions(t *testing.T) {
+	for _, key := range []string{"readOnly", "readonly", "ro", "external", "consistency", "destination"} {
+		dc := &spec.DevContainer{Mounts: []any{map[string]any{"type": "bind", "source": "/host/data", "target": "/data", key: true}}}
+		if _, _, _, err := buildContainerConfig(dc, nil, "alpine", "/workspace", "/sample", ""); err == nil || !strings.Contains(err.Error(), key) {
+			t.Fatalf("%s: %v", key, err)
+		}
 	}
 }
 

@@ -59,7 +59,11 @@ func runtimeMetadata(dc *spec.DevContainer, entries []metadata.Entry, ctx substi
 	if err != nil {
 		return metadata.Merged{}, errorf("substitute image metadata: %w", err)
 	}
-	return metadata.Merge(substituteSpec(dc, ctx), entries), nil
+	merged := metadata.Merge(substituteSpec(dc, ctx), entries)
+	if err := merged.DevContainer.ValidateMounts(); err != nil {
+		return metadata.Merged{}, err
+	}
+	return merged, nil
 }
 
 // applyPrimaryMetadata adds the merged devcontainer settings to the native

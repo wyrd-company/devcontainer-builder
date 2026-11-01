@@ -89,6 +89,14 @@ identity labels. To replace an existing container with the configured name, use
 `dcb up --remove-existing-container`. A name held by another container is an error;
 dcb does not remove that container.
 
+Mount objects follow the Dev Container specification: `type` (`bind` or
+`volume`) and `target` are required strings; `source` is an optional string.
+Other object properties are errors. For a read-only bind mount, use a string:
+
+```json
+"mounts": ["type=bind,source=/host/data,target=/data,readonly"]
+```
+
 ## Image metadata
 
 `dcb build` and `dcb up` write the `devcontainer.metadata` label on the image

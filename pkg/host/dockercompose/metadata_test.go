@@ -75,7 +75,7 @@ func TestComposeMetadataRuntimeMappings(t *testing.T) {
 	for _, native := range []bool{false, true} {
 		t.Run(map[bool]string{false: "metadata", true: "native-or-union"}[native], func(t *testing.T) {
 			var entries []metadata.Entry
-			label := `[{"init":true,"privileged":true,"capAdd":["SYS_PTRACE"],"securityOpt":["no-new-privileges"],"containerUser":"${localEnv:USER}","remoteUser":"root","containerEnv":{"FROM_META":"${localEnv:VALUE}","PRIORITY":"metadata"},"remoteEnv":{"REMOTE":"remote"},"entrypoint":"echo ${localEnv:VALUE}","mounts":[{"type":"volume","source":"sample-cache","target":"/cache","readOnly":true},"type=bind,src=${localWorkspaceFolder},dst=/bind,consistency=cached,ro"]}]`
+			label := `[{"init":true,"privileged":true,"capAdd":["SYS_PTRACE"],"securityOpt":["no-new-privileges"],"containerUser":"${localEnv:USER}","remoteUser":"root","containerEnv":{"FROM_META":"${localEnv:VALUE}","PRIORITY":"metadata"},"remoteEnv":{"REMOTE":"remote"},"entrypoint":"echo ${localEnv:VALUE}","mounts":["type=volume,source=sample-cache,target=/cache,readonly","type=bind,src=${localWorkspaceFolder},dst=/bind,consistency=cached,ro"]}]`
 			entries, _ = metadata.Parse(label)
 			if native {
 				falsity := false

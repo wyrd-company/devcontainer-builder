@@ -156,6 +156,9 @@ func parseMountString(s, nameOverride string) (*corev1.Volume, *corev1.VolumeMou
 }
 
 func parseMountObject(o map[string]any, nameOverride string) (*corev1.Volume, *corev1.VolumeMount, error) {
+	if err := (&spec.DevContainer{Mounts: []any{o}}).ValidateMounts(); err != nil {
+		return nil, nil, err
+	}
 	mf := mountFields{}
 	for k, raw := range o {
 		switch k {
@@ -167,13 +170,9 @@ func parseMountObject(o map[string]any, nameOverride string) (*corev1.Volume, *c
 			if s, ok := raw.(string); ok {
 				mf.source = s
 			}
-		case "target", "destination":
+		case "target":
 			if s, ok := raw.(string); ok {
 				mf.target = s
-			}
-		case "readonly":
-			if b, ok := raw.(bool); ok {
-				mf.readOnly = b
 			}
 		}
 	}

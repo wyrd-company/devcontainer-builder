@@ -113,6 +113,9 @@ func buildContainerConfig(
 }
 
 func buildContainerConfigWithEntrypoints(dc *spec.DevContainer, resolved []features.Resolved, entrypoints []string, image, containerWorkspaceFolder, localFolder, configFilePath string) (*container.Config, *container.HostConfig, string, error) {
+	if err := dc.ValidateMounts(); err != nil {
+		return nil, nil, "", err
+	}
 	// Features first, then the spec, so the spec wins (upstream order).
 	var envSlice []string
 	for _, f := range resolved {
@@ -257,16 +260,6 @@ func parseMountString(s string) *mount.Mount {
 func parseMountObject(o map[string]any) *mount.Mount {
 	m := &mount.Mount{}
 	for k, raw := range o {
-		switch k {
-		case "readonly", "readOnly":
-			switch v := raw.(type) {
-			case bool:
-				m.ReadOnly = v
-			case string:
-				m.ReadOnly = v == "" || v == "true" || v == "1"
-			}
-			continue
-		}
 		s, ok := raw.(string)
 		if !ok {
 			continue
@@ -276,10 +269,8 @@ func parseMountObject(o map[string]any) *mount.Mount {
 			m.Type = mount.Type(s)
 		case "source":
 			m.Source = s
-		case "target", "destination":
+		case "target":
 			m.Target = s
-		case "consistency":
-			m.Consistency = mount.Consistency(s)
 		}
 	}
 	if m.Type == "" {
