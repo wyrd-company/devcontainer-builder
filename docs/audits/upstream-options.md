@@ -25,13 +25,13 @@ including inherited help/version on each command. It records short aliases but
 scores each canonical long option once. It never subtracts omissions. Registration
 coverage is distinct from behavior parity and does not use these dispositions.
 The pinned `up` table has **44 explicit options**, plus inherited help/version.
-Registered option coverage is **172/253 (67.98%)**;
+Registered option coverage is **178/253 (70.36%)**;
 registration includes the three implemented session-folder pairs.
 
 ## Dispositions
 
-- implemented: **172**.
-- implement: **65**.
+- implemented: **178**.
+- implement: **59**.
 - not applicable by design: **15**.
 - needs Bob's decision: **1**.
 
@@ -461,12 +461,17 @@ when markers skip commands. Source: `injectHeadless.ts:364-410` and
 
 | Upstream option | dcb equivalent | Disposition | Unit | Reason / source |
 | --- | --- | --- | --- | --- |
-| --project-folder (-p) | none | implement | template-docs | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: templatesCLI/generateDocs.ts:13. |
-| --github-owner | none | implement | template-docs | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: templatesCLI/generateDocs.ts:14. |
-| --github-repo | none | implement | template-docs | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: templatesCLI/generateDocs.ts:15. |
-| --log-level | none | implement | template-docs | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: templatesCLI/generateDocs.ts:16. |
-| --help | none | implement | template-docs | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: yargs built-in help. |
-| --version | version command | implement | sibling-unit | dcb registers --version on every command; this command is not implemented yet. Source: devContainersSpecCLI.ts (.version). |
+| --project-folder (-p) | --project-folder (-p) | implemented | template-docs | Direct child collection folder, default dot. Source: templatesCLI/generateDocs.ts:13. |
+| --github-owner | --github-owner | implemented | template-docs | Metadata link owner, default empty. Source: templatesCLI/generateDocs.ts:14. |
+| --github-repo | --github-repo | implemented | template-docs | Metadata link repository, default empty. Source: templatesCLI/generateDocs.ts:15. |
+| --log-level | --log-level | implemented | template-docs | Diagnostic level. Source: templatesCLI/generateDocs.ts:16. |
+| --help | --help | implemented | template-docs | Command help. Source: yargs built-in help. |
+| --version | --version | implemented | sibling-unit | Inherited version. Source: devContainersSpecCLI.ts (.version). |
+
+The shared library renderer preserves Template README bytes, ordered JSONC
+options, notes, metadata links, skipped entries, deprecation headers, and symlink
+replacement. Template success leaves stdout empty. The pinned upstream registers
+no standalone `templates package` command; publishing packages Templates.
 
 ### templates metadata
 

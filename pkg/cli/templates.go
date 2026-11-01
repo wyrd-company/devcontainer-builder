@@ -31,6 +31,6 @@ func (a *application) templatesCommand() *cobra.Command {
 			return err
 		},
 	}
-	group.AddCommand(metadata)
+	group.AddCommand(metadata, a.templatesDocumentationCommand())
 	return group
 }

@@ -71,6 +71,7 @@ dcb generate --workspace-folder . --work-dir ./generated
 dcb features --workspace-folder . --out ./staged-features
 dcb features package ./src --output-folder ./packaged
 dcb features generate-docs -p ./src -n example/collection
+dcb templates generate-docs -p ./templates
 dcb server --out ./server --platform linux/amd64
 ```
 
@@ -235,3 +236,7 @@ remain. `up --omit-config-remote-env-from-metadata` omits configuration remoteEn
 from new metadata labels; remoteEnv persists by default and remains available to
 runtime commands. `build --omit-syntax-directive` and `up --omit-syntax-directive`
 ignore authored syntax directives and omit generated directives.
+
+`templates generate-docs` writes README.md in visible Template child folders from
+`devcontainer-template.json` and optional NOTES.md. It uses `-p` (default `.`),
+`--github-owner`, and `--github-repo`; success leaves stdout empty.

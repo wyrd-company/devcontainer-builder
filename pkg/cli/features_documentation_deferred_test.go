@@ -1,6 +1,6 @@
 // relationships:
 //
-// references: [features_documentation, options_boolean, ../features/testdata/documentation/deferred-pinned]
+// references: [features_documentation, options_boolean, ../../internal/collectiondocs/testdata/documentation/deferred-pinned]
 package cli
 
 import (
@@ -16,7 +16,7 @@ import (
 // The same pinned filesystem oracle also covers empty collections, skips,
 // metadata errors, unused link fields, and completed or preserved siblings.
 func TestFeaturesDocumentationDeferredValues(t *testing.T) {
-	data, err := os.ReadFile("../features/testdata/documentation/deferred-pinned.json")
+	data, err := os.ReadFile("../../internal/collectiondocs/testdata/documentation/deferred-pinned.json")
 	if err != nil {
 		t.Fatal(err)
 	}

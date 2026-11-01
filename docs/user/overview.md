@@ -51,7 +51,7 @@ Differences from upstream:
 | Docker only. | Docker, or Podman through `--docker-path`. |
 | Can install the VS Code server into the image at build time. | The editor installs the server when it attaches. |
 | Adds `down`, `inspect`, `generate`, `server`, and `skills`. | Adds `outdated`, `upgrade`, and `templates`. |
-| `dcb features` stages configuration Features; `features package` packages local Features; `features generate-docs` writes local Feature READMEs. | `features` also tests, publishes, and reports Feature information. |
+| `dcb features` stages configuration Features; `features package` packages local Features; `features generate-docs` writes local Feature READMEs; `templates generate-docs` writes local Template READMEs. | `features` also tests, publishes, and reports Feature information. |
 
 ### Process credentials
 
