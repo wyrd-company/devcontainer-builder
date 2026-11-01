@@ -50,6 +50,9 @@ func Metadata(client *oci.Client, identifier string) (json.RawMessage, error) {
 			return nil, fmt.Errorf("Template manifest does not match its digest")
 		}
 	}
+	if strings.TrimSpace(string(body)) == "null" {
+		return nil, fmt.Errorf("%w: null manifest", ErrUnavailable)
+	}
 	var shape struct {
 		Config json.RawMessage `json:"config"`
 	}
