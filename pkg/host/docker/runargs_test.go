@@ -19,7 +19,7 @@ func applyForTest(t *testing.T, args []string) (*container.Config, *container.Ho
 	t.Helper()
 	cfg := &container.Config{}
 	host := &container.HostConfig{}
-	if err := applyRunArgs(args, cfg, host); err != nil {
+	if _, err := applyRunArgs(args, cfg, host); err != nil {
 		t.Fatalf("applyRunArgs(%v): %v", args, err)
 	}
 	return cfg, host
@@ -316,14 +316,27 @@ func TestApplyRunArgs_Ulimits(t *testing.T) {
 	}
 }
 
-func TestApplyRunArgs_NameIgnored(t *testing.T) {
-	// --name must parse but not affect cfg/host (we manage naming via labels).
-	cfg, host := applyForTest(t, []string{"--name", "my-dev", "--init"})
-	if cfg.Hostname != "" {
-		t.Errorf("--name should not become hostname: %q", cfg.Hostname)
-	}
-	if host.Init == nil || !*host.Init {
-		t.Errorf("--init after --name: not parsed")
+func TestApplyRunArgs_Name(t *testing.T) {
+	for _, tc := range []struct {
+		args []string
+		want string
+	}{
+		{nil, ""},
+		{[]string{"--name", "sample-dev", "--init"}, "sample-dev"},
+		{[]string{"--name=sample-dev", "--init"}, "sample-dev"},
+		{[]string{"--name=first", "--name", "second", "--init"}, "second"},
+	} {
+		cfg, host := &container.Config{}, &container.HostConfig{}
+		name, err := applyRunArgs(tc.args, cfg, host)
+		if err != nil || name != tc.want {
+			t.Fatalf("applyRunArgs(%v) = %q, %v; want %q", tc.args, name, err, tc.want)
+		}
+		if cfg.Hostname != "" {
+			t.Fatalf("name became hostname: %q", cfg.Hostname)
+		}
+		if len(tc.args) > 0 && (host.Init == nil || !*host.Init) {
+			t.Fatal("flag after name was not parsed")
+		}
 	}
 }
 
@@ -361,7 +374,7 @@ func TestBuildContainerConfig_RunArgsMergesWithStructuredFields(t *testing.T) {
 		CapAdd:  []string{"SYS_PTRACE"},
 		RunArgs: []string{"--cap-add=NET_ADMIN", "--network=host"},
 	}
-	cfg, host, err := buildContainerConfig(dc, nil, "img:latest", "/w/proj", "/h/proj", "")
+	cfg, host, _, err := buildContainerConfig(dc, nil, "img:latest", "/w/proj", "/h/proj", "")
 	if err != nil {
 		t.Fatalf("buildContainerConfig: %v", err)
 	}
@@ -381,7 +394,7 @@ func TestBuildContainerConfig_RunArgsParseError(t *testing.T) {
 	dc := &spec.DevContainer{
 		RunArgs: []string{"--made-up-flag"},
 	}
-	_, _, err := buildContainerConfig(dc, nil, "img:latest", "/w/proj", "/h/proj", "")
+	_, _, _, err := buildContainerConfig(dc, nil, "img:latest", "/w/proj", "/h/proj", "")
 	if err == nil {
 		t.Fatal("expected error on unsupported flag")
 	}
@@ -392,6 +405,6 @@ func TestBuildContainerConfig_RunArgsParseError(t *testing.T) {
 func tryApply(args []string) (*container.Config, *container.HostConfig, error) {
 	cfg := &container.Config{}
 	host := &container.HostConfig{}
-	err := applyRunArgs(args, cfg, host)
+	_, err := applyRunArgs(args, cfg, host)
 	return cfg, host, err
 }

@@ -11,7 +11,7 @@ import (
 
 func TestApplyRequestIdentity(t *testing.T) {
 	build := func(dc *spec.DevContainer) ([]mount.Mount, map[string]string, func(UpRequest) ([]mount.Mount, map[string]string)) {
-		cfg, host, err := buildContainerConfig(dc, nil, "img:latest", "/workspaces/proj/app", "/host/proj/app", "/host/proj/app/.devcontainer/devcontainer.json")
+		cfg, host, _, err := buildContainerConfig(dc, nil, "img:latest", "/workspaces/proj/app", "/host/proj/app", "/host/proj/app/.devcontainer/devcontainer.json")
 		if err != nil {
 			t.Fatal(err)
 		}

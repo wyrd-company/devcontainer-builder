@@ -107,12 +107,12 @@ func buildContainerConfig(
 	dc *spec.DevContainer,
 	resolved []features.Resolved,
 	image, containerWorkspaceFolder, localFolder, configFilePath string,
-) (*container.Config, *container.HostConfig, error) {
+) (*container.Config, *container.HostConfig, string, error) {
 	merged := metadata.Merge(dc, metadata.Collect(nil, resolved, dc))
 	return buildContainerConfigWithEntrypoints(merged.DevContainer, resolved, merged.Entrypoints, image, containerWorkspaceFolder, localFolder, configFilePath)
 }
 
-func buildContainerConfigWithEntrypoints(dc *spec.DevContainer, resolved []features.Resolved, entrypoints []string, image, containerWorkspaceFolder, localFolder, configFilePath string) (*container.Config, *container.HostConfig, error) {
+func buildContainerConfigWithEntrypoints(dc *spec.DevContainer, resolved []features.Resolved, entrypoints []string, image, containerWorkspaceFolder, localFolder, configFilePath string) (*container.Config, *container.HostConfig, string, error) {
 	// Features first, then the spec, so the spec wins (upstream order).
 	var envSlice []string
 	for _, f := range resolved {
@@ -180,16 +180,15 @@ func buildContainerConfigWithEntrypoints(dc *spec.DevContainer, resolved []featu
 	host.Mounts = mounts
 
 	if err := applyPorts(dc.AppPort, cfg, host); err != nil {
-		return nil, nil, err
+		return nil, nil, "", err
 	}
 
-	if len(dc.RunArgs) > 0 {
-		if err := applyRunArgs(dc.RunArgs, cfg, host); err != nil {
-			return nil, nil, err
-		}
+	name, err := applyRunArgs(dc.RunArgs, cfg, host)
+	if err != nil {
+		return nil, nil, "", err
 	}
 
-	return cfg, host, nil
+	return cfg, host, name, nil
 }
 
 // workspaceMount returns the bind mount for the workspace, honoring

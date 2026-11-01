@@ -116,7 +116,7 @@ func TestBuildContainerConfig_ForwardPortsAreNotPublished(t *testing.T) {
 		// User also published port 5000 explicitly via runArgs.
 		RunArgs: []string{"-p", "127.0.0.1:5000:5000"},
 	}
-	cfg, host, err := buildContainerConfig(dc, nil, "img", "/w", "/h", "")
+	cfg, host, _, err := buildContainerConfig(dc, nil, "img", "/w", "/h", "")
 	if err != nil {
 		t.Fatalf("buildContainerConfig: %v", err)
 	}

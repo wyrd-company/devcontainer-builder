@@ -18,7 +18,7 @@ import (
 
 // foreignFlags are flags the documentation names for other tools: the
 // upstream CLI and the docker run vocabulary that runArgs accepts.
-var foreignFlags = map[string]bool{"--docker-path": true, "--entrypoint": true, "--cap-add": true}
+var foreignFlags = map[string]bool{"--docker-path": true, "--entrypoint": true, "--cap-add": true, "--name": true}
 
 var (
 	inlineCode = regexp.MustCompile("`([^`\n]+)`")

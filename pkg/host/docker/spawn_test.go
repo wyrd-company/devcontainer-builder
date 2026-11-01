@@ -65,7 +65,7 @@ func TestBuildContainerConfig_DefaultsAndLabels(t *testing.T) {
 		ContainerEnv:  map[string]any{"DEMO": "true"},
 		ContainerUser: "vscode",
 	}
-	cfg, host, err := buildContainerConfig(dc, nil, "img:latest", "/workspaces/proj", "/host/proj", "/host/proj/.devcontainer/devcontainer.json")
+	cfg, host, _, err := buildContainerConfig(dc, nil, "img:latest", "/workspaces/proj", "/host/proj", "/host/proj/.devcontainer/devcontainer.json")
 	if err != nil {
 		t.Fatalf("buildContainerConfig: %v", err)
 	}
@@ -111,7 +111,7 @@ func TestBuildContainerConfig_DefaultsAndLabels(t *testing.T) {
 func TestBuildContainerConfig_OverrideCommandFalsePreservesImageCommand(t *testing.T) {
 	override := false
 	dc := &spec.DevContainer{OverrideCommand: &override}
-	cfg, _, err := buildContainerConfig(dc, nil, "img:latest", "/workspaces/proj", "/host/proj", "")
+	cfg, _, _, err := buildContainerConfig(dc, nil, "img:latest", "/workspaces/proj", "/host/proj", "")
 	if err != nil {
 		t.Fatalf("buildContainerConfig: %v", err)
 	}
@@ -144,7 +144,7 @@ func TestBuildContainerConfig_FeatureEntrypointsRunBeforeKeepalive(t *testing.T)
 		{Metadata: features.Metadata{ID: "beta"}},
 		{Metadata: features.Metadata{ID: "gamma", Entrypoint: "/usr/local/share/gamma-init.sh"}},
 	}
-	cfg, _, err := buildContainerConfig(&spec.DevContainer{}, resolved, "img:latest", "/workspaces/proj", "/host/proj", "")
+	cfg, _, _, err := buildContainerConfig(&spec.DevContainer{}, resolved, "img:latest", "/workspaces/proj", "/host/proj", "")
 	if err != nil {
 		t.Fatalf("buildContainerConfig: %v", err)
 	}
@@ -164,7 +164,7 @@ func TestBuildContainerConfig_FeatureEntrypointsRunBeforeKeepalive(t *testing.T)
 func TestBuildContainerConfig_FeatureEntrypointsWrapImageCommand(t *testing.T) {
 	override := false
 	resolved := []features.Resolved{{Metadata: features.Metadata{ID: "alpha", Entrypoint: "/usr/local/share/alpha-init.sh"}}}
-	cfg, _, err := buildContainerConfig(&spec.DevContainer{OverrideCommand: &override}, resolved, "img:latest", "/workspaces/proj", "/host/proj", "")
+	cfg, _, _, err := buildContainerConfig(&spec.DevContainer{OverrideCommand: &override}, resolved, "img:latest", "/workspaces/proj", "/host/proj", "")
 	if err != nil {
 		t.Fatalf("buildContainerConfig: %v", err)
 	}
@@ -185,7 +185,7 @@ func TestBuildContainerConfig_SpecContainerEnvWinsOverFeature(t *testing.T) {
 	resolved := []features.Resolved{{Metadata: features.Metadata{
 		ContainerEnv: map[string]string{"SHARED": "feature", "FEATURE_ONLY": "yes"},
 	}}}
-	cfg, _, err := buildContainerConfig(dc, resolved, "img:latest", "/workspaces/proj", "/host/proj", "")
+	cfg, _, _, err := buildContainerConfig(dc, resolved, "img:latest", "/workspaces/proj", "/host/proj", "")
 	if err != nil {
 		t.Fatalf("buildContainerConfig: %v", err)
 	}
