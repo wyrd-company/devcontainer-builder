@@ -13,20 +13,22 @@ func TestServiceConfigHash_StableForSameInput(t *testing.T) {
 	val := "v"
 	build := func() types.ServiceConfig {
 		return types.ServiceConfig{
-			Name:        "app",
-			Image:       "alpine:3.20",
-			Command:     types.ShellCommand{"sh", "-c", "exec /entrypoint"},
-			WorkingDir:  "/srv",
-			User:        "1000:1000",
-			Environment: types.MappingWithEquals{"A": &val},
-			Volumes: []types.ServiceVolumeConfig{
-				{Type: types.VolumeTypeBind, Source: "/host", Target: "/in"},
-			},
-			Labels: types.Labels{
-				"team": "infra",
-				// Ignored:
-				"com.docker.compose.project": "should-be-stripped",
-				"devcontainer.local_folder":  "/should/be/stripped",
+			Name: "app",
+			ContainerSpec: types.ContainerSpec{
+				Image:       "alpine:3.20",
+				Command:     types.ShellCommand{"sh", "-c", "exec /entrypoint"},
+				WorkingDir:  "/srv",
+				User:        "1000:1000",
+				Environment: types.MappingWithEquals{"A": &val},
+				Volumes: []types.ServiceVolumeConfig{
+					{Type: types.VolumeTypeBind, Source: "/host", Target: "/in"},
+				},
+				Labels: types.Labels{
+					"team": "infra",
+					// Ignored:
+					"com.docker.compose.project": "should-be-stripped",
+					"devcontainer.local_folder":  "/should/be/stripped",
+				},
 			},
 		}
 	}
@@ -41,8 +43,8 @@ func TestServiceConfigHash_StableForSameInput(t *testing.T) {
 }
 
 func TestServiceConfigHash_ChangesWhenImageChanges(t *testing.T) {
-	a := serviceConfigHash(types.ServiceConfig{Name: "app", Image: "alpine:3.20"})
-	b := serviceConfigHash(types.ServiceConfig{Name: "app", Image: "alpine:3.21"})
+	a := serviceConfigHash(types.ServiceConfig{Name: "app", ContainerSpec: types.ContainerSpec{Image: "alpine:3.20"}})
+	b := serviceConfigHash(types.ServiceConfig{Name: "app", ContainerSpec: types.ContainerSpec{Image: "alpine:3.21"}})
 	if a == b {
 		t.Fatal("hash didn't change when image bumped")
 	}
@@ -51,12 +53,16 @@ func TestServiceConfigHash_ChangesWhenImageChanges(t *testing.T) {
 func TestServiceConfigHash_ChangesWhenEnvChanges(t *testing.T) {
 	v1, v2 := "1", "2"
 	a := serviceConfigHash(types.ServiceConfig{
-		Image:       "alpine",
-		Environment: types.MappingWithEquals{"FOO": &v1},
+		ContainerSpec: types.ContainerSpec{
+			Image:       "alpine",
+			Environment: types.MappingWithEquals{"FOO": &v1},
+		},
 	})
 	b := serviceConfigHash(types.ServiceConfig{
-		Image:       "alpine",
-		Environment: types.MappingWithEquals{"FOO": &v2},
+		ContainerSpec: types.ContainerSpec{
+			Image:       "alpine",
+			Environment: types.MappingWithEquals{"FOO": &v2},
+		},
 	})
 	if a == b {
 		t.Fatal("hash didn't change when env changed")
@@ -64,13 +70,15 @@ func TestServiceConfigHash_ChangesWhenEnvChanges(t *testing.T) {
 }
 
 func TestServiceConfigHash_IgnoresHostManagedLabels(t *testing.T) {
-	bare := serviceConfigHash(types.ServiceConfig{Image: "alpine"})
+	bare := serviceConfigHash(types.ServiceConfig{ContainerSpec: types.ContainerSpec{Image: "alpine"}})
 	// Adding only labels we strip should not change the hash.
 	withManaged := serviceConfigHash(types.ServiceConfig{
-		Image: "alpine",
-		Labels: types.Labels{
-			"com.docker.compose.project": "anything",
-			"devcontainer.local_folder":  "/anything",
+		ContainerSpec: types.ContainerSpec{
+			Image: "alpine",
+			Labels: types.Labels{
+				"com.docker.compose.project": "anything",
+				"devcontainer.local_folder":  "/anything",
+			},
 		},
 	})
 	if bare != withManaged {
@@ -80,17 +88,21 @@ func TestServiceConfigHash_IgnoresHostManagedLabels(t *testing.T) {
 
 func TestServiceConfigHash_VolumeOrderMatters(t *testing.T) {
 	a := serviceConfigHash(types.ServiceConfig{
-		Image: "alpine",
-		Volumes: []types.ServiceVolumeConfig{
-			{Type: types.VolumeTypeBind, Source: "/a", Target: "/x"},
-			{Type: types.VolumeTypeBind, Source: "/b", Target: "/y"},
+		ContainerSpec: types.ContainerSpec{
+			Image: "alpine",
+			Volumes: []types.ServiceVolumeConfig{
+				{Type: types.VolumeTypeBind, Source: "/a", Target: "/x"},
+				{Type: types.VolumeTypeBind, Source: "/b", Target: "/y"},
+			},
 		},
 	})
 	b := serviceConfigHash(types.ServiceConfig{
-		Image: "alpine",
-		Volumes: []types.ServiceVolumeConfig{
-			{Type: types.VolumeTypeBind, Source: "/b", Target: "/y"},
-			{Type: types.VolumeTypeBind, Source: "/a", Target: "/x"},
+		ContainerSpec: types.ContainerSpec{
+			Image: "alpine",
+			Volumes: []types.ServiceVolumeConfig{
+				{Type: types.VolumeTypeBind, Source: "/b", Target: "/y"},
+				{Type: types.VolumeTypeBind, Source: "/a", Target: "/x"},
+			},
 		},
 	})
 	if a == b {
@@ -99,7 +111,7 @@ func TestServiceConfigHash_VolumeOrderMatters(t *testing.T) {
 }
 
 func TestServiceConfigHash_ChangesWhenMountConsistencyChanges(t *testing.T) {
-	svc := types.ServiceConfig{Image: "alpine", Volumes: []types.ServiceVolumeConfig{{Type: "bind", Source: "/source", Target: "/target", Consistency: "cached"}}}
+	svc := types.ServiceConfig{ContainerSpec: types.ContainerSpec{Image: "alpine", Volumes: []types.ServiceVolumeConfig{{Type: "bind", Source: "/source", Target: "/target", Consistency: "cached"}}}}
 	before := serviceConfigHash(svc)
 	svc.Volumes[0].Consistency = "delegated"
 	if before == serviceConfigHash(svc) {

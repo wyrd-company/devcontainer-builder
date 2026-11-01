@@ -35,7 +35,7 @@ func TestComposeGPUDeviceSelection(t *testing.T) {
 func TestComposeGPUReservationKeepsResources(t *testing.T) {
 	existing := types.DeviceRequest{Capabilities: []string{"sample"}, Count: 2}
 	svc := types.ServiceConfig{Deploy: &types.DeployConfig{Resources: types.Resources{Reservations: &types.Resource{MemoryBytes: 128, Devices: []types.DeviceRequest{existing}}}}}
-	proj := &types.Project{Services: types.Services{"app": svc, "other": {Image: "busybox"}}}
+	proj := &types.Project{Services: types.Services{"app": svc, "other": {ContainerSpec: types.ContainerSpec{Image: "busybox"}}}}
 	dc := &spec.DevContainer{Service: "app", HostRequirements: map[string]any{"gpu": true}}
 	if err := New(nil, Options{}).applyGPUAvailability(context.Background(), proj, dc, "all"); err != nil {
 		t.Fatal(err)

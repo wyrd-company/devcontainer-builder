@@ -129,7 +129,7 @@ func TestBuildAuth_MalformedEngineValueHasAFixedReason(t *testing.T) {
 
 func TestServiceBuild_ForwardsRegistryAuth(t *testing.T) {
 	proj := &types.Project{Name: "proj", WorkingDir: "/w"}
-	svc := types.ServiceConfig{Name: "x", Build: &types.BuildConfig{Context: "."}}
+	svc := types.ServiceConfig{Name: "x", WorkloadSpec: types.WorkloadSpec{Build: &types.BuildConfig{Context: "."}}}
 	auth := registryauth.Static{"registry.example.test": {Username: "testuser"}}
 	_, opt, err := serviceBuild(proj, svc, "x:1", nil, BuildServiceImagesInputs{RegistryAuth: auth})
 	if err != nil {

@@ -111,11 +111,13 @@ func TestTranslateConfigsAndSecrets_DefaultTargets(t *testing.T) {
 	}
 	svc := types.ServiceConfig{
 		Name: "app",
-		Configs: []types.ServiceConfigObjConfig{
-			{Source: "app-config"},
-		},
-		Secrets: []types.ServiceSecretConfig{
-			{Source: "api-key"},
+		ContainerSpec: types.ContainerSpec{
+			Configs: []types.ServiceConfigObjConfig{
+				{Source: "app-config"},
+			},
+			Secrets: []types.ServiceSecretConfig{
+				{Source: "api-key"},
+			},
 		},
 	}
 
@@ -154,8 +156,10 @@ func TestTranslateConfigsAndSecrets_HonorsExplicitTarget(t *testing.T) {
 		Configs: types.Configs{"c": types.ConfigObjConfig{File: host}},
 	}
 	svc := types.ServiceConfig{
-		Name:    "app",
-		Configs: []types.ServiceConfigObjConfig{{Source: "c", Target: "/etc/myconfig"}},
+		Name: "app",
+		ContainerSpec: types.ContainerSpec{
+			Configs: []types.ServiceConfigObjConfig{{Source: "c", Target: "/etc/myconfig"}},
+		},
 	}
 	m := testObjectMaterializer(t, nil)
 	got, err := translateConfigsAndSecrets(proj, svc, m)
@@ -170,8 +174,10 @@ func TestTranslateConfigsAndSecrets_HonorsExplicitTarget(t *testing.T) {
 func TestTranslateConfigsAndSecrets_UndeclaredReferenceFails(t *testing.T) {
 	proj := &types.Project{Name: "p"}
 	svc := types.ServiceConfig{
-		Name:    "app",
-		Secrets: []types.ServiceSecretConfig{{Source: "missing"}},
+		Name: "app",
+		ContainerSpec: types.ContainerSpec{
+			Secrets: []types.ServiceSecretConfig{{Source: "missing"}},
+		},
 	}
 	m := testObjectMaterializer(t, nil)
 	_, err := translateConfigsAndSecrets(proj, svc, m)

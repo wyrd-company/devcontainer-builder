@@ -12,10 +12,12 @@ import (
 func TestTranslateService_NetworksGetAliases(t *testing.T) {
 	proj := &types.Project{Name: "proj_abc"}
 	svc := types.ServiceConfig{
-		Name:  "app",
-		Image: "alpine",
-		Networks: map[string]*types.ServiceNetworkConfig{
-			"default": {Aliases: []string{"app-alias"}},
+		Name: "app",
+		ContainerSpec: types.ContainerSpec{
+			Image: "alpine",
+			Networks: map[string]*types.ServiceNetworkConfig{
+				"default": {Aliases: []string{"app-alias"}},
+			},
 		},
 	}
 	netNames := map[string]string{"default": "proj_abc_default"}
@@ -37,11 +39,13 @@ func TestTranslateService_NetworksGetAliases(t *testing.T) {
 func TestTranslateService_NamedVolumeRenamed(t *testing.T) {
 	proj := &types.Project{Name: "proj_abc"}
 	svc := types.ServiceConfig{
-		Name:  "app",
-		Image: "alpine",
-		Volumes: []types.ServiceVolumeConfig{
-			{Type: types.VolumeTypeVolume, Source: "data", Target: "/var/data"},
-			{Type: types.VolumeTypeBind, Source: "/host/dir", Target: "/in/container"},
+		Name: "app",
+		ContainerSpec: types.ContainerSpec{
+			Image: "alpine",
+			Volumes: []types.ServiceVolumeConfig{
+				{Type: types.VolumeTypeVolume, Source: "data", Target: "/var/data"},
+				{Type: types.VolumeTypeBind, Source: "/host/dir", Target: "/in/container"},
+			},
 		},
 	}
 	volNames := map[string]string{"data": "proj_abc_data"}
@@ -97,10 +101,12 @@ func TestTranslateVolumesMountAPIOptions(t *testing.T) {
 func TestTranslateService_RejectsUnsupportedVolumeType(t *testing.T) {
 	proj := &types.Project{Name: "proj_abc"}
 	svc := types.ServiceConfig{
-		Name:  "app",
-		Image: "alpine",
-		Volumes: []types.ServiceVolumeConfig{
-			{Type: "tmpfs", Target: "/tmp/x"},
+		Name: "app",
+		ContainerSpec: types.ContainerSpec{
+			Image: "alpine",
+			Volumes: []types.ServiceVolumeConfig{
+				{Type: "tmpfs", Target: "/tmp/x"},
+			},
 		},
 	}
 	_, err := translateService(proj, svc, "proj_abc-app-1", nil, nil, nil, nil)
@@ -112,11 +118,15 @@ func TestTranslateService_RejectsUnsupportedVolumeType(t *testing.T) {
 func TestTranslateService_PortsExposeAndPublish(t *testing.T) {
 	proj := &types.Project{Name: "proj_abc"}
 	svc := types.ServiceConfig{
-		Name:  "app",
-		Image: "alpine",
-		Ports: []types.ServicePortConfig{
-			{Target: 80, Published: "8080", Protocol: "tcp"},
-			{Target: 9000, Protocol: "tcp"}, // expose-only
+		Name: "app",
+		ContainerSpec: types.ContainerSpec{
+			Image: "alpine",
+		},
+		WorkloadSpec: types.WorkloadSpec{
+			Ports: []types.ServicePortConfig{
+				{Target: 80, Published: "8080", Protocol: "tcp"},
+				{Target: 9000, Protocol: "tcp"}, // expose-only
+			},
 		},
 	}
 	tr, err := translateService(proj, svc, "proj_abc-app-1", nil, nil, nil, nil)
@@ -136,13 +146,17 @@ func TestTranslateService_ConfiguresHealthcheck(t *testing.T) {
 	timeout := types.Duration(time.Second)
 	retries := uint64(7)
 	svc := types.ServiceConfig{
-		Name:  "db",
-		Image: "busybox",
-		HealthCheck: &types.HealthCheckConfig{
-			Test:     types.HealthCheckTest{"CMD-SHELL", "test -f /tmp/ready"},
-			Interval: &interval,
-			Timeout:  &timeout,
-			Retries:  &retries,
+		Name: "db",
+		ContainerSpec: types.ContainerSpec{
+			Image: "busybox",
+		},
+		WorkloadSpec: types.WorkloadSpec{
+			HealthCheck: &types.HealthCheckConfig{
+				Test:     types.HealthCheckTest{"CMD-SHELL", "test -f /tmp/ready"},
+				Interval: &interval,
+				Timeout:  &timeout,
+				Retries:  &retries,
+			},
 		},
 	}
 	got, err := translateService(&types.Project{Name: "proj"}, svc, "proj-db-1", nil, nil, nil, nil)

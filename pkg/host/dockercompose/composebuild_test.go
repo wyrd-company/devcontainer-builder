@@ -17,9 +17,9 @@ func TestSelectBuildableServices_FiltersAndSkips(t *testing.T) {
 	proj := &types.Project{
 		Name: "proj_abc",
 		Services: types.Services{
-			"app":     types.ServiceConfig{Name: "app", Image: "alpine"},
-			"sidecar": types.ServiceConfig{Name: "sidecar", Image: "busybox", Build: &types.BuildConfig{Context: "."}},
-			"helper":  types.ServiceConfig{Name: "helper", Build: &types.BuildConfig{Context: "./helper"}},
+			"app":     types.ServiceConfig{Name: "app", ContainerSpec: types.ContainerSpec{Image: "alpine"}},
+			"sidecar": types.ServiceConfig{Name: "sidecar", ContainerSpec: types.ContainerSpec{Image: "busybox"}, WorkloadSpec: types.WorkloadSpec{Build: &types.BuildConfig{Context: "."}}},
+			"helper":  types.ServiceConfig{Name: "helper", WorkloadSpec: types.WorkloadSpec{Build: &types.BuildConfig{Context: "./helper"}}},
 		},
 	}
 	got, err := selectBuildableServices(proj, nil, nil)
@@ -62,22 +62,26 @@ func TestResolveBuildTag(t *testing.T) {
 	}{
 		{
 			name:    "image only",
-			svc:     types.ServiceConfig{Name: "s", Image: "registry/img:1"},
+			svc:     types.ServiceConfig{Name: "s", ContainerSpec: types.ContainerSpec{Image: "registry/img:1"}},
 			wantTag: "registry/img:1",
 		},
 		{
 			name: "build.tags wins, image folded into extras",
 			svc: types.ServiceConfig{
-				Name:  "s",
-				Image: "registry/img:1",
-				Build: &types.BuildConfig{Tags: types.StringList{"main:tag", "alt:tag"}},
+				Name: "s",
+				ContainerSpec: types.ContainerSpec{
+					Image: "registry/img:1",
+				},
+				WorkloadSpec: types.WorkloadSpec{
+					Build: &types.BuildConfig{Tags: types.StringList{"main:tag", "alt:tag"}},
+				},
 			},
 			wantTag:   "main:tag",
 			wantExtra: []string{"alt:tag", "registry/img:1"},
 		},
 		{
 			name:    "neither: generated tag prefixed",
-			svc:     types.ServiceConfig{Name: "helper", Build: &types.BuildConfig{}},
+			svc:     types.ServiceConfig{Name: "helper", WorkloadSpec: types.WorkloadSpec{Build: &types.BuildConfig{}}},
 			wantTag: "devcontainer-builder/compose-svc-proj_abc-helper:",
 		},
 	}
@@ -104,19 +108,23 @@ func TestServiceBuild_FieldsThreaded(t *testing.T) {
 	v := "1"
 	proj := &types.Project{Name: "proj_abc", WorkingDir: "/work"}
 	svc := types.ServiceConfig{
-		Name:  "helper",
-		Image: "registry/helper:1",
-		Build: &types.BuildConfig{
-			Context:    "./svc",
-			Dockerfile: "docker/Dockerfile.helper",
-			Args:       types.MappingWithEquals{"K": &v},
-			Labels:     types.Labels{"role": "helper"},
-			CacheFrom:  types.StringList{"type=registry,ref=cache"},
-			CacheTo:    types.StringList{"type=inline"},
-			Target:     "build",
-			Platforms:  types.StringList{"linux/amd64"},
-			NoCache:    true,
-			Pull:       true,
+		Name: "helper",
+		ContainerSpec: types.ContainerSpec{
+			Image: "registry/helper:1",
+		},
+		WorkloadSpec: types.WorkloadSpec{
+			Build: &types.BuildConfig{
+				Context:    "./svc",
+				Dockerfile: "docker/Dockerfile.helper",
+				Args:       types.MappingWithEquals{"K": &v},
+				Labels:     types.Labels{"role": "helper"},
+				CacheFrom:  types.StringList{"type=registry,ref=cache"},
+				CacheTo:    types.StringList{"type=inline"},
+				Target:     "build",
+				Platforms:  types.StringList{"linux/amd64"},
+				NoCache:    true,
+				Pull:       true,
+			},
 		},
 	}
 	in := BuildServiceImagesInputs{BuildKitAddress: "tcp://buildkit.test:1234", Progress: "plain"}
@@ -158,7 +166,7 @@ func TestServiceBuild_FieldsThreaded(t *testing.T) {
 
 func TestServiceBuild_DefaultDockerfile(t *testing.T) {
 	proj := &types.Project{Name: "proj", WorkingDir: "/w"}
-	svc := types.ServiceConfig{Name: "x", Build: &types.BuildConfig{Context: "."}}
+	svc := types.ServiceConfig{Name: "x", WorkloadSpec: types.WorkloadSpec{Build: &types.BuildConfig{Context: "."}}}
 	build, _, err := serviceBuild(proj, svc, "x:1", nil, BuildServiceImagesInputs{})
 	if err != nil {
 		t.Fatal(err)
@@ -171,8 +179,10 @@ func TestServiceBuild_DefaultDockerfile(t *testing.T) {
 func TestServiceBuild_RejectsDockerfileInline(t *testing.T) {
 	proj := &types.Project{Name: "proj", WorkingDir: "/w"}
 	svc := types.ServiceConfig{
-		Name:  "x",
-		Build: &types.BuildConfig{DockerfileInline: "FROM alpine"},
+		Name: "x",
+		WorkloadSpec: types.WorkloadSpec{
+			Build: &types.BuildConfig{DockerfileInline: "FROM alpine"},
+		},
 	}
 	_, _, err := serviceBuild(proj, svc, "x:1", nil, BuildServiceImagesInputs{})
 	if err == nil {
@@ -183,8 +193,8 @@ func TestServiceBuild_RejectsDockerfileInline(t *testing.T) {
 func TestApplyBuiltImages(t *testing.T) {
 	proj := &types.Project{
 		Services: types.Services{
-			"app":     types.ServiceConfig{Name: "app", Image: ""},
-			"sidecar": types.ServiceConfig{Name: "sidecar", Image: "stays"},
+			"app":     types.ServiceConfig{Name: "app", ContainerSpec: types.ContainerSpec{Image: ""}},
+			"sidecar": types.ServiceConfig{Name: "sidecar", ContainerSpec: types.ContainerSpec{Image: "stays"}},
 		},
 	}
 	applyBuiltImages(proj, map[string]string{"app": "built:1"})
