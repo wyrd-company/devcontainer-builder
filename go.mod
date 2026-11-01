@@ -15,7 +15,7 @@ require (
 	github.com/moby/buildkit v0.18.2
 	github.com/moby/docker-image-spec v1.3.1
 	github.com/opencontainers/go-digest v1.0.0
-	github.com/opencontainers/image-spec v1.1.0
+	github.com/opencontainers/image-spec v1.1.1
 	github.com/spf13/cobra v1.10.1
 	github.com/spf13/pflag v1.0.9
 	github.com/tonistiigi/fsutil v0.0.0-20241121093142-31cf1f437184
