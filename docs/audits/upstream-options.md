@@ -25,7 +25,7 @@ including inherited help/version on each command. It records short aliases but
 scores each canonical long option once. It never subtracts omissions. Registration
 coverage is distinct from behavior parity and does not use these dispositions.
 The pinned `up` table has **44 explicit options**, plus inherited help/version.
-Registered option coverage is **196/253 (77.47%)**;
+Registered option coverage is **204/253 (80.63%)**;
 registration includes the three implemented session-folder pairs.
 
 ## Dispositions
