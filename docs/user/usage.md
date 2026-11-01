@@ -1049,3 +1049,39 @@ dcb up --workspace-folder . --omit-config-remote-env-from-metadata
 `userEnvProbe` takes precedence. The probe reads the container user's shell
 environment before applying remote environment values. If shell startup takes
 more than 10 seconds, dcb warns and continues with no probed environment.
+
+## Git workspace discovery
+
+| `dcb` | Upstream CLI |
+| --- | --- |
+| Finds the Git root with the credentials of its own process. See [Process credentials](#process-credentials). | Runs `git`, which can start with different credentials. |
+| Finds the Git root as the latest stable Git release does, with the repository format rules of Git 2.55 built without Rust. See [Workspace mounts](/docs/dcb/usage#workspace-mounts-and-container-selection) and [the decision](https://github.com/wyrd-company/devcontainer-builder/blob/main/docs/decisions/follow-latest-stable-git-behavior.yml). | Runs the installed `git`, whose version and build decide which configuration and repository formats it accepts. |
+| Linux release builds look up accounts in `/etc/passwd` only. They skip an `include.path` of `~name/` whose account is not there, as if the included file were missing. Builds with cgo and macOS builds ask the account services. Bob approved this difference. See [Workspace mounts](/docs/dcb/usage#workspace-mounts-and-container-selection). | Runs `git`, which asks every account service of the host. It rejects a name that no service knows, and an included file that it cannot parse, so the upstream CLI finds no Git root. |
+| Reads an `include.path` of `%(prefix)/` followed by a relative path below the prefix that `--git-prefix` names, as Git reads it below the prefix of its build. Without `--git-prefix`, it does not read that file, as if it were missing. Bob approved this default. See [Workspace mounts](/docs/dcb/usage#workspace-mounts-and-container-selection) and [the decision](https://github.com/wyrd-company/devcontainer-builder/blob/main/docs/decisions/explicit-git-prefix-setting.yml). | Runs `git`, which reads that file below the prefix of its own build and rejects a file that it cannot parse, so the upstream CLI finds no Git root. Has no `--git-prefix` flag. |
+
+### Process credentials
+
+`dcb` and its Go packages read workspace, configuration and Git files with
+the credentials that the process has at the time of each read: its user and
+groups, and on Linux its capabilities. They do not change these credentials.
+A permission that the caller dropped stays dropped, and a permission that the
+caller holds is used.
+
+To find the Git root, the upstream CLI starts `git`. Starting a program can
+change its credentials, and `dcb` does not copy these changes:
+
+- A root process that cleared its effective capabilities can get them back
+  in `git`, unless `SECBIT_NOROOT` is set.
+- With `SECBIT_NOROOT`, the `git` of a root process starts with only the
+  ambient capabilities of that process.
+- File capabilities or a set-user-ID or set-group-ID bit on `git`, and a
+  security module that changes domain when `git` starts, also change its
+  credentials.
+
+In these cases, `dcb` and the upstream CLI can find different Git roots and
+mount different folders. When the process has the credentials that a started
+`git` gets, credentials cause no difference between them. A `dcb` started from
+a shell has these credentials when neither `dcb` nor `git` has file
+capabilities, a set-user-ID or set-group-ID bit, or a security module domain
+change when it starts. The Dev Container specification does not define how the
+Git root is found.
