@@ -132,6 +132,3 @@ require (
 	sigs.k8s.io/structured-merge-diff/v6 v6.4.2 // indirect
 	sigs.k8s.io/yaml v1.6.0 // indirect
 )
-
-// Workspace discovery uses the process credential and filesystem APIs directly.
-require golang.org/x/sys v0.48.0
