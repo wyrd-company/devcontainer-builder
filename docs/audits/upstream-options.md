@@ -25,13 +25,13 @@ including inherited help/version on each command. It records short aliases but
 scores each canonical long option once. It never subtracts omissions. Registration
 coverage is distinct from behavior parity and does not use these dispositions.
 The pinned `up` table has **44 explicit options**, plus inherited help/version.
-Registered option coverage is **167/253 (66.01%)**;
+Registered option coverage is **172/253 (67.98%)**;
 registration includes the three implemented session-folder pairs.
 
 ## Dispositions
 
-- implemented: **167**.
-- implement: **70**.
+- implemented: **172**.
+- implement: **65**.
 - not applicable by design: **15**.
 - needs Bob's decision: **1**.
 
@@ -441,7 +441,7 @@ when markers skip commands. Source: `injectHeadless.ts:364-410` and
 | Upstream option | dcb equivalent | Disposition | Unit | Reason / source |
 | --- | --- | --- | --- | --- |
 | --help | --help | implemented | templates | Template group help. |
-| --version | version command | implement | sibling-unit | dcb registers --version on every command; this command is not implemented yet. Source: devContainersSpecCLI.ts (.version). |
+| --version | --version | implemented | sibling-unit | Inherited version flag. |
 
 ### templates apply
 
@@ -474,6 +474,7 @@ when markers skip commands. Source: `injectHeadless.ts:364-410` and
 | --- | --- | --- | --- | --- |
 | --log-level | --log-level | implemented | template-metadata | Inherited diagnostics flag. Library reads the OCI annotation; stdout carries the JSON value. |
 | --help | --help | implemented | template-metadata | Command help. |
+| --version | --version | implemented | sibling-unit | Inherited version flag. |
 
 `templateId` is a required positional reference. Tag and digest forms use the
 upstream collection parser semantics. The command reads no layers.
