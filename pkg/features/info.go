@@ -193,6 +193,7 @@ type infoNode struct {
 	options                          json.RawMessage
 	set                              json.RawMessage
 	aliases                          []string
+	aliasesValue                     json.RawMessage
 	hard, soft                       []*infoNode
 	compare                          *node
 }
@@ -214,7 +215,11 @@ func (n *infoNode) raw() json.RawMessage {
 		fields = append(fields, infoField{"featureSet", n.set})
 	}
 	if n.aliases != nil {
-		fields = append(fields, infoField{"featureIdAliases", infoJSON(n.aliases)})
+		value := n.aliasesValue
+		if value == nil {
+			value = infoJSON(n.aliases)
+		}
+		fields = append(fields, infoField{"featureIdAliases", value})
 	}
 	return infoObject(fields...)
 }
@@ -247,6 +252,7 @@ func infoGraph(c *oci.Client, id string) (string, error) {
 		}
 		if duplicate {
 			n.aliases = nil
+			n.aliasesValue = nil
 			n.set = n.plainSet
 			continue
 		}
@@ -340,9 +346,7 @@ func (n *infoNode) load(c *oci.Client, merge bool) (json.RawMessage, error) {
 	}
 	var metadata Metadata
 	_ = json.Unmarshal(meta, &metadata)
-	if len(meta) > 0 {
-		n.aliases = metadata.aliases()
-	}
+	n.setReportAliases(meta, metadata)
 	_, value := decodeOptions(n.options)
 	n.compare = &node{res: Resolved{Source: n.id, Reference: &ref, Digest: digest, Metadata: metadata}, optionsValue: value}
 	resource := ref.Registry + "/" + ref.Repository
@@ -418,9 +422,7 @@ func (n *infoNode) loadTarball(c *oci.Client, merge bool) (json.RawMessage, erro
 	meta := collectiondocs.StringifyJSONCValue(data)
 	var metadata Metadata
 	_ = json.Unmarshal(meta, &metadata)
-	if len(meta) > 0 {
-		n.aliases = metadata.aliases()
-	}
+	n.setReportAliases(meta, metadata)
 	n.compare.res.Metadata = metadata
 	var a, b spec.OrderedMap
 	_ = json.Unmarshal(feature, &a)
@@ -437,4 +439,16 @@ func (n *infoNode) loadTarball(c *oci.Client, merge bool) (json.RawMessage, erro
 	}
 	n.set = infoObject(infoField{"sourceInformation", source}, infoField{"features", infoJSON([]json.RawMessage{infoObject(fields...)})})
 	return meta, nil
+}
+
+// setReportAliases retains the undefined current-id slot of runtime metadata.
+func (n *infoNode) setReportAliases(meta json.RawMessage, metadata Metadata) {
+	if len(meta) == 0 || string(meta) == "null" {
+		return
+	}
+	n.aliases = metadata.aliases()
+	if len(n.aliases) == 0 {
+		n.aliases = []string{""}
+		n.aliasesValue = json.RawMessage(`[null]`)
+	}
 }

@@ -18,7 +18,7 @@ func TestDependencyReportWorkspaceSubstitution(t *testing.T) {
 		{``, "default"},
 		{`"workspaceFolder":"/sample/workspace",`, "/sample/workspace"},
 		{`"dockerComposeFile":"compose.yml","workspaceFolder":"/sample/compose",`, "/sample/compose"},
-		{`"workspaceFolder":"${localWorkspaceFolderBasename}",`, "${localWorkspaceFolderBasename}"},
+		{`"workspaceFolder":"${localWorkspaceFolderBasename}",`, "basename"},
 	} {
 		w := dependencyWorkspace(t, `{`+tc.extra+`"features":{"./local":{"folder":"${containerWorkspaceFolder}","base":"${containerWorkspaceFolderBasename}"}}}`)
 		dependencyLocal(t, w, "local", `{"id":"local"}`)
@@ -27,6 +27,9 @@ func TestDependencyReportWorkspaceSubstitution(t *testing.T) {
 			t.Fatal(err)
 		}
 		want := tc.want
+		if want == "basename" {
+			want = filepath.Base(w)
+		}
 		if want == "default" {
 			want = "/workspaces/" + filepath.Base(w)
 		}
