@@ -308,3 +308,6 @@ report as text or JSON. A nil client uses Docker registry credentials.
 `features.ErrInfoUnavailable` accompanies upstream failure output for missing
 manifests or tags. Dependency reports reuse the registry and graph comparison
 code without installing Features.
+
+Feature information reports preserve escaped string content. Dependency graph node
+identifiers use JavaScript JSON string and number serialization.
