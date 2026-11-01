@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -75,5 +76,41 @@ func TestTemplatesDocumentationInvocation(t *testing.T) {
 		if code != row.exit {
 			t.Fatalf("%v exit %d want %d: %s", row.args, code, row.exit, logs.String())
 		}
+	}
+}
+
+func TestTemplatesDocumentationValuelessLogLevel(t *testing.T) {
+	for _, args := range [][]string{{"--log-level"}, {"--log-level", "--github-owner", "example", "--github-repo", "collection"}} {
+		t.Run(strings.Join(args, " "), func(t *testing.T) {
+			t.Chdir(t.TempDir())
+			if err := os.Mkdir("sample", 0755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile("sample/devcontainer-template.json", []byte(`{"id":"sample"}`), 0644); err != nil {
+				t.Fatal(err)
+			}
+			var out, logs bytes.Buffer
+			if code := Run(context.Background(), append([]string{"templates", "generate-docs"}, args...), "test", nil, &out, &logs); code != 0 {
+				t.Fatalf("exit %d: %s %s", code, out.String(), logs.String())
+			}
+			if out.Len() != 0 {
+				t.Fatalf("stdout %q", out.String())
+			}
+			data, err := os.ReadFile("sample/README.md")
+			if err != nil {
+				t.Fatal(err)
+			}
+			url := "devcontainer-template.json"
+			if len(args) > 1 {
+				url = "https://github.com/example/collection/blob/main/./sample/devcontainer-template.json"
+			}
+			want := "\n# sample\n\n\n\n\n\n\n\n---\n\n_Note: This file was auto-generated from the [devcontainer-template.json](" + url + ").  Add additional notes to a `NOTES.md`._\n"
+			if string(data) != want {
+				t.Fatalf("README %q want %q", data, want)
+			}
+			if !strings.Contains(logs.String(), "Generating") {
+				t.Fatalf("info diagnostics missing: %s", logs.String())
+			}
+		})
 	}
 }
