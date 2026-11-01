@@ -7,7 +7,7 @@ require (
 	github.com/containerd/console v1.0.5
 	github.com/containerd/platforms v1.0.0-rc.5
 	github.com/distribution/reference v0.6.0
-	github.com/docker/cli v29.8.2+incompatible
+	github.com/docker/cli v29.9.2+incompatible
 	github.com/docker/docker v28.5.2+incompatible
 	github.com/docker/docker-credential-helpers v0.9.12
 	github.com/docker/go-connections v0.8.2
