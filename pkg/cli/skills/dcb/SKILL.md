@@ -20,6 +20,10 @@ passes through unchanged. An explicit `--` before the command also works.
 
 Invocations except help and exec normally emit one JSON object on one stdout line.
 `outdated` emits its version report instead.
+`features resolve-dependencies` emits a Mermaid graph followed by pretty JSON
+installation order. It reads `.devcontainer.json` before
+`.devcontainer/devcontainer.json`, uses lockfile pins, and does not install
+Features or write lockfiles. Cycles fail after graph output.
 `features info <mode> <feature>` emits published Feature information as text
 or JSON (`--output-format json`). Modes are manifest, tags, dependencies, and
 verbose. Every mode requires a manifest; JSON dependencies returns `{}`.
@@ -76,6 +80,7 @@ dcb generate --workspace-folder . --work-dir ./generated
 dcb features --workspace-folder . --out ./staged-features
 dcb features package ./src --output-folder ./packaged
 dcb features generate-docs -p ./src -n example/collection
+dcb features resolve-dependencies --workspace-folder .
 dcb features info verbose ghcr.io/example/collection/sample:1
 dcb templates generate-docs -p ./templates
 dcb server --out ./server --platform linux/amd64

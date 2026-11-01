@@ -50,6 +50,7 @@ dcb down --workspace-folder .
 | `dcb set-up` | Runs the lifecycle commands of a configuration in a container that `dcb` did not create. |
 | `dcb generate` | Writes the generated Dockerfile and build context, and does not build. |
 | `dcb features` | Resolves and downloads the configuration's features into a directory. |
+| `dcb features resolve-dependencies` | Prints the configuration Feature graph and installation order. |
 | `dcb features info <mode> <feature>` | Reports a published Feature manifest, tags, or dependency graph. |
 | `dcb features generate-docs` | Generates README files from local Feature metadata and notes. |
 | `dcb features package <target>` | Packages a local Feature or collection as archives with collection metadata. |
@@ -73,7 +74,7 @@ boolean flags, as upstream. Arguments after `--` pass through unchanged.
 These upstream command families are not yet supported:
 
 - [`upgrade`](https://github.com/wyrd-company/devcontainer-builder/issues/21)
-- [Feature authoring commands other than `features package`, `features generate-docs`, and `features info`](https://github.com/wyrd-company/devcontainer-builder/issues/22)
+- [Feature authoring commands other than `features package`, `features generate-docs`, `features info`, and `features resolve-dependencies`](https://github.com/wyrd-company/devcontainer-builder/issues/22)
 - [Template commands other than `templates metadata` and `templates generate-docs`](https://github.com/wyrd-company/devcontainer-builder/issues/23)
 
 ### Workspace flags
@@ -1174,3 +1175,27 @@ emits manifest, canonicalId, and publishedTags when requested. JSON dependencies
 emits `{}` without loading dependency metadata. Registry authentication uses the
 existing Docker credential configuration. These reports do not stage Features
 or write a lockfile.
+
+## Resolve Feature dependencies
+
+```sh
+dcb features resolve-dependencies --workspace-folder .
+```
+
+This command reads `.devcontainer.json` first, then
+`.devcontainer/devcontainer.json`. It prints a Mermaid `flowchart` followed by
+pretty JSON with an ordered `installOrder` array. Each entry has `id` and
+`options`; OCI identifiers use the resolved manifest digest. Options retain
+object property order and scalar string or boolean values.
+
+Resolution supports local Features, HTTPS archives, OCI metadata annotations,
+and metadata from OCI layers. It applies configuration substitutions, lockfile
+integrity pins, hard dependencies, soft dependencies, aliases and
+`overrideFeatureInstallOrder`. It does not install Features or write lockfiles.
+A dependency cycle returns exit code 1 after printing the graph. An absent or
+empty `features` object fails before graph output. `--log-level` accepts
+`error` (default), `info`, `debug`, or `trace`.
+
+If HTTPS archive metadata cannot be retrieved or its integrity check fails,
+reporting retains the archive entry without dependency metadata, as upstream
+does. The report does not establish that a later installation will succeed.

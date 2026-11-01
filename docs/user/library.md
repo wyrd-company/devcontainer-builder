@@ -25,7 +25,7 @@ credentials that the calling process has at the time of the call; see
 | `pkg/host/runner` | Runs a lifecycle plan with marker files through any exec transport. |
 | `pkg/spec` | Reads `devcontainer.json`. |
 | `pkg/templates` | Reads metadata annotations from published Template manifests. |
-| `pkg/features` | Resolves Features and their install order, packages local Features, and generates their documentation. |
+| `pkg/features` | Resolves Features and their install order, packages local Features, generates their documentation, and reports dependency graphs. |
 | `pkg/substitute` | Substitutes configuration variables. |
 | `pkg/workspace` | Places a workspace folder in a container: its Git root, a worktree's common Git folder, and the workspace folder. |
 | `pkg/registryauth` | Reads registry credentials from the Docker client configuration, or holds credentials that the caller supplies. |
@@ -311,3 +311,19 @@ code without installing Features.
 
 Feature information reports preserve escaped string content. Dependency graph node
 identifiers use JavaScript JSON string and number serialization.
+
+## Report configuration Feature dependencies
+
+`features.ResolveDependencies(client, workspace)` returns the Mermaid graph and
+ordered, pretty JSON installation report. Pass `nil` for the existing OCI
+credential integration and an empty workspace for the current directory.
+The workflow discovers the configuration, substitutes option values, reads
+lockfile integrity pins and resolves local, HTTPS and OCI Feature metadata.
+It computes hard and soft dependencies, deduplicates equivalent Features and
+applies installation priorities. It does not install Features or write lockfiles.
+On an ordering failure, the returned string contains the graph and the error
+reports that no installation order exists. A configuration or resolution error
+returns before the graph. See [usage](usage.md#resolve-feature-dependencies).
+
+An HTTPS metadata retrieval failure retains the unexpanded archive entry;
+the report does not install or admit its archive contents.
