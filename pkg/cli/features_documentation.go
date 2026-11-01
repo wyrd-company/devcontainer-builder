@@ -113,6 +113,10 @@ func (a *application) documentationCommand(template bool) *cobra.Command {
 		flag.Annotations["documentation-no-value"] = []string{value}
 	}
 	if template {
+		// Shadow the inherited flag so this command can adapt yargs' default
+		// without changing flag parsing on other commands.
+		cmd.Flags().StringVar(&a.logLevel, "log-level", "info", "Diagnostic level")
+		cmd.Flags().Lookup("log-level").Annotations = map[string][]string{"documentation-no-value": {"info"}}
 		cmd.Short = "Generate READMEs for local Templates"
 	}
 	return cmd
