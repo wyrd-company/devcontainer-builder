@@ -141,7 +141,9 @@ func (r *Resolver) Upgrade(ctx context.Context, o UpgradeOptions) ([]byte, error
 		return nil, err
 	}
 	defer os.RemoveAll(stage)
-	resolved, err := r.ResolveWithLockfile(ctx, dc.Features, order, stage, filepath.Dir(dc.Path), state.Lockfile)
+	resolver := *r
+	resolver.upgradeWorkspace = workspace
+	resolved, err := resolver.ResolveWithLockfile(ctx, dc.Features, order, stage, filepath.Dir(dc.Path), state.Lockfile)
 	if err != nil {
 		return nil, err
 	}
@@ -164,4 +166,21 @@ func (r *Resolver) Upgrade(ctx context.Context, o UpgradeOptions) ([]byte, error
 		return nil, err
 	}
 	return []byte(b.String()), nil
+}
+
+// Match upstream's lexical path.relative check, including names containing '..'.
+// The general resolver retains its existing library source support.
+func validateUpgradeLocalSource(source, configDir, workspace string) error {
+	if filepath.IsAbs(source) || strings.HasPrefix(source, "file://") {
+		return fmt.Errorf("an absolute path or file URL to a local Feature is not allowed")
+	}
+	child := filepath.Join(configDir, source)
+	relative, err := filepath.Rel(filepath.Join(workspace, ".devcontainer"), child)
+	if err != nil {
+		return err
+	}
+	if strings.Contains(relative, "..") {
+		return fmt.Errorf("local file path parse error: resolved path must be a child of the .devcontainer/ folder: %s", child)
+	}
+	return nil
 }
