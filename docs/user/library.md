@@ -24,6 +24,7 @@ credentials that the calling process has at the time of the call; see
 | `pkg/lifecycle` | Plans the lifecycle commands of a configuration and its features. |
 | `pkg/host/runner` | Runs a lifecycle plan with marker files through any exec transport. |
 | `pkg/spec` | Reads `devcontainer.json`. |
+| `pkg/templates` | Reads metadata annotations from published Template manifests. |
 | `pkg/features` | Resolves Features and their install order, packages local Features, and generates their documentation. |
 | `pkg/substitute` | Substitutes configuration variables. |
 | `pkg/workspace` | Places a workspace folder in a container: its Git root, a worktree's common Git folder, and the workspace folder. |
@@ -272,3 +273,12 @@ state = state.Run(
 
 A feature whose files and options do not change stays cached. A change runs
 that feature again, and the features installed after it.
+
+## Read published Template metadata
+
+`templates.Metadata(client, "registry.example.test/collection/sample:1")` returns
+raw JSON from a Template manifest annotation. Pass a nil OCI client to use Docker
+registry credentials, or supply an `oci.Client` with an HTTP client and credential
+source. The operation reads the manifest without fetching layers. Digest
+references verify the manifest bytes. Missing or malformed metadata returns an
+error.

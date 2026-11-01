@@ -183,7 +183,7 @@ func (a *application) command() *cobra.Command {
 		a.logs = &logWriter{dst: a.stderr, json: a.logFormat == "json", mask: a.mask}
 		return nil
 	}
-	root.AddCommand(a.buildCommand(false), a.buildCommand(true), a.upCommand(), a.execCommand(), a.readCommand(), a.lifecycleCommand("run-user-commands"), a.lifecycleCommand("set-up"), a.manageCommand(false), a.manageCommand(true), a.featuresCommand(), a.serverCommand(), a.skillsCommand())
+	root.AddCommand(a.buildCommand(false), a.buildCommand(true), a.upCommand(), a.execCommand(), a.readCommand(), a.lifecycleCommand("run-user-commands"), a.lifecycleCommand("set-up"), a.manageCommand(false), a.manageCommand(true), a.featuresCommand(), a.templatesCommand(), a.serverCommand(), a.skillsCommand())
 	root.AddCommand(&cobra.Command{Use: "version", Short: "Print the dcb version", Args: cobra.NoArgs, RunE: printVersion})
 	a.terminalFlags(root)
 	a.featureControlFlags(root)

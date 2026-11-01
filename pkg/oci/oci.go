@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strings"
 	"time"
@@ -166,6 +167,12 @@ func (c *Client) FetchManifest(ref Reference) (*Manifest, []byte, error) {
 	return c.fetchManifest(ref, ref.String(), 0, firstManifest)
 }
 
+// FetchArtifactManifest fetches a single artifact manifest without following an
+// image index. Collection metadata commands require a manifest of the artifact.
+func (c *Client) FetchArtifactManifest(ref Reference) (*Manifest, []byte, error) {
+	return c.fetchManifest(ref, ref.String(), 0, nil)
+}
+
 // childSelector picks the manifest to follow from an index.
 type childSelector func([]Descriptor) (Descriptor, error)
 
@@ -229,7 +236,15 @@ func (c *Client) fetchManifest(ref Reference, name string, depth int, choose chi
 	if depth > 4 {
 		return nil, nil, fmt.Errorf("manifest %s: index nesting too deep", name)
 	}
-	req, err := http.NewRequest(http.MethodGet, manifestURL(ref), nil)
+	target := manifestURL(ref)
+	if choose == nil {
+		// Upstream collection requests use plain HTTP for exactly localhost.
+		if parsed, err := url.Parse(target); err == nil && parsed.Hostname() == "localhost" {
+			parsed.Scheme = "http"
+			target = parsed.String()
+		}
+	}
+	req, err := http.NewRequest(http.MethodGet, target, nil)
 	if err != nil {
 		return nil, nil, fmt.Errorf("manifest %s: invalid reference", name)
 	}
@@ -256,13 +271,16 @@ func (c *Client) fetchManifest(ref Reference, name string, depth int, choose chi
 		MediaType string `json:"mediaType"`
 	}
 	if err := json.Unmarshal(body, &envelope); err != nil {
-		return nil, nil, fmt.Errorf("manifest %s is malformed", name)
+		return nil, nil, fmt.Errorf("manifest %s is malformed: %w", name, err)
 	}
 	if envelope.MediaType != "" {
 		mediaType = envelope.MediaType
 	}
 	switch mediaType {
 	case mediaTypeOCIIndex, mediaTypeDockerManifestL:
+		if choose == nil {
+			return nil, nil, fmt.Errorf("manifest %s is an index, not an artifact manifest", name)
+		}
 		var idx Index
 		if err := json.Unmarshal(body, &idx); err != nil {
 			return nil, nil, fmt.Errorf("manifest index %s is malformed", name)
@@ -291,7 +309,7 @@ func (c *Client) fetchManifest(ref Reference, name string, depth int, choose chi
 	}
 	var m Manifest
 	if err := json.Unmarshal(body, &m); err != nil {
-		return nil, nil, fmt.Errorf("manifest %s is malformed", name)
+		return nil, nil, fmt.Errorf("manifest %s is malformed: %w", name, err)
 	}
 	return &m, body, nil
 }
