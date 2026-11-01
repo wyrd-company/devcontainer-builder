@@ -2,8 +2,10 @@
 #   validates: [recovery, receipts, recover-release]
 import json
 import os
+import runpy
 import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -88,6 +90,12 @@ class RecoveryTests(unittest.TestCase):
         self.assertEqual(checkouts[0]["with"]["ref"], "${{ github.workflow_sha }}")
         self.assertEqual(checkouts[1]["with"]["ref"], "refs/tags/${{ inputs.version }}")
         self.assertLess(next(i for i,s in enumerate(steps) if s.get("run") == "task release:recover-download"), steps.index(checkouts[1]))
+
+    def test_npm_entrypoint_does_not_attest_the_tooling_commit(self):
+        arguments = ["recovery.py", "npm", "--version", VERSION, "--dist", str(self.dist), "--source", str(self.source)]
+        with patch.object(sys, "argv", arguments), patch.object(recovery.subprocess, "check_output", return_value=COMMIT+"\n"), patch.object(recovery.channels, "publish_npm") as publish:
+            runpy.run_path(str(ROOT / "scripts/release/recovery.py"), run_name="__main__")
+        publish.assert_called_once_with(self.dist, VERSION, provenance=False)
 
 
 class ReceiptRestoreTests(unittest.TestCase):
