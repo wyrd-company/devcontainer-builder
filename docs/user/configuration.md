@@ -15,8 +15,14 @@ Comments and trailing commas are allowed.
 | Source | Properties |
 | --- | --- |
 | Image | `image` |
-| Dockerfile | `build.dockerfile` (or `dockerFile`), `build.context`, `build.args`, `build.target`, `build.cacheFrom` |
+| Dockerfile | `build.dockerfile` with `build.context`, or `dockerFile` with `context`; `build.args`, `build.target`, `build.cacheFrom` |
 | Docker Compose | `dockerComposeFile`, `service`, `runServices` |
+
+Dockerfile paths and context paths are relative to `devcontainer.json`. Without
+a context, the Dockerfile directory is the build context. Top-level `dockerFile`
+can use `build.args`, `build.target`, and `build.cacheFrom`. `dockerComposeFile`
+and `build.cacheFrom` accept a string or an array of strings. Lifecycle command
+objects accept string or string-array values. Nested command objects are invalid.
 
 Features are installed on top of each source. With Docker Compose, `dcb`
 creates the networks, volumes, and containers of the Compose project through
