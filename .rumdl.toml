@@ -1,0 +1,5 @@
+# relationships:
+#   references: [taskfile, .intentional/config]
+# Intentional owns changelog text and emits unwrapped release-note bullets.
+[per-file-ignores]
+"docs/user/CHANGELOG.md" = ["MD013"]

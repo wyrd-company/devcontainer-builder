@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.1
+
+### Fixes
+
+- Honor Docker container names supplied through runArgs, including reuse and explicit recreation.
+- Honor read-only options in Docker mount object targets and reject non-spec mount object properties.
+
 ## 0.2.0
 
 ### Features

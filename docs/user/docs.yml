@@ -13,8 +13,8 @@ assets:
 products:
   dcb:
     name: dcb
-    version: 0.2.0
-    docs-version: 0.1.0
+    version: 0.2.1
+    docs-version: 0.1.1
     logo: assets/logo.svg
     logo-dark: assets/logo-dark.svg
     favicon: assets/favicon.svg
