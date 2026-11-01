@@ -50,6 +50,7 @@ dcb down --workspace-folder .
 | `dcb set-up` | Runs the lifecycle commands of a configuration in a container that `dcb` did not create. |
 | `dcb generate` | Writes the generated Dockerfile and build context, and does not build. |
 | `dcb features` | Resolves and downloads the configuration's features into a directory. |
+| `dcb upgrade` | Generates a Feature lockfile and optionally updates a Feature requirement. |
 | `dcb features resolve-dependencies` | Prints the configuration Feature graph and installation order. |
 | `dcb features info <mode> <feature>` | Reports a published Feature manifest, tags, or dependency graph. |
 | `dcb features generate-docs` | Generates README files from local Feature metadata and notes. |
@@ -73,7 +74,6 @@ boolean flags, as upstream. Arguments after `--` pass through unchanged.
 
 These upstream command families are not yet supported:
 
-- [`upgrade`](https://github.com/wyrd-company/devcontainer-builder/issues/21)
 - [Feature authoring commands other than `features package`, `features generate-docs`, `features info`, and `features resolve-dependencies`](https://github.com/wyrd-company/devcontainer-builder/issues/22)
 - [Template commands other than `templates metadata` and `templates generate-docs`](https://github.com/wyrd-company/devcontainer-builder/issues/23)
 
@@ -1199,3 +1199,28 @@ empty `features` object fails before graph output. `--log-level` accepts
 If HTTPS archive metadata cannot be retrieved or its integrity check fails,
 reporting retains the archive entry without dependency metadata, as upstream
 does. The report does not establish that a later installation will succeed.
+
+## Upgrade Feature requirements and lockfiles
+
+```sh
+dcb upgrade --workspace-folder .
+dcb upgrade --workspace-folder . --dry-run
+dcb upgrade --config .devcontainer/devcontainer.json \
+  --feature registry.example/collection/sample --target-version 2
+```
+
+`upgrade` resolves configured Features and their dependencies and writes the
+lockfile beside the configuration. Discovery checks `.devcontainer/devcontainer.json`
+before `.devcontainer.json`. Existing lockfile integrity pins remain in use.
+The paired `--feature` (`-f`) and `--target-version` (`-v`) flags change the first
+matching Feature requirement. The target accepts `x`, `x.y`, or `x.y.z`.
+Configuration comments and formatting remain, with upstream's global regular
+expression replacement of the matching identifier throughout the file.
+
+`--dry-run` prints pretty lockfile JSON with a trailing newline. It still writes
+a requested configuration change and refreshes an existing lockfile during
+resolution. Without `--dry-run`, success writes no stdout and forces a canonical
+lockfile rewrite. A resolution failure can leave the configuration update in place.
+An absent or empty Features object fails. Operation errors go to stderr and
+exit 1;
+invalid invocations use the normal JSON error result and exit 2.

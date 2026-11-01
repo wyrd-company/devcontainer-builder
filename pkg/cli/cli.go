@@ -140,7 +140,7 @@ func (a *application) command() *cobra.Command {
 	printVersion := func(_ *cobra.Command, _ []string) error { a.result["version"] = a.version; return nil }
 	root := &cobra.Command{
 		Use: "dcb", Short: "Build and manage development containers",
-		Long:         "Build and manage development containers through the Docker Engine API.\n\nInvocations except help, exec, outdated, features info, and features resolve-dependencies normally write one JSON result line to stdout. Archive exports to stdout write only archive bytes. Help is plain text.\nExec passes child stdout/stderr through unchanged without a result line; other logs and command output use stderr.\nExit codes: 0 success, 1 operation failure, 2 invalid invocation; exec propagates the command exit code.\nUse -- before a container command's own flags.",
+		Long:         "Build and manage development containers through the Docker Engine API.\n\nInvocations except help, exec, outdated, features info, and features resolve-dependencies, and upgrade normally write one JSON result line to stdout. Archive exports to stdout write only archive bytes. Help is plain text.\nExec passes child stdout/stderr through unchanged without a result line; other logs and command output use stderr.\nExit codes: 0 success, 1 operation failure, 2 invalid invocation; exec propagates the command exit code.\nUse -- before a container command's own flags.",
 		Example:      "  dcb up --workspace-folder .\n  dcb build --workspace-folder . --image-name example:dev\n  dcb exec --workspace-folder . -- sh -c 'id && pwd'\n  dcb read-configuration --workspace-folder .\n  dcb skills install --dir .agents/skills",
 		SilenceUsage: true, SilenceErrors: true,
 		Args: cobra.NoArgs,
@@ -184,7 +184,7 @@ func (a *application) command() *cobra.Command {
 		a.logs = &logWriter{dst: a.stderr, json: a.logFormat == "json", mask: a.mask}
 		return nil
 	}
-	root.AddCommand(a.buildCommand(false), a.buildCommand(true), a.upCommand(), a.execCommand(), a.readCommand(), a.lifecycleCommand("run-user-commands"), a.lifecycleCommand("set-up"), a.manageCommand(false), a.manageCommand(true), a.featuresCommand(), a.templatesCommand(), a.outdatedCommand(), a.serverCommand(), a.skillsCommand())
+	root.AddCommand(a.buildCommand(false), a.buildCommand(true), a.upCommand(), a.execCommand(), a.readCommand(), a.lifecycleCommand("run-user-commands"), a.lifecycleCommand("set-up"), a.manageCommand(false), a.manageCommand(true), a.featuresCommand(), a.templatesCommand(), a.outdatedCommand(), a.upgradeCommand(), a.serverCommand(), a.skillsCommand())
 	root.AddCommand(&cobra.Command{Use: "version", Short: "Print the dcb version", Args: cobra.NoArgs, RunE: printVersion})
 	a.terminalFlags(root)
 	a.featureControlFlags(root)

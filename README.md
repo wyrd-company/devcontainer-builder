@@ -7,7 +7,8 @@
 `devcontainer.json`. It builds images on the Docker daemon's built-in BuildKit,
 and creates, starts, and runs lifecycle commands in containers through the
 Docker Engine API. Commands other than `outdated`, `features info`, and
-`features resolve-dependencies` write one JSON result line to stdout, except
+`features resolve-dependencies`, and `upgrade` write one JSON result line to
+stdout, except
 help, a valid `exec` invocation, and archive exports to stdout.
 
 Documentation is at [wyrd.foo/docs/dcb](https://wyrd.foo/docs/dcb), published
@@ -85,7 +86,6 @@ matched. [Overview](https://wyrd.foo/docs/dcb/overview) lists the differences.
 
 These upstream command families are not yet supported:
 
-- [`upgrade`](https://github.com/wyrd-company/devcontainer-builder/issues/21)
 - [Feature authoring commands other than `features package`, `features generate-docs`, and `features info`](https://github.com/wyrd-company/devcontainer-builder/issues/22)
 - [Template commands other than `templates metadata` and `templates generate-docs`](https://github.com/wyrd-company/devcontainer-builder/issues/23)
 

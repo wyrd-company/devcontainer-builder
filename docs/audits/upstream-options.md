@@ -138,7 +138,7 @@ feature authoring commands other than `features package`,
 `features generate-docs`, `features info`, and `features resolve-dependencies`.
 The `templates` group
 supports metadata and generate-docs. `outdated` reports Feature versions.
-`upgrade` and the other upstream `features` children are absent.
+`upgrade` generates Feature lockfiles. The other upstream `features` children are absent.
 
 Positional arguments are part of each command unit but do not add flag score units:
 `build [path]` maps to `build --workspace-folder`; `exec <cmd> [args..]` maps to
@@ -566,16 +566,16 @@ upstream collection parser semantics. The command reads no layers.
 
 | Upstream option | dcb equivalent | Disposition | Unit | Reason / source |
 | --- | --- | --- | --- | --- |
-| --workspace-folder | none | implement | upgrade | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: upgradeCommand.ts:26. |
+| --workspace-folder | --workspace-folder | implemented | upgrade | Native library workflow; preserves pinned upstream resolution and write behavior. Source: upgradeCommand.ts:26. |
 | --docker-path | none | not applicable by design | native-api | Approved native API requirement: runtime integrations use Engine/Compose APIs; executable path selection does not apply. Source: upgradeCommand.ts:27. |
 | --docker-compose-path | none | not applicable by design | native-api | Approved native API requirement: runtime integrations use Engine/Compose APIs; executable path selection does not apply. Source: upgradeCommand.ts:28. |
-| --config | none | implement | upgrade | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: upgradeCommand.ts:29. |
-| --log-level | none | implement | upgrade | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: upgradeCommand.ts:30. |
-| --dry-run | none | implement | upgrade | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: upgradeCommand.ts:31. |
-| --feature (-f) [hidden] | none | implement | upgrade | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: upgradeCommand.ts:33. |
-| --target-version (-v) [hidden] | none | implement | upgrade | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: upgradeCommand.ts:34. |
-| --help | none | implement | upgrade | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: yargs built-in help. |
-| --version | version command | implement | sibling-unit | dcb registers --version on every command; this command is not implemented yet. Source: devContainersSpecCLI.ts (.version). |
+| --config | --config | implemented | upgrade | Native library workflow; preserves pinned upstream resolution and write behavior. Source: upgradeCommand.ts:29. |
+| --log-level | --log-level | implemented | upgrade | Native library workflow; preserves pinned upstream resolution and write behavior. Source: upgradeCommand.ts:30. |
+| --dry-run | --dry-run | implemented | upgrade | Native library workflow; preserves pinned upstream resolution and write behavior. Source: upgradeCommand.ts:31. |
+| --feature (-f) [hidden] | --feature (-f) [hidden] | implemented | upgrade | Native library workflow; preserves pinned upstream resolution and write behavior. Source: upgradeCommand.ts:33. |
+| --target-version (-v) [hidden] | --target-version (-v) [hidden] | implemented | upgrade | Native library workflow; preserves pinned upstream resolution and write behavior. Source: upgradeCommand.ts:34. |
+| --help | --help | implemented | upgrade | Native library workflow; preserves pinned upstream resolution and write behavior. Source: yargs built-in help. |
+| --version | --version | implemented | sibling-unit | dcb registers --version on every command. Source: devContainersSpecCLI.ts (.version). |
 
 Dependency reporting follows the upstream HTTPS metadata fallback: retrieval or
 integrity failure leaves an unexpanded archive node. OCI digest mismatch fails
