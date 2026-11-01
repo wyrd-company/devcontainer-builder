@@ -185,20 +185,7 @@ func LoadVersionInfo(client *oci.Client, config *spec.DevContainer) (VersionRepo
 		} else if ref.Tag == "latest" {
 			v.Wanted = v.Latest
 		} else {
-			constraint, e := reportConstraint(ref.Tag)
-			if e == nil {
-				for i := len(versions) - 1; i >= 0; i-- {
-					candidate, _ := strictVersion(versions[i])
-					matches := constraint.Check(candidate)
-					if exact, e := strictVersion(ref.Tag); e == nil {
-						matches = compareReportVersions(candidate, exact) == 0
-					}
-					if matches {
-						v.Wanted = versions[i]
-						break
-					}
-				}
-			}
+			v.Wanted = wantedReportVersion(ref.Tag, versions)
 		}
 		if !reportTruthy(v.Current) {
 			v.Current = nil
@@ -222,6 +209,24 @@ func LoadVersionInfo(client *oci.Client, config *spec.DevContainer) (VersionRepo
 		result.Features[id] = v
 	}
 	return result, nil
+}
+
+func wantedReportVersion(tag string, versions []string) (wanted string) {
+	constraint, e := reportConstraint(tag)
+	if e == nil {
+		for i := len(versions) - 1; i >= 0; i-- {
+			candidate, _ := strictVersion(versions[i])
+			matches := constraint.Check(candidate)
+			if exact, e := strictVersion(tag); e == nil {
+				matches = compareReportVersions(candidate, exact) == 0
+			}
+			if matches {
+				wanted = versions[i]
+				break
+			}
+		}
+	}
+	return wanted
 }
 
 func digestVersion(client *oci.Client, ref oci.Reference) (string, error) {
