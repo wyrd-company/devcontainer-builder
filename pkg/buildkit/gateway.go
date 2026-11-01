@@ -193,8 +193,7 @@ func buildOnePlatform(
 		}
 		if spec.Graph.ResolveImageConfig {
 			_, _, cfg, err := gc.ResolveImageConfig(ctx, imageRef, sourceresolver.Opt{
-				Platform: &p,
-				ImageOpt: &sourceresolver.ResolveImageOpt{ResolveMode: bs.resolveMode},
+				ImageOpt: &sourceresolver.ResolveImageOpt{Platform: &p, ResolveMode: bs.resolveMode},
 			})
 			if err != nil {
 				return nil, nil, fmt.Errorf("resolve base image %s: %w", imageRef, err)

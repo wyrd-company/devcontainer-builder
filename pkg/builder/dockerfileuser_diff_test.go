@@ -59,7 +59,7 @@ func (r imageResolver) ResolveImageConfig(_ context.Context, ref string, _ sourc
 // returns the USER of the resulting image config.
 func buildkitUser(t *testing.T, dockerfile, target string, buildArgs map[string]string, p ocispecs.Platform) string {
 	t.Helper()
-	_, img, _, _, err := dockerfile2llb.Dockerfile2LLB(context.Background(), []byte(dockerfile), dockerfile2llb.ConvertOpt{
+	res, err := dockerfile2llb.Dockerfile2LLB(context.Background(), []byte(dockerfile), dockerfile2llb.ConvertOpt{
 		Config:         dockerui.Config{BuildArgs: buildArgs, Target: target},
 		TargetPlatform: &p,
 		MetaResolver:   imageResolver{t},
@@ -67,7 +67,7 @@ func buildkitUser(t *testing.T, dockerfile, target string, buildArgs map[string]
 	if err != nil {
 		t.Fatalf("dockerfile2llb: %v", err)
 	}
-	return img.Config.User
+	return res.Image.Config.User
 }
 
 // TestDockerfileUser_AgreesWithDockerfile2LLB checks the evaluator
