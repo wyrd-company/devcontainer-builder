@@ -327,3 +327,13 @@ returns before the graph. See [usage](usage.md#resolve-feature-dependencies).
 
 An HTTPS metadata retrieval failure retains the unexpanded archive entry;
 the report does not install or admit its archive contents.
+
+## Upgrade Feature lockfiles
+
+`resolver.Upgrade(ctx, features.UpgradeOptions{Workspace: folder, DryRun: true})`
+returns pretty lockfile JSON. `features.ValidateUpgradeOptions` validates the
+paired Feature and target-version flags. `ConfigPath` selects an explicit
+configuration. `Feature` and `TargetVersion` update a requirement before
+resolution, including in dry-run mode. Existing lockfile pins remain in use;
+dry-run can refresh an existing lockfile. Resolution uses the resolver's native
+OCI client and does not build or install Features.

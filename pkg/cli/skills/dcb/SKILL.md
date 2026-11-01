@@ -20,6 +20,10 @@ passes through unchanged. An explicit `--` before the command also works.
 
 Invocations except help and exec normally emit one JSON object on one stdout line.
 `outdated` emits its version report instead.
+`upgrade` writes no stdout on success, or pretty lockfile JSON with `--dry-run`.
+It retains existing integrity pins. The paired `--feature`/`--target-version`
+flags update a requirement before resolution, including during dry-run.
+Dry-run can refresh an existing lockfile. Operation errors use stderr and exit 1.
 `features resolve-dependencies` emits a Mermaid graph followed by pretty JSON
 installation order. It reads `.devcontainer.json` before
 `.devcontainer/devcontainer.json`, uses lockfile pins, and does not install
