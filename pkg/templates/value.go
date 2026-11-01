@@ -46,105 +46,119 @@ func (p *metadataParser) quoted() []byte {
 	}
 	return p.data[start:p.at]
 }
+
+// value dispatches validated JSON to the parser for its value kind.
 func (p *metadataParser) value() []byte {
 	p.space()
 	switch p.data[p.at] {
 	case '"':
 		return p.quoted()
 	case '{':
-		p.at++
-		p.space()
-		type member struct {
-			key, value []byte
-			index      uint64
-			numeric    bool
-		}
-		var members []member
-		seen := map[string]int{}
-		for p.data[p.at] != '}' {
-			key := p.quoted()
-			p.space()
-			p.at++
-			value := p.value()
-			identity := metadataKey(key)
-			if i, ok := seen[identity]; ok {
-				members[i].value = value
-			} else {
-				var decoded string
-				_ = json.Unmarshal(key, &decoded)
-				n, e := strconv.ParseUint(decoded, 10, 32)
-				numeric := e == nil && n < math.MaxUint32 && strconv.FormatUint(n, 10) == decoded
-				seen[identity] = len(members)
-				members = append(members, member{key, value, n, numeric})
-			}
-			p.space()
-			if p.data[p.at] == ',' {
-				p.at++
-				p.space()
-			} else {
-				break
-			}
-		}
-		p.at++
-		sort.SliceStable(members, func(i, j int) bool {
-			a, b := members[i], members[j]
-			if a.numeric != b.numeric {
-				return a.numeric
-			}
-			return a.numeric && a.index < b.index
-		})
-		var out bytes.Buffer
-		out.WriteByte('{')
-		for i, m := range members {
-			if i > 0 {
-				out.WriteByte(',')
-			}
-			out.Write(m.key)
-			out.WriteByte(':')
-			out.Write(m.value)
-		}
-		out.WriteByte('}')
-		return out.Bytes()
+		return p.object()
 	case '[':
-		p.at++
-		p.space()
-		var out bytes.Buffer
-		out.WriteByte('[')
-		for p.data[p.at] != ']' {
-			if out.Len() > 1 {
-				out.WriteByte(',')
-			}
-			out.Write(p.value())
-			p.space()
-			if p.data[p.at] == ',' {
-				p.at++
-				p.space()
-			} else {
-				break
-			}
-		}
-		p.at++
-		out.WriteByte(']')
-		return out.Bytes()
+		return p.array()
 	default:
-		start := p.at
-		for p.at < len(p.data) && !strings.ContainsRune(" \t\r\n,]}", rune(p.data[p.at])) {
-			p.at++
-		}
-		raw := p.data[start:p.at]
-		if raw[0] == 't' || raw[0] == 'f' || raw[0] == 'n' {
-			return raw
-		}
-		number, _ := strconv.ParseFloat(string(raw), 64)
-		if math.IsInf(number, 0) || math.IsNaN(number) {
-			return []byte("null")
-		}
-		if number == 0 {
-			return []byte("0")
-		}
-		encoded, _ := json.Marshal(number)
-		return encoded
+		return p.primitive()
 	}
+}
+
+func (p *metadataParser) object() []byte {
+	p.at++
+	p.space()
+	type member struct {
+		key, value []byte
+		index      uint64
+		numeric    bool
+	}
+	var members []member
+	seen := map[string]int{}
+	for p.data[p.at] != '}' {
+		key := p.quoted()
+		p.space()
+		p.at++
+		value := p.value()
+		identity := metadataKey(key)
+		if i, ok := seen[identity]; ok {
+			members[i].value = value
+		} else {
+			var decoded string
+			_ = json.Unmarshal(key, &decoded)
+			n, e := strconv.ParseUint(decoded, 10, 32)
+			numeric := e == nil && n < math.MaxUint32 && strconv.FormatUint(n, 10) == decoded
+			seen[identity] = len(members)
+			members = append(members, member{key, value, n, numeric})
+		}
+		p.space()
+		if p.data[p.at] == ',' {
+			p.at++
+			p.space()
+		} else {
+			break
+		}
+	}
+	p.at++
+	sort.SliceStable(members, func(i, j int) bool {
+		a, b := members[i], members[j]
+		if a.numeric != b.numeric {
+			return a.numeric
+		}
+		return a.numeric && a.index < b.index
+	})
+	var out bytes.Buffer
+	out.WriteByte('{')
+	for i, m := range members {
+		if i > 0 {
+			out.WriteByte(',')
+		}
+		out.Write(m.key)
+		out.WriteByte(':')
+		out.Write(m.value)
+	}
+	out.WriteByte('}')
+	return out.Bytes()
+}
+
+func (p *metadataParser) array() []byte {
+	p.at++
+	p.space()
+	var out bytes.Buffer
+	out.WriteByte('[')
+	for p.data[p.at] != ']' {
+		if out.Len() > 1 {
+			out.WriteByte(',')
+		}
+		out.Write(p.value())
+		p.space()
+		if p.data[p.at] == ',' {
+			p.at++
+			p.space()
+		} else {
+			break
+		}
+	}
+	p.at++
+	out.WriteByte(']')
+	return out.Bytes()
+}
+
+func (p *metadataParser) primitive() []byte {
+	start := p.at
+	for p.at < len(p.data) && !strings.ContainsRune(" \t\r\n,]}", rune(p.data[p.at])) {
+		p.at++
+	}
+	raw := p.data[start:p.at]
+	if raw[0] == 't' || raw[0] == 'f' || raw[0] == 'n' {
+		return raw
+	}
+	number, _ := strconv.ParseFloat(string(raw), 64)
+	if math.IsInf(number, 0) || math.IsNaN(number) {
+		return []byte("null")
+	}
+	if number == 0 {
+		return []byte("0")
+	}
+	encoded, _ := json.Marshal(number)
+	return encoded
 }
 
 // Compare property names as UTF-16 units, including escaped lone surrogates.
