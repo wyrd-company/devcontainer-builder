@@ -12,3 +12,13 @@ func TestStringifyJSONCValuePreservesStringCodeUnits(t *testing.T) {
 		t.Fatalf("got %q; want %q", got, want)
 	}
 }
+
+func TestStringifyJSONValuePreservesOwnPrototypeProperty(t *testing.T) {
+	input := []byte(`{"custom":{"__proto__":{"sample":true},"value":1}}`)
+	if got := string(StringifyJSONValue(input)); got != string(input) {
+		t.Fatalf("lost own property: %s", got)
+	}
+	if got := string(StringifyJSONCValue(input)); got != `{"custom":{"value":1}}` {
+		t.Fatalf("JSONC metadata semantics changed: %s", got)
+	}
+}

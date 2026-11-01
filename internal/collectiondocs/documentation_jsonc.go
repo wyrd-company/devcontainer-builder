@@ -82,10 +82,11 @@ func documentationCanonical(s string) string {
 }
 
 type documentationParser struct {
-	data    string
-	at      int
-	token   byte
-	literal any
+	ownProperties bool // JSON.parse defines own keys instead of invoking prototype setters.
+	data          string
+	at            int
+	token         byte
+	literal       any
 }
 
 func (p *documentationParser) next() {
@@ -276,7 +277,7 @@ func (p *documentationParser) value() (any, bool) {
 				p.recover('}')
 				continue
 			}
-			if key == "__proto__" && documentationHasPrototypeSetter(o) {
+			if !p.ownProperties && key == "__proto__" && documentationHasPrototypeSetter(o) {
 				switch v.(type) {
 				case *documentationObject, []any, nil:
 					o.proto = v

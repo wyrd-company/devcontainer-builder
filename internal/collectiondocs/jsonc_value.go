@@ -151,3 +151,12 @@ func stringifyValue(value any) json.RawMessage {
 	}
 	return b.Bytes()
 }
+
+// StringifyJSONValue preserves own properties at JSON.parse boundaries. Its
+// input must be valid JSON; JSONC metadata continues through StringifyJSONCValue.
+func StringifyJSONValue(data []byte) json.RawMessage {
+	p := documentationParser{data: documentationUTF8(data), ownProperties: true}
+	p.next()
+	value, _ := p.value()
+	return stringifyValue(value)
+}

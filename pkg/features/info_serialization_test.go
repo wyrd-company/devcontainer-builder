@@ -51,3 +51,22 @@ func TestInfoPrettyRejectsInvalidJSON(t *testing.T) {
 		t.Fatalf("%q %v", got, err)
 	}
 }
+
+func TestInfoOwnPrototypePropertySurvivesReportAndHash(t *testing.T) {
+	raw := json.RawMessage(`{"__proto__":{"sample":true},"value":1}`)
+	if got := string(infoNormalize(raw)); got != string(raw) {
+		t.Fatalf("lost property: %s", got)
+	}
+	n := &infoNode{id: "sample", kind: "resolved", options: raw}
+	expectedRaw := `{"type":"resolved","userFeatureId":"sample","options":` + string(raw) + `,"dependsOn":[],"installsAfter":[],"roundPriority":0}`
+	sum := sha256.Sum256([]byte(expectedRaw))
+	if got, want := n.label(), fmt.Sprintf("%x[sample<br/><0>]", sum[:3]); got != want {
+		t.Fatalf("hash %s want %s", got, want)
+	}
+	r := newFakeRegistry(t)
+	r.manifests["collection/sample/manifests/1"] = []byte(`{"config":{"mediaType":"application/vnd.devcontainers"},"custom":` + string(raw) + `}`)
+	got, err := Info(r.resolver().OCI, "manifest", r.host()+"/collection/sample:1", "json")
+	if err != nil || !strings.Contains(got, `"__proto__"`) {
+		t.Fatalf("lost report property: %s %v", got, err)
+	}
+}
