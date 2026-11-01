@@ -39,3 +39,6 @@ until the first release. After that, include an intent for user-facing changes.
 
 The owning organization's community health policies apply, including its code of
 conduct, support guidance, and private security reporting policy.
+
+See [release operations](docs/runbooks/releasing.md) for publication retries
+and recovery from existing GitHub release assets.

@@ -11,6 +11,7 @@ import sys
 import tarfile
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 import channels
@@ -272,6 +273,67 @@ class ChannelsTests(unittest.TestCase):
         self.assertIn("different bytes", result.stderr)
         self.assertFalse(any(c[:2] == ["npm", "publish"] for c in self.calls()[count:]))
 
+    def test_npm_publishes_all_before_waiting_and_retries_only_missing_metadata(self):
+        clock = [0]
+        accepted = {}
+        events = []
+        def view(identity):
+            events.append(("view", identity))
+            return accepted.get(identity) if clock[0] >= 10 else None
+        def publish(args):
+            self.assertEqual(args[:2], ["npm", "publish"])
+            data = Path(args[2]).read_bytes()
+            with tarfile.open(args[2]) as archive:
+                meta = json.load(archive.extractfile("package/package.json"))
+            identity = meta["name"] + "@" + meta["version"]
+            self.assertNotIn(identity, accepted)
+            accepted[identity] = "sha512-" + base64.b64encode(hashlib.sha512(data).digest()).decode()
+            events.append(("publish", identity))
+            return subprocess.CompletedProcess(args, 0, "accepted", "")
+        def sleep(seconds):
+            self.assertEqual(len(accepted), 5)
+            clock[0] += seconds
+        with patch.object(channels, "npm_integrity", side_effect=view), patch.object(channels, "command", side_effect=publish), patch.object(channels.time, "monotonic", side_effect=lambda: clock[0]), patch.object(channels.time, "sleep", side_effect=sleep):
+            channels.publish_npm(self.root / "dist", VERSION)
+        self.assertEqual(len([e for e in events if e[0] == "publish"]), 5)
+        self.assertEqual(clock[0], 10)
+        self.assertEqual([e[0] for e in events][5:10], ["publish"] * 5)
+        # Even when metadata is absent again, receipts prevent another publish.
+        clock[0] = 0
+        with patch.object(channels, "npm_integrity", side_effect=view), patch.object(channels, "command", side_effect=AssertionError("must not republish accepted packages")), patch.object(channels.time, "monotonic", side_effect=lambda: clock[0]), patch.object(channels.time, "sleep", side_effect=sleep):
+            channels.publish_npm(self.root / "dist", VERSION)
+
+    def test_npm_visibility_timeout_is_bounded_and_receipts_survive(self):
+        clock = [0]
+        def sleep(seconds):
+            clock[0] += seconds
+        with patch.object(channels, "npm_integrity", return_value=None), patch.object(channels, "command", return_value=subprocess.CompletedProcess([], 0, "accepted", "")), patch.object(channels, "NPM_VISIBILITY_SECONDS", 20), patch.object(channels.time, "monotonic", side_effect=lambda: clock[0]), patch.object(channels.time, "sleep", side_effect=sleep):
+            with self.assertRaisesRegex(ValueError, "metadata is still unavailable"):
+                channels.publish_npm(self.root / "dist", VERSION)
+        self.assertEqual(clock[0], 20)
+        receipt = json.loads((self.root / "dist/npm-publication-receipts.json").read_text())
+        self.assertEqual(len(receipt["accepted"]), 5)
+
+    def test_receipt_conflict_prevents_any_publication(self):
+        identity = f"@wyrd-company/dcb@{VERSION}"
+        (self.root / "dist/npm-publication-receipts.json").write_text(json.dumps({"version": VERSION, "accepted": {identity: "sha512-different"}}))
+        result = self.execute("npm")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("receipt has different bytes", result.stderr)
+        self.assertFalse(any(c[:2] == ["npm", "publish"] for c in self.calls()))
+
+    def test_homebrew_publisher_retries_push_when_formula_has_no_diff(self):
+        tap = self.root / "tap"
+        git_env = __import__("git_env").git_env
+        remote = self.root / "example-remote.git"
+        subprocess.run(["git", "init", "--bare", "--initial-branch=main", str(remote)], check=True, capture_output=True, env=git_env(fixture=True))
+        subprocess.run(["git", "init", "--initial-branch=main", str(tap)], check=True, capture_output=True, env=git_env(fixture=True))
+        subprocess.run(["git", "-C", str(tap), "remote", "add", "origin", str(remote)], check=True, env=git_env(fixture=True))
+        channels.publish_homebrew(self.root / "dist", VERSION, tap)
+        first = subprocess.check_output(["git", "-C", str(tap), "rev-parse", "HEAD"], text=True, env=git_env()).strip()
+        channels.publish_homebrew(self.root / "dist", VERSION, tap)
+        self.assertEqual(subprocess.check_output(["git", "-C", str(remote), "rev-parse", "main"], text=True, env=git_env()).strip(), first)
+
     def test_command_failures_with_valid_json_are_not_success(self):
         with self.assertRaises(RuntimeError):
             channels.require_success(
@@ -318,7 +380,7 @@ class ChannelsTests(unittest.TestCase):
         self.save()
         result = self.execute("npm")
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn("does not yet match", result.stderr)
+        self.assertIn("different bytes", result.stderr)
 
     def test_registry_errors_are_not_treated_as_missing_versions(self):
         for channel, flag in [("github", "github_error"), ("npm", "npm_error")]:

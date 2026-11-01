@@ -10,6 +10,7 @@ from unittest.mock import patch
 
 from git_env import git_env
 import run as release_run
+import channels
 from test_release import ROOT, VERSION
 
 
@@ -77,21 +78,9 @@ class ReleaseGitEnvironmentTests(unittest.TestCase):
         self.git("-C", str(tap), "remote", "set-url", "origin", str(remote))
         (self.root / "dist").mkdir()
         (self.root / "dist/dcb.rb").write_text("example formula\n")
-        tools = self.root / "bin"
-        tools.mkdir()
-        # Only tag/channel checks are stubbed. All Git operations are real and
-        # both possible remotes are local repositories owned by this test.
-        python = tools / "python3"
-        python.write_text("#!/bin/sh\nexit 0\n")
-        python.chmod(0o755)
-        result = subprocess.run(
-            ["bash", str(ROOT / "scripts/release/publish.sh"), "homebrew", str(tap)],
-            cwd=self.root,
-            env={**os.environ, "PATH": str(tools) + os.pathsep + os.environ["PATH"],
-                 "RELEASE_VERSION": VERSION},
-            capture_output=True, text=True,
-        )
-        self.assertEqual(result.returncode, 0, result.stderr)
+        # The shared publisher executes real Git operations with inherited
+        # repository overrides removed; both remotes are test-owned.
+        channels.publish_homebrew(self.root / "dist", VERSION, tap)
         self.assert_sentinel_unchanged()
         self.assertEqual(
             self.git("--git-dir=" + str(remote), "show", "main:Formula/dcb.rb"),
