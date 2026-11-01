@@ -32,20 +32,37 @@ func ResolveDependencies(client *oci.Client, workspace string) (string, error) {
 	if st, e := os.Stat(configPath); e != nil || !st.Mode().IsRegular() {
 		configPath = filepath.Join(workspace, ".devcontainer", "devcontainer.json")
 	}
-	config, err := ReadVersionConfig(workspace, configPath)
-	if err != nil {
-		return "", err
-	}
-	if config.Features.Len() == 0 {
-		return "", fmt.Errorf("Could not parse features object in configuration %q", configPath)
-	}
 	data, err := os.ReadFile(configPath)
 	if err != nil {
 		return "", err
 	}
+	data = collectiondocs.StringifyJSONCValue(data)
 	var document spec.OrderedMap
-	if err = json.Unmarshal(collectiondocs.ReadJSONCValue(data), &document); err != nil {
+	if err = json.Unmarshal(data, &document); err != nil {
 		return "", err
+	}
+	var values any
+	_ = json.Unmarshal(data, &values)
+	if err = validateReportSubstitutions(values); err != nil {
+		return "", err
+	}
+	config := &spec.DevContainer{Path: configPath}
+	if raw := document.Values["features"]; len(raw) > 0 && raw[0] == '{' {
+		if err = json.Unmarshal(raw, &config.Features); err != nil {
+			return "", err
+		}
+	}
+	seen := map[string]bool{}
+	keys := []string{}
+	for _, id := range config.Features.Keys {
+		if !seen[id] {
+			keys = append(keys, id)
+			seen[id] = true
+		}
+	}
+	config.Features.Keys = keys
+	if config.Features.Len() == 0 {
+		return "", fmt.Errorf("Could not parse features object in configuration %q", configPath)
 	}
 	env := map[string]string{}
 	for _, entry := range os.Environ() {
@@ -55,10 +72,16 @@ func ResolveDependencies(client *oci.Client, workspace string) (string, error) {
 		}
 	}
 	ctx := substitute.Context{LocalWorkspaceFolder: workspace, LocalEnv: env}
+	var containerFolder string
+	_ = json.Unmarshal(document.Values["workspaceFolder"], &containerFolder)
+	if _, compose := document.Values["dockerComposeFile"]; !compose && containerFolder == "" {
+		containerFolder = "/workspaces/" + filepath.Base(workspace)
+	}
+	ctx.ContainerWorkspaceFolder = containerFolder
 	var subst func(json.RawMessage) json.RawMessage
 	subst = func(raw json.RawMessage) json.RawMessage {
 		var s string
-		if json.Unmarshal(raw, &s) == nil {
+		if len(raw) > 0 && raw[0] == '"' && json.Unmarshal(raw, &s) == nil {
 			return infoJSON(substitute.Substitute(ctx, s))
 		}
 		var obj spec.OrderedMap
@@ -115,6 +138,17 @@ func ResolveDependencies(client *oci.Client, workspace string) (string, error) {
 		}
 		duplicate := false
 		for _, old := range all {
+			x, y := old.compare.optionsValue, n.compare.optionsValue
+			isObject := func(v any) bool {
+				switch v.(type) {
+				case nil, map[string]any, []any:
+					return true
+				}
+				return false
+			}
+			if old.compare.ref().resource == n.compare.ref().resource && (x == nil || y == nil) && isObject(x) && isObject(y) {
+				return "", fmt.Errorf("cannot compare null Feature options")
+			}
 			if old.compare.equals(n.compare) {
 				duplicate = true
 				break
@@ -188,6 +222,11 @@ func ResolveDependencies(client *oci.Client, workspace string) (string, error) {
 		}
 	}
 	out.WriteByte('\n')
+	for _, n := range all {
+		if string(n.options) == "null" {
+			return out.String(), fmt.Errorf("cannot read options of null Feature")
+		}
+	}
 	if len(all) == 0 {
 		return out.String(), fmt.Errorf("No viable installation order!")
 	}
@@ -265,6 +304,9 @@ func ResolveDependencies(client *oci.Client, workspace string) (string, error) {
 
 func (n *infoNode) loadLocal(merge bool) (json.RawMessage, error) {
 	resolved := filepath.Join(filepath.Dir(n.configPath), n.id)
+	if strings.HasSuffix(n.id, string(filepath.Separator)) && !strings.HasSuffix(resolved, string(filepath.Separator)) {
+		resolved += string(filepath.Separator)
+	}
 	relative, err := filepath.Rel(filepath.Join(n.workspace, ".devcontainer"), resolved)
 	if err != nil || filepath.IsAbs(n.id) || strings.Contains(relative, "..") {
 		return nil, fmt.Errorf("local Feature must be inside .devcontainer: %s", n.id)

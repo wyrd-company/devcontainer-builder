@@ -6,8 +6,8 @@
 `dcb` builds and runs [development containers](https://containers.dev/) from a
 `devcontainer.json`. It builds images on the Docker daemon's built-in BuildKit,
 and creates, starts, and runs lifecycle commands in containers through the
-Docker Engine API. Commands other than `outdated` write one JSON result line
-to stdout, except
+Docker Engine API. Commands other than `outdated`, `features info`, and
+`features resolve-dependencies` write one JSON result line to stdout, except
 help, a valid `exec` invocation, and archive exports to stdout.
 
 Documentation is at [wyrd.foo/docs/dcb](https://wyrd.foo/docs/dcb), published

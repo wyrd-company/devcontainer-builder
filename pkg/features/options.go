@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strconv"
 
 	"golang.org/x/text/collate"
 	"golang.org/x/text/language"
@@ -14,6 +15,24 @@ import (
 // string or boolean values; other value types do not take part.
 // Mismatched types compare by their JavaScript type name.
 func compareOptions(a, b any) int {
+	object := func(v any) (map[string]any, bool) {
+		switch v := v.(type) {
+		case map[string]any:
+			return v, true
+		case []any:
+			m := map[string]any{}
+			for i, value := range v {
+				m[strconv.Itoa(i)] = value
+			}
+			return m, true
+		}
+		return nil, false
+	}
+	if av, ok := object(a); ok {
+		if bv, ok := object(b); ok {
+			return compareOptionObjects(av, bv)
+		}
+	}
 	switch av := a.(type) {
 	case string:
 		if bv, ok := b.(string); ok {

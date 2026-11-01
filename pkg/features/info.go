@@ -331,14 +331,18 @@ func (n *infoNode) load(c *oci.Client, merge bool) (json.RawMessage, error) {
 			}
 		}
 		b, e := os.ReadFile(filepath.Join(dir, "devcontainer-feature.json"))
-		if e != nil {
+		if e != nil && !(os.IsNotExist(e) && n.configPath != "") {
 			return nil, e
 		}
-		meta = collectiondocs.StringifyJSONCValue(b)
+		if e == nil {
+			meta = collectiondocs.StringifyJSONCValue(b)
+		}
 	}
 	var metadata Metadata
 	_ = json.Unmarshal(meta, &metadata)
-	n.aliases = metadata.aliases()
+	if len(meta) > 0 {
+		n.aliases = metadata.aliases()
+	}
 	_, value := decodeOptions(n.options)
 	n.compare = &node{res: Resolved{Source: n.id, Reference: &ref, Digest: digest, Metadata: metadata}, optionsValue: value}
 	resource := ref.Registry + "/" + ref.Repository
@@ -414,7 +418,9 @@ func (n *infoNode) loadTarball(c *oci.Client, merge bool) (json.RawMessage, erro
 	meta := collectiondocs.StringifyJSONCValue(data)
 	var metadata Metadata
 	_ = json.Unmarshal(meta, &metadata)
-	n.aliases = metadata.aliases()
+	if len(meta) > 0 {
+		n.aliases = metadata.aliases()
+	}
 	n.compare.res.Metadata = metadata
 	var a, b spec.OrderedMap
 	_ = json.Unmarshal(feature, &a)
