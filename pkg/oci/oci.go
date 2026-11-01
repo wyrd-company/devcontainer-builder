@@ -254,6 +254,9 @@ func (c *Client) fetchManifest(ref Reference, name string, depth int, choose chi
 		mediaTypeDockerManifest,
 		mediaTypeDockerManifestL,
 	}, ", "))
+	if choose == nil {
+		req.Header.Set("Accept", mediaTypeOCIManifest)
+	}
 	resp, err := c.do(req, ref)
 	if err != nil {
 		return nil, nil, fmt.Errorf("manifest %s: %w", name, err)

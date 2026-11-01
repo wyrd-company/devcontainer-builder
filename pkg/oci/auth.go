@@ -33,7 +33,7 @@ func (c *Client) do(req *http.Request, ref Reference) (*http.Response, error) {
 	if err != nil {
 		return nil, err
 	}
-	if resp.StatusCode == http.StatusUnauthorized {
+	if resp.StatusCode == http.StatusUnauthorized || (resp.StatusCode == http.StatusForbidden && resp.Header.Get("WWW-Authenticate") != "") {
 		challenge := resp.Header.Get("WWW-Authenticate")
 		_ = resp.Body.Close()
 		// Credentials are bound to the registry's origin: a challenge from
