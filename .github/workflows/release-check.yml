@@ -30,7 +30,7 @@ jobs:
       # ryl disable-line rule:line-length
       - uses: goreleaser/goreleaser-action@a4f02ab5355a589de60d917a659ce617ed19b3de # v7
         with:
-          version: v2.17.0
+          version: v2.19.0
           install-only: true
       - run: task release:yaml-tool
       - run: task release:inspectors
