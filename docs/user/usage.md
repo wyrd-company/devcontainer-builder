@@ -51,6 +51,7 @@ dcb down --workspace-folder .
 | `dcb features` | Resolves and downloads the configuration's features into a directory. |
 | `dcb features generate-docs` | Generates README files from local Feature metadata and notes. |
 | `dcb features package <target>` | Packages a local Feature or collection as archives with collection metadata. |
+| `dcb templates metadata <templateId>` | Fetches a published Template's metadata as JSON. |
 | `dcb server` | Downloads a VS Code server archive. |
 | `dcb skills` | Prints or installs the bundled agent skill. |
 | `dcb version` | Returns the `dcb` version. `dcb --version`, or `--version` on any command, returns the same result in place of the command. |
@@ -71,7 +72,7 @@ These upstream command families are not yet supported:
 - [`outdated`](https://github.com/wyrd-company/devcontainer-builder/issues/20)
 - [`upgrade`](https://github.com/wyrd-company/devcontainer-builder/issues/21)
 - [Feature authoring commands other than `features package` and `features generate-docs`](https://github.com/wyrd-company/devcontainer-builder/issues/22)
-- [`templates`](https://github.com/wyrd-company/devcontainer-builder/issues/23)
+- [Template commands other than `templates metadata`](https://github.com/wyrd-company/devcontainer-builder/issues/23)
 
 ### Workspace flags
 
@@ -1085,3 +1086,17 @@ a shell has these credentials when neither `dcb` nor `git` has file
 capabilities, a set-user-ID or set-group-ID bit, or a security module domain
 change when it starts. The Dev Container specification does not define how the
 Git root is found.
+
+## Published Template metadata
+
+```sh
+dcb templates metadata ghcr.io/example/templates/sample:1
+```
+
+`templates metadata` reads the `dev.containers.metadata` annotation from an OCI
+artifact manifest. It writes the annotation's JSON value directly to stdout,
+without the usual result envelope. Missing references or metadata write `{}`
+and exit 1. Diagnostics use stderr. It does not download Template files.
+References include a registry and repository, use `latest` when no tag is given,
+and accept `@sha256:...` to verify a specific manifest. Reference text is
+lowercased, as upstream. Registry authentication uses Docker client credentials.

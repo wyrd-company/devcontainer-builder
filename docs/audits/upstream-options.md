@@ -440,7 +440,7 @@ when markers skip commands. Source: `injectHeadless.ts:364-410` and
 
 | Upstream option | dcb equivalent | Disposition | Unit | Reason / source |
 | --- | --- | --- | --- | --- |
-| --help | none | implement | templates | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: yargs built-in help. |
+| --help | --help | implemented | templates | Template group help. |
 | --version | version command | implement | sibling-unit | dcb registers --version on every command; this command is not implemented yet. Source: devContainersSpecCLI.ts (.version). |
 
 ### templates apply
@@ -470,11 +470,13 @@ when markers skip commands. Source: `injectHeadless.ts:364-410` and
 
 ### templates metadata
 
-| Upstream option | dcb equivalent | Disposition | Unit | Reason / source |
+| Upstream option | dcb option | Disposition | Unit | Notes |
 | --- | --- | --- | --- | --- |
-| --log-level | none | implement | template-metadata | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: templatesCLI/metadata.ts:13. |
-| --help | none | implement | template-metadata | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: yargs built-in help. |
-| --version | version command | implement | sibling-unit | dcb registers --version on every command; this command is not implemented yet. Source: devContainersSpecCLI.ts (.version). |
+| --log-level | --log-level | implemented | template-metadata | Inherited diagnostics flag. Library reads the OCI annotation; stdout carries the JSON value. |
+| --help | --help | implemented | template-metadata | Command help. |
+
+`templateId` is a required positional reference. Tag and digest forms use the
+upstream collection parser semantics. The command reads no layers.
 
 ### templates publish
 
