@@ -91,7 +91,7 @@ func outdatedTable(report features.VersionReport) string {
 				b.WriteString(strings.Repeat(" ", widths[i]-size(v)+2))
 			}
 		}
-		lines[j] = b.String()
+		lines[j] = strings.TrimRight(b.String(), " \t\r\n")
 	}
 	return strings.Join(lines, "\n")
 }
@@ -103,6 +103,12 @@ func versionText(value any) string {
 		return "-"
 	case string:
 		return v
+	case float64:
+		if v == 0 {
+			return "0"
+		}
+		encoded, _ := json.Marshal(v)
+		return string(encoded)
 	case []any:
 		parts := make([]string, len(v))
 		for i, item := range v {

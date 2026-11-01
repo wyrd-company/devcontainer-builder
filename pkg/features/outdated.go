@@ -185,7 +185,7 @@ func LoadVersionInfo(client *oci.Client, config *spec.DevContainer) (VersionRepo
 		} else if ref.Tag == "latest" {
 			v.Wanted = v.Latest
 		} else {
-			constraint, e := semver.NewConstraint(ref.Tag)
+			constraint, e := reportConstraint(ref.Tag)
 			if e == nil {
 				for i := len(versions) - 1; i >= 0; i-- {
 					candidate, _ := strictVersion(versions[i])
@@ -466,4 +466,15 @@ func reportTruthy(value any) bool {
 	default:
 		return true
 	}
+}
+
+// OCI tag syntax admits numeric components which strict node-semver ranges reject.
+func reportConstraint(tag string) (*semver.Constraints, error) {
+	core := strings.TrimPrefix(strings.SplitN(tag, "-", 2)[0], "v")
+	for _, part := range strings.Split(core, ".") {
+		if len(part) > 1 && part[0] == '0' && strings.IndexFunc(part, func(r rune) bool { return r < '0' || r > '9' }) < 0 {
+			return nil, fmt.Errorf("invalid strict semver range %q", tag)
+		}
+	}
+	return semver.NewConstraint(tag)
 }
