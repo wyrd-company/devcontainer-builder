@@ -63,6 +63,10 @@ func TestTemplatesMetadataReviewRegressions(t *testing.T) {
 			t.Error("advertised unsupported media type")
 		}
 		w.Header().Set("Content-Type", "application/vnd.oci.image.manifest.v1+json")
+		if strings.Contains(r.URL.Path, "nullmanifest") {
+			_, _ = w.Write([]byte(`null`))
+			return
+		}
 		if strings.Contains(r.URL.Path, "noconfig") {
 			_, _ = w.Write([]byte(`{"schemaVersion":2}`))
 			return
@@ -88,6 +92,7 @@ func TestTemplatesMetadataReviewRegressions(t *testing.T) {
 		output      string
 	}{
 		{"collection/auth403", 0, 2, "{\"id\":\"last\",\"number\":9007199254740992,\"overflow\":null}\n"},
+		{"collection/nullmanifest", 1, 1, "{}\n"},
 		{"collection/noconfig", 1, 1, ""}, {"collection/nullconfig", 1, 1, ""},
 		{"sample", 1, 0, "{}\n"}, {"sample:stable", 1, 0, "{}\n"},
 	} {
