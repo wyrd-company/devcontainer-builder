@@ -77,7 +77,8 @@ if __name__ == "__main__":
             manifest.verify_handoff(args.dist / "release-manifest.json", commit, args.version)
             manifest.verify_assets(args.dist, args.version)
             if args.operation == "npm":
-                channels.publish_npm(args.dist, args.version)
+                # workflow_dispatch attests the tooling ref, not the release tag.
+                channels.publish_npm(args.dist, args.version, provenance=False)
             else:
                 if args.tap is None:
                     parser.error("--tap is required")

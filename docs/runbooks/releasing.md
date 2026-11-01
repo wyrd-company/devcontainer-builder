@@ -29,9 +29,10 @@ Accepted identities and their integrities are saved as a workflow artifact,
 including when verification fails. A job retry restores those receipts and
 verifies accepted packages without another publish request.
 
-Homebrew runs after npm verification. Documentation and package-repository
-submission follow a successful Release workflow. A docs tag on the code
-release commit defers to that workflow; a docs-only tag publishes separately.
+Homebrew runs after npm verification and refuses to replace a newer formula.
+Documentation and package-repository submission follow a successful Release
+workflow. A docs tag on the code release commit defers to that workflow; a
+docs-only tag publishes separately.
 
 ## Recover an existing release
 
@@ -47,6 +48,11 @@ It checks out the original release tag for packaging metadata and the npm
 launcher. The tag, manifest and assets must agree. It repacks npm tarballs
 and renders Homebrew from the original binaries; it does not compile, move
 release tags or replace GitHub assets. Already published npm bytes must match.
+
+The tag publisher attaches npm provenance from the release commit. Recovery
+omits npm provenance for missing packages: its workflow identity names the
+tooling commit, while the package sources come from the original release tag.
+Existing package attestations remain unchanged.
 
 Recovery uses the same npm visibility checks and saved acceptance receipts.
 Rerun its failed job to retain those receipts. A new manual recovery run has

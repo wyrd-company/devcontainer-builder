@@ -151,7 +151,7 @@ def wait_for_npm(packages):
         time.sleep(min(NPM_POLL_SECONDS, remaining))
 
 
-def publish_npm(dist, version):
+def publish_npm(dist, version, *, provenance=True):
     packages = []
     receipt_path = dist / "npm-publication-receipts.json"
     receipts = {"version": version, "accepted": {}}
@@ -198,7 +198,8 @@ def publish_npm(dist, version):
             continue
         require_success(
             command(
-                ["npm", "publish", str(archive), "--@wyrd-company:registry=https://registry.npmjs.org", "--access", "public", "--provenance"]
+                ["npm", "publish", str(archive), "--@wyrd-company:registry=https://registry.npmjs.org", "--access", "public"]
+                + (["--provenance"] if provenance else [])
             )
         )
         receipts["accepted"][identity] = local
@@ -211,11 +212,16 @@ def publish_npm(dist, version):
 
 def verify_homebrew(dist, version, tap):
     existing = tap / "Formula/dcb.rb"
-    if existing.exists() and re.search(
-        r'^\s*version "' + re.escape(version) + r'"\s*$',
-        existing.read_text(),
-        re.MULTILINE,
-    ):
+    if not existing.exists():
+        return
+    match = re.search(r'^\s*version "([^"]+)"\s*$', existing.read_text(), re.MULTILINE)
+    if match is None:
+        raise ValueError("existing Homebrew formula has no explicit version")
+    current = version_value(match[1])
+    requested = version_value(version)
+    if tuple(map(int, current.split("."))) > tuple(map(int, requested.split("."))):
+        raise ValueError(f"refusing to downgrade Homebrew from {current} to {requested}")
+    if current == requested:
         if existing.read_bytes() != (dist / "dcb.rb").read_bytes():
             raise ValueError(
                 "existing Homebrew formula for this version has different bytes"

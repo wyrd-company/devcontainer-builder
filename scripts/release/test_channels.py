@@ -273,6 +273,19 @@ class ChannelsTests(unittest.TestCase):
         self.assertIn("different bytes", result.stderr)
         self.assertFalse(any(c[:2] == ["npm", "publish"] for c in self.calls()[count:]))
 
+    def test_npm_recovery_omits_provenance_and_still_verifies_all_bytes(self):
+        with patch.dict(os.environ, self.env):
+            channels.publish_npm(self.root / "dist", VERSION, provenance=False)
+        publishes = [c for c in self.calls() if c[:2] == ["npm", "publish"]]
+        self.assertEqual(len(publishes), 5)
+        self.assertTrue(all("--provenance" not in c for c in publishes))
+        self.load()
+        for archive in (self.root / "dist/npm/tarballs").glob("*.tgz"):
+            with tarfile.open(archive) as package:
+                meta = json.load(package.extractfile("package/package.json"))
+            identity = meta["name"] + "@" + meta["version"]
+            self.assertEqual(self.state["npm"][identity], "sha512-" + base64.b64encode(hashlib.sha512(archive.read_bytes()).digest()).decode())
+
     def test_npm_publishes_all_before_waiting_and_retries_only_missing_metadata(self):
         clock = [0]
         accepted = {}
@@ -329,7 +342,10 @@ class ChannelsTests(unittest.TestCase):
         subprocess.run(["git", "init", "--bare", "--initial-branch=main", str(remote)], check=True, capture_output=True, env=git_env(fixture=True))
         subprocess.run(["git", "init", "--initial-branch=main", str(tap)], check=True, capture_output=True, env=git_env(fixture=True))
         subprocess.run(["git", "-C", str(tap), "remote", "add", "origin", str(remote)], check=True, env=git_env(fixture=True))
+        (tap / "Formula").mkdir()
+        (tap / "Formula/dcb.rb").write_text('version "0.0.1"\n')
         channels.publish_homebrew(self.root / "dist", VERSION, tap)
+        self.assertEqual((tap / "Formula/dcb.rb").read_bytes(), (self.root / "dist/dcb.rb").read_bytes())
         first = subprocess.check_output(["git", "-C", str(tap), "rev-parse", "HEAD"], text=True, env=git_env()).strip()
         channels.publish_homebrew(self.root / "dist", VERSION, tap)
         self.assertEqual(subprocess.check_output(["git", "-C", str(remote), "rev-parse", "main"], text=True, env=git_env()).strip(), first)
@@ -408,6 +424,33 @@ class ChannelsTests(unittest.TestCase):
         self.assertNotEqual(self.execute("homebrew", str(tap)).returncode, 0)
         formula.write_text('version "0.0.1"\n')
         self.assertEqual(self.execute("homebrew", str(tap)).returncode, 0)
+
+    def test_homebrew_newer_version_fails_before_copy_or_git_writes(self):
+        tap = self.root / "tap"
+        (tap / "Formula").mkdir(parents=True)
+        formula = tap / "Formula/dcb.rb"
+        for version in ["1.2.4", "1.10.0", "2.0.0"]:
+            with self.subTest(version=version):
+                original = f'version "{version}"\n# existing formula\n'
+                formula.write_text(original)
+                with patch.object(channels.subprocess, "run", return_value=subprocess.CompletedProcess([], 0, "", "")) as git:
+                    with self.assertRaisesRegex(ValueError, "refusing to downgrade Homebrew"):
+                        channels.publish_homebrew(self.root / "dist", VERSION, tap)
+                    git.assert_not_called()
+                self.assertEqual(formula.read_text(), original)
+
+    def test_homebrew_unknown_version_fails_before_copy_or_git_writes(self):
+        tap = self.root / "tap"
+        (tap / "Formula").mkdir(parents=True)
+        formula = tap / "Formula/dcb.rb"
+        for original in ['# no explicit version\n', 'version "invalid"\n']:
+            with self.subTest(formula=original):
+                formula.write_text(original)
+                with patch.object(channels.subprocess, "run", return_value=subprocess.CompletedProcess([], 0, "", "")) as git:
+                    with self.assertRaises(ValueError):
+                        channels.publish_homebrew(self.root / "dist", VERSION, tap)
+                    git.assert_not_called()
+                self.assertEqual(formula.read_text(), original)
 
 
 if __name__ == "__main__":
