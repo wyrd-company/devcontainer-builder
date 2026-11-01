@@ -15,6 +15,10 @@ func TestValidateMounts(t *testing.T) {
 	for _, tc := range []struct{ name, input, want string }{
 		{"bind", `{"type":"bind","source":"/host/data","target":"/data"}`, ""},
 		{"volume", `{"type":"volume","target":"/data"}`, ""},
+		{"object_readonly_target", `{"type":"bind","source":"/host/data","target":"/data,readonly"}`, ""},
+		{"object_named_volume", `{"type":"volume","source":"sample-cache","target":"/cache"}`, ""},
+		{"readonly_true", `{"type":"bind","target":"/data","readonly":true}`, `unsupported object property "readonly"`},
+		{"readOnly_false", `{"type":"bind","target":"/data","readOnly":false}`, `unsupported object property "readOnly"`},
 		{"empty-strings", `{"type":"bind","source":"","target":""}`, ""},
 		{"readonly-string", `"type=bind,source=/host/data,target=/data,readonly"`, ""},
 		{"readOnly", `{"type":"bind","target":"/data","readOnly":true}`, `unsupported object property "readOnly"`},

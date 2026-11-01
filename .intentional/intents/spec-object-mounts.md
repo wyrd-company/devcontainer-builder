@@ -3,4 +3,4 @@ dcb: patch
 dcb-docs: patch
 ---
 
-Reject non-spec devcontainer mount object properties and direct read-only mounts to the portable string syntax.
+Honor read-only options in Docker mount object targets and reject non-spec mount object properties.

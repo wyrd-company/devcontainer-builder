@@ -257,29 +257,17 @@ func parseMountString(s string) *mount.Mount {
 	return m
 }
 
+// parseMountObject uses upstream generateMountCommand's serialization. Options
+// in target, such as "/data,readonly", are Docker mount options, not path text.
 func parseMountObject(o map[string]any) *mount.Mount {
-	m := &mount.Mount{}
-	for k, raw := range o {
-		s, ok := raw.(string)
-		if !ok {
-			continue
-		}
-		switch k {
-		case "type":
-			m.Type = mount.Type(s)
-		case "source":
-			m.Source = s
-		case "target":
-			m.Target = s
-		}
+	typ, _ := o["type"].(string)
+	source, _ := o["source"].(string)
+	target, _ := o["target"].(string)
+	args := "type=" + typ + ","
+	if source != "" {
+		args += "src=" + source + ","
 	}
-	if m.Type == "" {
-		m.Type = mount.TypeBind
-	}
-	if m.Target == "" {
-		return nil
-	}
-	return m
+	return parseMountString(args + "dst=" + target)
 }
 
 func upsertEnv(env []string, k, v string) []string {

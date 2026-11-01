@@ -89,13 +89,47 @@ identity labels. To replace an existing container with the configured name, use
 `dcb up --remove-existing-container`. A name held by another container is an error;
 dcb does not remove that container.
 
-Mount objects follow the Dev Container specification: `type` (`bind` or
-`volume`) and `target` are required strings; `source` is an optional string.
-Other object properties are errors. For a read-only bind mount, use a string:
+### mounts
+
+Mounts accept strings or objects. Objects have only `type` (`bind` or `volume`),
+`source`, and `target`. The `type` and `target` strings are required; `source`
+is optional. A plain object mount is read-write:
 
 ```json
-"mounts": ["type=bind,source=/host/data,target=/data,readonly"]
+{
+  "mounts": [
+    { "type": "bind", "source": "/host/data", "target": "/data" },
+    { "type": "volume", "source": "sample-cache", "target": "/cache" }
+  ]
+}
 ```
+
+On the Docker host, put `,readonly` in the object's `target` to make the mount
+read-only. As upstream does, dcb converts the object to Docker mount arguments,
+so `/data,readonly` means a read-only mount at `/data`. The `/data,ro` form
+works too:
+
+```json
+{
+  "mounts": [
+    { "type": "bind", "source": "/host/data", "target": "/data,readonly" },
+    { "type": "bind", "source": "/host/shared", "target": "/shared,ro" }
+  ]
+}
+```
+
+The equivalent string form is:
+
+```json
+{
+  "mounts": ["type=bind,source=/host/data,target=/data,readonly"]
+}
+```
+
+Separate object properties such as `readOnly` or `readonly` are not in the
+Dev Container specification. dcb rejects them with an error; use the `target`
+option or string form above. Compose uses its own volume syntax; the Docker
+comma-option example does not define Compose volume options.
 
 ## Image metadata
 

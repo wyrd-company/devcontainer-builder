@@ -27,7 +27,13 @@ func TestDockerObjectMountsCLI(t *testing.T) {
 	volume := fmt.Sprintf("sample-mount-%d", time.Now().UnixNano())
 	config := map[string]any{
 		"image": image, "workspaceMount": "type=volume,source=" + volume + ",target=/workspace", "workspaceFolder": "/workspace",
-		"mounts": []any{"type=bind,source=/tmp,target=/sample-data,readonly", map[string]any{"type": "volume", "target": "/object-data"}},
+		"mounts": []any{
+			"type=bind,source=/tmp,target=/string-readonly,readonly",
+			map[string]any{"type": "bind", "source": "/tmp", "target": "/object-readonly,readonly"},
+			map[string]any{"type": "bind", "source": "/tmp", "target": "/object-ro,ro"},
+			map[string]any{"type": "bind", "source": "/tmp", "target": "/object-bind"},
+			map[string]any{"type": "volume", "target": "/object-data"},
+		},
 	}
 	data, err := json.Marshal(config)
 	if err != nil {
@@ -51,23 +57,29 @@ func TestDockerObjectMountsCLI(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	foundBind, foundObject := false, false
+	wants := map[string]bool{"/string-readonly": false, "/object-readonly": false, "/object-ro": false, "/object-bind": true, "/object-data": true}
 	for _, m := range info.Mounts {
-		switch m.Destination {
-		case "/sample-data":
-			foundBind = true
-			if m.RW {
-				t.Fatal("readonly string mount is writable")
+		if writable, ok := wants[m.Destination]; ok {
+			if m.RW != writable {
+				t.Fatalf("mount %s writable=%v, want %v", m.Destination, m.RW, writable)
 			}
-		case "/object-data":
-			foundObject = true
-			if !m.RW {
-				t.Fatal("valid object mount is not writable")
-			}
+			delete(wants, m.Destination)
 		}
 	}
-	if !foundBind || !foundObject {
-		t.Fatalf("mounts=%+v", info.Mounts)
+	if len(wants) != 0 {
+		t.Fatalf("missing mounts %v; actual=%+v", wants, info.Mounts)
 	}
-	hostRunCommand(t, os.Environ(), bin, "exec", "--workspace-folder", workspace, "--", "sh", "-c", `touch /object-data/sample && if touch /sample-data/sample-mount-write-probe; then exit 1; fi`)
+	t.Run("object_and_string_readonly_deny_writes", func(t *testing.T) {
+		script := fmt.Sprintf(`set -eu
+probe=%s
+trap 'rm -f "/object-bind/$probe"' EXIT
+touch /object-data/sample
+printf original > "/object-bind/$probe"
+for target in /string-readonly /object-readonly /object-ro; do
+ test "$(cat "$target/$probe")" = original
+ if printf changed > "$target/$probe"; then exit 1; fi
+done
+test "$(cat "/object-bind/$probe")" = original`, volume)
+		hostRunCommand(t, os.Environ(), bin, "exec", "--workspace-folder", workspace, "--", "sh", "-c", script)
+	})
 }

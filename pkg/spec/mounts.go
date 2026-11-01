@@ -32,7 +32,7 @@ func (d *DevContainer) ValidateMounts() error {
 					return fmt.Errorf("mounts[%d].%s: expected a string", i, key)
 				}
 			default:
-				return fmt.Errorf("mounts[%d]: unsupported object property %q; mount objects allow only type, source, and target; for read-only mounts use a string such as type=bind,source=/host/data,target=/data,readonly", i, key)
+				return fmt.Errorf("mounts[%d]: unsupported object property %q; mount objects allow only type, source, and target; for Docker read-only mounts use target \"/data,readonly\" or a mount string ending in ,readonly", i, key)
 			}
 		}
 		typ, ok := obj["type"].(string)
