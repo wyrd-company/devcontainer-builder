@@ -83,6 +83,12 @@ and do not replace it. An unknown flag is an error, so that a typing error does
 not change the container. `--entrypoint` is an error, because `dcb` sets the
 entrypoint that keeps the container running.
 
+`--name sample-dev` and `--name=sample-dev` set the Docker container name.
+Without `--name`, Docker chooses the name. dcb finds and reuses containers by
+identity labels. To replace an existing container with the configured name, use
+`dcb up --remove-existing-container`. A name held by another container is an error;
+dcb does not remove that container.
+
 ## Image metadata
 
 `dcb build` and `dcb up` write the `devcontainer.metadata` label on the image

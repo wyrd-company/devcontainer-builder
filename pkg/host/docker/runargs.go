@@ -13,24 +13,26 @@ import (
 
 // applyRunArgs parses docker-CLI-style flags from a devcontainer.json
 // runArgs array and folds them into cfg / host. Strings have already
-// been variable-substituted by the caller.
+// been variable-substituted by the caller. The returned name is the
+// separate Engine ContainerCreate name argument, not the container hostname.
 //
 // Unknown or malformed flags return an error rather than being silently
 // ignored: a silent drop of e.g. --network or --gpus could leave the
 // container running with surprising defaults.
-func applyRunArgs(args []string, cfg *container.Config, host *container.HostConfig) error {
+func applyRunArgs(args []string, cfg *container.Config, host *container.HostConfig) (string, error) {
 	p := &runArgsParser{args: args}
 	for p.more() {
 		if err := p.step(cfg, host); err != nil {
-			return err
+			return "", err
 		}
 	}
-	return nil
+	return p.name, nil
 }
 
 type runArgsParser struct {
 	args []string
 	i    int
+	name string
 }
 
 func (p *runArgsParser) more() bool { return p.i < len(p.args) }
@@ -110,11 +112,11 @@ func (p *runArgsParser) step(cfg *container.Config, host *container.HostConfig) 
 	case "-d", "--detach", "-i", "--interactive", "-t", "--tty", "--rm", "--sig-proxy":
 		// no-op
 	case "--name":
-		// We manage container naming via labels; ignore an explicit name
-		// rather than fight upstream tooling.
-		if _, err := take(); err != nil {
+		v, err := take()
+		if err != nil {
 			return err
 		}
+		p.name = v
 
 	// ---------------------------------------------------------------
 	// Single-value flags on Config.

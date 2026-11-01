@@ -9,6 +9,7 @@ import (
 
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/mount"
+	"github.com/docker/docker/errdefs"
 
 	"github.com/wyrd-company/devcontainer-builder/pkg/features"
 	"github.com/wyrd-company/devcontainer-builder/pkg/host/runner"
@@ -339,11 +340,12 @@ func (h *Host) create(
 ) (string, error) {
 	var cfg *container.Config
 	var host *container.HostConfig
+	var name string
 	var err error
 	if req.metadataEntries != nil {
-		cfg, host, err = buildContainerConfigWithEntrypoints(dc, nil, req.entrypoints, req.Image, containerWorkspace, req.LocalWorkspace, req.SpecPath)
+		cfg, host, name, err = buildContainerConfigWithEntrypoints(dc, nil, req.entrypoints, req.Image, containerWorkspace, req.LocalWorkspace, req.SpecPath)
 	} else {
-		cfg, host, err = buildContainerConfig(dc, req.Features, req.Image, containerWorkspace, req.LocalWorkspace, req.SpecPath)
+		cfg, host, name, err = buildContainerConfig(dc, req.Features, req.Image, containerWorkspace, req.LocalWorkspace, req.SpecPath)
 	}
 	if err == nil && req.metadataEntries != nil {
 		value, encodeErr := metadata.Encode(req.metadataEntries)
@@ -368,8 +370,11 @@ func (h *Host) create(
 			appendImageCommand(cfg, img.Config.Entrypoint, img.Config.Cmd)
 		}
 	}
-	resp, err := h.client.ContainerCreate(ctx, cfg, host, nil, nil, "")
+	resp, err := h.client.ContainerCreate(ctx, cfg, host, nil, nil, name)
 	if err != nil {
+		if name != "" && errdefs.IsConflict(err) {
+			return "", errorf("create: container name %q is already in use; choose another --name or remove the conflicting container: %w", name, err)
+		}
 		return "", errorf("create: %w", err)
 	}
 	return resp.ID, nil

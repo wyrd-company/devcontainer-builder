@@ -24,7 +24,7 @@ func TestRuntimeMetadata(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cfg, host, err := buildContainerConfigWithEntrypoints(dc, nil, entrypoints, "alpine", "/workspace", "", "")
+	cfg, host, _, err := buildContainerConfigWithEntrypoints(dc, nil, entrypoints, "alpine", "/workspace", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -75,7 +75,7 @@ func TestCreatePersistsRawMetadataAndWrapsEntrypoints(t *testing.T) {
 func TestFeatureRuntimeRequirements(t *testing.T) {
 	truth := true
 	resolved := []features.Resolved{{Source: "./sample", Metadata: features.Metadata{Init: &truth, Privileged: &truth, CapAdd: []string{"SYS_PTRACE"}, SecurityOpt: []string{"no-new-privileges"}, Mounts: []any{"type=volume,target=/sample"}}}}
-	_, host, err := buildContainerConfig(&spec.DevContainer{}, resolved, "alpine", "/workspace", "", "")
+	_, host, _, err := buildContainerConfig(&spec.DevContainer{}, resolved, "alpine", "/workspace", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
