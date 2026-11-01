@@ -31,7 +31,7 @@ func TestEmptyWorkspaceMount(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			cfg, host, err := buildContainerConfig(dc, nil, "alpine", "/tmp", "/host/sample", "")
+			cfg, host, _, err := buildContainerConfig(dc, nil, "alpine", "/tmp", "/host/sample", "")
 			if err != nil {
 				t.Fatal(err)
 			}
