@@ -25,7 +25,7 @@ var collectionTag = regexp.MustCompile(`^[a-z0-9_][a-z0-9._-]{0,127}$`)
 
 // Metadata fetches the dev.containers.metadata annotation of a published
 // Template. It returns the annotation's JSON value, including scalar or null
-// values, without fetching layers. A nil client uses Docker registry credentials.
+// values, with JavaScript number and object semantics, without fetching layers. A nil client uses Docker registry credentials.
 // References follow upstream collection syntax, with an explicit registry,
 // lowercase normalization, latest by default, and optional sha256 digest.
 func Metadata(client *oci.Client, identifier string) (json.RawMessage, error) {
@@ -50,6 +50,13 @@ func Metadata(client *oci.Client, identifier string) (json.RawMessage, error) {
 			return nil, fmt.Errorf("Template manifest does not match its digest")
 		}
 	}
+	var shape struct {
+		Config json.RawMessage `json:"config"`
+	}
+	_ = json.Unmarshal(body, &shape)
+	if len(shape.Config) == 0 || string(shape.Config) == "null" {
+		return nil, fmt.Errorf("Template manifest has no config object")
+	}
 	if manifest.Config.MediaType != "application/vnd.devcontainers" {
 		return nil, fmt.Errorf("%w: unexpected manifest config media type %q", ErrUnavailable, manifest.Config.MediaType)
 	}
@@ -60,7 +67,7 @@ func Metadata(client *oci.Client, identifier string) (json.RawMessage, error) {
 	if !json.Valid([]byte(metadata)) {
 		return nil, fmt.Errorf("Template manifest metadata is not valid JSON")
 	}
-	return json.RawMessage(metadata), nil
+	return metadataValue([]byte(metadata)), nil
 }
 
 func metadataReference(identifier string) (oci.Reference, error) {
@@ -85,7 +92,7 @@ func metadataReference(identifier string) (oci.Reference, error) {
 		return invalid()
 	}
 	parts := strings.Split(resource, "/")
-	if len(parts) < 2 {
+	if len(parts) < 3 {
 		return invalid()
 	}
 	if parts[1] == "devcontainers-contrib" {

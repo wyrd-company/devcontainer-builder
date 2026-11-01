@@ -277,7 +277,8 @@ that feature again, and the features installed after it.
 ## Read published Template metadata
 
 `templates.Metadata(client, "registry.example.test/collection/sample:1")` returns
-raw JSON from a Template manifest annotation. Pass a nil OCI client to use Docker
+JSON from a Template manifest annotation with upstream number rounding and
+object property semantics. Pass a nil OCI client to use Docker
 registry credentials, or supply an `oci.Client` with an HTTP client and credential
 source. The operation reads the manifest without fetching layers. Digest
 references verify the manifest bytes. Missing or malformed metadata returns an

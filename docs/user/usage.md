@@ -1099,4 +1099,7 @@ without the usual result envelope. Missing references or metadata write `{}`
 and exit 1. Diagnostics use stderr. It does not download Template files.
 References include a registry and repository, use `latest` when no tag is given,
 and accept `@sha256:...` to verify a specific manifest. Reference text is
-lowercased, as upstream. Registry authentication uses Docker client credentials.
+lowercased, as upstream. A reference includes a collection namespace before its
+Template name. Registry authentication uses Docker client credentials; exactly
+`localhost` uses plain HTTP, as upstream. Malformed metadata, missing manifest
+configuration, and digest mismatches exit 1 without JSON on stdout.
