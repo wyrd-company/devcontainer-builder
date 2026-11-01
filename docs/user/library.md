@@ -183,6 +183,24 @@ before returning. Cancellation uses the supplied context. See
 `TestPackageArchiveCanBeResolved` for packaging followed by archive resolution,
 and [Usage](/docs/dcb/usage#package-local-features) for archive naming and flags.
 
+## Report Feature versions
+
+`features.ReadVersionConfig(workspace, configPath)` discovers or reads a JSONC
+reporting configuration without requiring build fields. It reuses the collection
+reader's JavaScript-compatible JSONC recovery and object enumeration. Empty `configPath` uses
+workspace discovery. `features.LoadVersionInfo(client, config)` returns a
+`VersionReport` with `Features` and configuration `Order`. Its JSON marshaler
+preserves this order and omits unavailable fields. A nil client uses the existing
+registry credentials. Pass an `oci.Client` for a custom HTTP transport or source.
+`oci.Client.PublishedTags` retrieves unmodified registry tags;
+`features.StrictSortedVersions` filters and sorts full semver tags.
+
+Reporting does not install Features, resolve dependencies, or write lockfiles.
+Tag discovery failures produce unavailable fields; malformed lockfiles, digest
+mismatches, layer errors, and invalid metadata versions return errors. Digest
+metadata comes from the annotation or the first Feature layer. See
+[version reporting](usage.md#report-feature-versions) for current/wanted/latest.
+
 ## Registry credentials
 
 One credential source can serve every registry request of a workspace:

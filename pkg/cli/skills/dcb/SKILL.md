@@ -4,6 +4,7 @@ description: Build and manage development containers with dcb, inspect configura
 relationships:
   references: [CONTRIBUTING]
 ---
+
 # Development containers with dcb
 
 Use `dcb --help` to read command descriptions, common flags, and examples.
@@ -18,6 +19,7 @@ follow positional arguments.
 passes through unchanged. An explicit `--` before the command also works.
 
 Invocations except help and exec normally emit one JSON object on one stdout line.
+`outdated` emits its version report instead.
 Archive exports to stdout emit only archive bytes. An interactive terminal is
 refused with exit code 2 and a JSON error result; use a pipe or file destination.
 Check `outcome`: `success` or `error`. Errors include `message` and
@@ -166,13 +168,15 @@ as the remote user; the container needs `git`. A failed install still gives a
 JSON object of string, number or boolean values (numbers and booleans become
 their JavaScript text). Both apply only to that command's lifecycle
 commands and dotfiles install; `exec` does not get them. For these commands,
-configuration `remoteEnv` wins over `--remote-env`; secrets win over both. Secret values,
+configuration `remoteEnv` wins over `--remote-env`; secrets win over both.
+Secret values,
 and their quoted, JSON, base64 and URL-escaped forms, show as `********` in stderr
 and the result. An unreadable or malformed
 secrets file exits `1` and names the path, not the content.
 
 `dcb version` and `dcb --version` return the version. `dcb skills --list`
-lists bundled skills; `dcb skills dcb` prints this skill in the result's `skills[].content`.
+lists bundled skills; `dcb skills dcb` prints this skill in the result's
+`skills[].content`.
 `dcb skills install --dir .agents/skills` writes `dcb/SKILL.md` below the
 chosen directory.
 
@@ -186,12 +190,13 @@ independently of the include flags. Without a container, container environment
 references remain unresolved. Ordinary reads without an explicit container ID
 also work when Docker is unreachable.
 
-### Data folders
+## Data folders
 
 Use `--user-data-folder` on build, exec, read-configuration, run-user-commands,
 set-up, and up to place private feature/build staging inside a selected host
 folder. Explicit `--work-dir` overrides build staging. Existing contents stay
-intact. Compose up also stores inline configs and environment-backed configs/secrets there
+intact. Compose up also stores inline configs and environment-backed
+configs/secrets there
 (default: `$TMPDIR/dcb-compose`). Down discovers their private directories from
 Docker ownership records without repeating the folder option or supplying the
 source configuration. It removes materialized copies, preserves file-backed
@@ -240,3 +245,15 @@ ignore authored syntax directives and omit generated directives.
 `templates generate-docs` writes README.md in visible Template child folders from
 `devcontainer-template.json` and optional NOTES.md. It uses `-p` (default `.`),
 `--github-owner`, and `--github-repo`; success leaves stdout empty.
+
+## Report Feature versions
+
+Use `dcb outdated --workspace-folder .` for a text table, or add
+`--output-format json` for a `features` report with current, wanted, wantedMajor,
+latest, and latestMajor fields. Unavailable JSON fields are omitted. The report
+has no outcome field. Config order is retained. Local Features are omitted.
+Current uses the lockfile when present; wanted follows the configured tag or
+digest metadata; latest uses the highest full semver tag. Lockfiles are unchanged.
+This command needs registry access and no Docker daemon. `--config` selects an
+explicit file. User data folder is accepted and unused. Log levels are info,
+debug, and trace. Terminal dimensions must be supplied together.

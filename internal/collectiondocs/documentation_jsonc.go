@@ -29,8 +29,8 @@ type documentationObject struct {
 
 // The upstream docs reader discards jsonc-parser's error list. Retain values
 // recovered before/after syntax errors, rather than imposing strict JSON admission.
-// This reader follows that parser's object/array separator recovery, scoped to
-// documentation; configuration and packaging keep their existing strict readers.
+// This reader follows that parser's object/array separator recovery. Reporting
+// readers reuse it; build configuration and packaging keep strict admission.
 func documentationJSON(data []byte) any {
 	p := documentationParser{data: documentationUTF8(data)}
 	p.next()
