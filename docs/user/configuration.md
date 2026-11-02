@@ -350,8 +350,9 @@ cached by BuildKit.
 
 ## Container and remote users
 
-Native builds preserve the base image's `USER`. Generated Dockerfiles preserve
-it when the base image user can be resolved. If that lookup fails or image
+Native builds without Features preserve the base image's `USER`. Feature builds
+and generated Dockerfiles restore the inferred base image user, with explicit
+`root` when the base image has no user. If that lookup fails or image
 metadata resolution is skipped, feature user defaults and the final generated
 image `USER` fall back to `root`. A failed lookup also logs a warning.
 `containerUser` sets the identity of PID 1 and feature entrypoints when the

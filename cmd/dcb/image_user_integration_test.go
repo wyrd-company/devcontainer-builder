@@ -43,7 +43,8 @@ func TestDockerRootEntrypointWithRemoteUser(t *testing.T) {
 						removeImage(t, baseTag)
 					}
 				})
-				wantImageUser := ""
+				// Feature builds restore the inferred image USER, including explicit root.
+				wantImageUser := "root"
 				if source == "dockerfile" {
 					delete(config, "image")
 					config["build"] = map[string]any{"dockerfile": "Dockerfile"}
@@ -89,7 +90,7 @@ func TestDockerRootEntrypointWithRemoteUser(t *testing.T) {
 					writeConfig(map[string]any{"image": tag, "workspaceFolder": "/workspace", "workspaceMount": "type=volume,target=/workspace"})
 				}
 				hostRunCommand(t, os.Environ(), bin, "up", "--workspace-folder", workspace, "--image-name", tag, "--update-remote-user-uid-default", "never")
-				if got := inspectImage(t, tag).User; got != wantImageUser && !(generated && source == "image" && got == "root") {
+				if got := inspectImage(t, tag).User; got != wantImageUser {
 					t.Fatalf("image USER = %q, want base user %q", got, wantImageUser)
 				}
 				out := hostRunCommand(t, os.Environ(), bin, "exec", "--workspace-folder", workspace, "--", "sh", "-c",
