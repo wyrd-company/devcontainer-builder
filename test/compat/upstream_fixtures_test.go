@@ -285,12 +285,12 @@ func TestCuratedCLIUnsupportedBuildOptionsError(t *testing.T) {
 	workspace := filepath.Join(root, "reference", "cli", "src", "test", "configs", "dockerfile-with-target")
 
 	// This pinned fixture contains --label, which is supported. Keep the
-	// unsupported-option contract on a native session flag that remains unmapped.
+	// unsupported-option contract on a native build flag that remains unmapped.
 	dc, err := spec.LoadFromWorkspace(workspace)
 	if err != nil {
 		t.Fatal(err)
 	}
-	dc.Build.Options = append(dc.Build.Options, "--ssh", "default")
+	dc.Build.Options = append(dc.Build.Options, "--ulimit", "nofile=1024:1024")
 
 	_, err = builder.New().Build(context.Background(), builder.Options{
 		Spec:         dc,
@@ -418,4 +418,19 @@ func equalStrings(a, b []string) bool {
 		}
 	}
 	return true
+}
+
+// TestCuratedCLIBuildOptionSSH accepts native empty SSH options on the pinned fixture.
+func TestCuratedCLIBuildOptionSSH(t *testing.T) {
+	root := referenceRoot(t, "cli")
+	workspace := filepath.Join(root, "reference", "cli", "src", "test", "configs", "dockerfile-with-target")
+	dc, err := spec.LoadFromWorkspace(workspace)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dc.Build.Options = append(dc.Build.Options, "--ssh=")
+	_, err = builder.New().Generate(context.Background(), builder.Options{Spec: dc, Workspace: workspace, WorkDir: t.TempDir(), SkipFeatures: true, SkipImageMetaResolve: true})
+	if err != nil {
+		t.Fatalf("native empty SSH option rejected: %v", err)
+	}
 }
