@@ -56,3 +56,6 @@ with native array grammar, empty-key validation and last-key precedence.
 
 Build scratch-only Dockerfiles whose frontend result has no filesystem reference
 while retaining image configuration and normal nonempty filesystem builds.
+
+Map build.options build arguments to native Dockerfile solves with host inheritance,
+ordered precedence and independent config-only metadata and user inference.

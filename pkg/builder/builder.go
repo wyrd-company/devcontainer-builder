@@ -431,17 +431,17 @@ func prepareBaseImage(dc *spec.DevContainer, opts Options) (string, *buildkit.Do
 		return "", nil, err
 	}
 
-	network, err := buildNetworkMode(dc)
+	parsed, err := parseBuildOptions(dc)
 	if err != nil {
 		return "", nil, err
 	}
 	upstream := &buildkit.DockerfileBuild{
-		NetworkMode:         network,
+		NetworkMode:         parsed.Network,
 		OmitSyntaxDirective: opts.OmitSyntaxDirective,
 		ContextDir:          upstreamCtx,
 		DockerfileDir:       filepath.Dir(dfPath),
 		Filename:            filepath.Base(dfPath),
-		BuildArgs:           mergeArgs(buildArgsFromSpec(dc), opts.BuildArgs),
+		BuildArgs:           mergeArgs(mergeArgs(buildArgsFromSpec(dc), parsed.Args), opts.BuildArgs),
 	}
 	if dc.Build != nil && dc.Build.Target != "" {
 		upstream.Target = dc.Build.Target

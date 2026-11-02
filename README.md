@@ -101,7 +101,8 @@ Kubernetes, and convert configurations into Kubernetes Pods. They can be
 embedded in a service or an operator. See
 [Go libraries](https://wyrd.foo/docs/dcb/library).
 
-Dockerfile `build.options` supports native BuildKit networking and image labels.
+Dockerfile `build.options` supports native BuildKit networking, image labels,
+and build arguments.
 Other build option mappings remain explicit limitations; see
 [configuration conformance](docs/audits/schema-conformance.md).
 

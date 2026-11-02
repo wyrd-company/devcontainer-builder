@@ -364,8 +364,16 @@ OCI client and does not build or install Features.
 Dockerfile builds accept `build.options --network` with default, none or host.
 The builder maps these to `DockerfileBuild.NetworkMode`; standalone and nested
 Dockerfile solves request the host entitlement only for host mode. Remaining build
-flags other than image labels remain unsupported.
+flags other than image labels and build arguments remain unsupported.
 
 `build.options --label` supplies final image labels with native buildx array
 parsing and last-key precedence. Bare keys use empty values. Explicit
 `builder.Options.Labels` override configuration labels.
+
+Build options accept repeated `--build-arg KEY=VALUE` and `--build-arg=KEY=VALUE`.
+Arguments override `build.args`; explicit library build arguments apply last.
+Bare keys inherit the host environment when set. Unset bare keys leave earlier
+values intact; explicit empty values remain empty. Empty keys are invalid.
+Metadata and image user inference use `build.args` independently of these options,
+as in the pinned upstream CLI. Generated feature arguments retain their own
+staging and final image handling.

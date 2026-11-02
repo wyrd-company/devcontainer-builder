@@ -63,6 +63,7 @@ func TestBaseMetadataUsesLoadedConfigAndDockerfileTarget(t *testing.T) {
 		{"image", &spec.DevContainer{Image: "alpine:3.20"}, nil, "alpine:3.20"},
 		{"target", &spec.DevContainer{Path: filepath.Join(dir, ".devcontainer.json"), Build: &spec.Build{Dockerfile: "Dockerfile", Context: ".", Target: "selected"}}, nil, "alpine:3.20"},
 		{"arg", &spec.DevContainer{Path: filepath.Join(dir, ".devcontainer.json"), Build: &spec.Build{Dockerfile: "Dockerfile", Context: ".", Target: "selected", Args: map[string]string{"BASE": "ignored:tag"}}}, map[string]string{"BASE": "busybox:1.36"}, "busybox:1.36"},
+		{"options-do-not-alter-inference", &spec.DevContainer{Path: filepath.Join(dir, ".devcontainer.json"), Build: &spec.Build{Dockerfile: "Dockerfile", Target: "selected", Args: map[string]string{"BASE": "alpine:3.20"}, Options: []string{"--build-arg=BASE=busybox:1.36"}}}, nil, "alpine:3.20"},
 		{"default-stage", &spec.DevContainer{Path: filepath.Join(dir, ".devcontainer.json"), Dockerfile: "Dockerfile"}, nil, "busybox:1.36"},
 		{"scratch", &spec.DevContainer{Image: "scratch"}, nil, ""},
 	} {

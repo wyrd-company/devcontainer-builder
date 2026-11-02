@@ -36,7 +36,8 @@ objects accept string or string-array values. Nested command objects are invalid
 value uses the default network. These options control Dockerfile `RUN`
 instructions. Host mode requests BuildKit's `network.host` entitlement; the
 daemon must allow it. Custom container network names are not BuildKit build
-networks. Image labels are also supported, as described below. Remaining build flags
+networks. Image labels and build arguments are also supported, as described below.
+Remaining build flags
 return an explicit unsupported-option error.
 
 Build options also accept repeated `--label KEY=VALUE` or `--label=KEY=VALUE`.
@@ -383,3 +384,11 @@ sets the behavior when the configuration has no `updateRemoteUserUID`:
 | `on` | The Linux default and explicit macOS opt-in. Changes the IDs unless the configuration sets `updateRemoteUserUID: false`. |
 | `off` | On Linux, changes the IDs only when the configuration sets `updateRemoteUserUID: true`. Disables remapping on macOS. |
 | `never` | Never changes the IDs. |
+
+Build options accept repeated `--build-arg KEY=VALUE` and `--build-arg=KEY=VALUE`.
+Arguments override `build.args`; explicit library build arguments apply last.
+Bare keys inherit the host environment when set. Unset bare keys leave earlier
+values intact; explicit empty values remain empty. Empty keys are invalid.
+Metadata and image user inference use `build.args` independently of these options,
+as in the pinned upstream CLI. Generated feature arguments retain their own
+staging and final image handling.

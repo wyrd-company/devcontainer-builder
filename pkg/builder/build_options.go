@@ -17,6 +17,7 @@ import (
 type dockerBuildOptions struct {
 	Network string
 	Labels  map[string]string
+	Args    map[string]string
 }
 
 // buildNetworkMode retains the network-only view used by callers and tests.
@@ -36,6 +37,8 @@ func parseBuildOptions(dc *spec.DevContainer) (dockerBuildOptions, error) {
 	flags.SetOutput(io.Discard)
 	var mode string
 	var labels []string
+	var args []string
+	flags.StringArrayVar(&args, "build-arg", nil, "build-time variables")
 	flags.StringArrayVar(&labels, "label", nil, "image labels")
 	flags.StringVar(&mode, "network", "default", "network for Dockerfile RUN instructions")
 	if err := flags.Parse(dc.Build.Options); err != nil {
@@ -51,6 +54,19 @@ func parseBuildOptions(dc *spec.DevContainer) (dockerBuildOptions, error) {
 		}
 	}
 	parsed.Labels = dockeropts.ConvertKVStringsToMap(labels)
+	// Resolve each occurrence before merging, as native buildx does: an unset
+	// bare argument leaves an earlier value (including build.args) intact.
+	parsed.Args = make(map[string]string)
+	for _, arg := range args {
+		resolved, err := dockeropts.ValidateEnv(arg)
+		if err != nil {
+			return parsed, fmt.Errorf("build.options: build-arg: %w", err)
+		}
+		if key, value, ok := strings.Cut(resolved, "="); ok {
+			parsed.Args[key] = value
+		}
+	}
+
 	switch mode {
 	case "default", "":
 		parsed.Network = "sandbox"

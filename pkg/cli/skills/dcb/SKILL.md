@@ -350,7 +350,7 @@ option keys use the last value. Docker rejects logging options for driver `none`
 
 `build.options --network` supports default, none and host for Dockerfile RUN
 instructions. Repeated values use the last value. Host mode requests the native
-BuildKit network.host entitlement. The daemon must allow it. Build flags other than network and image labels
+BuildKit network.host entitlement. The daemon must allow it. Build flags other than network, image labels and build arguments
 currently return an explicit unsupported-option error.
 
 `build.options --label` sets image labels through native BuildKit. Repeated
@@ -359,3 +359,11 @@ staging. Explicit library labels override configuration labels.
 
 Scratch-only Dockerfiles can build without filesystem layers. Image configuration
 is retained when the Dockerfile frontend returns an empty filesystem.
+
+Build options accept repeated `--build-arg KEY=VALUE` and `--build-arg=KEY=VALUE`.
+Arguments override `build.args`; explicit library build arguments apply last.
+Bare keys inherit the host environment when set. Unset bare keys leave earlier
+values intact; explicit empty values remain empty. Empty keys are invalid.
+Metadata and image user inference use `build.args` independently of these options,
+as in the pinned upstream CLI. Generated feature arguments retain their own
+staging and final image handling.

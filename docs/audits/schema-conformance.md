@@ -66,7 +66,7 @@ runtime consumers require pinned differential checks and corrections:
   native integer and memory-size grammar. Platform enforcement is daemon-owned.
 - `build.options --network` maps default/empty, none and host modes to the
   Dockerfile frontend, with final scalar precedence and host entitlement on
-  both solve routes. Image labels map to the final image configuration. Other build flags still
+  both solve routes. Image labels map to the final image configuration. Build arguments map to native frontend arguments. Other build flags still
   need native mappings. The network
   comparison covers pinned argv and native BuildKit acceptance, not network
   traffic enforcement or full build flag coverage.
@@ -78,7 +78,7 @@ runtime consumers require pinned differential checks and corrections:
 Build options image labels use native buildx array parsing and last-key
 precedence. Empty keys fail before staging. Final image configuration retains
 base labels, applies configuration labels, then explicit library labels.
-Build arguments, target selection, cache, secrets and SSH remain queued. Target
+Target selection, cache, secrets and SSH remain queued. Target
 selection must account for upstream generated Dockerfile feature stages.
 
 Dockerfile gateway solves use native LLB scratch state when the frontend returns
@@ -90,3 +90,11 @@ Main integration requires a simulated rebase before any remote branch rewrite.
 Each correction needs tests, valid guard mutations with green controls, a clean
 full gate, and independent review. The command option inventory is a separate
 measurement and does not establish configuration schema conformance.
+
+Build options accept repeated `--build-arg KEY=VALUE` and `--build-arg=KEY=VALUE`.
+Arguments override `build.args`; explicit library build arguments apply last.
+Bare keys inherit the host environment when set. Unset bare keys leave earlier
+values intact; explicit empty values remain empty. Empty keys are invalid.
+Metadata and image user inference use `build.args` independently of these options,
+as in the pinned upstream CLI. Generated feature arguments retain their own
+staging and final image handling.

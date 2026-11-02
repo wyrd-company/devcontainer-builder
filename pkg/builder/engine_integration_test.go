@@ -217,3 +217,31 @@ func TestScratchOnlyBuildEngine(t *testing.T) {
 		}
 	}
 }
+
+// TestBuildOptionsArgsEngine checks the public builder-to-Dockerfile argument wire.
+func TestBuildOptionsArgsEngine(t *testing.T) {
+	ctx := context.Background()
+	cli := requireEngine(t, ctx)
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "Dockerfile"), "FROM scratch\nARG VALUE=default\nARG KEEP=default\nLABEL sample=$VALUE keep=$KEEP\n")
+	dc := &spec.DevContainer{Path: filepath.Join(dir, "devcontainer.json"), Build: &spec.Build{Dockerfile: "Dockerfile", Args: map[string]string{"VALUE": "config", "KEEP": "config"}, Options: []string{"--build-arg=VALUE=first", "--build-arg=VALUE=option"}}}
+	for _, explicit := range []map[string]string{nil, {"VALUE": "library"}} {
+		tag := fmt.Sprintf("dcb-build-args-test:%d", time.Now().UnixNano())
+		t.Cleanup(func() { _, _ = cli.ImageRemove(context.Background(), tag, imagetypes.RemoveOptions{Force: true}) })
+		_, err := New().Build(ctx, Options{Spec: dc, Workspace: dir, WorkDir: t.TempDir(), Docker: cli, Tags: []string{tag}, Load: true, SkipImageMetaResolve: true, BuildArgs: explicit, Stdout: io.Discard, Stderr: io.Discard})
+		if err != nil {
+			t.Fatal(err)
+		}
+		img, err := cli.ImageInspect(ctx, tag)
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := "option"
+		if explicit != nil {
+			want = "library"
+		}
+		if img.Config.Labels["sample"] != want || img.Config.Labels["keep"] != "config" {
+			t.Fatalf("labels=%v", img.Config.Labels)
+		}
+	}
+}
