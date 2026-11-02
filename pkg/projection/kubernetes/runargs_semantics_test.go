@@ -189,3 +189,19 @@ func TestRunArgsUnsetThenSetEnvironment(t *testing.T) {
 		}
 	}
 }
+
+func TestRunArgsMergedSecurityUnion(t *testing.T) {
+	for _, runArgs := range [][]string{nil, {"--security-opt=label=type:second_t", "--security-opt=seccomp=default"}} {
+		req := ProjectRequest{Image: "alpine", Spec: &spec.DevContainer{
+			RunArgs: runArgs, SecurityOpt: []string{"label=type:second_t", "label=type:first_t", "seccomp=default", "seccomp=unconfined"},
+		}, Features: []features.Resolved{{Metadata: features.Metadata{SecurityOpt: []string{"label=type:first_t", "seccomp=unconfined"}}}}}
+		pj, err := Project(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		sc := pj.Pod.Spec.Containers[0].SecurityContext
+		if sc.SELinuxOptions.Type != "second_t" || string(sc.SeccompProfile.Type) != "RuntimeDefault" {
+			t.Fatalf("SELinux=%+v seccomp=%+v", sc.SELinuxOptions, sc.SeccompProfile)
+		}
+	}
+}

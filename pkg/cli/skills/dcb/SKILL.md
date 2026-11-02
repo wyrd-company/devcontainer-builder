@@ -415,6 +415,7 @@ Kubernetes image-source `runArgs` maps native boolean assignments, combined and
 attached short forms, stdin and TTY. Bare environment keys use `LocalEnv` (nil
 uses the process environment); explicit empty maps disable inheritance. Final unset
 keys require `ImageConfig`; removing an image-owned variable returns an error.
-Merged security flags follow `runArgs`. Detach conflicts with inherited output
+Merged security flags follow `runArgs`; merged security options use first-seen
+union order. Detach conflicts with inherited output
 attachment, and enabled init has no PodSpec equivalent. Other Docker flag and
 Compose translations remain separate coverage.

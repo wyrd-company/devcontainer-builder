@@ -305,7 +305,14 @@ func applyFeatureFlags(c *corev1.Container, dc *spec.DevContainer, resolved []fe
 			}
 		}
 	}
+	// Merge metadata with pinned first-seen union semantics. runArgs were
+	// already applied separately and do not participate in this union.
+	seenSecurityOpt := map[string]bool{}
 	for _, opt := range secOpts {
+		if seenSecurityOpt[opt] {
+			continue
+		}
+		seenSecurityOpt[opt] = true
 		applySecurityOpt(c, opt)
 	}
 }
