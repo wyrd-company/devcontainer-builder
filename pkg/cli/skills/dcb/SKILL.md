@@ -1,8 +1,9 @@
 ---
 name: dcb
-description: Build and manage development containers with dcb, inspect
-configuration, run container commands and lifecycle hooks, or stage features and
-VS Code server archives.
+description: >-
+  Build and manage development containers with dcb, inspect configuration,
+  run container commands and lifecycle hooks, or stage features and
+  VS Code server archives.
 relationships:
   references: [CONTRIBUTING]
 ---
@@ -299,8 +300,8 @@ customizations from image metadata. Configuration and inherited customizations
 remain. `up --omit-config-remote-env-from-metadata` omits configuration
 remoteEnv
 from new metadata labels; remoteEnv persists by default and remains available to
-runtime commands. `build --omit-syntax-directive` and `up --omit-syntax-
-directive`
+runtime commands. `build --omit-syntax-directive` and
+`up --omit-syntax-directive`
 ignore authored syntax directives and omit generated directives.
 
 `templates generate-docs` writes README.md in visible Template child folders
@@ -403,8 +404,8 @@ Scratch-only Dockerfiles can build without filesystem layers. Image
 configuration
 is retained when the Dockerfile frontend returns an empty filesystem.
 
-Build options accept repeated `--build-arg KEY=VALUE` and `--build-
-arg=KEY=VALUE`.
+Build options accept repeated `--build-arg KEY=VALUE` and
+`--build-arg=KEY=VALUE`.
 Arguments override `build.args`; explicit library build arguments apply last.
 Bare keys inherit the host environment when set. Unset bare keys leave earlier
 values intact; explicit empty values remain empty. Empty keys are invalid.

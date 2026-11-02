@@ -105,8 +105,8 @@ Each correction needs tests, valid guard mutations with green controls, a clean
 full gate, and independent review. The command option inventory is a separate
 measurement and does not establish configuration schema conformance.
 
-Build options accept repeated `--build-arg KEY=VALUE` and `--build-
-arg=KEY=VALUE`.
+Build options accept repeated `--build-arg KEY=VALUE` and
+`--build-arg=KEY=VALUE`.
 Arguments override `build.args`; explicit library build arguments apply last.
 Bare keys inherit the host environment when set. Unset bare keys leave earlier
 values intact; explicit empty values remain empty. Empty keys are invalid.
