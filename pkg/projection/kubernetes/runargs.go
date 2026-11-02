@@ -49,6 +49,9 @@ func applyRunArgs(args []string, pod *corev1.Pod, c *corev1.Container, localEnv 
 			}
 		}
 	}
+	if p.autoRemove {
+		return fmt.Errorf("runArgs: --rm has no Kubernetes Pod deletion equivalent")
+	}
 	if p.init {
 		return fmt.Errorf("runArgs: --init has no Kubernetes equivalent (build a tini-style entrypoint into the image)")
 	}
@@ -64,6 +67,7 @@ func applyRunArgs(args []string, pod *corev1.Pod, c *corev1.Container, localEnv 
 type runArgsParser struct {
 	unsetEnv         []string
 	init, publishAll bool
+	autoRemove       bool
 	args             []string
 	i                int
 	localEnv         map[string]string
@@ -136,6 +140,8 @@ func (p *runArgsParser) step(pod *corev1.Pod, c *corev1.Container) error {
 			c.TTY = v
 		case "-d", "--detach":
 			p.detach = v
+		case "--rm":
+			p.autoRemove = v
 		case "--init":
 			p.init = v
 		case "-P", "--publish-all":
@@ -637,7 +643,10 @@ func (p *runArgsParser) step(pod *corev1.Pod, c *corev1.Container) error {
 		pod.Annotations[k] = av
 
 	case "--entrypoint":
-		return fmt.Errorf("runArgs: --entrypoint is not supported (the projection owns the keepalive entrypoint)")
+		// Pinned singleContainer appends --entrypoint /bin/sh after runArgs.
+		if _, err := take(); err != nil {
+			return err
+		}
 
 	default:
 		return fmt.Errorf("runArgs: unsupported flag %q", flag)

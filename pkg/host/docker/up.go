@@ -376,7 +376,7 @@ func (h *Host) create(
 	if err := h.applyGPUAvailability(ctx, dc, req.GPUAvailability, host); err != nil {
 		return "", err
 	}
-	if !overrideCommand(dc) && (len(req.entrypoints) > 0 || len(featureEntrypoints(req.Features)) > 0) {
+	if !overrideCommand(dc) {
 		img, err := h.client.ImageInspect(ctx, req.Image)
 		if err != nil {
 			return "", errorf("inspect image %s: %w", req.Image, err)

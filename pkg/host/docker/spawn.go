@@ -157,15 +157,11 @@ func buildContainerConfigEntrypointsControls(dc *spec.DevContainer, resolved []f
 		Env:    envSlice,
 		Labels: labels,
 	}
-	if overrideCommand(dc) || len(entrypoints) > 0 {
-		// Match upstream: shell entrypoint that runs the feature
-		// entrypoints and keeps the container alive until SIGTERM. With
-		// overrideCommand false the caller appends the image's
-		// entrypoint and command (appendImageCommand).
-		cfg.Entrypoint = strslice.StrSlice{"/bin/sh"}
-		cfg.Cmd = strslice.StrSlice{"-c", keepaliveScript(entrypoints), "-"}
-		cfg.StopSignal = "SIGTERM"
-	}
+	// The pinned CLI always installs its wrapper, even without Features.
+	// With overrideCommand false, create appends the inspected image command.
+	cfg.Entrypoint = strslice.StrSlice{"/bin/sh"}
+	cfg.Cmd = strslice.StrSlice{"-c", keepaliveScript(entrypoints), "-"}
+
 	if dc.ContainerUser != "" {
 		cfg.User = dc.ContainerUser
 	}

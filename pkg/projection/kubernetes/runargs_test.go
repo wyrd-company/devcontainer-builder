@@ -285,17 +285,21 @@ func TestRunArgs_RejectInit(t *testing.T) {
 	}
 }
 
-func TestRunArgs_RejectEntrypoint(t *testing.T) {
-	if err := projectArgsErr(t, "--entrypoint=/bin/bash"); err == nil {
-		t.Error("expected error for --entrypoint")
+func TestRunArgs_OverriddenEntrypoint(t *testing.T) {
+	// Pinned singleContainer.ts appends its shell entrypoint after runArgs.
+	pod := projectArgs(t, "--entrypoint=/bin/bash")
+	if got := pod.Spec.Containers[0].Command; len(got) != 1 || got[0] != "/bin/sh" {
+		t.Fatalf("entrypoint = %v", got)
+	}
+	if err := projectArgsErr(t, "--entrypoint"); err == nil {
+		t.Fatal("missing entrypoint value accepted")
 	}
 }
 
 func TestRunArgs_TolerateNoOpDockerFlags(t *testing.T) {
-	// These mirror the docker host's no-op set: -i / -t / -d / --rm /
-	// --sig-proxy. They should produce a valid pod with no extra
-	// fields.
-	pod := projectArgs(t, "-it", "--rm", "--sig-proxy=false")
+	// Client signal proxy and disabled automatic deletion add no environment.
+	// Enabled deletion is tested separately: a Pod has no automatic removal.
+	pod := projectArgs(t, "-it", "--rm=false", "--sig-proxy=false")
 	if len(pod.Spec.Containers[0].Env) != 0 {
 		t.Errorf("expected no env from no-op flags, got %+v", pod.Spec.Containers[0].Env)
 	}
@@ -348,4 +352,15 @@ func splitFlagForTest(s string) []string {
 		return []string{s}
 	}
 	return []string{s}
+}
+
+func TestRunArgs_AutomaticDeletion(t *testing.T) {
+	for _, args := range [][]string{{"--rm"}, {"--rm=true"}, {"--rm=false", "--rm"}} {
+		if err := projectArgsErr(t, args...); err == nil || !strings.Contains(err.Error(), "deletion equivalent") {
+			t.Fatalf("%v: expected unsupported deletion, got %v", args, err)
+		}
+	}
+	for _, args := range [][]string{{"--rm=false"}, {"--rm", "--rm=false"}} {
+		projectArgs(t, args...)
+	}
 }

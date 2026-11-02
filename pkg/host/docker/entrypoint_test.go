@@ -71,3 +71,30 @@ func TestCreate_OverrideCommandFalseWrapsImageCommand(t *testing.T) {
 		t.Fatalf("cmd = %q", created.Cmd)
 	}
 }
+
+// No Feature is needed for the pinned wrapper or image inspection.
+func TestCreate_ImageWrapperWithoutFeatures(t *testing.T) {
+	for _, command := range []string{`{"Entrypoint":["/image-entry","$VALUE"],"Cmd":["serve",""]}`, `{}`} {
+		for _, args := range [][]string{nil, {"--entrypoint=/ignored"}, {"--entrypoint", ""}} {
+			h, created := fakeDaemon(t, command)
+			override := false
+			if _, err := h.create(context.Background(), &spec.DevContainer{OverrideCommand: &override, RunArgs: args}, UpRequest{Image: "alpine"}, ""); err != nil {
+				t.Fatal(err)
+			}
+			if len(created.Entrypoint) != 1 || created.Entrypoint[0] != "/bin/sh" || len(created.Cmd) < 3 || created.Cmd[2] != "-" {
+				t.Fatalf("wrapper: %+v", created)
+			}
+			var image container.Config
+			if err := json.Unmarshal([]byte(command), &image); err != nil {
+				t.Fatal(err)
+			}
+			want := append(append([]string{}, image.Entrypoint...), image.Cmd...)
+			if strings.Join(created.Cmd[3:], "\x00") != strings.Join(want, "\x00") || len(created.Cmd[3:]) != len(want) {
+				t.Fatalf("image argv=%q want=%q", created.Cmd[3:], want)
+			}
+			if created.StopSignal != "" {
+				t.Fatalf("image stop signal overridden: %q", created.StopSignal)
+			}
+		}
+	}
+}

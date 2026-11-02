@@ -460,3 +460,11 @@ no executable returns a contextual error. Unset image-owned environment values
 return an error because Pod environment omission inherits image values. Explicit
 empty environment values remain empty. Authored command and environment dollars
 remain literal. Sidecars receive no primary configuration or Feature overlays.
+
+Image-source Docker containers always run the pinned shell wrapper, including
+`overrideCommand: false` without Features. That mode appends the inspected image
+Entrypoint and Cmd. The image stop signal remains inherited unless `runArgs`
+overrides it. Authored `--entrypoint` values are parsed and replaced by the
+wrapper on Docker and Kubernetes. Docker `--rm` uses native Engine automatic
+deletion. Kubernetes reports enabled `--rm` as unsupported because a standalone
+Pod has no equivalent deletion behavior; a final `--rm=false` is accepted.

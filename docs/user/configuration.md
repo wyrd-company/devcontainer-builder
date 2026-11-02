@@ -481,3 +481,11 @@ empty values stay empty. Generated override YAML escapes dollars for Compose
 interpolation; direct runtime values retain literal dollars. `remoteEnv` applies
 to exec and lifecycle commands. These checks cover native host command and
 environment handling; full Compose and schema conformance remain separate work.
+
+Image-source Docker containers always run the pinned shell wrapper, including
+`overrideCommand: false` without Features. That mode appends the inspected image
+Entrypoint and Cmd. The image stop signal remains inherited unless `runArgs`
+overrides it. Authored `--entrypoint` values are parsed and replaced by the
+wrapper on Docker and Kubernetes. Docker `--rm` uses native Engine automatic
+deletion. Kubernetes reports enabled `--rm` as unsupported because a standalone
+Pod has no equivalent deletion behavior; a final `--rm=false` is accepted.

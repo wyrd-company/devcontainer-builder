@@ -92,3 +92,7 @@ Preserve native Docker Compose command defaults, empty command overrides, image
 fallback, ordered Feature entrypoints and literal dollars. Keep remoteEnv
 exec-only, preserve environment precedence and remove unset image variables.
 Do not add stdin or TTY with the primary wrapper.
+
+Preserve the unconditional image-source wrapper and native image stop signal.
+Translate overridden Kubernetes entrypoints and report unsupported Pod automatic
+deletion instead of silently ignoring enabled runArgs --rm.

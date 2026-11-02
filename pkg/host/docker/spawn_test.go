@@ -145,8 +145,9 @@ func TestBuildContainerConfig_OverrideCommandFalsePreservesImageCommand(t *testi
 	if err != nil {
 		t.Fatalf("buildContainerConfig: %v", err)
 	}
-	if len(cfg.Entrypoint) != 0 || len(cfg.Cmd) != 0 || cfg.StopSignal != "" {
-		t.Fatalf("overrideCommand=false should leave image entrypoint/cmd alone, got entrypoint=%v cmd=%v stop=%q", cfg.Entrypoint, cfg.Cmd, cfg.StopSignal)
+	// Pinned singleContainer.ts always wraps; create appends image argv later.
+	if len(cfg.Entrypoint) != 1 || cfg.Entrypoint[0] != "/bin/sh" || len(cfg.Cmd) != 3 || cfg.StopSignal != "" {
+		t.Fatalf("overrideCommand=false should prepare the pinned image command wrapper, got entrypoint=%v cmd=%v stop=%q", cfg.Entrypoint, cfg.Cmd, cfg.StopSignal)
 	}
 }
 
