@@ -35,7 +35,10 @@ runtime consumers require pinned differential checks and corrections:
   flags. Merged init, privileged, capability and security option flags follow
   runArgs. Health and logging options retain native Docker values, final scalar precedence,
   health conflict checks and logging key precedence. Remaining Docker flag
-  coverage stays queued. CPU period, quota, and realtime values use Docker integer
+  coverage stays queued. Network endpoint flags retain first-attachment legacy
+  values, repeated native CSV attachments, aliases, IP addresses, MAC addresses,
+  links, driver options, gateway priority, and conflict validation. Endpoint
+  configuration reaches Engine creation; daemon enforcement stays daemon-owned. CPU period, quota, and realtime values use Docker integer
   parsing; NanoCPU values use the native exact rational parser. Swappiness and
   block I/O weight retain Docker integer forms and final scalar values. CPU
   shares, PID limits, and OOM score adjustments accept base-zero integers;

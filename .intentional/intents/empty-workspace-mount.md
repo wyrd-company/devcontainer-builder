@@ -31,3 +31,6 @@ including native validation, size units, repeated devices, and zero values.
 
 Preserve Docker storage options and Windows CPU and system-drive I/O creation
 controls with native value parsing and final-value precedence.
+
+Preserve native Docker network attachments, endpoint addresses, aliases, MAC
+addresses, and per-network options through Engine container creation.

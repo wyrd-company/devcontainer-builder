@@ -15,6 +15,7 @@ import (
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/api/types/mount"
+	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/api/types/strslice"
 
 	"github.com/wyrd-company/devcontainer-builder/pkg/features"
@@ -110,12 +111,13 @@ func buildContainerConfig(
 	dc *spec.DevContainer,
 	resolved []features.Resolved,
 	image, containerWorkspaceFolder, localFolder, configFilePath string,
+	networking ...*network.NetworkingConfig,
 ) (*container.Config, *container.HostConfig, string, error) {
 	merged := metadata.Merge(dc, metadata.Collect(nil, resolved, dc))
-	return buildContainerConfigWithEntrypoints(merged.DevContainer, resolved, merged.Entrypoints, image, containerWorkspaceFolder, localFolder, configFilePath)
+	return buildContainerConfigWithEntrypoints(merged.DevContainer, resolved, merged.Entrypoints, image, containerWorkspaceFolder, localFolder, configFilePath, networking...)
 }
 
-func buildContainerConfigWithEntrypoints(dc *spec.DevContainer, resolved []features.Resolved, entrypoints []string, image, containerWorkspaceFolder, localFolder, configFilePath string) (*container.Config, *container.HostConfig, string, error) {
+func buildContainerConfigWithEntrypoints(dc *spec.DevContainer, resolved []features.Resolved, entrypoints []string, image, containerWorkspaceFolder, localFolder, configFilePath string, networking ...*network.NetworkingConfig) (*container.Config, *container.HostConfig, string, error) {
 	if err := dc.ValidateMounts(); err != nil {
 		return nil, nil, "", err
 	}
@@ -184,7 +186,7 @@ func buildContainerConfigWithEntrypoints(dc *spec.DevContainer, resolved []featu
 		return nil, nil, "", err
 	}
 
-	name, err := applyRunArgs(dc.RunArgs, cfg, host)
+	name, err := applyRunArgs(dc.RunArgs, cfg, host, networking...)
 	if err != nil {
 		return nil, nil, "", err
 	}

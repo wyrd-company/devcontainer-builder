@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/network"
 	"github.com/docker/go-connections/nat"
 
 	"github.com/wyrd-company/devcontainer-builder/pkg/spec"
@@ -122,15 +123,20 @@ func TestApplyRunArgs_Restart(t *testing.T) {
 }
 
 func TestApplyRunArgs_ConfigFields(t *testing.T) {
-	cfg, _ := applyForTest(t, []string{
+	networking := &network.NetworkingConfig{}
+	cfg, host := &container.Config{}, &container.HostConfig{}
+	_, err := applyRunArgs([]string{
 		"--hostname=foo", "-u", "1000:1000", "--workdir=/w",
 		"--mac-address=02:42:ac:11:00:02", "--stop-signal=SIGINT",
 		"--stop-timeout", "30",
-	})
+	}, cfg, host, networking)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if cfg.Hostname != "foo" || cfg.User != "1000:1000" || cfg.WorkingDir != "/w" {
 		t.Errorf("cfg: %+v", cfg)
 	}
-	if cfg.MacAddress != "02:42:ac:11:00:02" || cfg.StopSignal != "SIGINT" {
+	if cfg.MacAddress != "" || networking.EndpointsConfig["default"].MacAddress != "02:42:ac:11:00:02" || cfg.StopSignal != "SIGINT" {
 		t.Errorf("mac/stop-signal: %+v", cfg)
 	}
 	if cfg.StopTimeout == nil || *cfg.StopTimeout != 30 {

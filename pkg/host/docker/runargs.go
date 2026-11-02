@@ -3,6 +3,7 @@ package docker
 import (
 	"encoding/csv"
 	"fmt"
+	"net"
 	"strconv"
 	"strings"
 	"time"
@@ -10,6 +11,7 @@ import (
 	dockeropts "github.com/docker/cli/opts"
 	"github.com/docker/docker/api/types/blkiodev"
 	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/network"
 	"github.com/docker/go-connections/nat"
 	"github.com/docker/go-units"
 )
@@ -22,7 +24,7 @@ import (
 // Unknown or malformed flags return an error rather than being silently
 // ignored: a silent drop of e.g. --network or --gpus could leave the
 // container running with surprising defaults.
-func applyRunArgs(args []string, cfg *container.Config, host *container.HostConfig) (string, error) {
+func applyRunArgs(args []string, cfg *container.Config, host *container.HostConfig, networking ...*network.NetworkingConfig) (string, error) {
 	p := &runArgsParser{args: args}
 	for p.more() {
 		if err := p.step(cfg, host); err != nil {
@@ -56,20 +58,30 @@ func applyRunArgs(args []string, cfg *container.Config, host *container.HostConf
 		}
 		cfg.Labels = merged
 	}
+	netConfig, err := p.applyNetworks(cfg, host)
+	if err != nil {
+		return "", fmt.Errorf("runArgs: network: %w", err)
+	}
+	for _, target := range networking {
+		*target = *netConfig
+	}
 	return p.name, nil
 }
 
 type runArgsParser struct {
-	args          []string
-	i             int
-	name          string
-	envFiles      []string
-	labelFiles    []string
-	health        container.HealthConfig
-	noHealthcheck bool
-	logDriver     string
-	logOptions    []string
-	swappiness    *int64
+	args               []string
+	i                  int
+	name               string
+	envFiles           []string
+	labelFiles         []string
+	health             container.HealthConfig
+	noHealthcheck      bool
+	logDriver          string
+	logOptions         []string
+	swappiness         *int64
+	networks           dockeropts.NetworkOpt
+	ip, ip6            net.IP
+	aliases, linkLocal []string
 }
 
 func (p *runArgsParser) more() bool { return p.i < len(p.args) }
@@ -273,7 +285,33 @@ func (p *runArgsParser) step(cfg *container.Config, host *container.HostConfig) 
 		if err != nil {
 			return err
 		}
-		host.NetworkMode = container.NetworkMode(v)
+		if err := p.networks.Set(v); err != nil {
+			return fmt.Errorf("runArgs: network: %w", err)
+		}
+	case "--ip", "--ip6":
+		v, err := take()
+		if err != nil {
+			return err
+		}
+		ip := net.ParseIP(strings.TrimSpace(v))
+		if ip == nil {
+			return fmt.Errorf("runArgs: invalid IP address %q", v)
+		}
+		if flag == "--ip" {
+			p.ip = ip
+		} else {
+			p.ip6 = ip
+		}
+	case "--net-alias", "--network-alias", "--link-local-ip":
+		v, err := take()
+		if err != nil {
+			return err
+		}
+		if flag == "--link-local-ip" {
+			p.linkLocal = append(p.linkLocal, v)
+		} else {
+			p.aliases = append(p.aliases, v)
+		}
 	case "--ipc":
 		v, err := take()
 		if err != nil {

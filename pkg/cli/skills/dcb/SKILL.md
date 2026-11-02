@@ -301,6 +301,13 @@ retain Docker integer parsing and final scalar values, including zero.
 `--oom-kill-disable` uses Docker boolean spellings. Daemon resource validation
 still applies.
 
+Docker network flags preserve repeated attachments and native per-network CSV
+options. Legacy `--ip`, `--ip6`, `--link-local-ip`, and network aliases apply
+to the first attachment. Endpoint MAC addresses, links, driver options, and
+gateway priority reach the Engine creation request. Conflicting legacy and
+per-network values return errors. Address allocation and network enforcement
+belong to the daemon.
+
 Docker storage options (`--storage-opt`) retain key/value entries and the last
 value for each key. Windows resource flags (`--cpu-count`, `--cpu-percent`,
 `--io-maxbandwidth`, `--io-maxiops`) map to Engine creation fields. CPU and IOPS
