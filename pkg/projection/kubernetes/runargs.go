@@ -2,9 +2,11 @@ package kubernetes
 
 import (
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 
+	oci "github.com/opencontainers/image-spec/specs-go/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 
@@ -24,21 +26,34 @@ import (
 // silently dropped — the same conservative posture pkg/host/docker
 // takes against unknown flags.
 //
-// Flags that pkg/host/docker tolerates as docker-runtime no-ops (-i,
-// -t, -d, --rm, --sig-proxy, --name) are also no-ops here.
-func applyRunArgs(args []string, pod *corev1.Pod, c *corev1.Container) error {
-	p := &runArgsParser{args: args}
+// Interactive stdin and TTY map to native container fields. Detach conflicts
+// with the pinned inherited output attachment; signal proxy is client-owned.
+func applyRunArgs(args []string, pod *corev1.Pod, c *corev1.Container, localEnv map[string]string, imageConfig *oci.ImageConfig) error {
+	p := &runArgsParser{args: args, localEnv: localEnv, imageConfig: imageConfig}
 	for p.more() {
 		if err := p.step(pod, c); err != nil {
 			return err
 		}
 	}
+	if p.init {
+		return fmt.Errorf("runArgs: --init has no Kubernetes equivalent (build a tini-style entrypoint into the image)")
+	}
+	if p.publishAll {
+		return fmt.Errorf("runArgs: --publish-all has no Kubernetes equivalent (declare ContainerPorts plus a Service for external reach)")
+	}
+	if p.detach {
+		return fmt.Errorf("runArgs: conflicting options: cannot specify both --attach and --detach")
+	}
 	return nil
 }
 
 type runArgsParser struct {
-	args []string
-	i    int
+	init, publishAll bool
+	imageConfig      *oci.ImageConfig
+	args             []string
+	i                int
+	localEnv         map[string]string
+	detach           bool
 }
 
 func (p *runArgsParser) more() bool { return p.i < len(p.args) }
@@ -60,8 +75,13 @@ func (p *runArgsParser) step(pod *corev1.Pod, c *corev1.Container) error {
 	if !strings.HasPrefix(a, "-") {
 		return fmt.Errorf("runArgs: positional argument %q is not allowed (only flags belong in runArgs)", a)
 	}
-	if isCombinedBoolShort(a) {
-		return nil
+	if len(a) > 2 && a[0] == '-' && a[1] != '-' && a[2] != '=' {
+		if strings.ContainsRune("ditP", rune(a[1])) {
+			p.args = append(append([]string{}, p.args[:p.i]...), append([]string{"-" + a[2:]}, p.args[p.i:]...)...)
+			a = a[:2]
+		} else if strings.ContainsRune("ahuwelpvmc", rune(a[1])) {
+			a = a[:2] + "=" + a[2:]
+		}
 	}
 
 	flag, val, hasVal := splitFlag(a)
@@ -74,37 +94,50 @@ func (p *runArgsParser) step(pod *corev1.Pod, c *corev1.Container) error {
 		}
 		return p.pop(), nil
 	}
-	requireNoValue := func() error {
-		if hasVal {
-			return fmt.Errorf("runArgs: flag %s does not take a value", flag)
+	boolean := func() (bool, error) {
+		if !hasVal {
+			return true, nil
 		}
-		return nil
+		v, err := strconv.ParseBool(val)
+		if err != nil {
+			return false, fmt.Errorf("runArgs: flag %s: %w", flag, err)
+		}
+		return v, nil
 	}
-
 	switch flag {
-	// --------------------------------------------------------------
-	// Booleans on SecurityContext.
-	// --------------------------------------------------------------
-	case "--privileged":
-		if err := requireNoValue(); err != nil {
+	case "--privileged", "--read-only", "--init", "-P", "--publish-all",
+		"-d", "--detach", "-i", "--interactive", "-t", "--tty", "--rm", "--sig-proxy":
+		v, err := boolean()
+		if err != nil {
 			return err
 		}
-		ensureSecCtx(c).Privileged = boolPtr(true)
-	case "--read-only":
-		if err := requireNoValue(); err != nil {
+		switch flag {
+		case "--privileged":
+			ensureSecCtx(c).Privileged = boolPtr(v)
+		case "--read-only":
+			ensureSecCtx(c).ReadOnlyRootFilesystem = boolPtr(v)
+		case "-i", "--interactive":
+			c.Stdin = v
+		case "-t", "--tty":
+			c.TTY = v
+		case "-d", "--detach":
+			p.detach = v
+		case "--init":
+			p.init = v
+		case "-P", "--publish-all":
+			p.publishAll = v
+		}
+	case "-a", "--attach":
+		v, err := take()
+		if err != nil {
 			return err
 		}
-		ensureSecCtx(c).ReadOnlyRootFilesystem = boolPtr(true)
-
-	// --init has no PodSpec equivalent. Kubernetes containers start
-	// as PID 1 of the container; the spec doesn't expose a tini-like
-	// reaper. The image itself is the place to put one.
-	case "--init":
-		return fmt.Errorf("runArgs: --init has no Kubernetes equivalent (PID 1 is the container's command; build a tini-style entrypoint into the image)")
-
-	// Tolerated docker-runtime no-ops.
-	case "-d", "--detach", "-i", "--interactive", "-t", "--tty", "--rm", "--sig-proxy":
-		// no-op
+		switch strings.ToLower(v) {
+		case "stdin": // Attachment is selected by the exec caller, not PodSpec.
+		case "stdout", "stderr":
+		default:
+			return fmt.Errorf("runArgs: --attach: valid streams are STDIN, STDOUT and STDERR")
+		}
 
 	// --name → metadata.name (only if not already set by the request).
 	case "--name":
@@ -115,9 +148,6 @@ func (p *runArgsParser) step(pod *corev1.Pod, c *corev1.Container) error {
 		if pod.Name == "" {
 			pod.Name = v
 		}
-
-	case "-P", "--publish-all":
-		return fmt.Errorf("runArgs: --publish-all has no Kubernetes equivalent (declare ContainerPorts plus a Service for external reach)")
 
 	// --------------------------------------------------------------
 	// Container-level fields.
@@ -404,10 +434,39 @@ func (p *runArgsParser) step(pod *corev1.Pod, c *corev1.Container) error {
 		if err != nil {
 			return err
 		}
-		if !strings.ContainsRune(v, '=') {
-			return fmt.Errorf("runArgs: --env %q: bare KEY form not supported, use KEY=VALUE", v)
+		k, ev, explicit := strings.Cut(v, "=")
+		if k == "" {
+			return fmt.Errorf("runArgs: --env: invalid environment variable %q", v)
 		}
-		k, ev := splitKV(v)
+		if !explicit {
+			var set bool
+			if p.localEnv != nil {
+				ev, set = p.localEnv[k]
+			} else {
+				ev, set = os.LookupEnv(k)
+			}
+			if !set {
+				// Pod Env cannot remove image-owned variables. Require inspection
+				// before accepting an unset key, and reject an inherited image key.
+				if p.imageConfig == nil {
+					return fmt.Errorf("runArgs: --env %q: ImageConfig is required for an unset host key", k)
+				}
+				for _, imageEnv := range p.imageConfig.Env {
+					imageKey, _, _ := strings.Cut(imageEnv, "=")
+					if imageKey == k {
+						return fmt.Errorf("runArgs: --env %q: unsetting image environment has no Kubernetes equivalent", k)
+					}
+				}
+				out := c.Env[:0]
+				for _, e := range c.Env {
+					if e.Name != k {
+						out = append(out, e)
+					}
+				}
+				c.Env = out
+				break
+			}
+		}
 		c.Env = upsertEnvVar(c.Env, k, ev)
 	case "--add-host":
 		v, err := take()
@@ -834,18 +893,6 @@ func splitFlag(a string) (flag, val string, hasVal bool) {
 		return a[:eq], a[eq+1:], true
 	}
 	return a, "", false
-}
-
-func isCombinedBoolShort(a string) bool {
-	if len(a) < 3 || a[0] != '-' || a[1] == '-' {
-		return false
-	}
-	for _, c := range a[1:] {
-		if c != 'i' && c != 't' && c != 'd' {
-			return false
-		}
-	}
-	return true
 }
 
 func splitKV(s string) (k, v string) {

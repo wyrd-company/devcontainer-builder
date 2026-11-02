@@ -74,3 +74,6 @@ environment, command forms, parallel execution and failure semantics.
 
 Map Kubernetes image-source command overrides through native OCI image
 configuration and preserve Feature/configuration environment precedence.
+
+Preserve Kubernetes image-source runArgs booleans, short forms, stdin, TTY,
+host environment inheritance and merged security flag precedence.

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"path"
+	"slices"
 	"strings"
 
 	oci "github.com/opencontainers/image-spec/specs-go/v1"
@@ -72,6 +73,10 @@ type ProjectRequest struct {
 	// overrideCommand is false so the wrapper can exec its Entrypoint and Cmd.
 	// Image environment stays image-owned; Pod Env overlays it.
 	ImageConfig *oci.ImageConfig
+
+	// LocalEnv supplies bare runArgs --env keys. Nil uses the process environment;
+	// an empty map disables host inheritance.
+	LocalEnv map[string]string
 
 	// Features as resolved by pkg/features. Their containerEnv,
 	// init/privileged/capAdd/securityOpt, and mounts merge into the
@@ -213,8 +218,6 @@ func Project(req ProjectRequest) (*Projection, error) {
 		}
 	}
 
-	applyFeatureFlags(&pod.Spec.Containers[0], dc, req.Features)
-
 	if err := applyMounts(pod, dc, req); err != nil {
 		return nil, err
 	}
@@ -224,10 +227,20 @@ func Project(req ProjectRequest) (*Projection, error) {
 	}
 
 	if len(dc.RunArgs) > 0 {
-		if err := applyRunArgs(dc.RunArgs, pod, &pod.Spec.Containers[0]); err != nil {
+		if err := applyRunArgs(dc.RunArgs, pod, &pod.Spec.Containers[0], req.LocalEnv, req.ImageConfig); err != nil {
 			return nil, err
 		}
 	}
+
+	// Merged flags follow runArgs in the pinned upstream spawn argv.
+	init := dc.Init != nil && *dc.Init
+	for _, f := range req.Features {
+		init = init || f.Metadata.Init != nil && *f.Metadata.Init
+	}
+	if init {
+		return nil, errors.New("kubernetes projection: merged --init has no Kubernetes equivalent (build a tini-style entrypoint into the image)")
+	}
+	applyFeatureFlags(&pod.Spec.Containers[0], dc, req.Features)
 
 	// Kubernetes expands $(NAME) and folds $$ in command arguments and Env.
 	// Escape dollars so Docker-authored strings reach the process unchanged.
@@ -268,8 +281,7 @@ func applyContainerUser(c *corev1.Container, user string) error {
 // the same way the docker host does.
 func applyFeatureFlags(c *corev1.Container, dc *spec.DevContainer, resolved []features.Resolved) {
 	privileged := dc.Privileged != nil && *dc.Privileged
-	capAdd := append([]string(nil), dc.CapAdd...)
-	secOpts := append([]string(nil), dc.SecurityOpt...)
+	var capAdd, secOpts []string
 	for _, f := range resolved {
 		if f.Metadata.Privileged != nil && *f.Metadata.Privileged {
 			privileged = true
@@ -277,6 +289,8 @@ func applyFeatureFlags(c *corev1.Container, dc *spec.DevContainer, resolved []fe
 		capAdd = append(capAdd, f.Metadata.CapAdd...)
 		secOpts = append(secOpts, f.Metadata.SecurityOpt...)
 	}
+	capAdd = append(capAdd, dc.CapAdd...)
+	secOpts = append(secOpts, dc.SecurityOpt...)
 	if privileged {
 		ensureSecCtx(c).Privileged = boolPtr(true)
 	}
@@ -286,7 +300,9 @@ func applyFeatureFlags(c *corev1.Container, dc *spec.DevContainer, resolved []fe
 			sc.Capabilities = &corev1.Capabilities{}
 		}
 		for _, cap := range capAdd {
-			sc.Capabilities.Add = append(sc.Capabilities.Add, corev1.Capability(cap))
+			if !slices.Contains(sc.Capabilities.Add, corev1.Capability(cap)) {
+				sc.Capabilities.Add = append(sc.Capabilities.Add, corev1.Capability(cap))
+			}
 		}
 	}
 	for _, opt := range secOpts {

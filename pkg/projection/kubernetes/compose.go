@@ -550,7 +550,7 @@ func buildPrimaryContainer(
 		// pod here because applyRunArgs writes onto pod.Spec; the
 		// caller will see the container's portion via &c.
 		dummyPod := &corev1.Pod{}
-		if err := applyRunArgs(dc.RunArgs, dummyPod, &c); err != nil {
+		if err := applyRunArgs(dc.RunArgs, dummyPod, &c, nil, nil); err != nil {
 			return c, nil, err
 		}
 		// Note: pod-wide runArgs settings (HostNetwork, NodeSelector,

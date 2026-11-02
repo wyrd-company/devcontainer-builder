@@ -110,11 +110,13 @@ func TestRunArgs_Env(t *testing.T) {
 	if got["FOO"] != "bar" || got["BAZ"] != "qux" {
 		t.Errorf("env = %+v", got)
 	}
-	// Bare KEY form (no =) is rejected: Kubernetes doesn't have a
-	// "pass through from host environ" semantic.
-	if err := projectArgsErr(t, "-e", "FOO"); err == nil {
-		t.Error("expected error for bare KEY")
+	// Bare keys inherit the host value, per native Docker ValidateEnv.
+	t.Setenv("FOO", "inherited")
+	inherited := projectArgs(t, "-e", "FOO")
+	if got := envAsMap(inherited.Spec.Containers[0].Env)["FOO"]; got != "inherited" {
+		t.Fatalf("FOO = %q", got)
 	}
+
 }
 
 func TestRunArgs_AddHostAndDNS(t *testing.T) {

@@ -267,6 +267,7 @@ func (h *Host) buildPod(
 		ContainerWorkspace:    containerWorkspace,
 		Image:                 req.Image,
 		ImageConfig:           req.ImageConfig,
+		LocalEnv:              req.LocalEnv,
 		Features:              req.Features,
 		Name:                  podName,
 		Namespace:             ns,

@@ -420,3 +420,11 @@ no source. Relative paths use the invoking host working directory. Native
 BuildKit sessions supply these sources to Dockerfile builds, including generated
 feature stages. Invalid sources return errors. These build sources are separate
 from lifecycle `--secrets-file` values.
+
+Kubernetes image-source `runArgs` maps native boolean assignments, combined and
+attached short forms, stdin and TTY. Bare environment keys use `LocalEnv` (nil
+uses the process environment); explicit empty maps disable inheritance. Unset
+keys require `ImageConfig`; removing an image-owned variable returns an error.
+Merged security flags follow `runArgs`. Detach conflicts with inherited output
+attachment, and enabled init has no PodSpec equivalent. Other Docker flag and
+Compose translations remain separate coverage.

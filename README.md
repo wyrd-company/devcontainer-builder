@@ -119,3 +119,11 @@ change must pass; `task parity` runs the parity harness.
 [MIT](LICENSE). The npm launcher and some release scripts are adapted from
 other Wyrd Company projects under the Apache License 2.0; see
 [`npm/NOTICE`](npm/NOTICE).
+
+Kubernetes image-source `runArgs` maps native boolean assignments, combined and
+attached short forms, stdin and TTY. Bare environment keys use `LocalEnv` (nil
+uses the process environment); explicit empty maps disable inheritance. Unset
+keys require `ImageConfig`; removing an image-owned variable returns an error.
+Merged security flags follow `runArgs`. Detach conflicts with inherited output
+attachment, and enabled init has no PodSpec equivalent. Other Docker flag and
+Compose translations remain separate coverage.
