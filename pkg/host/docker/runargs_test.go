@@ -663,3 +663,66 @@ func TestRunArgsOOMBoolean(t *testing.T) {
 		}
 	}
 }
+
+func TestRunArgsWeightDevice(t *testing.T) {
+	_, h := applyForTest(t, []string{"--blkio-weight-device=/dev/sample:500", "--blkio-weight-device", "/dev/sample:0", "--blkio-weight-device=/dev/other:010"})
+	got := h.BlkioWeightDevice
+	if len(got) != 3 || got[0].Path != "/dev/sample" || got[0].Weight != 500 || got[1].Path != "/dev/sample" || got[1].Weight != 0 || got[2].Path != "/dev/other" || got[2].Weight != 10 {
+		t.Fatalf("ordered weights: %+v", got)
+	}
+}
+func TestRunArgsReadBps(t *testing.T)   { testRunArgsThrottle(t, "--device-read-bps", true) }
+func TestRunArgsWriteBps(t *testing.T)  { testRunArgsThrottle(t, "--device-write-bps", true) }
+func TestRunArgsReadIOps(t *testing.T)  { testRunArgsThrottle(t, "--device-read-iops", false) }
+func TestRunArgsWriteIOps(t *testing.T) { testRunArgsThrottle(t, "--device-write-iops", false) }
+func testRunArgsThrottle(t *testing.T, flag string, bytes bool) {
+	t.Helper()
+	value := "010"
+	want := uint64(10)
+	if bytes {
+		value = "1.5mb"
+		want = 1572864
+	}
+	_, h := applyForTest(t, []string{flag + "=/dev/sample:" + value, flag, "/dev/sample:0", flag + "=/dev/other:42"})
+	got := h.BlkioDeviceReadBps
+	switch flag {
+	case "--device-write-bps":
+		got = h.BlkioDeviceWriteBps
+	case "--device-read-iops":
+		got = h.BlkioDeviceReadIOps
+	case "--device-write-iops":
+		got = h.BlkioDeviceWriteIOps
+	}
+	if len(got) != 3 || got[0].Path != "/dev/sample" || got[0].Rate != want || got[1].Path != "/dev/sample" || got[1].Rate != 0 || got[2].Path != "/dev/other" || got[2].Rate != 42 {
+		t.Fatalf("%s ordered rates: %+v", flag, got)
+	}
+	total := len(h.BlkioDeviceReadBps) + len(h.BlkioDeviceWriteBps) + len(h.BlkioDeviceReadIOps) + len(h.BlkioDeviceWriteIOps)
+	if total != 3 {
+		t.Fatalf("%s changed another throttle list: %+v", flag, h.Resources)
+	}
+}
+func TestRunArgsDeviceIOErrors(t *testing.T) {
+	for _, flag := range []string{"--blkio-weight-device", "--device-read-bps", "--device-write-bps", "--device-read-iops", "--device-write-iops"} {
+		for _, v := range []string{"", "/sample:10", "/dev/sample", "/dev/sample:", "/dev/sample:-1", "/dev/sample:invalid"} {
+			_, _, err := tryApply([]string{flag + "=" + v})
+			if err == nil || !strings.Contains(err.Error(), flag) {
+				t.Fatalf("%s=%s: %v", flag, v, err)
+			}
+		}
+		if _, _, err := tryApply([]string{flag}); err == nil {
+			t.Fatalf("missing value: %s", flag)
+		}
+	}
+	for _, v := range []string{"9", "1001", "65536", "0x64"} {
+		if _, _, err := tryApply([]string{"--blkio-weight-device=/dev/sample:" + v}); err == nil {
+			t.Fatalf("invalid weight %s", v)
+		}
+	}
+	for _, flag := range []string{"--device-read-iops", "--device-write-iops"} {
+		for _, v := range []string{"1mb", "1.5", "18446744073709551616"} {
+			if _, _, err := tryApply([]string{flag + "=/dev/sample:" + v}); err == nil {
+				t.Fatalf("invalid IOPS %s", v)
+			}
+		}
+	}
+}

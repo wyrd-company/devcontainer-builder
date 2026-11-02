@@ -39,7 +39,8 @@ runtime consumers require pinned differential checks and corrections:
   parsing; NanoCPU values use the native exact rational parser. Swappiness and
   block I/O weight retain Docker integer forms and final scalar values. CPU
   shares, PID limits, and OOM score adjustments accept base-zero integers;
-  OOM disable uses native boolean spellings.
+  OOM disable uses native boolean spellings. Per-device block I/O weight and
+  byte/IOPS throttles use native validators and retain ordered repeated entries.
 - Empty Compose file arrays require upstream Compose file discovery.
 - Reading a common-only document must not require a build/run source.
 - Environment values require schema type checks and pinned null-value behavior.

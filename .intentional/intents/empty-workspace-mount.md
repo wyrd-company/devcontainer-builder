@@ -25,3 +25,6 @@ Preserve exact Docker NanoCPU values and CPU period, quota, and realtime flags.
 
 Preserve Docker swappiness and block I/O weight, native integer forms for CPU
 shares, PID limits and OOM scores, and native OOM disable boolean spellings.
+
+Preserve Docker per-device block I/O weights and byte/IOPS throttle lists,
+including native validation, size units, repeated devices, and zero values.

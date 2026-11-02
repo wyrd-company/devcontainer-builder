@@ -113,6 +113,13 @@ retain Docker integer parsing and final scalar values, including zero.
 `--oom-kill-disable` uses Docker boolean spellings. Daemon resource validation
 still applies.
 
+Docker per-device block I/O flags (`--blkio-weight-device`,
+`--device-read-bps`, `--device-write-bps`, `--device-read-iops`, and
+`--device-write-iops`) use native Docker validation. Repeated entries retain
+argument order, including repeated devices and zero values. Byte rates accept
+Docker size units; IOPS values are decimal integers. The Docker daemon and host
+kernel determine whether the requested limits can be enforced.
+
 Docker `runArgs` health options (`--health-cmd`, `--health-interval`,
 `--health-timeout`, `--health-start-period`, `--health-start-interval`, and
 `--health-retries`) retain Docker values. `--no-healthcheck` disables image health

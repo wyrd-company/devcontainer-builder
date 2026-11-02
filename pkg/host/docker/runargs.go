@@ -8,6 +8,7 @@ import (
 	"time"
 
 	dockeropts "github.com/docker/cli/opts"
+	"github.com/docker/docker/api/types/blkiodev"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/go-connections/nat"
 	"github.com/docker/go-units"
@@ -515,6 +516,40 @@ func (p *runArgsParser) step(cfg *container.Config, host *container.HostConfig) 
 			return err
 		}
 		host.Devices = append(host.Devices, dm)
+	case "--blkio-weight-device":
+		v, err := take()
+		if err != nil {
+			return err
+		}
+		d, err := dockeropts.ValidateWeightDevice(v)
+		if err != nil {
+			return fmt.Errorf("runArgs: %s: %w", flag, err)
+		}
+		host.BlkioWeightDevice = append(host.BlkioWeightDevice, &blkiodev.WeightDevice{Path: d.Path, Weight: d.Weight})
+	case "--device-read-bps", "--device-write-bps", "--device-read-iops", "--device-write-iops":
+		v, err := take()
+		if err != nil {
+			return err
+		}
+		validate := dockeropts.ValidateThrottleBpsDevice
+		if flag == "--device-read-iops" || flag == "--device-write-iops" {
+			validate = dockeropts.ValidateThrottleIOpsDevice
+		}
+		d, err := validate(v)
+		if err != nil {
+			return fmt.Errorf("runArgs: %s: %w", flag, err)
+		}
+		device := &blkiodev.ThrottleDevice{Path: d.Path, Rate: d.Rate}
+		switch flag {
+		case "--device-read-bps":
+			host.BlkioDeviceReadBps = append(host.BlkioDeviceReadBps, device)
+		case "--device-write-bps":
+			host.BlkioDeviceWriteBps = append(host.BlkioDeviceWriteBps, device)
+		case "--device-read-iops":
+			host.BlkioDeviceReadIOps = append(host.BlkioDeviceReadIOps, device)
+		case "--device-write-iops":
+			host.BlkioDeviceWriteIOps = append(host.BlkioDeviceWriteIOps, device)
+		}
 	case "--device-cgroup-rule":
 		v, err := take()
 		if err != nil {
