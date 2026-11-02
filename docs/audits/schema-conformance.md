@@ -70,8 +70,10 @@ runtime consumers require pinned differential checks and corrections:
   need native mappings. The network
   comparison covers pinned argv and native BuildKit acceptance, not network
   traffic enforcement or full build flag coverage.
-- `initializeCommand` is preserved but not executed. The public configuration
-  guide describes this limitation.
+- `initializeCommand` runs natively on the host for every CLI up before build
+  and container startup. The pinned entry point, workspace cwd, host environment,
+  shell/argv/parallel forms, error and interrupt behavior define this mapping.
+  This does not claim full schema validation or terminal emulation parity.
 - Kubernetes projection needs checks for command override, environment ordering,
   and its supported Docker argument translations.
 

@@ -87,7 +87,17 @@ sees it.
 | `customizations` | Kept in the image metadata and collected in the merged configuration. |
 | `shutdownAction` | Validated. `dcb down` always stops and removes the container. |
 
-`initializeCommand` does not run: `dcb` runs no commands on the host.
+`initializeCommand` runs on the host for every `dcb up`, before building or
+starting containers, including with `--skip-post-create`. The working directory
+is the local workspace folder. Commands inherit the host environment;
+container and remote environment settings do not apply. Strings run through
+`/bin/sh -c` (Windows: `ComSpec /c`, default `cmd.exe`); arrays execute directly.
+Object entries run in parallel and buffer each named command's output until it
+finishes. Empty commands do nothing. A failure aborts startup without cancelling
+parallel siblings; SIGINT reports an interruption and allows startup to continue.
+Initialization has no lifecycle marker. Build, generate, configuration reads,
+set-up, exec and run-user-commands do not execute it. Command output uses the
+lifecycle log stream; the CLI retains its JSON result on stdout.
 
 ### Variables
 

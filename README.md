@@ -5,7 +5,8 @@
 
 `dcb` builds and runs [development containers](https://containers.dev/) from a
 `devcontainer.json`. It builds images on the Docker daemon's built-in BuildKit,
-and creates, starts, and runs lifecycle commands in containers through the
+and runs host initialization on up. It creates, starts, and runs lifecycle
+commands in containers through the
 Docker Engine API. Commands other than `outdated`, `features info`, and
 `features resolve-dependencies`, and `upgrade` write one JSON result line to
 stdout, except

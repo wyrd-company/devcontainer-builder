@@ -87,6 +87,9 @@ func (a *application) upCommand() *cobra.Command {
 		if err := a.placeWorkspace(dc, workspace); err != nil {
 			return err
 		}
+		if err := a.initialize(cmd.Context(), dc, workspace); err != nil {
+			return err
+		}
 		uid, err := resolveUIDUpdate(cmd, runtime.GOOS)
 		if err != nil {
 			return err

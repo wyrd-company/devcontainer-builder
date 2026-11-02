@@ -68,3 +68,6 @@ including inline cache, local export/import, ordering and contextual errors.
 
 Map build.options secret and SSH sources through native buildx parsing and
 BuildKit session providers for Dockerfile and generated feature builds.
+
+Execute initializeCommand on the host before every up, with upstream workspace,
+environment, command forms, parallel execution and failure semantics.

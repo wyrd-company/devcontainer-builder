@@ -159,7 +159,12 @@ options win. Invalid JSON exits `2`.
 Compose adds a primary-service GPU device reservation under the same rules;
 explicit service GPU reservations and `gpus` selection take precedence.
 
-`up --skip-post-create` skips all lifecycle commands;
+`initializeCommand` runs on the host on every `up`, before build/start, in the
+local workspace with the host environment. Strings use the host shell, arrays
+execute directly, and object entries run in parallel. Failures abort startup;
+SIGINT reports interruption and continues. It has no marker and does not run
+on build, generate, read-configuration, set-up, exec or run-user-commands.
+`up --skip-post-create` skips container lifecycle commands;
 `--skip-post-attach` skips only postAttachCommand. Use
 `run-user-commands` to run lifecycle commands in an existing devcontainer.
 Use `set-up --container-id <id> --workspace-folder .` to apply the

@@ -45,6 +45,7 @@ type DevContainer struct {
 	ForwardPorts         []any          `json:"forwardPorts,omitempty"`
 	AppPort              any            `json:"appPort,omitempty"`
 	UpdateRemoteUserUID  *bool          `json:"updateRemoteUserUID,omitempty"`
+	Initialize           Command        `json:"initializeCommand,omitempty"`
 	OnCreate             Command        `json:"onCreateCommand,omitempty"`
 	UpdateContent        Command        `json:"updateContentCommand,omitempty"`
 	PostCreate           Command        `json:"postCreateCommand,omitempty"`
