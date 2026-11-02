@@ -99,7 +99,8 @@ table or with `--output-format json`. It does not need Docker or change lockfile
 
 The packages under [`pkg/`](pkg) build images, run containers on Docker or
 Kubernetes, and convert configurations into Kubernetes Pods. They can be
-embedded in a service or an operator. See
+embedded in a service or an operator. Image-source Kubernetes projection supports
+command overrides and configuration-over-Feature environment precedence. See
 [Go libraries](https://wyrd.foo/docs/dcb/library).
 
 Dockerfile `build.options` supports native BuildKit networking, image labels,

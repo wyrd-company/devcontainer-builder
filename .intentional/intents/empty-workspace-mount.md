@@ -71,3 +71,6 @@ BuildKit session providers for Dockerfile and generated feature builds.
 
 Execute initializeCommand on the host before every up, with upstream workspace,
 environment, command forms, parallel execution and failure semantics.
+
+Map Kubernetes image-source command overrides through native OCI image
+configuration and preserve Feature/configuration environment precedence.

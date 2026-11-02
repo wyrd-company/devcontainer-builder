@@ -26,6 +26,12 @@ then workspace `.env`, then `docker-compose.yml` and its existing override file.
 `containerEnv` values are strings; `remoteEnv` values are strings or null.
 Remote null becomes the literal string `"null"` for exec and lifecycle commands.
 
+Kubernetes library image-source projection uses the upstream command wrapper and
+Feature entrypoints. With `overrideCommand: false`, supply native OCI ImageConfig
+in the projection or host request; missing image configuration is an error.
+Configuration environment overrides Features; the image supplies inherited values.
+This is a library surface; Kubernetes runArgs and Compose parity remain separate.
+
 `exec` stops reading options at the container command; every later argument
 passes through unchanged. An explicit `--` before the command also works.
 

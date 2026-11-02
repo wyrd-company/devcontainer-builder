@@ -6,6 +6,7 @@ import (
 	"path"
 	"strings"
 
+	oci "github.com/opencontainers/image-spec/specs-go/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -66,6 +67,11 @@ type ProjectRequest struct {
 
 	// Image is the already-built container image reference.
 	Image string
+
+	// ImageConfig is the built image configuration. Required when
+	// overrideCommand is false so the wrapper can exec its Entrypoint and Cmd.
+	// Image environment stays image-owned; Pod Env overlays it.
+	ImageConfig *oci.ImageConfig
 
 	// Features as resolved by pkg/features. Their containerEnv,
 	// init/privileged/capAdd/securityOpt, and mounts merge into the
@@ -150,11 +156,35 @@ func Project(req ProjectRequest) (*Projection, error) {
 		WorkingDir: containerWorkspace,
 	}
 
-	envSlice := envFromMap(stringMap(dc.ContainerEnv))
+	// Feature entrypoints run before the image command, including when the
+	// command is overridden, as in the pinned single-container wrapper.
+	var entrypoints []string
+	for _, f := range req.Features {
+		if f.Metadata.Entrypoint != "" {
+			entrypoints = append(entrypoints, f.Metadata.Entrypoint)
+		}
+	}
+	if len(entrypoints) > 0 {
+		c.Args[1] = strings.Replace(keepaliveCmd, `exec "$@"`, strings.Join(entrypoints, "\n")+"\n"+`exec "$@"`, 1)
+	}
+	if dc.OverrideCommand != nil && !*dc.OverrideCommand {
+		if req.ImageConfig == nil {
+			return nil, errors.New("kubernetes projection: ImageConfig is required when overrideCommand is false")
+		}
+		c.Args = append(c.Args, req.ImageConfig.Entrypoint...)
+		c.Args = append(c.Args, req.ImageConfig.Cmd...)
+	}
+
+	var envSlice []corev1.EnvVar
 	for _, f := range req.Features {
 		for k, v := range f.Metadata.ContainerEnv {
 			envSlice = upsertEnv(envSlice, k, v)
 		}
+	}
+	// Configuration values override Features; native image environment is
+	// inherited by Kubernetes below these explicit Pod values.
+	for k, v := range stringMap(dc.ContainerEnv) {
+		envSlice = upsertEnv(envSlice, k, v)
 	}
 	c.Env = envSlice
 
@@ -199,6 +229,15 @@ func Project(req ProjectRequest) (*Projection, error) {
 		}
 	}
 
+	// Kubernetes expands $(NAME) and folds $$ in command arguments and Env.
+	// Escape dollars so Docker-authored strings reach the process unchanged.
+	for i, arg := range pod.Spec.Containers[0].Args {
+		pod.Spec.Containers[0].Args[i] = strings.ReplaceAll(arg, "$", "$$")
+	}
+	for i := range pod.Spec.Containers[0].Env {
+		e := &pod.Spec.Containers[0].Env[i]
+		e.Value = strings.ReplaceAll(e.Value, "$", "$$")
+	}
 	return &Projection{Pod: pod}, nil
 }
 

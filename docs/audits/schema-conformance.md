@@ -74,8 +74,11 @@ runtime consumers require pinned differential checks and corrections:
   and container startup. The pinned entry point, workspace cwd, host environment,
   shell/argv/parallel forms, error and interrupt behavior define this mapping.
   This does not claim full schema validation or terminal emulation parity.
-- Kubernetes projection needs checks for command override, environment ordering,
-  and its supported Docker argument translations.
+- Kubernetes image-source projection uses the pinned shell wrapper and Feature
+  entrypoints. Explicit false command override requires native OCI image
+  configuration and appends Entrypoint then Cmd. Configuration environment wins
+  over ordered Features, above native image inheritance. Compose command/env
+  parity and supported Docker argument translations still need checks.
 
 Build options image labels use native buildx array parsing and last-key
 precedence. Empty keys fail before staging. Final image configuration retains

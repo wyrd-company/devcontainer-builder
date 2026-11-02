@@ -139,10 +139,9 @@ func TestProject_ContainerEnvAndFeatureMerge(t *testing.T) {
 	if got["FOO"] != "1" {
 		t.Errorf("FOO = %q, want 1", got["FOO"])
 	}
-	// Feature value overrides the spec value (matches docker host's
-	// upsertEnv behavior).
-	if got["BAR"] != "from-feature" {
-		t.Errorf("BAR = %q, want from-feature", got["BAR"])
+	// Configuration overrides Feature metadata (pinned imageMetadata merge).
+	if got["BAR"] != "2" {
+		t.Errorf("BAR = %q, want 2", got["BAR"])
 	}
 	if got["NODE_ENV"] != "development" {
 		t.Errorf("NODE_ENV = %q, want development", got["NODE_ENV"])

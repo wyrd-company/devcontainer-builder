@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	oci "github.com/opencontainers/image-spec/specs-go/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -40,6 +41,8 @@ type UpRequest struct {
 	// Image is the already-built image reference (use pkg/builder to
 	// produce one).
 	Image string
+	// ImageConfig is forwarded to projection; required for overrideCommand false.
+	ImageConfig *oci.ImageConfig
 	// Features as resolved by pkg/features. Their containerEnv,
 	// init/privileged/capAdd/securityOpt, and mounts merge into the
 	// pod the same way pkg/projection/kubernetes merges them.
@@ -263,6 +266,7 @@ func (h *Host) buildPod(
 		LocalWorkspace:        req.LocalWorkspace,
 		ContainerWorkspace:    containerWorkspace,
 		Image:                 req.Image,
+		ImageConfig:           req.ImageConfig,
 		Features:              req.Features,
 		Name:                  podName,
 		Namespace:             ns,

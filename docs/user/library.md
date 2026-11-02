@@ -286,6 +286,18 @@ pj, err := kubernetes.Project(kubernetes.ProjectRequest{
 // pj.Pod is a *corev1.Pod.
 ```
 
+Image-source projection defaults `overrideCommand` to true. The shell wrapper
+runs Feature entrypoints in order. With `overrideCommand: false`, pass the built
+image's native OCI `ImageConfig` in `ProjectRequest.ImageConfig` or
+`pkg/host/kubernetes.UpRequest.ImageConfig`. Its Entrypoint and Cmd run after
+the Feature entrypoints. A missing image configuration returns an error; an
+explicit empty configuration represents an image with no command. Image
+environment stays inherited from the image. Feature environment overlays it in
+Feature order, then configuration `containerEnv` wins, including empty values.
+Pod values escape dollars so Kubernetes expansion preserves runtime literals.
+Feature Dockerfile expansion occurs at build time.
+These request fields are library inputs, separate from devcontainer.json.
+
 `runArgs` flags without a Kubernetes equivalent are errors and are not
 dropped. Lifecycle commands are not part of the Pod; `pkg/host/kubernetes`
 runs them through the Pod exec API. `ProjectCompose` converts a Compose
