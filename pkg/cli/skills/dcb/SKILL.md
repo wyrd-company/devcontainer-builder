@@ -290,6 +290,11 @@ Files load before explicit environment and label flags. Paths use the process
 working directory. Merged init, privileged, capability and security option flags
 follow runArgs, as in the upstream CLI.
 
+Docker CPU run arguments preserve exact NanoCPU values through native Docker parsing.
+`--cpu-period`, `--cpu-quota`, `--cpu-rt-period`, and `--cpu-rt-runtime`
+retain Docker integer parsing and the final scalar value, including zero.
+Daemon resource and platform validation still applies.
+
 Docker `runArgs` health options (`--health-cmd`, `--health-interval`,
 `--health-timeout`, `--health-start-period`, `--health-start-interval`, and
 `--health-retries`) retain Docker values. `--no-healthcheck` disables image health

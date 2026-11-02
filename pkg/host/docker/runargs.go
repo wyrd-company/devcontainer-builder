@@ -382,11 +382,31 @@ func (p *runArgsParser) step(cfg *container.Config, host *container.HostConfig) 
 		if err != nil {
 			return err
 		}
-		f, err := strconv.ParseFloat(v, 64)
+		n, err := dockeropts.ParseCPUs(v)
 		if err != nil {
 			return fmt.Errorf("runArgs: --cpus: %w", err)
 		}
-		host.NanoCPUs = int64(f * 1e9)
+		host.NanoCPUs = n
+	case "--cpu-period", "--cpu-quota", "--cpu-rt-period", "--cpu-rt-runtime":
+		v, err := take()
+		if err != nil {
+			return err
+		}
+		// Docker registers these options as pflag Int64 values (base zero).
+		n, err := strconv.ParseInt(v, 0, 64)
+		if err != nil {
+			return fmt.Errorf("runArgs: %s: %w", flag, err)
+		}
+		switch flag {
+		case "--cpu-period":
+			host.CPUPeriod = n
+		case "--cpu-quota":
+			host.CPUQuota = n
+		case "--cpu-rt-period":
+			host.CPURealtimePeriod = n
+		case "--cpu-rt-runtime":
+			host.CPURealtimeRuntime = n
+		}
 	case "-c", "--cpu-shares":
 		v, err := take()
 		if err != nil {

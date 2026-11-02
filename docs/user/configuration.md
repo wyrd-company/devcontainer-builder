@@ -102,6 +102,11 @@ the Engine API. Bare environment keys inherit the host value; unset keys stay
 bare so that Engine removes image defaults. Detach and signal proxy flags control
 the Docker CLI process and have no container setting.
 
+Docker CPU run arguments preserve exact NanoCPU values through native Docker parsing.
+`--cpu-period`, `--cpu-quota`, `--cpu-rt-period`, and `--cpu-rt-runtime`
+retain Docker integer parsing and the final scalar value, including zero.
+Daemon resource and platform validation still applies.
+
 Docker `runArgs` health options (`--health-cmd`, `--health-interval`,
 `--health-timeout`, `--health-start-period`, `--health-start-interval`, and
 `--health-retries`) retain Docker values. `--no-healthcheck` disables image health

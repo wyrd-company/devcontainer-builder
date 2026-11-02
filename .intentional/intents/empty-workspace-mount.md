@@ -20,3 +20,5 @@ merged feature flags after runArgs.
 
 Accept Docker health and logging run arguments with native value precedence and
 conflict checks.
+
+Preserve exact Docker NanoCPU values and CPU period, quota, and realtime flags.

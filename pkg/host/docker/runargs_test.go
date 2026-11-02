@@ -534,3 +534,49 @@ func TestBuildContainerConfig_FileOverrides(t *testing.T) {
 		t.Fatalf("explicit config env must follow files: %q", cfg.Env)
 	}
 }
+
+// Docker CLI uses exact rational NanoCPUs and pflag base-zero Int64 parsing.
+func TestRunArgsCPUExact(t *testing.T) {
+	for _, tc := range []struct {
+		value string
+		want  int64
+	}{
+		{"0.000000001", 1}, {"1.000000001", 1000000001}, {"1/2", 500000000}, {"1e-3", 1000000}, {"0", 0},
+	} {
+		_, host := applyForTest(t, []string{"--cpus=" + tc.value})
+		if host.NanoCPUs != tc.want {
+			t.Fatalf("%s: got %d want %d", tc.value, host.NanoCPUs, tc.want)
+		}
+	}
+	_, host := applyForTest(t, []string{"--cpus=2", "--cpus=0"})
+	if host.NanoCPUs != 0 {
+		t.Fatal("final zero lost")
+	}
+}
+func TestRunArgsCPUInvalid(t *testing.T) {
+	for _, value := range []string{"NaN", "Inf", "1/0", "0.0000000001", ""} {
+		if _, _, err := tryApply([]string{"--cpus=" + value}); err == nil {
+			t.Fatalf("accepted %q", value)
+		}
+	}
+}
+func TestRunArgsCPUPeriods(t *testing.T) {
+	_, host := applyForTest(t, []string{"--cpu-period=0x186a0", "--cpu-quota", "-1", "--cpu-rt-period=010", "--cpu-rt-runtime=4"})
+	if host.CPUPeriod != 100000 || host.CPUQuota != -1 || host.CPURealtimePeriod != 8 || host.CPURealtimeRuntime != 4 {
+		t.Fatalf("resources=%+v", host.Resources)
+	}
+	_, host = applyForTest(t, []string{"--cpu-period=100000", "--cpu-period=0", "--cpu-quota=2", "--cpu-quota=0", "--cpu-rt-period=3", "--cpu-rt-period=0", "--cpu-rt-runtime=4", "--cpu-rt-runtime=0"})
+	if host.CPUPeriod != 0 || host.CPUQuota != 0 || host.CPURealtimePeriod != 0 || host.CPURealtimeRuntime != 0 {
+		t.Fatal("final zero lost")
+	}
+}
+func TestRunArgsCPUPeriodErrors(t *testing.T) {
+	for _, flag := range []string{"--cpu-period", "--cpu-quota", "--cpu-rt-period", "--cpu-rt-runtime"} {
+		for _, args := range [][]string{{flag}, {flag + "=invalid"}, {flag + "=9223372036854775808"}} {
+			_, _, err := tryApply(args)
+			if err == nil || !strings.Contains(err.Error(), flag) {
+				t.Fatalf("%v: %v", args, err)
+			}
+		}
+	}
+}
