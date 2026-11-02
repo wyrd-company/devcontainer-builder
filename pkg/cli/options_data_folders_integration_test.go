@@ -30,7 +30,7 @@ func TestDataFoldersDockerIntegration(t *testing.T) {
 			source := `"image":"alpine:3.20"`
 			if mode == "compose" {
 				hash := sha256.Sum256([]byte(workspace))
-				compose := fmt.Sprintf("name: sample-%x\nservices:\n  app:\n    image: alpine:3.20\n", hash[:6])
+				compose := fmt.Sprintf("name: sample-%x\nservices:\n  app:\n    image: alpine:3.20\n    command: [sleep, infinity]\n", hash[:6])
 				if err := os.WriteFile(filepath.Join(workspace, "compose.yml"), []byte(compose), 0o644); err != nil {
 					t.Fatal(err)
 				}

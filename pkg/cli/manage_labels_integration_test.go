@@ -71,7 +71,7 @@ func TestManageIDLabelsComposeDockerIntegration(t *testing.T) {
 	var ids, workspaces []string
 	for i, project := range projects {
 		workspace := filepath.Join(root, fmt.Sprintf("workspace-%d", i))
-		compose := fmt.Sprintf("name: %s\nservices:\n  app:\n    image: alpine:3.20\n    labels:\n      example.test/manage-owner: %s\n    volumes: [data:/data]\n  sidecar:\n    image: alpine:3.20\n    command: [sleep, '600']\n    labels:\n      example.test/manage-owner: %s\nvolumes:\n  data: {}\n", project, unique, unique)
+		compose := fmt.Sprintf("name: %s\nservices:\n  app:\n    image: alpine:3.20\n    command: [sleep, infinity]\n    labels:\n      example.test/manage-owner: %s\n    volumes: [data:/data]\n  sidecar:\n    image: alpine:3.20\n    command: [sleep, '600']\n    labels:\n      example.test/manage-owner: %s\nvolumes:\n  data: {}\n", project, unique, unique)
 		writeTestFile(t, filepath.Join(workspace, "compose.yml"), compose)
 		writeTestFile(t, filepath.Join(workspace, ".devcontainer.json"), `{"dockerComposeFile":"compose.yml","service":"app","workspaceFolder":"/","updateRemoteUserUID":false}`)
 		result, _ := invoke(t, 0, "up", "--workspace-folder", workspace, "--skip-post-create", "--id-label", mountsIDKey+"="+project, "--id-label", mountsRoleKey+"=managed")

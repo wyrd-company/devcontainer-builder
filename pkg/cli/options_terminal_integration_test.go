@@ -23,7 +23,7 @@ func TestTerminalDimensionsDockerIntegration(t *testing.T) {
 			base := `"image":"alpine:3.20"`
 			if mode == "compose" {
 				project := sha256.Sum256([]byte(workspace))
-				compose := fmt.Sprintf("name: sample-%x\nservices:\n  app:\n    image: alpine:3.20\n", project[:6])
+				compose := fmt.Sprintf("name: sample-%x\nservices:\n  app:\n    image: alpine:3.20\n    command: [sleep, infinity]\n", project[:6])
 				if err := os.WriteFile(filepath.Join(workspace, "compose.yml"), []byte(compose), 0600); err != nil {
 					t.Fatal(err)
 				}

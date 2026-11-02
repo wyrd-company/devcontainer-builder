@@ -35,7 +35,7 @@ func TestLifecycleOptionsDockerIntegration(t *testing.T) {
 				// A per-test project name keeps parallel task runs independent.
 				workspaceID := sha256.Sum256([]byte(workspace))
 				project := fmt.Sprintf("sample-%x", workspaceID[:6])
-				compose := fmt.Sprintf("name: %s\nservices:\n  app:\n    image: alpine:3.20\n", project)
+				compose := fmt.Sprintf("name: %s\nservices:\n  app:\n    image: alpine:3.20\n    command: [sleep, infinity]\n", project)
 				if err := os.WriteFile(filepath.Join(workspace, "compose.yml"), []byte(compose), 0o644); err != nil {
 					t.Fatal(err)
 				}

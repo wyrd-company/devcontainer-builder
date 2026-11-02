@@ -37,7 +37,7 @@ func featureControlFixture(t *testing.T, mode string, withFeature bool) string {
 		if strings.Contains(mode, "dockerfile") {
 			service = "    image: " + strings.Replace(defaultImage(workspace), ":latest", ":base", 1) + "\n    build: .\n"
 		}
-		body := fmt.Sprintf("name: sample-%x\nservices:\n  app:\n%s", id[:6], service)
+		body := fmt.Sprintf("name: sample-%x\nservices:\n  app:\n%s", id[:6], service+"    command: [sleep, infinity]\n")
 		if err := os.WriteFile(filepath.Join(workspace, "compose.yml"), []byte(body), 0644); err != nil {
 			t.Fatal(err)
 		}

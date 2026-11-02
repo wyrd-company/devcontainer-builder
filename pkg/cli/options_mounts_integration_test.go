@@ -251,7 +251,7 @@ func TestMountOptionsComposeDockerIntegration(t *testing.T) {
 	sum := sha256.Sum256([]byte(workspace))
 	unique := fmt.Sprintf("%x", sum[:6])
 	project := "sample-mounts-" + unique
-	compose := fmt.Sprintf("name: %s\nservices:\n  app:\n    image: alpine:3.20\n", project)
+	compose := fmt.Sprintf("name: %s\nservices:\n  app:\n    image: alpine:3.20\n    command: [sleep, infinity]\n", project)
 	config := `{"dockerComposeFile":"compose.yml","service":"app","workspaceFolder":"/","updateRemoteUserUID":false}`
 	writeTestFile(t, filepath.Join(workspace, "compose.yml"), compose)
 	writeTestFile(t, filepath.Join(workspace, ".devcontainer.json"), config)
