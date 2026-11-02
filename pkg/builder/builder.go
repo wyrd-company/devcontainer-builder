@@ -371,7 +371,12 @@ func solveOptions(opts Options, ctxDir string, dc *spec.DevContainer) (buildkit.
 	if err != nil {
 		return buildkit.SolveOptions{}, err
 	}
+	sessions, err := buildSessions(dc)
+	if err != nil {
+		return buildkit.SolveOptions{}, err
+	}
 	return buildkit.SolveOptions{
+		Session:          sessions,
 		Address:          opts.BuildKitAddress,
 		Docker:           opts.Docker,
 		LocalContextName: featuresLocalName,

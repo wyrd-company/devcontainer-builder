@@ -65,3 +65,6 @@ independent configured-target metadata and user inference.
 
 Map build cache options through native buildx parsing and BuildKit cache sessions,
 including inline cache, local export/import, ordering and contextual errors.
+
+Map build.options secret and SSH sources through native buildx parsing and
+BuildKit session providers for Dockerfile and generated feature builds.

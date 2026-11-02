@@ -388,3 +388,13 @@ BuildKit sessions transfer local cache stores and use the existing registry
 credentials. The default inline-cache build argument can be overridden through
 `build.args`, build options or explicit library arguments. Backend availability
 and export support depend on the BuildKit worker.
+
+Build options accept repeated `build.options --secret` and `build.options --ssh`
+with native buildx syntax. Secrets support file sources, environment sources and
+implicit source selection by ID. Repeated secret IDs select the last source;
+repeated SSH IDs return an error. SSH sources support agent sockets and native
+private-key files; an omitted path uses `SSH_AUTH_SOCK`. Empty option values add
+no source. Relative paths use the invoking host working directory. Native
+BuildKit sessions supply these sources to Dockerfile builds, including generated
+feature stages. Invalid sources return errors. These build sources are separate
+from lifecycle `--secrets-file` values.

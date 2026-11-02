@@ -18,7 +18,7 @@ import (
 )
 
 func TestValidateBuildSupport_RejectsBuildOptions(t *testing.T) {
-	dc := &spec.DevContainer{Build: &spec.Build{Options: []string{"--ssh", "default"}}}
+	dc := &spec.DevContainer{Build: &spec.Build{Options: []string{"--ulimit", "nofile=1024:1024"}}}
 	err := validateBuildSupport(dc)
 	if err == nil || !strings.Contains(err.Error(), "build.options is not supported") {
 		t.Fatalf("err = %v, want build.options rejection", err)

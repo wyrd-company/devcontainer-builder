@@ -8,6 +8,7 @@ import (
 	"io"
 	"strings"
 
+	"github.com/docker/buildx/util/buildflags"
 	dockeropts "github.com/docker/cli/opts"
 
 	"github.com/spf13/pflag"
@@ -22,6 +23,8 @@ type dockerBuildOptions struct {
 	Args      map[string]string
 	CacheFrom []string
 	CacheTo   []string
+	Secrets   buildflags.Secrets
+	SSH       []*buildflags.SSH
 }
 
 // buildNetworkMode retains the network-only view used by callers and tests.
@@ -42,6 +45,9 @@ func parseBuildOptions(dc *spec.DevContainer) (dockerBuildOptions, error) {
 	var mode string
 	var labels []string
 	var args []string
+	var secrets, ssh []string
+	flags.StringArrayVar(&secrets, "secret", nil, "build secrets")
+	flags.StringArrayVar(&ssh, "ssh", nil, "SSH agent forwarding")
 	flags.StringArrayVar(&parsed.CacheFrom, "cache-from", nil, "cache import sources")
 	flags.StringArrayVar(&parsed.CacheTo, "cache-to", nil, "cache export destinations")
 	flags.StringVar(&parsed.Target, "target", "", "target build stage")
@@ -55,6 +61,15 @@ func parseBuildOptions(dc *spec.DevContainer) (dockerBuildOptions, error) {
 		return parsed, fmt.Errorf("build.options: unexpected positional arguments %q", flags.Args())
 	}
 	parsed.TargetSet = flags.Changed("target")
+	var err error
+	parsed.Secrets, err = buildflags.ParseSecretSpecs(secrets)
+	if err != nil {
+		return parsed, fmt.Errorf("build.options: secret: %w", err)
+	}
+	parsed.SSH, err = buildflags.ParseSSHSpecs(ssh)
+	if err != nil {
+		return parsed, fmt.Errorf("build.options: ssh: %w", err)
+	}
 	for _, value := range labels {
 		key, _, _ := strings.Cut(value, "=")
 		if key == "" {

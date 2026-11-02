@@ -21,6 +21,8 @@ import (
 // SolveOptions describes which BuildKit to use and how to export the
 // resulting image.
 type SolveOptions struct {
+	// Session adds native BuildKit providers, such as build secrets and SSH agents.
+	Session             []session.Attachable
 	allowedEntitlements []string
 	// Address is the BuildKit endpoint. When empty, BUILDKIT_HOST is
 	// consulted; when that is empty too, the Docker daemon's built-in
@@ -192,7 +194,7 @@ func runSolve(ctx context.Context, opt SolveOptions, multi bool, localMounts map
 		CacheImports:        cacheEntries(opt.CacheImports),
 		CacheExports:        cacheEntries(opt.CacheExports),
 		FrontendAttrs:       frontendAttrs,
-		Session:             []session.Attachable{credentials},
+		Session:             append([]session.Attachable{credentials}, opt.Session...),
 	}
 
 	g, gctx := errgroup.WithContext(ctx)
