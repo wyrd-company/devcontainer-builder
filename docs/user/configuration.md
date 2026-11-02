@@ -10,6 +10,9 @@ relationships:
 [Dev Container specification](https://containers.dev/implementors/json_reference/).
 Comments and trailing commas are allowed.
 
+A common-only document, such as `{"remoteUser":"root"}`, can be read with
+`dcb read-configuration`. Build and up require a container source.
+
 ## Container sources
 
 | Source | Properties |
@@ -23,6 +26,18 @@ a context, the Dockerfile directory is the build context. Top-level `dockerFile`
 can use `build.args`, `build.target`, and `build.cacheFrom`. `dockerComposeFile`
 and `build.cacheFrom` accept a string or an array of strings. Lifecycle command
 objects accept string or string-array values. Nested command objects are invalid.
+
+An empty `dockerComposeFile` array selects discovery from the workspace folder.
+Discovery uses `COMPOSE_FILE` from the supplied host environment, then the first
+`COMPOSE_FILE=...` line in the workspace `.env` file, then `docker-compose.yml`
+and an existing `docker-compose.override.yml` file. File lists in `COMPOSE_FILE`
+use the host path delimiter. Values from `.env` are trimmed and otherwise literal.
+Explicit file strings and nonempty arrays resolve from `devcontainer.json`.
+
+`containerEnv` values must be strings. `remoteEnv` values must be strings or
+null. Both properties must be objects. Remote null is retained in configuration
+and becomes the literal string `"null"` in runtime commands, as in the pinned
+upstream CLI. An empty string remains empty.
 
 Features are installed on top of each source. With Docker Compose, `dcb`
 creates the networks, volumes, and containers of the Compose project through

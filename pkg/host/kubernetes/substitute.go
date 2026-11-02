@@ -139,8 +139,8 @@ func containerSubstituteCommand(ctx substitute.ContainerContext, c spec.Command)
 }
 
 // stringMapFromAny unwraps a map[string]any whose values are strings.
-// Non-string values are dropped — Kubernetes envvars are string-only,
-// matching pkg/projection/kubernetes.stringMap.
+// Null becomes the literal string "null" as in upstream exec arguments.
+// Other non-string values are rejected by configuration validation.
 func stringMapFromAny(in map[string]any) map[string]string {
 	if in == nil {
 		return nil
@@ -151,7 +151,7 @@ func stringMapFromAny(in map[string]any) map[string]string {
 		case string:
 			out[k] = t
 		case nil:
-			out[k] = ""
+			out[k] = "null"
 		}
 	}
 	return out

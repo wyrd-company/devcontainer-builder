@@ -129,6 +129,9 @@ func buildContainerConfigEntrypointsControls(dc *spec.DevContainer, resolved []f
 	if err := dc.ValidateMounts(); err != nil {
 		return nil, nil, "", err
 	}
+	if err := dc.ValidateEnvironment(); err != nil {
+		return nil, nil, "", err
+	}
 	// Features first, then the spec, so the spec wins (upstream order).
 	var envSlice []string
 	for _, f := range resolved {
@@ -312,7 +315,7 @@ func stringMap(in map[string]any) map[string]string {
 		case string:
 			out[k] = t
 		case nil:
-			out[k] = ""
+			out[k] = "null"
 		default:
 			b, _ := json.Marshal(t)
 			out[k] = string(b)

@@ -81,6 +81,9 @@ func (a *application) upCommand() *cobra.Command {
 		if err != nil {
 			return err
 		}
+		if err := dc.ValidateSource(); err != nil {
+			return err
+		}
 		if err := a.placeWorkspace(dc, workspace); err != nil {
 			return err
 		}

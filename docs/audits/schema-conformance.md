@@ -23,6 +23,15 @@ options. Invalid options return contextual errors. The split Moby mount type is
 converted through its wire representation with unknown fields rejected so that
 the Engine client cannot silently discard an option.
 
+Common-only documents are accepted by configuration reads. Build and up require
+a source. Empty Compose file arrays discover files from the supplied workspace
+and environment: COMPOSE_FILE, literal workspace .env COMPOSE_FILE, then
+legacy docker-compose.yml and its existing file override. Explicit paths remain
+relative to the configuration directory. Resolved discovery paths reach runtime
+labels. Environment schema validation accepts string containerEnv values and
+string/null remoteEnv values. Remote null survives configuration merging and
+becomes literal "null" for CLI and host exec/lifecycle consumers.
+
 ## Audit work queue
 
 Configuration conformance takes priority over additional command work. These
@@ -54,9 +63,6 @@ runtime consumers require pinned differential checks and corrections:
   Storage options retain last-value-per-key semantics. Windows CPU count, CPU
   percent, system-drive bandwidth and IOPS map to Engine creation fields with
   native integer and memory-size grammar. Platform enforcement is daemon-owned.
-- Empty Compose file arrays require upstream Compose file discovery.
-- Reading a common-only document must not require a build/run source.
-- Environment values require schema type checks and pinned null-value behavior.
 - `build.options` needs a native BuildKit mapping; nonempty values are rejected.
 - `initializeCommand` is preserved but not executed. The public configuration
   guide describes this limitation.

@@ -127,7 +127,7 @@ func stringMap(in map[string]any) map[string]string {
 		case string:
 			out[k] = t
 		case nil:
-			out[k] = ""
+			out[k] = "null"
 		default:
 			b, _ := json.Marshal(t)
 			out[k] = string(b)

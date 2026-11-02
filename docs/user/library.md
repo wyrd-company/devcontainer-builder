@@ -33,6 +33,13 @@ credentials that the calling process has at the time of the call; see
 Package documentation is on
 [pkg.go.dev](https://pkg.go.dev/github.com/wyrd-company/devcontainer-builder).
 
+`spec.Load` and `DevContainer.Validate` accept common-only configurations.
+`DevContainer.ValidateSource` checks the additional source requirement for build
+and up. `ValidateEnvironment` also checks values in specs constructed in Go.
+For empty Compose file arrays, `dockercompose.ResolveComposeFiles` and
+`LoadProject` use the supplied workspace and `LocalEnv` for discovery.
+`Project.ComposeFiles` contains the resolved file paths used in runtime labels.
+
 ## Build an image
 
 ```go

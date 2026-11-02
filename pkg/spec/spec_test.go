@@ -126,9 +126,8 @@ func TestValidate(t *testing.T) {
 			dc:   DevContainer{DockerComposeFile: StringOrSlice{"compose.yml"}, Service: "app"},
 		},
 		{
-			name:    "no fields at all",
-			dc:      DevContainer{},
-			wantErr: "no image, build, dockerFile, or dockerComposeFile",
+			name: "no fields at all",
+			dc:   DevContainer{},
 		},
 		{
 			name:    "compose missing service",

@@ -20,6 +20,7 @@ import (
 func TestResolveRemoteEnv(t *testing.T) {
 	got := resolveRemoteEnv(map[string]any{
 		"STATIC":         "value",
+		"NULL":           nil,
 		"FROM_LOCAL":     "${localEnv:HOST_VALUE}",
 		"FROM_CONTAINER": "${containerEnv:BASE_VALUE}",
 		"FROM_ID":        "${devcontainerId}",
@@ -37,6 +38,7 @@ func TestResolveRemoteEnv(t *testing.T) {
 		want string
 	}{
 		{"STATIC", "value"},
+		{"NULL", "null"},
 		{"FROM_LOCAL", "host"},
 		{"FROM_CONTAINER", "container"},
 		{"JSON", `{"enabled":true}`},
@@ -137,5 +139,22 @@ func TestRemoteWorkspaceFolder(t *testing.T) {
 func TestDefaultImageName(t *testing.T) {
 	if got := defaultImage("/workspace"); got != "dcb-c52ddf65534b7b46:latest" {
 		t.Fatalf("default image name changed: %s; update test/parity dcbImage", got)
+	}
+}
+
+func TestCommonReadBuildUpCLI(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, ".devcontainer.json"), []byte(`{"remoteUser":"root","workspaceFolder":"/workspace"}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	code, out, stderr := runCLI("read-configuration", "--workspace-folder", dir)
+	if code != 0 || !strings.Contains(out, "root") {
+		t.Fatalf("read %d %s %s", code, out, stderr)
+	}
+	for _, command := range []string{"build", "up"} {
+		code, out, stderr := runCLI(command, "--workspace-folder", dir)
+		if code == 0 || !strings.Contains(out+stderr, "no image") {
+			t.Fatalf("%s %d %s", command, code, stderr)
+		}
 	}
 }

@@ -298,7 +298,7 @@ func (h *Host) Up(ctx context.Context, req UpRequest) (*UpResult, error) {
 		return nil, err
 	}
 
-	scope := labelScope{Project: proj.Name, WorkingDir: proj.WorkingDir, ComposeFiles: req.Spec.ComposeFiles(), LocalWorkspace: req.LocalWorkspace, SpecPath: req.SpecPath, IDLabels: req.IDLabels}
+	scope := labelScope{Project: proj.Name, WorkingDir: proj.WorkingDir, ComposeFiles: proj.ComposeFiles, LocalWorkspace: req.LocalWorkspace, SpecPath: req.SpecPath, IDLabels: req.IDLabels}
 	if err := proj.ForEachService(startNames, func(name string, svc *types.ServiceConfig) error {
 		isPrimary := name == req.Spec.Service
 		// Wait for any service_healthy / service_completed_successfully

@@ -62,7 +62,7 @@ func TestStringMapFromAny(t *testing.T) {
 		"c": 42, // dropped
 	}
 	got := stringMapFromAny(in)
-	if got["a"] != "1" || got["b"] != "" {
+	if got["a"] != "1" || got["b"] != "null" {
 		t.Errorf("got %v", got)
 	}
 	if _, ok := got["c"]; ok {

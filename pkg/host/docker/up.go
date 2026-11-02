@@ -136,6 +136,9 @@ func (h *Host) Up(ctx context.Context, req UpRequest) (*UpResult, error) {
 	if err := req.Spec.ValidateMounts(); err != nil {
 		return nil, err
 	}
+	if err := req.Spec.ValidateEnvironment(); err != nil {
+		return nil, err
+	}
 	if req.LocalWorkspace == "" {
 		return nil, errorf("UpRequest.LocalWorkspace is required")
 	}

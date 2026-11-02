@@ -87,6 +87,10 @@ Commands that read a configuration take these flags:
 | `--config` | The path to `devcontainer.json`. The default is discovery in the workspace folder: `.devcontainer/devcontainer.json`, then `.devcontainer.json`. |
 | `--override-config` | A file with alternate configuration content. Relative paths in it resolve against the `--config` location. |
 
+`read-configuration` accepts common-only documents without an image, Dockerfile,
+or Compose source. `build` and `up` require a source. See
+[Configuration](/docs/dcb/configuration) for Compose discovery and environment types.
+
 `dcb` identifies the container of a workspace by its labels, so `exec`,
 `down`, `inspect`, and `run-user-commands` find the container that `up`
 created. `exec`, `run-user-commands`, `set-up`, and `read-configuration` also

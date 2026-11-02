@@ -118,6 +118,9 @@ func Project(req ProjectRequest) (*Projection, error) {
 	if err := req.Spec.ValidateMounts(); err != nil {
 		return nil, err
 	}
+	if err := req.Spec.ValidateEnvironment(); err != nil {
+		return nil, err
+	}
 	if req.Image == "" {
 		return nil, errors.New("kubernetes projection: ProjectRequest.Image is required")
 	}

@@ -41,3 +41,8 @@ the deprecated kernel-memory flag without applying it.
 Honor upstream Docker stdout/stderr attachment, native stream validation and
 interactive stdin, with detach conflict checks. Reserve and write cidfile paths
 on the client before start, retaining written IDs and removing failed reservations.
+
+Accept common-only configuration reads while requiring sources for build and up.
+Discover Compose files for empty file arrays from the caller's environment and
+workspace. Validate environment value types and preserve upstream remote null
+behavior in exec and lifecycle commands.

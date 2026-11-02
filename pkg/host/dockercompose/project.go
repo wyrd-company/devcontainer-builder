@@ -43,9 +43,12 @@ func LoadProject(ctx context.Context, in LoadInputs) (*types.Project, error) {
 	if in.Spec.Mode() != spec.ModeCompose {
 		return nil, fmt.Errorf("spec is not in compose mode")
 	}
-	files := in.Spec.ComposeFiles()
-	if len(files) == 0 {
-		return nil, fmt.Errorf("spec has no dockerComposeFile entries")
+	files, err := ResolveComposeFiles(in.Spec, in.Workspace, in.LocalEnv)
+	if err != nil {
+		return nil, err
+	}
+	if err := in.Spec.ValidateEnvironment(); err != nil {
+		return nil, err
 	}
 	if in.Spec.Service == "" {
 		return nil, fmt.Errorf("spec is missing the service field")
@@ -93,5 +96,6 @@ func LoadProject(ctx context.Context, in LoadInputs) (*types.Project, error) {
 	if _, err := proj.GetService(in.Spec.Service); err != nil {
 		return nil, fmt.Errorf("%w: %q", ErrPrimaryNotFound, in.Spec.Service)
 	}
+	proj.ComposeFiles = files
 	return proj, nil
 }

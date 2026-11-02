@@ -280,36 +280,37 @@ const (
 // Validate has succeeded; otherwise the result is whichever mode the
 // compose discriminator fields suggest.
 func (d *DevContainer) Mode() Mode {
-	if len(d.DockerComposeFile) > 0 || d.Service != "" {
+	if d.DockerComposeFile != nil || d.Service != "" {
 		return ModeCompose
 	}
 	return ModeSingle
 }
 
-// Validate checks mount objects and the discriminator: a spec is either single-container
-// (image / build / dockerFile) or compose (dockerComposeFile + service),
-// and the two sets of fields cannot mix. Validate is invoked from Load
+// Validate checks environment values, mount objects and source discriminators.
+// Common-only configurations are valid for reading. Compose and single-container
+// sources cannot mix. Validate is invoked from Load
 // so callers using Load never see a malformed spec; tests and other
 // in-memory construction paths can call it directly.
 func (d *DevContainer) Validate() error {
+	if err := d.ValidateEnvironment(); err != nil {
+		return err
+	}
 	if err := d.ValidateMounts(); err != nil {
 		return err
 	}
-	hasCompose := len(d.DockerComposeFile) > 0 || d.Service != ""
+	hasCompose := d.DockerComposeFile != nil || d.Service != ""
 	hasSingle := d.Image != "" || d.Dockerfile != "" || d.Build != nil
 
 	if hasCompose && hasSingle {
 		return fmt.Errorf("spec mixes compose fields (dockerComposeFile/service) with single-container fields (image/build/dockerFile); choose one")
 	}
 	if hasCompose {
-		if len(d.DockerComposeFile) == 0 {
+		if d.DockerComposeFile == nil {
 			return fmt.Errorf("service is set but dockerComposeFile is missing")
 		}
 		if d.Service == "" {
 			return fmt.Errorf("dockerComposeFile is set but service is missing")
 		}
-	} else if !hasSingle {
-		return fmt.Errorf("spec has no image, build, dockerFile, or dockerComposeFile field")
 	}
 
 	switch d.ShutdownAction {

@@ -20,6 +20,12 @@ Use upstream configuration forms: `build.dockerfile` with `build.context`, or
 `dockerComposeFile` and `build.cacheFrom` accept strings or string arrays;
 parallel lifecycle command values are strings or string arrays.
 
+Common-only configurations can be read; build and up require a source.
+An empty `dockerComposeFile` array discovers files from workspace `COMPOSE_FILE`,
+then workspace `.env`, then `docker-compose.yml` and its existing override file.
+`containerEnv` values are strings; `remoteEnv` values are strings or null.
+Remote null becomes the literal string `"null"` for exec and lifecycle commands.
+
 `exec` stops reading options at the container command; every later argument
 passes through unchanged. An explicit `--` before the command also works.
 

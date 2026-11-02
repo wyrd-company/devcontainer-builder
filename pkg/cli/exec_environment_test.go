@@ -20,7 +20,7 @@ import (
 // including flag parsing and configuration substitution, without a daemon.
 func TestExecRemoteEnvPrecedence(t *testing.T) {
 	workspace := t.TempDir()
-	config := `{"image":"alpine:3.20","remoteEnv":{"SAMPLE":"configured","EMPTY":"","CONFIG_ONLY":"${localEnv:SAMPLE_VALUE}"}}`
+	config := `{"image":"alpine:3.20","remoteEnv":{"SAMPLE":"configured","EMPTY":"","NULL":null,"CONFIG_ONLY":"${localEnv:SAMPLE_VALUE}"}}`
 	if err := os.WriteFile(filepath.Join(workspace, ".devcontainer.json"), []byte(config), 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -56,7 +56,7 @@ func TestExecRemoteEnvPrecedence(t *testing.T) {
 		key, value, _ := strings.Cut(pair, "=")
 		env[key] = value
 	}
-	want := map[string]string{"SAMPLE": "configured", "EMPTY": "", "CONFIG_ONLY": "from-host", "CLI_ONLY": "extra"}
+	want := map[string]string{"SAMPLE": "configured", "EMPTY": "", "NULL": "null", "CONFIG_ONLY": "from-host", "CLI_ONLY": "extra"}
 	if !reflect.DeepEqual(env, want) {
 		t.Fatalf("exec environment = %v, want %v", env, want)
 	}

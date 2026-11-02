@@ -259,6 +259,9 @@ func resolveRemoteEnv(in map[string]any, ctx substitute.Context, containerEnv ma
 	out := make(map[string]string, len(in))
 	for k, v := range in {
 		s, ok := v.(string)
+		if v == nil {
+			s = "null"
+		}
 		if !ok && v != nil {
 			b, _ := json.Marshal(v)
 			s = string(b)
