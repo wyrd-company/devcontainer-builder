@@ -70,29 +70,41 @@ func Initialize(ctx context.Context, command spec.Command, opts InitializeOption
 		if len(args) == 0 {
 			return nil
 		}
-		executable, err := hostExecutable(args[0], opts.Workspace, opts.Env)
+		executables, err := hostExecutables(args[0], opts.Workspace, opts.Env)
 		if err != nil {
 			return fmt.Errorf("the initializeCommand in the devcontainer.json failed: %w", err)
 		}
-		cmd := exec.CommandContext(ctx, executable, args[1:]...)
-		// The resolver already selected the child executable. Avoid a second
-		// lookup of a bare name through the parent environment.
-		cmd.Path, cmd.Err = executable, nil
-		cmd.Args[0] = args[0]
-		cmd.Dir, cmd.Env, cmd.Stdin = opts.Workspace, opts.Env, opts.Stdin
 		var buffered bytes.Buffer
 		writer := writerFunc(func(p []byte) (int, error) { output(p); return len(p), nil })
-		if name != "" {
-			cmd.Stdout, cmd.Stderr = &buffered, &buffered
-		} else {
-			cmd.Stdout, cmd.Stderr = writer, writer
+		var denied error
+		for _, executable := range executables {
+			cmd := exec.CommandContext(ctx, executable, args[1:]...)
+			// Candidates are resolved using the child environment and directory.
+			cmd.Path, cmd.Err = executable, nil
+			cmd.Args[0] = args[0]
+			cmd.Dir, cmd.Env, cmd.Stdin = opts.Workspace, opts.Env, opts.Stdin
+			if name != "" {
+				cmd.Stdout, cmd.Stderr = &buffered, &buffered
+			} else {
+				cmd.Stdout, cmd.Stderr = writer, writer
+			}
+			err = cmd.Run()
+			if runtime.GOOS != "windows" && errors.Is(err, syscall.ENOEXEC) {
+				fallback := exec.CommandContext(ctx, "/bin/sh", append([]string{executable}, args[1:]...)...)
+				fallback.Dir, fallback.Env, fallback.Stdin = cmd.Dir, cmd.Env, cmd.Stdin
+				fallback.Stdout, fallback.Stderr = cmd.Stdout, cmd.Stderr
+				err = fallback.Run()
+				break
+			}
+			if runtime.GOOS == "windows" || !continuePathSearch(err) {
+				break
+			}
+			if errors.Is(err, syscall.EACCES) {
+				denied = err
+			}
 		}
-		err = cmd.Run()
-		if runtime.GOOS != "windows" && errors.Is(err, syscall.ENOEXEC) {
-			fallback := exec.CommandContext(ctx, "/bin/sh", append([]string{executable}, args[1:]...)...)
-			fallback.Dir, fallback.Env, fallback.Stdin = cmd.Dir, cmd.Env, cmd.Stdin
-			fallback.Stdout, fallback.Stderr = cmd.Stdout, cmd.Stderr
-			err = fallback.Run()
+		if continuePathSearch(err) && denied != nil {
+			err = denied
 		}
 		if name != "" {
 			output(buffered.Bytes())
@@ -135,22 +147,22 @@ type writerFunc func([]byte) (int, error)
 
 func (f writerFunc) Write(p []byte) (int, error) { return f(p) }
 
-// hostExecutable resolves argv against the child environment and directory.
+// hostExecutables resolves argv against the child environment and directory.
 // exec.CommandContext otherwise uses the parent's PATH and resolves relative
 // PATH entries before Cmd.Dir takes effect.
-func hostExecutable(name, workspace string, env []string) (string, error) {
+func hostExecutables(name, workspace string, env []string) ([]string, error) {
 	dir, err := filepath.Abs(workspace)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	if filepath.IsAbs(name) {
-		return name, nil
+		return []string{name}, nil
 	}
-	if strings.ContainsAny(name, `/\`) {
+	if strings.Contains(name, "/") || runtime.GOOS == "windows" && strings.Contains(name, `\`) {
 		if runtime.GOOS != "windows" {
-			return name, nil
+			return []string{name}, nil
 		}
-		return filepath.Join(dir, name), nil
+		return []string{filepath.Join(dir, name)}, nil
 	}
 	if env == nil {
 		env = os.Environ()
@@ -181,11 +193,16 @@ func hostExecutable(name, workspace string, env []string) (string, error) {
 	if path == "" {
 		entries = []string{""}
 	}
+	var candidates []string
 	for _, entry := range entries {
 		for _, suffix := range suffixes {
 			candidate := name + suffix
 			if entry != "" {
 				candidate = entry + string(filepath.Separator) + candidate
+			}
+			if runtime.GOOS != "windows" {
+				candidates = append(candidates, candidate)
+				continue
 			}
 			lookup := candidate
 			if !filepath.IsAbs(lookup) {
@@ -195,12 +212,18 @@ func hostExecutable(name, workspace string, env []string) (string, error) {
 			// by the host, and the script name must retain its native spelling.
 			info, err := os.Stat(lookup)
 			if err == nil && !info.IsDir() && (runtime.GOOS == "windows" || info.Mode()&0111 != 0) {
-				if runtime.GOOS != "windows" {
-					return candidate, nil
-				}
-				return lookup, nil
+				return []string{lookup}, nil
 			}
 		}
 	}
-	return "", &exec.Error{Name: name, Err: exec.ErrNotFound}
+	if len(candidates) > 0 {
+		return candidates, nil
+	}
+	return nil, &exec.Error{Name: name, Err: exec.ErrNotFound}
+}
+
+// A child exit is never a search error. These errors can reject an individual
+// PATH candidate before a process starts; native execvp continues searching.
+func continuePathSearch(err error) bool {
+	return errors.Is(err, syscall.ENOENT) || errors.Is(err, syscall.ENOTDIR) || errors.Is(err, syscall.EACCES) || errors.Is(err, syscall.ESTALE) || errors.Is(err, syscall.ENODEV) || errors.Is(err, syscall.ETIMEDOUT)
 }

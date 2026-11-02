@@ -279,3 +279,71 @@ func TestInitializePathComponents(t *testing.T) {
 		}
 	}
 }
+
+func TestInitializePathSearchErrors(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("POSIX execvp fixtures")
+	}
+	for _, tc := range []struct {
+		name, body string
+		mode       os.FileMode
+		want       string
+		fail       bool
+	}{
+		{"missing-interpreter", "#!/nonexistent/sample-interpreter\n", 0700, "second", false},
+		{"permission-denied", "printf forbidden", 0600, "second", false},
+		{"text-first", "printf first", 0700, "first", false},
+		{"child-failure", "exit 7", 0700, "", true},
+		{"child-interrupt", "exit 130", 0700, "initializeCommand interrupted.\n", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			for _, name := range []string{"first", "second"} {
+				if err := os.Mkdir(filepath.Join(dir, name), 0700); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := os.WriteFile(filepath.Join(dir, "first/sample-command"), []byte(tc.body), tc.mode); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(dir, "second/sample-command"), []byte("#!/bin/sh\nprintf second"), 0700); err != nil {
+				t.Fatal(err)
+			}
+			var out bytes.Buffer
+			err := Initialize(context.Background(), spec.Command{Args: []string{"sample-command"}}, InitializeOptions{Workspace: dir, Env: []string{"PATH=missing:first:second"}, Output: &out})
+			if (err != nil) != tc.fail || out.String() != tc.want {
+				t.Fatalf("output=%q err=%v want=%q fail=%v", out.String(), err, tc.want, tc.fail)
+			}
+		})
+	}
+	// Explicit paths do not search PATH, even for a missing interpreter.
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "sample-command"), []byte("#!/nonexistent/sample-interpreter\n"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := Initialize(context.Background(), spec.Command{Args: []string{"./sample-command"}}, InitializeOptions{Workspace: dir}); err == nil {
+		t.Fatal("explicit missing interpreter accepted")
+	}
+	if err := Initialize(context.Background(), spec.Command{Args: []string{"sample-command"}}, InitializeOptions{Workspace: dir, Env: []string{"PATH=.:missing"}}); err == nil {
+		t.Fatal("exhausted search accepted")
+	}
+}
+
+func TestInitializePOSIXBackslashExecutable(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("POSIX executable filename")
+	}
+	dir := t.TempDir()
+	if err := os.Mkdir(filepath.Join(dir, "bin"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	executable := `sample\command`
+	if err := os.WriteFile(filepath.Join(dir, "bin", executable), []byte("#!/bin/sh\nprintf selected"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	var output bytes.Buffer
+	err := Initialize(context.Background(), spec.Command{Args: []string{executable}}, InitializeOptions{Workspace: dir, Env: []string{"PATH=bin"}, Output: &output})
+	if err != nil || output.String() != "selected" {
+		t.Fatalf("output=%q err=%v", output.String(), err)
+	}
+}
