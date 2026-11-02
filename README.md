@@ -140,7 +140,8 @@ overrides need
 separate checks.
 
 Kubernetes Compose sidecars preserve service command and entrypoint defaults,
-including explicit empty overrides. `ComposeProjectRequest.SidecarImageConfigs`
+including explicit empty overrides and the `[""]` entrypoint reset.
+`ComposeProjectRequest.SidecarImageConfigs`
 supplies native OCI image configuration by service name when an empty command
 needs image entrypoint fallback or an unset environment key needs checking.
 An explicit empty entrypoint suppresses image Entrypoint and Cmd; a service with

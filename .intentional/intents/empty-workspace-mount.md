@@ -86,3 +86,4 @@ image environment removals with primary service context.
 Preserve Kubernetes Compose sidecar empty command overrides and literal dollars.
 Use native image configuration for empty-command fallback and final environment
 unset checks, with contextual errors for unrepresentable image-owned removals.
+Normalize the native single-empty-string sidecar entrypoint reset.

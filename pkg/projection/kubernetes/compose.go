@@ -657,7 +657,7 @@ func buildSidecarContainer(
 	// only those cases, and put the executable in Command to suppress image Cmd.
 	c.Command = append([]string(nil), svc.Entrypoint...)
 	c.Args = append([]string(nil), svc.Command...)
-	if svc.Entrypoint != nil && len(svc.Entrypoint) == 0 {
+	if svc.Entrypoint != nil && (len(svc.Entrypoint) == 0 || (len(svc.Entrypoint) == 1 && svc.Entrypoint[0] == "")) {
 		c.Command = append([]string(nil), svc.Command...)
 		c.Args = nil
 		if len(c.Command) == 0 {

@@ -451,7 +451,8 @@ Removing an image-owned variable returns an error; a Feature or configuration
 overlay can replace the nil value. These are library inputs, not schema fields.
 
 Kubernetes Compose sidecars preserve service command and entrypoint defaults,
-including explicit empty overrides. `ComposeProjectRequest.SidecarImageConfigs`
+including explicit empty overrides and the `[""]` entrypoint reset.
+`ComposeProjectRequest.SidecarImageConfigs`
 supplies native OCI image configuration by service name when an empty command
 needs image entrypoint fallback or an unset environment key needs checking.
 An explicit empty entrypoint suppresses image Entrypoint and Cmd; a service with

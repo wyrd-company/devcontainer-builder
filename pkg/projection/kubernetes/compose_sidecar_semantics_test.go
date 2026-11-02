@@ -23,7 +23,7 @@ func TestComposeSidecarCommandForms(t *testing.T) {
 	forms := []struct {
 		name  string
 		value []string
-	}{{"nil", nil}, {"empty", []string{}}, {"explicit", []string{"/program", "two words", "", "$(VALUE):$$"}}}
+	}{{"nil", nil}, {"empty", []string{}}, {"empty-string-entry", []string{""}}, {"explicit", []string{"/program", "two words", "", "$(VALUE):$$"}}}
 	for _, entry := range forms {
 		for _, cmd := range forms {
 			t.Run(entry.name+"/"+cmd.name, func(t *testing.T) {
@@ -35,7 +35,7 @@ func TestComposeSidecarCommandForms(t *testing.T) {
 				image := &oci.ImageConfig{Entrypoint: []string{"/image", "$(VALUE)"}, Cmd: []string{"image-argument"}}
 				r.SidecarImageConfigs = map[string]*oci.ImageConfig{"worker": image}
 				out, err := ProjectCompose(r)
-				if entry.value != nil && len(entry.value) == 0 && len(cmd.value) == 0 {
+				if entry.value != nil && (len(entry.value) == 0 || (len(entry.value) == 1 && entry.value[0] == "")) && len(cmd.value) == 0 {
 					if err == nil || !strings.Contains(err.Error(), `service "worker"`) || !strings.Contains(err.Error(), "no command specified") {
 						t.Fatalf("error=%v", err)
 					}
@@ -51,6 +51,9 @@ func TestComposeSidecarCommandForms(t *testing.T) {
 					t.Fatal(err)
 				}
 				wantEntry, wantCmd := entry.value, cmd.value
+				if len(wantEntry) == 1 && wantEntry[0] == "" {
+					wantEntry = []string{}
+				}
 				if wantEntry == nil {
 					wantEntry = image.Entrypoint
 				}
@@ -149,7 +152,7 @@ func TestComposeSidecarEnvironment(t *testing.T) {
 
 func TestComposeSidecarLoaderForms(t *testing.T) {
 	for _, field := range []string{"entrypoint", "command"} {
-		for _, form := range []string{"null", "[]", `""`, `["/program", "two words", ""]`, `'/program "two words"'`} {
+		for _, form := range []string{"null", "[]", `""`, `[""]`, `["/program", "two words", ""]`, `'/program "two words"'`} {
 			t.Run(field+"/"+form, func(t *testing.T) {
 				dc, p, _ := loadProjectForTest(t, "services:\n  app:\n    image: alpine\n  worker:\n    image: alpine\n    "+field+": "+form+"\n", `{"dockerComposeFile":"compose.yml","service":"app"}`)
 				r := sidecarRequest()
@@ -158,7 +161,7 @@ func TestComposeSidecarLoaderForms(t *testing.T) {
 				r.SidecarImageConfigs = map[string]*oci.ImageConfig{"worker": {Entrypoint: []string{"/image"}, Cmd: []string{"arg"}}}
 				out, err := ProjectCompose(r)
 				empty := form == "[]" || form == `""`
-				if field == "entrypoint" && empty {
+				if field == "entrypoint" && (empty || form == `[""]`) {
 					if err == nil {
 						t.Fatal("empty entrypoint retained image command")
 					}
