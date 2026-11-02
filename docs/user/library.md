@@ -436,8 +436,9 @@ entrypoint and command. Absent service values fall back to the image; an explici
 empty entrypoint suppresses both image Entrypoint and Cmd, and an explicit empty
 command suppresses image Cmd. Configuration `containerEnv` overrides ordered
 Features, then service environment, above inherited image environment. Dollars
-remain literal. Sidecar empty-command and environment-unset semantics, full
-Compose `runArgs`, and native host Compose command overrides need separate checks.
+remain literal. Full Compose `runArgs` and native host Compose command
+overrides need
+separate checks.
 
 Pass the selected image's native OCI configuration as
 `ComposeProjectRequest.PrimaryImageConfig` when image command fallback is needed.
@@ -448,3 +449,13 @@ command fallback. A final nil service environment value requires image
 configuration so projection can determine whether omission is sufficient.
 Removing an image-owned variable returns an error; a Feature or configuration
 overlay can replace the nil value. These are library inputs, not schema fields.
+
+Kubernetes Compose sidecars preserve service command and entrypoint defaults,
+including explicit empty overrides. `ComposeProjectRequest.SidecarImageConfigs`
+supplies native OCI image configuration by service name when an empty command
+needs image entrypoint fallback or an unset environment key needs checking.
+An explicit empty entrypoint suppresses image Entrypoint and Cmd; a service with
+no executable returns a contextual error. Unset image-owned environment values
+return an error because Pod environment omission inherits image values. Explicit
+empty environment values remain empty. Authored command and environment dollars
+remain literal. Sidecars receive no primary configuration or Feature overlays.

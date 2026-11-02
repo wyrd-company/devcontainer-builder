@@ -74,6 +74,11 @@ type ComposeProjectRequest struct {
 	// an image with no command or environment.
 	PrimaryImageConfig *oci.ImageConfig
 
+	// SidecarImageConfigs supplies native image configuration by service name.
+	// Required for explicit empty command fallback and final unset environment
+	// checks. No devcontainer.json field is added.
+	SidecarImageConfigs map[string]*oci.ImageConfig
+
 	// Features as resolved by pkg/features. Their containerEnv,
 	// init/privileged/capAdd/securityOpt, and mounts merge into the
 	// primary container only — sidecar services don't see them.
@@ -283,7 +288,7 @@ func ProjectCompose(req ComposeProjectRequest) (*ComposeProjection, error) {
 	sort.Strings(sideNames)
 	for _, name := range sideNames {
 		svc, _ := proj.GetService(name)
-		c, vols, err := buildSidecarContainer(svc, volMap, configBindings, secretBindings)
+		c, vols, err := buildSidecarContainer(svc, req.SidecarImageConfigs[name], volMap, configBindings, secretBindings)
 		if err != nil {
 			return nil, fmt.Errorf("service %q: %w", name, err)
 		}
@@ -634,7 +639,7 @@ func buildPrimaryContainer(
 // compose service. Features and devcontainer.json fields don't apply
 // to sidecars; they take only what compose declared.
 func buildSidecarContainer(
-	svc composetypes.ServiceConfig, volMap map[string]composeVolumeBinding,
+	svc composetypes.ServiceConfig, imageConfig *oci.ImageConfig, volMap map[string]composeVolumeBinding,
 	configBindings, secretBindings map[string]composeObjectBinding,
 ) (corev1.Container, []corev1.Volume, error) {
 	c := corev1.Container{
@@ -647,13 +652,49 @@ func buildSidecarContainer(
 	if svc.Image == "" {
 		return c, nil, fmt.Errorf("compose-side `build:` is out of scope; service %q must have an image", svc.Name)
 	}
-	if len(svc.Entrypoint) > 0 {
-		c.Command = []string(svc.Entrypoint)
+	// Nonempty command and entrypoint map directly. Empty overrides cannot
+	// survive Pod serialization: CRI would use image defaults again. Resolve
+	// only those cases, and put the executable in Command to suppress image Cmd.
+	c.Command = append([]string(nil), svc.Entrypoint...)
+	c.Args = append([]string(nil), svc.Command...)
+	if svc.Entrypoint != nil && len(svc.Entrypoint) == 0 {
+		c.Command = append([]string(nil), svc.Command...)
+		c.Args = nil
+		if len(c.Command) == 0 {
+			return c, nil, fmt.Errorf("empty entrypoint suppresses image command: no command specified")
+		}
+	} else if svc.Entrypoint == nil && svc.Command != nil && len(svc.Command) == 0 {
+		if imageConfig == nil {
+			return c, nil, fmt.Errorf("SidecarImageConfigs is required for empty command image entrypoint fallback")
+		}
+		c.Command = append([]string(nil), imageConfig.Entrypoint...)
+		if len(c.Command) == 0 || (len(c.Command) == 1 && c.Command[0] == "") {
+			return c, nil, fmt.Errorf("empty command: no command specified")
+		}
 	}
-	if len(svc.Command) > 0 {
-		c.Args = []string(svc.Command)
+	for k, v := range svc.Environment {
+		if v != nil {
+			continue
+		}
+		if imageConfig == nil {
+			return c, nil, fmt.Errorf("SidecarImageConfigs is required for unset environment key %q", k)
+		}
+		for _, e := range imageConfig.Env {
+			if strings.SplitN(e, "=", 2)[0] == k {
+				return c, nil, fmt.Errorf("unset environment key %q has no Kubernetes equivalent for an image-owned variable", k)
+			}
+		}
 	}
 	c.Env = composeEnvToK8s(svc.Environment)
+	for i := range c.Command {
+		c.Command[i] = strings.ReplaceAll(c.Command[i], "$", "$$")
+	}
+	for i := range c.Args {
+		c.Args[i] = strings.ReplaceAll(c.Args[i], "$", "$$")
+	}
+	for i := range c.Env {
+		c.Env[i].Value = strings.ReplaceAll(c.Env[i].Value, "$", "$$")
+	}
 	if svc.User != "" {
 		if err := applyContainerUser(&c, svc.User); err != nil {
 			return c, nil, fmt.Errorf("service %q: %w", svc.Name, err)

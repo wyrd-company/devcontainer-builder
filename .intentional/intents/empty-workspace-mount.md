@@ -82,3 +82,7 @@ Preserve Kubernetes Compose primary service command defaults, explicit empty
 commands, image fallback, Feature entrypoints, literal dollars and configuration
 environment precedence. Report missing image configuration and unrepresentable
 image environment removals with primary service context.
+
+Preserve Kubernetes Compose sidecar empty command overrides and literal dollars.
+Use native image configuration for empty-command fallback and final environment
+unset checks, with contextual errors for unrepresentable image-owned removals.
