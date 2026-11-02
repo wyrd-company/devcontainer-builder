@@ -48,7 +48,7 @@ func TestMountOptionRegistration(t *testing.T) {
 		}
 		return cmd.Flags()
 	}
-	want := map[string]string{"mount-workspace-git-root": "true", "mount-git-worktree-common-dir": "false", "id-label": "[]"}
+	want := map[string]string{"mount-workspace-git-root": "true", "mount-git-worktree-common-dir": "false", "id-label": "[]", "git-prefix": ""}
 	for _, name := range []string{"up", "exec", "read-configuration", "run-user-commands"} {
 		for flag, def := range want {
 			f := find(name).Lookup(flag)
@@ -66,7 +66,7 @@ func TestMountOptionRegistration(t *testing.T) {
 	}
 	// Upstream build and set-up place the workspace folder alone.
 	for _, name := range []string{"build", "set-up"} {
-		for _, flag := range []string{"mount-workspace-git-root", "id-label", "mount"} {
+		for _, flag := range []string{"mount-workspace-git-root", "id-label", "mount", "git-prefix"} {
 			if find(name).Lookup(flag) != nil {
 				t.Errorf("%s has --%s", name, flag)
 			}
@@ -88,6 +88,10 @@ func TestMountOptionValidation(t *testing.T) {
 		{[]string{"up", "--mount", "type=tmpfs,source=a,target=/a"}, "Unmatched argument format: mount must match type=<bind|volume>,source=<source>,target=<target>[,external=<true|false>]"},
 		{[]string{"up", "--mount", "type=bind,source=/a,target=/b,readonly"}, "Unmatched argument format: mount must match type=<bind|volume>,source=<source>,target=<target>[,external=<true|false>]"},
 		{[]string{"up", "--workspace-mount-consistency", "fast"}, "--workspace-mount-consistency must be consistent, cached, or delegated"},
+		{[]string{"up", "--git-prefix", ""}, "--git-prefix must not be empty"},
+		{[]string{"exec", "--git-prefix=", "--", "true"}, "--git-prefix must not be empty"},
+		{[]string{"read-configuration", "--git-prefix", ""}, "--git-prefix must not be empty"},
+		{[]string{"run-user-commands", "--git-prefix="}, "--git-prefix must not be empty"},
 	} {
 		args := append([]string{tc.args[0], "--workspace-folder", app}, tc.args[1:]...)
 		result, _ := invoke(t, 2, args...)
@@ -153,6 +157,18 @@ func TestReadConfigurationWorkspaceGitRoot(t *testing.T) {
 	if ws, _ = workspace(); ws["workspaceFolder"] != "/workspaces/repo/app" || ws["workspaceMount"] != "type=bind,source=/host/custom,target=/src" {
 		t.Fatalf("configured mount=%v", ws)
 	}
+	for _, folder := range []string{"", "/tmp"} {
+		config := `{"image":"alpine:3.20","workspaceMount":""}`
+		if folder != "" {
+			config = `{"image":"alpine:3.20","workspaceFolder":"/tmp","workspaceMount":""}`
+		}
+		writeTestFile(t, filepath.Join(app, ".devcontainer.json"), config)
+		ws, _ := workspace()
+		if value, ok := ws["workspaceMount"]; !ok || value != "" {
+			t.Fatalf("empty workspaceMount = %v", ws)
+		}
+	}
+
 	// Compose files own the mounts; there is no derived workspace mount.
 	writeTestFile(t, filepath.Join(app, "compose.yml"), "services:\n  app:\n    image: alpine:3.20\n")
 	for _, folder := range []string{"", "/src/app"} {
@@ -299,5 +315,72 @@ func TestIDLabelsWithoutWorkspaceReadNoConfiguration(t *testing.T) {
 	result, _ = invoke(t, 0, "read-configuration")
 	if configuration(result)["remoteEnv"] == nil {
 		t.Fatalf("default result=%v", result)
+	}
+}
+
+// gitPrefixWorkspace selects a global config that includes etc/inc.cfg
+// through %(prefix)/, and writes a file that Git rejects at
+// base/deep/prefix/etc/inc.cfg. It returns base.
+func gitPrefixWorkspace(t *testing.T) string {
+	t.Helper()
+	base, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	global := filepath.Join(base, "global.cfg")
+	writeTestFile(t, global, "[include]\n\tpath = %(prefix)/etc/inc.cfg\n")
+	writeTestFile(t, filepath.Join(base, "deep", "prefix", "etc", "inc.cfg"), "[broken\n")
+	t.Setenv("GIT_CONFIG_GLOBAL", global)
+	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
+	return base
+}
+
+// --git-prefix names the prefix of the host Git's build. Without it, an
+// include through %(prefix)/ and a relative path is not read; with it, a file
+// that Git rejects there gives no Git root, so the workspace folder is
+// mounted, as upstream mounts it.
+func TestReadConfigurationGitPrefix(t *testing.T) {
+	repo, app := gitWorkspace(t, `{"image":"alpine:3.20"}`)
+	base := gitPrefixWorkspace(t)
+	mount := func(args ...string) any {
+		t.Helper()
+		result, _ := invoke(t, 0, append([]string{"read-configuration", "--workspace-folder", app}, args...)...)
+		ws, _ := result["workspace"].(map[string]any)
+		return ws["workspaceMount"]
+	}
+	repoMount := "type=bind,source=" + repo + ",target=/workspaces/repo"
+	appMount := "type=bind,source=" + app + ",target=/workspaces/app"
+	prefix := filepath.Join(base, "deep", "prefix")
+	if got := mount(); got != repoMount {
+		t.Fatalf("without --git-prefix: %v, want %s", got, repoMount)
+	}
+	if got := mount("--git-prefix", prefix); got != appMount {
+		t.Fatalf("--git-prefix %s: %v, want %s", prefix, got, appMount)
+	}
+	if got := mount("--git-prefix", filepath.Join(base, "deep")); got != repoMount {
+		t.Fatalf("other --git-prefix: %v, want %s", got, repoMount)
+	}
+	if got := mount("--git-prefix", prefix, "--mount-workspace-git-root=false"); got != appMount {
+		t.Fatalf("--git-prefix without the Git root: %v", got)
+	}
+	// A relative value starts at the current folder, and its components are
+	// followed: link/../prefix is deep/prefix through the link, where a
+	// lexically cleaned value would name cwd/prefix.
+	cwd := filepath.Join(base, "cwd")
+	writeTestFile(t, filepath.Join(cwd, "prefix", "etc", "inc.cfg"), "[core]\n")
+	if err := os.Symlink(filepath.Join(base, "deep", "inner"), filepath.Join(cwd, "link")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(base, "deep", "inner"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(cwd)
+	for _, value := range []string{"../deep/prefix", "link/../prefix"} {
+		if got := mount("--git-prefix", value); got != appMount {
+			t.Fatalf("--git-prefix %s: %v, want %s", value, got, appMount)
+		}
+	}
+	if got := mount("--git-prefix", "prefix"); got != repoMount {
+		t.Fatalf("--git-prefix prefix: %v, want %s", got, repoMount)
 	}
 }

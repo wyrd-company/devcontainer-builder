@@ -26,6 +26,7 @@ type DevContainer struct {
 	Name                 string         `json:"name,omitempty"`
 	Image                string         `json:"image,omitempty"`
 	Dockerfile           string         `json:"dockerFile,omitempty"`
+	Context              string         `json:"context,omitempty"`
 	Build                *Build         `json:"build,omitempty"`
 	DockerComposeFile    StringOrSlice  `json:"dockerComposeFile,omitempty"`
 	Service              string         `json:"service,omitempty"`
@@ -61,6 +62,21 @@ type DevContainer struct {
 	Path string `json:"-"`
 	// Raw retains the original (jsonc-stripped) bytes for round-trip needs.
 	Raw json.RawMessage `json:"-"`
+}
+
+// DeclaresWorkspaceMount reports whether workspaceMount is configured, including
+// an explicitly empty value that disables the default workspace mount. Specs
+// constructed in Go can set WorkspaceMount or retain the key in Raw.
+func (dc *DevContainer) DeclaresWorkspaceMount() bool {
+	if dc.WorkspaceMount != "" {
+		return true
+	}
+	var keys map[string]json.RawMessage
+	if json.Unmarshal(dc.Raw, &keys) != nil {
+		return false
+	}
+	_, ok := keys["workspaceMount"]
+	return ok
 }
 
 // Build models the inline build object inside devcontainer.json.
@@ -126,6 +142,9 @@ func (c *Command) UnmarshalJSON(data []byte) error {
 		}
 		c.Parallel = make(map[string]Command, len(m))
 		for k, raw := range m {
+			if len(raw) > 0 && raw[0] == '{' {
+				return fmt.Errorf("parallel command %q must be a string or string array", k)
+			}
 			var sub Command
 			if err := sub.UnmarshalJSON(raw); err != nil {
 				return fmt.Errorf("parallel command %q: %w", k, err)
@@ -138,8 +157,7 @@ func (c *Command) UnmarshalJSON(data []byte) error {
 }
 
 // StringOrSlice accepts either a single string or a list of strings, which
-// the devcontainer spec allows for command fields. Retained for fields
-// that don't need the parallel-object form.
+// the devcontainer spec allows for dockerComposeFile and build.cacheFrom.
 type StringOrSlice []string
 
 func (s *StringOrSlice) UnmarshalJSON(data []byte) error {
@@ -160,27 +178,6 @@ func (s *StringOrSlice) UnmarshalJSON(data []byte) error {
 			return err
 		}
 		*s = v
-		return nil
-	}
-	// Map form: {"name": "command"} — pick values in iteration order. We
-	// preserve the values only since names are advisory.
-	if data[0] == '{' {
-		var m map[string]any
-		if err := json.Unmarshal(data, &m); err != nil {
-			return err
-		}
-		for _, v := range m {
-			switch t := v.(type) {
-			case string:
-				*s = append(*s, t)
-			case []any:
-				for _, e := range t {
-					if str, ok := e.(string); ok {
-						*s = append(*s, str)
-					}
-				}
-			}
-		}
 		return nil
 	}
 	return fmt.Errorf("unsupported StringOrSlice value: %s", string(data))
@@ -373,7 +370,9 @@ func LoadFromWorkspace(workspace string) (*DevContainer, error) {
 // is returned with no error.
 func (d *DevContainer) BuildContextDir() (string, error) {
 	switch {
-	case d.Build != nil && d.Build.Context != "":
+	case d.Dockerfile != "" && d.Context != "":
+		return resolveFromSpecDir(d.Path, d.Context), nil
+	case d.Dockerfile == "" && d.Build != nil && d.Build.Context != "":
 		return resolveFromSpecDir(d.Path, d.Build.Context), nil
 	case d.DockerfilePath() != "":
 		return filepath.Dir(d.DockerfileFile()), nil

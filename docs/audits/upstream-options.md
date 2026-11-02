@@ -25,13 +25,13 @@ including inherited help/version on each command. It records short aliases but
 scores each canonical long option once. It never subtracts omissions. Registration
 coverage is distinct from behavior parity and does not use these dispositions.
 The pinned `up` table has **44 explicit options**, plus inherited help/version.
-Registered option coverage is **154/253 (60.87%)**;
-registration includes the three session-folder pairs awaiting probe-cache behavior.
+Registered option coverage is **204/253 (80.63%)**;
+registration includes the three implemented session-folder pairs.
 
 ## Dispositions
 
-- implemented: **151**.
-- implement: **86**.
+- implemented: **196**.
+- implement: **41**.
 - not applicable by design: **15**.
 - needs Bob's decision: **1**.
 
@@ -51,7 +51,7 @@ supports outdated reporting and template metadata.
 | lifecycle | M | 7 | Lifecycle controls: skip-non-blocking-commands, prebuild, stop-for-personalization, expect-existing-container. |
 | mounts | L | 14 | Workspace mounts and container selection: mount, workspace-mount-consistency, mount-workspace-git-root, mount-git-worktree-common-dir, id-label; mount-workspace-git-root defaults to true; mount-git-worktree-common-dir defaults to false; additional mounts are explicit. |
 | environment | M | 5 | Remote environment and secrets: remote-env, secrets-file; lifecycle secret inputs are separate from configuration remoteEnv metadata. |
-| data-folders | M | 17 | Registration: all folder options. Behavior: host staging, Compose object materialization/cleanup, and container markers are routed; see [state publication](state-publication.md). Session probe-cache persistence is not implemented. System patch markers are written by up and set-up. |
+| data-folders | M | 17 | Registration: all folder options. Behavior: host staging, Compose object materialization/cleanup, and container markers are routed; see [state publication](state-publication.md). Session probe caches use the supplied folder with the upstream mode-specific JSON format. System patch markers are written by up and set-up. |
 | terminal | S | 10 | Terminal dimensions: terminal-columns, terminal-rows. |
 | lockfile | L | 4 | Feature lockfiles: experimental-lockfile, experimental-frozen-lockfile. |
 | feature-controls | M | 9 | Feature mapping and metadata controls: skip-feature-auto-mapping, skip-persisting-customizations-from-features, omit-config-remote-env-from-metadata, omit-syntax-directive; persist remoteEnv in metadata by default; omit-config-remote-env-from-metadata defaults to false and omits it when enabled. |
@@ -76,7 +76,51 @@ Upstream defaults govern implementation unless an approved requirement states
 otherwise. Git-root mounting defaults to true. Configuration remoteEnv persists
 in image metadata unless omit-config-remote-env-from-metadata is enabled.
 A stricter policy requires Bob's decision; an additive opt-in does not itself
-authorize changing the default.
+authorize changing the default. The approved process-credential requirement
+governs native Git discovery: it reads with the credentials of its own process,
+not those of a started `git`; see
+[Process credentials](../user/overview.md#process-credentials). It removes no option.
+Native Git discovery follows the latest stable Git release, which Bob
+approved in
+[Follow latest stable Git behavior](../decisions/follow-latest-stable-git-behavior.yml).
+It applies the repository format rules of Git 2.55 built without Rust, which
+Bob approved, whatever Git is installed; it does not check the host Git's
+version or start `git`. Other Git versions and builds read some configuration
+paths differently and accept other repository extensions, so the upstream CLI
+can mount a different folder; see
+[Workspace mounts](../user/usage.md#workspace-mounts-and-container-selection).
+The full config read rejects invalid `core.ignorecase`, `core.filemode`,
+`core.symlinks`, `core.trustctime`, `core.quotepath`, `core.ignorestat`,
+`core.sparseCheckout`, `core.sparseCheckoutCone`, `core.protectHFS`,
+`core.protectNTFS`, `core.precomposeUnicode`, `core.fsyncObjectFiles`,
+`core.safecrlf`, `core.autocrlf`, `core.lockfilePid`,
+`sparse.expectFilesOutsideOfPatterns`, `pager.color`, `color.pager`,
+`user.useConfigOnly`, `advice.detachedHead` and `advice.statusHints` boolean
+values after reading all file, include and command-line inputs.
+`core.safecrlf` also accepts
+`warn`, without regard to case. `core.autocrlf` also accepts `input`,
+without regard to case.
+Native discovery follows current Git for `core.lockfilePid`; Git before 2.54
+ignores that key.
+Bob also approved one account-lookup difference: Linux release builds look up
+accounts in `/etc/passwd` only and skip an `include.path` of `~name/` whose
+account is not there; see
+[Relation to the Dev Container CLI](../user/overview.md#relation-to-the-dev-container-cli).
+`dcb` adds `--git-prefix` to up, exec, read-configuration and
+run-user-commands, the commands with mount-workspace-git-root, and
+`Options.GitPrefix` to `pkg/workspace`; upstream has neither. It names the
+prefix of the host Git's build, where Git reads an `include.path` of
+`%(prefix)/` followed by a relative path. Without it, `dcb` does not read that
+file. Bob approved the extension and this default; see
+[Explicit Git prefix setting](../decisions/explicit-git-prefix-setting.yml).
+The extension removes no option and is not counted in the dispositions above.
+Another deliberate difference from the latest stable Git needs Bob's approval.
+The specification recommends mounting the repository root but does not define
+how it is found or what happens when Git rejects the repository. Whether to keep
+upstream's Git-dependent default, mount the requested folder by default, or
+make the choice explicit is open in
+[issue 44](https://github.com/wyrd-company/devcontainer-builder/issues/44); no
+default change is approved.
 
 Template commands are outside the current implementation scope. Template
 application extracts non-omitted files into the destination and overwrites
@@ -90,16 +134,19 @@ containerCollectionsOCI.ts:562.
 
 All 18 upstream leaf commands are included below, with the root and two command
 groups. `dcb features` resolves/stages a configuration; it does not cover upstream's
-feature authoring commands. The `templates` group, all its children, `outdated`,
-`upgrade`, and all upstream `features` children are absent.
+feature authoring commands other than `features package`,
+`features generate-docs`, `features info`, and `features resolve-dependencies`.
+The `templates` group
+supports metadata and generate-docs. `outdated` reports Feature versions.
+`upgrade` generates Feature lockfiles. The other upstream `features` children are absent.
 
 Positional arguments are part of each command unit but do not add flag score units:
 `build [path]` maps to `build --workspace-folder`; `exec <cmd> [args..]` maps to
 `exec <cmd> [args..]` (an explicit `--` also works). Missing units must also
 implement `features test [target]`
-(deprecated target; project-folder preferred), `features package <target>`,
-`features publish <target>`, `features info <mode> <feature>`,
-`templates publish <target>`, and `templates metadata <templateId>`.
+(deprecated target; project-folder preferred),
+`features publish <target>`,
+`templates publish <target>`.
 Mode choices for feature info are manifest, tags, dependencies and verbose.
 Command-shape differences alone are not an omission under the epic contract.
 
@@ -182,35 +229,69 @@ features, dotfiles, environment probing and version support.
 
 ### features generate-docs
 
+`features.GenerateDocumentation` owns local README generation. CLI defaults and
+aliases match the pinned command; metadata and NOTES.md produce byte-for-byte
+README fixtures, including tolerant JSONC recovery, option ordering, dollar
+replacement patterns, deprecation notices, and extensions. Missing metadata/IDs
+skip with success; file operation failures permit sibling completion. README
+replacement preserves the pinned symlink and mode behavior. Valueless string
+options use upstream defaults; explicit empty values stay empty. UTF-8 maximal
+subparts, malformed-fraction recovery, list-length coercion, and object/prototype
+conversion follow the actual pinned command, including conversion/map failures.
+String option indices, grouped short flags, and camel-case option aliases also
+follow the pinned command.
+Long dotted options retain the same object conversion and file-operation errors
+as dotted shorthand; escaped surrogate keys retain their identity until output.
+Dotted publication values retain own properties and repeated arrays until the
+library uses them. Shadowed conversion methods fail at that stage; empty or
+skipped collections and unused GitHub link fields retain the pinned behavior.
+The CLI retains dcb's
+JSON result, global diagnostic controls, and invocation-error exit 2. Upstream has
+no stdout result and invocation-error exit 1. Tests: `TestGenerateDocumentationPinnedReadmes`,
+`TestGenerateDocumentationFilesystem`, `TestGenerateDocumentationConversionReadmes`,
+`TestFeaturesDocumentationCommand`, `TestFeaturesDocumentationOptionalStringValues`,
+`TestGenerateDocumentationStringOptions`, `TestFeaturesDocumentationGroupedAndCamelFlags`,
+`TestGenerateDocumentationDeferredValues`, `TestFeaturesDocumentationDeferredValues`.
+
 | Upstream option | dcb equivalent | Disposition | Unit | Reason / source |
 | --- | --- | --- | --- | --- |
-| --project-folder (-p) | none | implement | feature-docs | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: featuresCLI/generateDocs.ts:13. |
-| --registry (-r) | none | implement | feature-docs | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: featuresCLI/generateDocs.ts:14. |
-| --namespace (-n) | none | implement | feature-docs | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: featuresCLI/generateDocs.ts:15. |
-| --github-owner | none | implement | feature-docs | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: featuresCLI/generateDocs.ts:16. |
-| --github-repo | none | implement | feature-docs | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: featuresCLI/generateDocs.ts:17. |
-| --log-level | none | implement | feature-docs | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: featuresCLI/generateDocs.ts:18. |
-| --help | none | implement | feature-docs | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: yargs built-in help. |
-| --version | version command | implement | sibling-unit | dcb registers --version on every command; this command is not implemented yet. Source: devContainersSpecCLI.ts (.version). |
+| --project-folder (-p) | --project-folder | implemented | feature-docs | Registered with the local documentation handler. Source: featuresCLI/generateDocs.ts:13. |
+| --registry (-r) | --registry | implemented | feature-docs | Registered with the local documentation handler. Source: featuresCLI/generateDocs.ts:14. |
+| --namespace (-n) | --namespace | implemented | feature-docs | Registered with the local documentation handler. Source: featuresCLI/generateDocs.ts:15. |
+| --github-owner | --github-owner | implemented | feature-docs | Registered with the local documentation handler. Source: featuresCLI/generateDocs.ts:16. |
+| --github-repo | --github-repo | implemented | feature-docs | Registered with the local documentation handler. Source: featuresCLI/generateDocs.ts:17. |
+| --log-level | --log-level | implemented | feature-docs | Registered with the local documentation handler. Source: featuresCLI/generateDocs.ts:18. |
+| --help | --help | implemented | feature-docs | Registered with the local documentation handler. Source: yargs built-in help. |
+| --version | --version | implemented | sibling-unit | Prints the version in place of the command. Source: devContainersSpecCLI.ts (.version). |
 
 ### features info
 
 | Upstream option | dcb equivalent | Disposition | Unit | Reason / source |
 | --- | --- | --- | --- | --- |
-| --log-level | none | implement | feature-info | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: featuresCLI/info.ts:15. |
-| --output-format | none | implement | feature-info | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: featuresCLI/info.ts:16. |
-| --help | none | implement | feature-info | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: yargs built-in help. |
-| --version | version command | implement | sibling-unit | dcb registers --version on every command; this command is not implemented yet. Source: devContainersSpecCLI.ts (.version). |
+| --log-level | --log-level | implemented | feature-info | Registered for published Feature reporting in all four modes. Source: featuresCLI/info.ts:15. |
+| --output-format | --output-format | implemented | feature-info | Registered for published Feature reporting in all four modes. Source: featuresCLI/info.ts:16. |
+| --help | --help | implemented | feature-info | Registered for published Feature reporting in all four modes. Source: yargs built-in help. |
+| --version | version command | implemented | sibling-unit | dcb registers --version on every command; info reports the CLI version. Source: devContainersSpecCLI.ts (.version). |
 
 ### features package
 
+`features.Package` implements single-Feature and collection packaging. The CLI
+accepts `<target>`, preserves existing output unless
+force is explicit, and writes plain tar archives with the upstream `.tgz` name.
+Single archives use the metadata ID; collection archives use folder names.
+An ID cannot place an archive outside the output directory.
+Nonempty `legacyIds` adds `currentId` in packaged metadata without source edits.
+The CLI retains dcb's JSON-result contract. `TestPackageSingle`,
+`TestPackageCollection`, `TestPackageOutput`, and `TestFeaturesPackageCommand`
+cover the behavior; the external pinned-CLI workflow comparison checks artifacts.
+
 | Upstream option | dcb equivalent | Disposition | Unit | Reason / source |
 | --- | --- | --- | --- | --- |
-| --output-folder (-o) | none | implement | feature-package | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: collectionCommonUtils/package.ts:16. |
-| --force-clean-output-folder (-f) | none | implement | feature-package | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: collectionCommonUtils/package.ts:17. |
-| --log-level | none | implement | feature-package | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: collectionCommonUtils/package.ts:18. |
-| --help | none | implement | feature-package | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: yargs built-in help. |
-| --version | version command | implement | sibling-unit | dcb registers --version on every command; this command is not implemented yet. Source: devContainersSpecCLI.ts (.version). |
+| --output-folder (-o) | --output-folder (-o) | implemented | feature-package | Destination defaults to ./output. Source: collectionCommonUtils/package.ts:16. |
+| --force-clean-output-folder (-f) | --force-clean-output-folder (-f) | implemented | feature-package | Existing output is removed only when requested. Source: collectionCommonUtils/package.ts:17. |
+| --log-level | --log-level | implemented | feature-package | Uses the existing diagnostic level. Source: collectionCommonUtils/package.ts:18. |
+| --help | --help | implemented | feature-package | Describes target and packaging flags. Source: yargs built-in help. |
+| --version | --version | implemented | sibling-unit | The inherited version flag runs in place of packaging. Source: devContainersSpecCLI.ts (.version). |
 
 ### features publish
 
@@ -224,12 +305,20 @@ features, dotfiles, environment probing and version support.
 
 ### features resolve-dependencies
 
+`features.ResolveDependencies` discovers the reporting configuration, substitutes
+values, and uses the native OCI client, local metadata and HTTPS archives.
+The graph shares the `features info` node serialization and hashes. Installation
+rounds preserve hard and soft dependencies, aliases, duplicates, scalar options,
+lockfile integrity and override priorities. Cycles print the graph before failure.
+`TestResolveDependencies*` and `TestFeatureDependenciesCommand` cover the workflow;
+the fresh external differential harness compares exact stdout and exit status.
+
 | Upstream option | dcb equivalent | Disposition | Unit | Reason / source |
 | --- | --- | --- | --- | --- |
-| --log-level | none | implement | feature-dependencies | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: featuresCLI/resolveDependencies.ts:32. |
-| --workspace-folder | none | implement | feature-dependencies | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: featuresCLI/resolveDependencies.ts:33. |
-| --help | none | implement | feature-dependencies | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: yargs built-in help. |
-| --version | version command | implement | sibling-unit | dcb registers --version on every command; this command is not implemented yet. Source: devContainersSpecCLI.ts (.version). |
+| --log-level | --log-level | implemented | feature-dependencies | Registered for the dependency reporting workflow. Source: featuresCLI/resolveDependencies.ts:32. |
+| --workspace-folder | --workspace-folder | implemented | feature-dependencies | Registered for the dependency reporting workflow. Source: featuresCLI/resolveDependencies.ts:33. |
+| --help | --help | implemented | feature-dependencies | Registered for the dependency reporting workflow. Source: yargs built-in help. |
+| --version | version command | implemented | sibling-unit | dcb registers --version on every command; this command reports the CLI version. Source: devContainersSpecCLI.ts (.version). |
 
 ### features test
 
@@ -253,18 +342,24 @@ features, dotfiles, environment probing and version support.
 
 ### outdated
 
-| Upstream option | dcb equivalent | Disposition | Unit | Reason / source |
+`features.LoadVersionInfo` implements the report; `features.ReadVersionConfig`
+reads reporting configs. The CLI formats text/JSON. Registry access is native
+OCI HTTP with existing credentials. Lockfiles remain unchanged. Differential
+fixtures exercise tags, locks, digests, metadata fallback, failures, order,
+configuration discovery, and explicit paths.
+
+| Upstream option | dcb equivalent | Disposition | Unit | Evidence |
 | --- | --- | --- | --- | --- |
-| --user-data-folder | none | implement | outdated | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: devContainersSpecCLI.ts:1119. |
-| --workspace-folder | none | implement | outdated | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: devContainersSpecCLI.ts:1120. |
-| --config | none | implement | outdated | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: devContainersSpecCLI.ts:1121. |
-| --output-format | none | implement | outdated | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: devContainersSpecCLI.ts:1122. |
-| --log-level | none | implement | outdated | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: devContainersSpecCLI.ts:1123. |
-| --log-format | none | implement | outdated | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: devContainersSpecCLI.ts:1124. |
-| --terminal-columns | none | implement | outdated | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: devContainersSpecCLI.ts:1125. |
-| --terminal-rows | none | implement | outdated | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: devContainersSpecCLI.ts:1126. |
-| --help | none | implement | outdated | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: yargs built-in help. |
-| --version | version command | implement | sibling-unit | dcb registers --version on every command; this command is not implemented yet. Source: devContainersSpecCLI.ts (.version). |
+| --user-data-folder | --user-data-folder | implemented | outdated | Accepted and unused upstream. |
+| --workspace-folder | --workspace-folder | implemented | outdated | Defaults to current folder. |
+| --config | --config | implemented | outdated | Explicit path or workspace discovery. |
+| --output-format | --output-format | implemented | outdated | Text table or ordered JSON. |
+| --log-level | --log-level | implemented | outdated | info/debug/trace. |
+| --log-format | --log-format | implemented | outdated | text/json. |
+| --terminal-columns | --terminal-columns | implemented | outdated | Requires terminal-rows. |
+| --terminal-rows | --terminal-rows | implemented | outdated | Requires terminal-columns. |
+| --help | --help | implemented | outdated | Command help. |
+| --version | --version | implemented | sibling-unit | Shared version handler. |
 
 ### read-configuration
 
@@ -326,7 +421,7 @@ when markers skip commands. Source: `injectHeadless.ts:364-410` and
 | --dotfiles-repository | --dotfiles-repository | implemented | sibling-unit | Registered; installs after postCreateCommand once per container. A failed install warns and the next run retries. Source: devContainersSpecCLI.ts:776. |
 | --dotfiles-install-command | --dotfiles-install-command | implemented | sibling-unit | Registered; runs in the clone in place of the default install-script search. Source: devContainersSpecCLI.ts:777. |
 | --dotfiles-target-path | --dotfiles-target-path | implemented | sibling-unit | Registered; default ~/dotfiles. Source: devContainersSpecCLI.ts:778. |
-| --container-session-data-folder | --container-session-data-folder | implement | data-folders | Registered; persistence of the shell probe cache in this folder is not implemented. Source: devContainersSpecCLI.ts:779. |
+| --container-session-data-folder | --container-session-data-folder | implemented | data-folders | Mode-specific user environment probe caches are read and written in this folder; failures are non-fatal. Source: devContainersSpecCLI.ts:779. |
 | --secrets-file | --secrets-file | implemented | environment | Registered; secret variables for lifecycle commands and the dotfiles install, above remoteEnv. Not stored; masked in stderr and the result. Source: devContainersSpecCLI.ts:780. |
 | --help | --help | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: yargs built-in help. |
 | --version | --version | implemented | sibling-unit | Registered on every command; prints the version result in place of the command, as upstream. Source: devContainersSpecCLI.ts (.version). |
@@ -352,7 +447,7 @@ when markers skip commands. Source: `injectHeadless.ts:364-410` and
 | --dotfiles-repository | --dotfiles-repository | implemented | sibling-unit | Registered; installs after postCreateCommand once per container. A failed install warns and the next run retries. Source: devContainersSpecCLI.ts:354. |
 | --dotfiles-install-command | --dotfiles-install-command | implemented | sibling-unit | Registered; runs in the clone in place of the default install-script search. Source: devContainersSpecCLI.ts:355. |
 | --dotfiles-target-path | --dotfiles-target-path | implemented | sibling-unit | Registered; default ~/dotfiles. Source: devContainersSpecCLI.ts:356. |
-| --container-session-data-folder | --container-session-data-folder | implement | data-folders | Registered; persistence of the shell probe cache in this folder is not implemented. Source: devContainersSpecCLI.ts:357. |
+| --container-session-data-folder | --container-session-data-folder | implemented | data-folders | Mode-specific user environment probe caches are read and written in this folder; failures are non-fatal. Source: devContainersSpecCLI.ts:357. |
 | --include-configuration | --include-configuration | implemented | covered | Configuration snapshot is included on request. Source: devContainersSpecCLI.ts:358. |
 | --include-merged-configuration | --include-merged-configuration | implemented | covered | Merged configuration snapshot is included on request. Source: devContainersSpecCLI.ts:359. |
 | --help | --help | implemented | covered | Registered flag and handler exist; fixture parity remains a separate behavior measure. Source: yargs built-in help. |
@@ -362,8 +457,8 @@ when markers skip commands. Source: `injectHeadless.ts:364-410` and
 
 | Upstream option | dcb equivalent | Disposition | Unit | Reason / source |
 | --- | --- | --- | --- | --- |
-| --help | none | implement | templates | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: yargs built-in help. |
-| --version | version command | implement | sibling-unit | dcb registers --version on every command; this command is not implemented yet. Source: devContainersSpecCLI.ts (.version). |
+| --help | --help | implemented | templates | Template group help. |
+| --version | --version | implemented | sibling-unit | Inherited version flag. |
 
 ### templates apply
 
@@ -383,20 +478,28 @@ when markers skip commands. Source: `injectHeadless.ts:364-410` and
 
 | Upstream option | dcb equivalent | Disposition | Unit | Reason / source |
 | --- | --- | --- | --- | --- |
-| --project-folder (-p) | none | implement | template-docs | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: templatesCLI/generateDocs.ts:13. |
-| --github-owner | none | implement | template-docs | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: templatesCLI/generateDocs.ts:14. |
-| --github-repo | none | implement | template-docs | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: templatesCLI/generateDocs.ts:15. |
-| --log-level | none | implement | template-docs | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: templatesCLI/generateDocs.ts:16. |
-| --help | none | implement | template-docs | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: yargs built-in help. |
-| --version | version command | implement | sibling-unit | dcb registers --version on every command; this command is not implemented yet. Source: devContainersSpecCLI.ts (.version). |
+| --project-folder (-p) | --project-folder (-p) | implemented | template-docs | Direct child collection folder, default dot. Source: templatesCLI/generateDocs.ts:13. |
+| --github-owner | --github-owner | implemented | template-docs | Metadata link owner, default empty. Source: templatesCLI/generateDocs.ts:14. |
+| --github-repo | --github-repo | implemented | template-docs | Metadata link repository, default empty. Source: templatesCLI/generateDocs.ts:15. |
+| --log-level | --log-level | implemented | template-docs | Diagnostic level. Source: templatesCLI/generateDocs.ts:16. |
+| --help | --help | implemented | template-docs | Command help. Source: yargs built-in help. |
+| --version | --version | implemented | sibling-unit | Inherited version. Source: devContainersSpecCLI.ts (.version). |
+
+The shared library renderer preserves Template README bytes, ordered JSONC
+options, notes, metadata links, skipped entries, deprecation headers, and symlink
+replacement. Template success leaves stdout empty. The pinned upstream registers
+no standalone `templates package` command; publishing packages Templates.
 
 ### templates metadata
 
-| Upstream option | dcb equivalent | Disposition | Unit | Reason / source |
+| Upstream option | dcb option | Disposition | Unit | Notes |
 | --- | --- | --- | --- | --- |
-| --log-level | none | implement | template-metadata | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: templatesCLI/metadata.ts:13. |
-| --help | none | implement | template-metadata | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: yargs built-in help. |
-| --version | version command | implement | sibling-unit | dcb registers --version on every command; this command is not implemented yet. Source: devContainersSpecCLI.ts (.version). |
+| --log-level | --log-level | implemented | template-metadata | Inherited diagnostics flag. Library reads the OCI annotation; stdout carries the JSON value. |
+| --help | --help | implemented | template-metadata | Command help. |
+| --version | --version | implemented | sibling-unit | Inherited version flag. |
+
+`templateId` is a required positional reference. Tag and digest forms use the
+upstream collection parser semantics. The command reads no layers.
 
 ### templates publish
 
@@ -448,7 +551,7 @@ when markers skip commands. Source: `injectHeadless.ts:364-410` and
 | --dotfiles-repository | --dotfiles-repository | implemented | sibling-unit | Registered; installs after postCreateCommand once per container. A failed install warns and the next run retries. Source: devContainersSpecCLI.ts:135. |
 | --dotfiles-install-command | --dotfiles-install-command | implemented | sibling-unit | Registered; runs in the clone in place of the default install-script search. Source: devContainersSpecCLI.ts:136. |
 | --dotfiles-target-path | --dotfiles-target-path | implemented | sibling-unit | Registered; default ~/dotfiles. Source: devContainersSpecCLI.ts:137. |
-| --container-session-data-folder | --container-session-data-folder | implement | data-folders | Registered; persistence of the shell probe cache in this folder is not implemented. Source: devContainersSpecCLI.ts:138. |
+| --container-session-data-folder | --container-session-data-folder | implemented | data-folders | Mode-specific user environment probe caches are read and written in this folder; failures are non-fatal. Source: devContainersSpecCLI.ts:138. |
 | --omit-config-remote-env-from-metadata [hidden] | --omit-config-remote-env-from-metadata | implemented | feature-controls | Registered hidden boolean, default false; persists configuration remoteEnv by default and omits it when enabled; runtime remoteEnv stays available. Source: devContainersSpecCLI.ts:139. |
 | --secrets-file | --secrets-file | implemented | environment | Registered; secret variables for lifecycle commands and the dotfiles install, above remoteEnv. Not stored; masked in stderr and the result. Source: devContainersSpecCLI.ts:140. |
 | --experimental-lockfile [hidden] | --experimental-lockfile | implemented | lockfile | Digest-pinned resolution, integrity checks, frozen drift validation, and atomic publication after success. Source: devContainersSpecCLI.ts:141. |
@@ -463,13 +566,18 @@ when markers skip commands. Source: `injectHeadless.ts:364-410` and
 
 | Upstream option | dcb equivalent | Disposition | Unit | Reason / source |
 | --- | --- | --- | --- | --- |
-| --workspace-folder | none | implement | upgrade | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: upgradeCommand.ts:26. |
+| --workspace-folder | --workspace-folder | implemented | upgrade | Native library workflow; preserves pinned upstream resolution and write behavior. Source: upgradeCommand.ts:26. |
 | --docker-path | none | not applicable by design | native-api | Approved native API requirement: runtime integrations use Engine/Compose APIs; executable path selection does not apply. Source: upgradeCommand.ts:27. |
 | --docker-compose-path | none | not applicable by design | native-api | Approved native API requirement: runtime integrations use Engine/Compose APIs; executable path selection does not apply. Source: upgradeCommand.ts:28. |
-| --config | none | implement | upgrade | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: upgradeCommand.ts:29. |
-| --log-level | none | implement | upgrade | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: upgradeCommand.ts:30. |
-| --dry-run | none | implement | upgrade | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: upgradeCommand.ts:31. |
-| --feature (-f) [hidden] | none | implement | upgrade | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: upgradeCommand.ts:33. |
-| --target-version (-v) [hidden] | none | implement | upgrade | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: upgradeCommand.ts:34. |
-| --help | none | implement | upgrade | Command is absent; add the command and this option. Existing dcb features stages features and does not implement this subcommand. Source: yargs built-in help. |
-| --version | version command | implement | sibling-unit | dcb registers --version on every command; this command is not implemented yet. Source: devContainersSpecCLI.ts (.version). |
+| --config | --config | implemented | upgrade | Native library workflow; preserves pinned upstream resolution and write behavior. Source: upgradeCommand.ts:29. |
+| --log-level | --log-level | implemented | upgrade | Native library workflow; preserves pinned upstream resolution and write behavior. Source: upgradeCommand.ts:30. |
+| --dry-run | --dry-run | implemented | upgrade | Native library workflow; preserves pinned upstream resolution and write behavior. Source: upgradeCommand.ts:31. |
+| --feature (-f) [hidden] | --feature (-f) [hidden] | implemented | upgrade | Native library workflow; preserves pinned upstream resolution and write behavior. Source: upgradeCommand.ts:33. |
+| --target-version (-v) [hidden] | --target-version (-v) [hidden] | implemented | upgrade | Native library workflow; preserves pinned upstream resolution and write behavior. Source: upgradeCommand.ts:34. |
+| --help | --help | implemented | upgrade | Native library workflow; preserves pinned upstream resolution and write behavior. Source: yargs built-in help. |
+| --version | --version | implemented | sibling-unit | dcb registers --version on every command. Source: devContainersSpecCLI.ts (.version). |
+
+Dependency reporting follows the upstream HTTPS metadata fallback: retrieval or
+integrity failure leaves an unexpanded archive node. OCI digest mismatch fails
+resolution. Locale collation applies to installation ordering; object option
+keys retain JavaScript's sorted-key comparison and output insertion order.

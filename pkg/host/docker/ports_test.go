@@ -20,18 +20,18 @@ func TestNormalizePort(t *testing.T) {
 	}{
 		{"int", 3000, "127.0.0.1:3000:3000", false},
 		{"float64", float64(8080), "127.0.0.1:8080:8080", false},
-		{"bare numeric string", "9000", "127.0.0.1:9000:9000", false},
-		{"numeric string with proto", "9000/udp", "127.0.0.1:9000:9000/udp", false},
-		{"port range", "8000-8002", "127.0.0.1:8000-8002:8000-8002", false},
+		{"bare numeric string", "9000", "9000", false},
+		{"numeric string with proto", "9000/udp", "9000/udp", false},
+		{"port range", "8000-8002", "8000-8002", false},
 		// Anything with a colon is left alone — explicit binding wins.
 		{"host:container preserved", "8080:80", "8080:80", false},
 		{"iface:host:container preserved", "127.0.0.1:8080:80", "127.0.0.1:8080:80", false},
-		{"empty string skipped", "", "", false},
+		{"empty string unchanged", "", "", false},
 		{"nil skipped", nil, "", false},
 		{"out-of-range numeric", 70000, "", true},
 		{"zero numeric", 0, "", true},
 		{"unsupported type", true, "", true},
-		{"non-numeric bare", "abc", "", true},
+		{"non-numeric string passed to Docker", "abc", "abc", false},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -64,14 +64,14 @@ func TestApplyPorts_AppPortBindings(t *testing.T) {
 		t.Errorf("exposed ports: got %v want %v", gotExposed, wantExposed)
 	}
 
-	// 3000 + 9000 should bind to 127.0.0.1; 80 should keep 127.0.0.1:8080 explicit.
+	// Numeric 3000 uses loopback; string 9000 asks Docker to allocate a host port.
 	got := func(port nat.Port) []nat.PortBinding {
 		return host.PortBindings[port]
 	}
 	if b := got("3000/tcp"); len(b) != 1 || b[0].HostIP != "127.0.0.1" || b[0].HostPort != "3000" {
 		t.Errorf("3000/tcp binding: %+v", b)
 	}
-	if b := got("9000/tcp"); len(b) != 1 || b[0].HostIP != "127.0.0.1" || b[0].HostPort != "9000" {
+	if b := got("9000/tcp"); len(b) != 1 || b[0].HostIP != "" || b[0].HostPort != "" {
 		t.Errorf("9000/tcp binding: %+v", b)
 	}
 	if b := got("80/tcp"); len(b) != 1 || b[0].HostIP != "127.0.0.1" || b[0].HostPort != "8080" {

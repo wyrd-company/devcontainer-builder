@@ -10,7 +10,9 @@ relationships:
 `github.com/wyrd-company/devcontainer-builder`. The host packages take their
 Docker or Kubernetes client from the caller, do not read `DOCKER_HOST` or
 `KUBECONFIG`, and write nothing to stdout or stderr unless given a writer, so
-a service or an operator can embed them.
+a service or an operator can embed them. The packages read files with the
+credentials that the calling process has at the time of the call; see
+[Process credentials](/docs/dcb/overview#process-credentials).
 
 | Package | Purpose |
 | --- | --- |
@@ -22,7 +24,8 @@ a service or an operator can embed them.
 | `pkg/lifecycle` | Plans the lifecycle commands of a configuration and its features. |
 | `pkg/host/runner` | Runs a lifecycle plan with marker files through any exec transport. |
 | `pkg/spec` | Reads `devcontainer.json`. |
-| `pkg/features` | Resolves features and their install order. |
+| `pkg/templates` | Reads metadata annotations from published Template manifests. |
+| `pkg/features` | Resolves Features and their install order, packages local Features, generates their documentation, and reports dependency graphs. |
 | `pkg/substitute` | Substitutes configuration variables. |
 | `pkg/workspace` | Places a workspace folder in a container: its Git root, a worktree's common Git folder, and the workspace folder. |
 | `pkg/registryauth` | Reads registry credentials from the Docker client configuration, or holds credentials that the caller supplies. |
@@ -90,6 +93,114 @@ writers if the output is shown or kept.
 `Up` is idempotent. It finds the workspace container by its labels, starts it
 if it is stopped, and runs only the lifecycle commands that the marker files
 show as not yet done.
+
+## Place a workspace
+
+```go
+import "github.com/wyrd-company/devcontainer-builder/pkg/workspace"
+
+placement, err := workspace.Resolve("/path/to/workspace/app", false, false, workspace.Options{
+    MountGitRoot: true,
+    Platform:     runtime.GOOS,
+    GitPrefix:    "/usr",
+})
+```
+
+`Resolve` finds the Git root as `dcb up` does, without running `git`, and
+returns the workspace mount and folder that a host's `UpRequest` takes.
+`Options.GitPrefix` is the prefix of the host Git's build, as `--git-prefix`
+names it; without it, an `include.path` of `%(prefix)/` followed by a relative
+path is not read. A relative `Options.GitPrefix` starts at the including
+file's folder, not at the current folder as a relative `--git-prefix` does.
+`Options.GitRoot` returns the Git root alone. Repository-format
+config files can be streams, such as FIFOs. Discovery waits for a writer
+without a time limit, and reads the file again after setup, as Git does.
+Discovery also reads the
+command-line config environment (`GIT_CONFIG_COUNT` pairs and
+`GIT_CONFIG_PARAMETERS`) after repository setup. A command-line
+`include.path` must expand to an absolute path. After all full-read inputs,
+an invalid `core.ignorecase`, `core.filemode`, `core.symlinks`,
+`core.trustctime`, `core.quotepath`, `core.ignorestat`, `core.sparseCheckout`,
+`core.sparseCheckoutCone`, `core.protectHFS`, `core.protectNTFS`,
+`core.precomposeUnicode`, `core.fsyncObjectFiles`, `core.safecrlf`,
+`core.autocrlf`, `core.lockfilePid`, `sparse.expectFilesOutsideOfPatterns`,
+`pager.color`, `color.pager`, `user.useConfigOnly`, `advice.detachedHead` or
+`advice.statusHints` boolean gives no Git root, so `Resolve` mounts the
+requested folder.
+`core.safecrlf` also accepts `warn`, without regard to case.
+`core.autocrlf` also accepts `input`, without regard to case.
+Native discovery follows current Git for `core.lockfilePid`; Git before 2.54
+ignores that key.
+See [Workspace mounts](/docs/dcb/usage#workspace-mounts-and-container-selection).
+
+## Generate Feature documentation
+
+```go
+err := features.GenerateDocumentation(ctx, features.DocumentationOptions{
+    ProjectFolder: "./src",
+    Registry:      "ghcr.io",
+    Namespace:     "example/collection",
+    GitHubOwner:   "example-owner",
+    GitHubRepo:    "example-repo",
+})
+```
+
+Pass the selected folder and publication strings directly; the CLI supplies its
+`.` and `ghcr.io` defaults. `Logger` is optional and receives progress plus
+`warning:` and `error:` diagnostics. Each visible child with an ID gets a README
+from its metadata and optional NOTES.md. Missing metadata or an ID is skipped;
+other entry failures return an error after the remaining entries are processed.
+Metadata and notes stay unchanged; existing README files are replaced. The reader
+retains upstream UTF-8 replacement, tolerant number recovery, and JavaScript
+property/prototype conversion, including UTF-16 string property indices.
+Optional `RegistryValue`, `NamespaceValue`, `GitHubOwnerValue`, and
+`GitHubRepoValue` override their corresponding strings with a `DocumentationValue`.
+Use `Text` for a string, a non-nil `Properties` map for an object with own
+properties, or a non-nil `Elements` slice for an array. Objects take precedence
+over arrays, and arrays over text. Values convert when rendering uses them.
+An own `toString` property can fail conversion. Skipped entries and an empty
+collection do not convert publication values. Owner and repository values are
+used only when both differ from the empty string; arrays and objects differ
+from it even when their text conversion is empty.
+Conversion or map errors preserve that entry's
+README and return an operation error after sibling processing. The
+[usage guide](usage.md#generate-feature-documentation) describes content,
+symlinks, tolerant JSONC parsing, and partial results.
+
+## Package local Features
+
+`features.Package(ctx, features.PackageOptions{Target: "./src", OutputDir: "./output"})`
+writes Feature archives and `devcontainer-collection.json`. Empty paths use the
+current folder and `./output`. `ForceCleanOutputDir` permits removal of an
+existing output directory. The returned `*features.Collection` contains raw
+Feature metadata, including unknown properties. Sources stay unchanged.
+
+The operation returns an error for an invalid source, existing output without
+force, missing required metadata, or a collection entry without `install.sh`.
+An ID that would write outside the output directory is also rejected.
+It can leave earlier archives on failure. It closes files and removes staging
+before returning. Cancellation uses the supplied context. See
+`TestPackageArchiveCanBeResolved` for packaging followed by archive resolution,
+and [Usage](/docs/dcb/usage#package-local-features) for archive naming and flags.
+
+## Report Feature versions
+
+`features.ReadVersionConfig(workspace, configPath)` discovers or reads a JSONC
+reporting configuration without requiring build fields. It reuses the collection
+reader's JavaScript-compatible JSONC recovery and object enumeration.
+Empty `configPath` uses
+workspace discovery. `features.LoadVersionInfo(client, config)` returns a
+`VersionReport` with `Features` and configuration `Order`. Its JSON marshaler
+preserves this order and omits unavailable fields. A nil client uses the existing
+registry credentials. Pass an `oci.Client` for a custom HTTP transport or source.
+`oci.Client.PublishedTags` retrieves unmodified registry tags;
+`features.StrictSortedVersions` filters and sorts full semver tags.
+
+Reporting does not install Features, resolve dependencies, or write lockfiles.
+Tag discovery failures produce unavailable fields; malformed lockfiles, digest
+mismatches, layer errors, and invalid metadata versions return errors. Digest
+metadata comes from the annotation or the first Feature layer. See
+[version reporting](usage.md#report-feature-versions) for current/wanted/latest.
 
 ## Registry credentials
 
@@ -181,3 +292,48 @@ state = state.Run(
 
 A feature whose files and options do not change stays cached. A change runs
 that feature again, and the features installed after it.
+
+## Read published Template metadata
+
+`templates.Metadata(client, "registry.example.test/collection/sample:1")` returns
+JSON from a Template manifest annotation with upstream number rounding and
+object property semantics. Pass a nil OCI client to use Docker
+registry credentials, or supply an `oci.Client` with an HTTP client and credential
+source. The operation reads the manifest without fetching layers. Digest
+references verify the manifest bytes. Missing or malformed metadata returns an
+error.
+
+`features.Info(client, mode, identifier, format)` returns a published Feature
+report as text or JSON. A nil client uses Docker registry credentials.
+`features.ErrInfoUnavailable` accompanies upstream failure output for missing
+manifests or tags. Dependency reports reuse the registry and graph comparison
+code without installing Features.
+
+Feature information reports preserve escaped string content. Dependency graph node
+identifiers use JavaScript JSON string and number serialization.
+
+## Report configuration Feature dependencies
+
+`features.ResolveDependencies(client, workspace)` returns the Mermaid graph and
+ordered, pretty JSON installation report. Pass `nil` for the existing OCI
+credential integration and an empty workspace for the current directory.
+The workflow discovers the configuration, substitutes option values, reads
+lockfile integrity pins and resolves local, HTTPS and OCI Feature metadata.
+It computes hard and soft dependencies, deduplicates equivalent Features and
+applies installation priorities. It does not install Features or write lockfiles.
+On an ordering failure, the returned string contains the graph and the error
+reports that no installation order exists. A configuration or resolution error
+returns before the graph. See [usage](usage.md#resolve-feature-dependencies).
+
+An HTTPS metadata retrieval failure retains the unexpanded archive entry;
+the report does not install or admit its archive contents.
+
+## Upgrade Feature lockfiles
+
+`resolver.Upgrade(ctx, features.UpgradeOptions{Workspace: folder, DryRun: true})`
+returns pretty lockfile JSON. `features.ValidateUpgradeOptions` validates the
+paired Feature and target-version flags. `ConfigPath` selects an explicit
+configuration. `Feature` and `TargetVersion` update a requirement before
+resolution, including in dry-run mode. Existing lockfile pins remain in use;
+dry-run can refresh an existing lockfile. Resolution uses the resolver's native
+OCI client and does not build or install Features.

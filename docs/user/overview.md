@@ -18,7 +18,8 @@ OCI features, and runs the same lifecycle commands.
 - **Run.** `dcb up` builds the image when needed, then creates and starts the
   container and runs the lifecycle commands. `dcb exec` runs a command in it,
   and `dcb down` removes it.
-- **Read.** Every command writes one JSON result line to stdout, except help,
+- **Read.** Commands other than `outdated` write one JSON result line to stdout,
+  except help,
   a valid `exec` invocation, and archive exports to stdout. Logs go to stderr.
   Exit codes separate operation failures from invalid invocations.
 
@@ -47,11 +48,19 @@ Differences from upstream:
 | --- | --- |
 | One static binary. | Node.js package. |
 | Builds through the Docker Engine API on the daemon's BuildKit. | Runs the `docker` and `docker buildx` commands. |
-| One JSON result line for every command except help, a valid `exec` invocation, and archive exports to stdout. | Output format varies by command. |
+| One JSON result line for commands other than `outdated`, except help, a valid `exec` invocation, and archive exports to stdout. | Output format varies by command. |
 | Docker only. | Docker, or Podman through `--docker-path`. |
 | Can install the VS Code server into the image at build time. | The editor installs the server when it attaches. |
-| Adds `down`, `inspect`, `generate`, `server`, and `skills`. | Adds `outdated`, `upgrade`, and `templates`. |
-| `dcb features` stages the features of a configuration. | `features` tests, packages, and publishes features. |
+| Adds `down`, `inspect`, `generate`, `server`, and `skills`. | Also has `upgrade` and more Template commands. |
+| `dcb features` stages configuration Features; `features package` packages local Features; `features generate-docs` writes local Feature READMEs; `features info` reports published Feature information; `features resolve-dependencies` reports the configuration dependency graph and installation order; `templates generate-docs` writes local Template READMEs. | `features` also tests and publishes Features. |
+
+### Process credentials
+
+See [Git workspace discovery](/docs/dcb/usage#git-workspace-discovery) for
+process credentials, account lookup, and Git format differences.
+
+`outdated` writes a text table by default, or a version report with
+`--output-format json`.
 
 ## Requirements
 

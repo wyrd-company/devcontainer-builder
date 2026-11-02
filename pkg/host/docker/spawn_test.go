@@ -25,8 +25,8 @@ func TestParseMountString(t *testing.T) {
 			&mount.Mount{Type: mount.TypeVolume, Source: "node-modules", Target: "/workspaces/proj/node_modules"},
 		},
 		{
-			"source=/x,target=/y", // type omitted -> defaults to bind
-			&mount.Mount{Type: mount.TypeBind, Source: "/x", Target: "/y"},
+			"source=sample-data,target=/y", // Docker defaults to volume
+			&mount.Mount{Type: mount.TypeVolume, Source: "sample-data", Target: "/y"},
 		},
 		{
 			"type=bind,source=/x,target=/y,readonly", // bare "readonly" flag
@@ -34,16 +34,19 @@ func TestParseMountString(t *testing.T) {
 		},
 	}
 	for _, c := range cases {
-		got := parseMountString(c.in)
+		got, err := parseMountString(c.in)
+		if err != nil {
+			t.Fatal(err)
+		}
 		if !reflect.DeepEqual(got, c.want) {
 			t.Errorf("parseMountString(%q):\n got  %+v\n want %+v", c.in, got, c.want)
 		}
 	}
 }
 
-func TestParseMountString_NoTargetReturnsNil(t *testing.T) {
-	if parseMountString("type=bind,source=/x") != nil {
-		t.Error("missing target should yield nil mount")
+func TestParseMountString_NoTargetReturnsError(t *testing.T) {
+	if _, err := parseMountString("type=bind,source=/x"); err == nil {
+		t.Error("missing target should return an error")
 	}
 }
 
@@ -219,5 +222,36 @@ func TestBuildContainerConfig_SpecContainerEnvWinsOverFeature(t *testing.T) {
 	env := strings.Join(cfg.Env, "\n")
 	if !strings.Contains(env, "SHARED=spec") || strings.Contains(env, "SHARED=feature") || !strings.Contains(env, "FEATURE_ONLY=yes") {
 		t.Fatalf("env = %v", cfg.Env)
+	}
+}
+
+func TestBuildContainerConfig_FeatureFlagPrecedence(t *testing.T) {
+	yes := true
+	resolved := []features.Resolved{{Metadata: features.Metadata{Init: &yes, Privileged: &yes, CapAdd: []string{"SYS_PTRACE"}, SecurityOpt: []string{"seccomp=unconfined"}}}}
+	dc := &spec.DevContainer{Image: "alpine", RunArgs: []string{"--init=false", "--privileged=false", "--cap-add=NET_ADMIN", "--security-opt=apparmor=unconfined"}}
+	_, host, _, err := buildContainerConfig(dc, resolved, "alpine", "", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if host.Init == nil || !*host.Init || !host.Privileged {
+		t.Fatalf("feature booleans must follow runArgs: %+v", host)
+	}
+	if !reflect.DeepEqual([]string(host.CapAdd), []string{"NET_ADMIN", "SYS_PTRACE"}) {
+		t.Fatalf("capability order: %v", host.CapAdd)
+	}
+	if !reflect.DeepEqual(host.SecurityOpt, []string{"apparmor=unconfined", "seccomp=unconfined"}) {
+		t.Fatalf("security option order: %v", host.SecurityOpt)
+	}
+	// False merged fields emit no flags and must leave explicit runArgs intact.
+	no := false
+	dc.Init = &no
+	dc.Privileged = &no
+	dc.RunArgs = []string{"--init", "--privileged"}
+	_, host, _, err = buildContainerConfig(dc, nil, "alpine", "", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if host.Init == nil || !*host.Init || !host.Privileged {
+		t.Fatal("false fields must not override runArgs")
 	}
 }

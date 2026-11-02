@@ -17,6 +17,8 @@ func booleanOptionArgs(root *cobra.Command, args []string) []string {
 	out := make([]string, 0, len(args))
 	cmd := root
 	selecting := true
+	seenDocumentation := map[*pflag.Flag]bool{}
+	singleDocumentationObject := map[*pflag.Flag]bool{}
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
 		if arg == "--" {
@@ -31,13 +33,46 @@ func booleanOptionArgs(root *cobra.Command, args []string) []string {
 		}
 		// Cobra also merges inherited persistent flags here.
 		cmd.InitDefaultHelpFlag()
+		dotted := documentationDottedFlag(cmd, arg)
+		if dotted != nil {
+			documentationProperty(dotted, arg, args[i+1:])
+		}
+		if group, consumed, handled := documentationGroupedArgs(cmd, arg, args[i+1:]); handled {
+			// Repeated property writes mutate a sole object. Once an ordinary
+			// repeated value makes an array, yargs appends each dotted object.
+			if dotted != nil && singleDocumentationObject[dotted] {
+				i += consumed
+				continue
+			}
+			// Revisit expanded tokens so the last flag can consume its value.
+			args = append(append(append([]string{}, args[:i]...), group...), args[i+1+consumed:]...)
+			arg = args[i]
+		}
 		var flag *pflag.Flag
 		name, _, equals := strings.Cut(arg, "=")
 		if strings.HasPrefix(name, "--") {
 			name = strings.TrimPrefix(name, "--")
 			flag = cmd.Flags().Lookup(name)
-		} else if arg == "-h" {
-			flag = cmd.Flags().ShorthandLookup("h")
+		} else if strings.HasPrefix(name, "-") && len(name) == 2 {
+			flag = cmd.Flags().ShorthandLookup(name[1:])
+		}
+		if flag != nil {
+			if flag.Annotations["documentation-no-value"] != nil {
+				if dotted == nil {
+					if value, handled := documentationOptionArg(flag, arg, args[i+1:]); handled {
+						_, text, _ := strings.Cut(value, "=")
+						documentationScalar(flag, text)
+					} else if len(args[i+1:]) > 0 {
+						documentationScalar(flag, args[i+1])
+					}
+				}
+				singleDocumentationObject[flag] = dotted != nil && !seenDocumentation[flag]
+				seenDocumentation[flag] = true
+			}
+			if value, handled := documentationOptionArg(flag, arg, args[i+1:]); handled {
+				out = append(out, value)
+				continue
+			}
 		}
 		if flag != nil && !equals && i+1 < len(args) {
 			next := args[i+1]

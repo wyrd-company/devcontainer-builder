@@ -108,5 +108,7 @@ markers retain upstream write-before-hook semantics. Dotfiles completion markers
 retain after-success publication. On `up` and `set-up`, root system patch markers
 are created before the `/etc/environment` and `/etc/profile` edits, including
 under `--skip-post-create`. The selected container system data folder holds
-these markers. Session probe-cache persistence is not implemented.
+these markers. Session probe caches are stored in the supplied session folder as
+`env-<probe-mode>.json`. They hold the probed environment before remote environment
+overrides and lifecycle secrets are applied. Cache failures are non-fatal.
 `Resolver.CacheDir` has no current cache reader/writer.

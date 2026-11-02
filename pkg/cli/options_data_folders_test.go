@@ -19,7 +19,7 @@ func TestDataFolderOptions(t *testing.T) {
 	root := (&application{}).command()
 	for _, cmd := range root.Commands() {
 		for _, option := range []struct{ name, commands string }{
-			{"user-data-folder", "build exec read-configuration run-user-commands set-up up"},
+			{"user-data-folder", "build exec outdated read-configuration run-user-commands set-up up"},
 			{"container-data-folder", "exec run-user-commands set-up up"},
 			{"container-system-data-folder", "exec run-user-commands set-up up"},
 			{"container-session-data-folder", "run-user-commands set-up up"},

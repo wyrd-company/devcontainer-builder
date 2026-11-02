@@ -44,11 +44,19 @@ dcb down --workspace-folder .
 | `dcb down` | Stops and removes the workspace container. |
 | `dcb inspect` | Returns the Docker inspection of the workspace container. |
 | `dcb build` | Builds the image and loads, pushes, or exports it. |
+| `dcb outdated` | Reports declared OCI Feature versions as text or JSON. |
 | `dcb read-configuration` | Returns the configuration with variables substituted. |
 | `dcb run-user-commands` | Runs the lifecycle commands in the existing workspace container. |
 | `dcb set-up` | Runs the lifecycle commands of a configuration in a container that `dcb` did not create. |
 | `dcb generate` | Writes the generated Dockerfile and build context, and does not build. |
 | `dcb features` | Resolves and downloads the configuration's features into a directory. |
+| `dcb upgrade` | Generates a Feature lockfile and optionally updates a Feature requirement. |
+| `dcb features resolve-dependencies` | Prints the configuration Feature graph and installation order. |
+| `dcb features info <mode> <feature>` | Reports a published Feature manifest, tags, or dependency graph. |
+| `dcb features generate-docs` | Generates README files from local Feature metadata and notes. |
+| `dcb features package <target>` | Packages a local Feature or collection as archives with collection metadata. |
+| `dcb templates generate-docs` | Generates README files from local Template metadata and notes. |
+| `dcb templates metadata <templateId>` | Fetches a published Template's metadata as JSON. |
 | `dcb server` | Downloads a VS Code server archive. |
 | `dcb skills` | Prints or installs the bundled agent skill. |
 | `dcb version` | Returns the `dcb` version. `dcb --version`, or `--version` on any command, returns the same result in place of the command. |
@@ -66,10 +74,8 @@ boolean flags, as upstream. Arguments after `--` pass through unchanged.
 
 These upstream command families are not yet supported:
 
-- [`outdated`](https://github.com/wyrd-company/devcontainer-builder/issues/20)
-- [`upgrade`](https://github.com/wyrd-company/devcontainer-builder/issues/21)
-- [Feature authoring commands under `features`](https://github.com/wyrd-company/devcontainer-builder/issues/22)
-- [`templates`](https://github.com/wyrd-company/devcontainer-builder/issues/23)
+- [Feature authoring commands other than `features package`, `features generate-docs`, `features info`, and `features resolve-dependencies`](https://github.com/wyrd-company/devcontainer-builder/issues/22)
+- [Template commands other than `templates metadata` and `templates generate-docs`](https://github.com/wyrd-company/devcontainer-builder/issues/23)
 
 ### Workspace flags
 
@@ -120,7 +126,8 @@ lifecycle command leaves the existing lockfile unchanged.
 
 ## Results
 
-Every command writes exactly one JSON object on one line to stdout, except
+Commands other than `outdated` write exactly one JSON object on one line to
+stdout, except
 help, a valid `exec` invocation, and archive exports to stdout (see
 [Build exporters](#build-exporters)). An invalid invocation, including one of
 `exec`, writes a JSON error result and exits with `2`. The `outcome` field is
@@ -475,6 +482,94 @@ dcb features --workspace-folder . --out ./staged-features
 dcb server --out ./server --platform linux/amd64
 ```
 
+### Package local Features
+
+```sh
+dcb features package ./src --output-folder ./packaged
+dcb features package ./src/sample -o ./packaged -f
+```
+
+The target is required. A target with
+`devcontainer-feature.json` is one Feature; otherwise its non-hidden child
+folders with that file form a collection. Collection entries must have
+`install.sh`. Each Feature must have `id`, `version`, and `name` metadata.
+An ID that would put an archive outside the output folder is rejected.
+Other metadata properties and source files are retained. Nonempty `legacyIds`
+adds `currentId` with the Feature ID to the packaged metadata. Source files
+are unchanged.
+
+`--output-folder` (`-o`) defaults to `./output`. An existing output directory
+causes an operation failure. `--force-clean-output-folder` (`-f`) removes it
+before packaging. An error can leave archives from earlier collection entries;
+the collection metadata is written only after all entries succeed.
+
+The output contains `devcontainer-collection.json` and
+`devcontainer-feature-<id>.tgz` for a single Feature, or
+`devcontainer-feature-<folder>.tgz` for each collection entry. These are plain
+tar archives with the upstream `.tgz` name. File bytes, modes, and symlinks are
+preserved. `dcb` returns its usual JSON result with a `features` metadata array;
+upstream logs progress without a stdout result. Packaging uses local files and
+does not need Docker or a registry. See `TestPackageSingle`,
+`TestPackageCollection`, and `TestFeaturesPackageCommand` for the contract checks.
+
+### Generate Feature documentation
+
+```sh
+dcb features generate-docs --project-folder ./src --namespace example/collection
+```
+
+`--project-folder` (`-p`, default `.`) contains the Feature child folders;
+the command does not append `src` or `test`. Hidden entries are skipped.
+`--namespace` (`-n`) is required, and `--registry` (`-r`) defaults to `ghcr.io`.
+A string flag without a value uses its declared default: an empty namespace or
+GitHub owner/repository, `.` for the project folder, and `ghcr.io` for the registry.
+An explicit empty string stays empty.
+Arguments after `--` are ignored; positional arguments before it are rejected.
+Grouped short flags use the upstream defaults for earlier flags in the group.
+The camel-case aliases `--projectFolder`, `--githubOwner`, `--githubRepo`, and
+`--logLevel` select the same values as their hyphenated names.
+The example reference uses the Feature ID and the major part of its version,
+or `latest` when the version is absent. Supply both `--github-owner` and
+`--github-repo` to link metadata to that repository's `main` branch.
+
+Each README includes the name, description, options in metadata order,
+VS Code extensions, deprecation and legacy-ID notices, and optional `NOTES.md`.
+Numeric option keys follow JavaScript key order. An empty option default is
+`-`; false and zero remain values, and an absent default renders `undefined`,
+as upstream. Markdown and replacement-string dollar patterns are retained with
+upstream's JavaScript replacement semantics. Metadata uses the upstream
+tolerant JSONC recovery behavior. Metadata and notes use Node-compatible UTF-8
+replacement for malformed byte sequences. Object values retain JavaScript own
+property and prototype conversion, including operation errors when conversion
+fails. A list's length property controls whether its map operation is attempted;
+invalid map operations also fail before replacing that entry's README.
+String-valued options enumerate UTF-16 indices, as upstream.
+Distinct escaped UTF-16 property keys remain distinct; isolated surrogate units
+become replacement characters when the README is written.
+Equivalent recovered UTF-16 keys select the same property. Repeated dotted
+option assignments update one object until ordinary repeated values form an array.
+Dotted properties are retained until a README uses the publication value.
+An own `toString` property fails conversion and preserves that entry's README.
+Empty collections and skipped entries do not convert publication values.
+An owner or repository value is unused when its counterpart is the empty string.
+
+Existing READMEs are replaced. An existing README symlink is unlinked; a dangling
+symlink is followed, as upstream. Source metadata and notes stay unchanged.
+Missing metadata, unreadable metadata, or a missing ID logs a diagnostic and
+skips that entry with exit `0`. A folder, notes, or README write failure exits
+`1`; other entries can already have completed. There is no collection rollback.
+The command uses local files without Docker or registry access.
+
+Progress and skip diagnostics use stderr. `dcb` retains its JSON result on stdout
+and invocation-error exit `2`; upstream emits no stdout result and uses exit `1`
+for invocation errors. `--log-level` accepts the shared dcb levels, including
+upstream's `info`, `debug`, and `trace`, and `--log-format` remains available.
+Repeated publication strings are comma-joined as upstream; repeated project
+folders fail. See `TestGenerateDocumentationPinnedReadmes`,
+`TestGenerateDocumentationFilesystem`, `TestGenerateDocumentationConversionReadmes`,
+`TestFeaturesDocumentationCommand`, `TestFeaturesDocumentationOptionalStringValues`,
+`TestGenerateDocumentationDeferredValues`, and `TestFeaturesDocumentationDeferredValues`.
+
 ## Agent skills
 
 `dcb` includes an agent skill that tells a coding agent how to use the
@@ -583,9 +678,12 @@ root edits run once per container, with markers in this folder, including when
 `--skip-post-create` is set. That flag skips the user environment probe.
 
 `--container-session-data-folder` is accepted on `up`, `set-up`, and
-`run-user-commands`, with no default. Probe-cache persistence is not implemented.
-Probe results are not stored between calls, and dcb does not create the supplied
-session folder.
+`run-user-commands`, with no default. When supplied, dcb stores the probed
+environment in `env-<probe-mode>.json` inside this container folder and reuses it
+on later calls with the same folder and mode. Read, parse, or write failures are
+non-fatal. No cache is read or written when the probe mode is `none` or lifecycle
+commands are skipped. Remote environment overrides and lifecycle secrets are not
+added to the cached probe result.
 
 ## Terminal dimensions
 
@@ -627,19 +725,239 @@ primary Compose service.
 | --- | --- | --- | --- |
 | `--mount-workspace-git-root` | `up`, `exec`, `read-configuration`, `run-user-commands` | `true` | Mount the top folder of the workspace's Git working tree at `/workspaces/<name>`. The workspace folder is its subfolder there, for example `/workspaces/repository/app`. Outside a Git working tree, the workspace folder is mounted. `--mount-workspace-git-root=false` mounts only the workspace folder. |
 | `--mount-git-worktree-common-dir` | `up`, `exec`, `read-configuration`, `run-user-commands` | `false` | For a linked worktree added with `git worktree add --relative-paths`, also mount the repository's common Git folder, so Git works in the container. Applies only with Git-root mounting. |
+| `--git-prefix` | `up`, `exec`, `read-configuration`, `run-user-commands` | none | The prefix of the host Git's build: the folder that Git puts in place of `%(prefix)` in an `include.path`. Without it, such an include followed by a relative path is not read. A relative value starts at the current folder. The upstream CLI has no such flag; it runs `git`, which knows its prefix. |
 | `--workspace-mount-consistency` | `up` | `cached` | `consistent`, `cached`, or `delegated`. On macOS and Windows hosts the workspace mount gets this consistency; Linux hosts ignore it, as upstream does. |
 | `--mount` | `up` | none | An additional mount, `type=<bind\|volume>,source=<source>,target=<target>[,external=<true\|false>]`. Repeat the flag for more mounts. `external=true` marks a Compose named volume as external. |
 | `--id-label` | `up`, `exec`, `read-configuration`, `run-user-commands`, `down`, `inspect` | none | A `name=value` label. Repeat the flag for more labels. |
 
-The Git root is found from the files in the workspace's parent folders; `dcb`
-does not run `git`. `exec`, `run-user-commands`, `set-up`, and an `up` that
+The Git root is found from the files in the workspace's parent folders and
+Git's system and global config files; `dcb` does not run `git`. It reads these
+files with the credentials of its own process; see
+[Process credentials](/docs/dcb/overview#process-credentials).
+Discovery follows the latest stable Git release, except where this section
+names another Git release. `dcb` does not check the version of the installed
+`git`; the upstream CLI runs it, so an older Git can mount a different folder.
+As Git does when it starts, `dcb` first reads the system config file and then
+the global config files. The system file is the file that `GIT_CONFIG_SYSTEM`
+names, unless `GIT_CONFIG_NOSYSTEM` is true; a `GIT_CONFIG_NOSYSTEM` value
+that Git does not read as a boolean gives no Git root. As Git does, `dcb`
+removes `.` components and repeated separators from `GIT_CONFIG_SYSTEM`, and
+removes each `..` component with the component before it, without reading the
+file system. When a `..` component has no component before it, the path keeps
+the changes made until then. Git 2.32 opens `GIT_CONFIG_SYSTEM` as given, so
+`link/../system.cfg` names a file beside the folder that `link` points to, and
+the upstream CLI with that Git can mount a different folder.
+Without `GIT_CONFIG_SYSTEM`, Git reads the system
+file that its build names, such as `/etc/gitconfig`; `dcb` does not read that
+file. The global config files are the file that `GIT_CONFIG_GLOBAL` names, or
+else `$XDG_CONFIG_HOME/git/config`, or `$HOME/.config/git/config` when
+`XDG_CONFIG_HOME` is empty or unset, and then `$HOME/.gitconfig`. Relative
+paths start at the workspace folder. A config file that Git rejects gives no
+Git root: a syntax error, or an access failure other than a missing file or
+denied permission. Git reads the files again after setup, from its working
+folder: the working tree, after symbolic links are resolved, when the
+workspace folder is inside it, and otherwise the workspace folder. Relative
+paths then start at that folder. A folder or another file that Git cannot open
+then also gives no Git root, and so does a system file that the process cannot
+read because permission is denied. Each read takes a special file, such as a
+terminal or a FIFO, until it ends, and a read error ends the file, as in Git.
+As in Git, a FIFO read waits, with no time limit, until a writer opens the
+FIFO, and the file ends when the last writer closes it. Both reads follow
+`include.path` entries when Git reads them, as Git does. A relative include
+path starts at the including file's folder, `~/` starts at `HOME`, and `~name/`
+at the home folder of that account. Git asks every account service that the
+host names, such as `/etc/passwd`, LDAP or systemd. The Linux release builds
+look up accounts in `/etc/passwd` only. They skip a `~name/` include whose
+account is not there, as if the included file were missing. Git reads that
+file for an account that another service knows, and rejects a name that no
+service knows. When Git rejects the name or that file, the upstream CLI mounts
+the workspace folder, and `dcb` mounts the Git root. This is an approved
+difference; see
+[Relation to the Dev Container CLI](/docs/dcb/overview#relation-to-the-dev-container-cli).
+Builds with cgo and macOS builds ask the account services, as Git does. A
+`%(prefix)/` path followed by an absolute path names that path, as in Git.
+Git reads `%(prefix)/` followed by a relative path at the prefix of its build,
+a separator and the rest. That prefix is the folder that Git was built to be
+installed in, usually the folder above the `bin` folder of the `git` command,
+such as `/usr` for `/usr/bin/git`; Homebrew builds name their `opt` folder,
+such as `/opt/homebrew/opt/git`. `dcb` does not run `git`, so `--git-prefix`
+names that prefix, and `dcb` then reads that path, as Git does. A relative
+`--git-prefix` starts at the current folder of the command. A relative
+`Options.GitPrefix` of the library gives a relative path, which starts at the
+including file's folder. A command-line include has no including file, so
+a relative expanded path is rejected.
+Without `--git-prefix`, `dcb` does not read such an include, as if the
+included file were missing. When Git rejects that file, the upstream CLI
+mounts the workspace folder, and `dcb` mounts the Git root. This is an
+approved difference; see
+[Relation to the Dev Container CLI](/docs/dcb/overview#relation-to-the-dev-container-cli).
+A missing included file is skipped.
+An include without a value, a `~` path that cannot be expanded, an access
+failure other than a missing file, a file that Git cannot open, such as a
+folder, a syntax error, and more than 10 nested includes give no Git root. As
+in Git, a relative config file name, and a relative include in that file, is
+looked up from the folder that the read starts at, so the length of that
+folder's path does not limit it, and the process needs only search permission
+on that folder, as Git's `chdir` does. On macOS, a thread of its own changes
+to that folder to look the name up. On hosts other than Linux and macOS, `dcb`
+joins the name to the folder's path instead. The read after setup then also
+reads the repository config files of the format check, described below, with
+their includes. Last, it reads command-line config from the environment:
+`GIT_CONFIG_COUNT` pairs named `GIT_CONFIG_KEY_0` and `GIT_CONFIG_VALUE_0`,
+and the following indices, then `GIT_CONFIG_PARAMETERS`. A count, missing
+pair, key or parameter quoting that Git rejects gives no Git root.
+`GIT_CONFIG_PARAMETERS` accepts both `'key=value'` and `'key'='value'` forms.
+These entries also follow `include.path`, with the account and prefix rules
+above. The expanded path must be absolute: a relative include has no file
+whose folder can be its base, and gives no Git root. A relative include
+inside that file starts at that file's folder. A missing absolute include
+is skipped. After the full read finishes, any `core.ignorecase`, `core.filemode`,
+`core.symlinks`, `core.trustctime`, `core.quotepath`, `core.ignorestat`,
+`core.sparseCheckout`, `core.sparseCheckoutCone`, `core.protectHFS`,
+`core.protectNTFS`, `core.precomposeUnicode`, `core.fsyncObjectFiles`,
+`core.safecrlf`, `core.autocrlf`, `core.lockfilePid`,
+`sparse.expectFilesOutsideOfPatterns`, `pager.color`, `color.pager`,
+`user.useConfigOnly`, `advice.detachedHead` or `advice.statusHints` value that
+Git cannot read as a boolean
+gives no Git root, even if a later value is valid. `core.safecrlf`
+also accepts `warn`, without regard to case. `core.autocrlf` also accepts `input`,
+without regard to case.
+Native discovery follows current Git for `core.lockfilePid`; Git before 2.54
+ignores that key.
+A key without a value is true; an empty value is false. Boolean words and
+integers follow Git's boolean rules. The initial read and repository-format
+read do not apply these keys' types. Other typed values from the full config
+read and `includeIf` conditions are not applied.
+As Git does, discovery walks the physical parent folders, after symbolic links
+in the workspace folder's path are resolved. The Git root keeps the workspace
+folder's path, up as many folders as Git walked, as the upstream CLI resolves
+Git's relative result.
+`GIT_CEILING_DIRECTORIES` stops parent discovery before
+a listed ancestor. Entries must be absolute paths. Git resolves symlinks in
+entries until an empty path-list entry disables that resolution. Entries after
+that marker retain literal path components. A ceiling equal
+to the starting folder does not stop discovery. Parent discovery also stops at
+the first physical parent folder on another file system, unless
+`GIT_DISCOVERY_ACROSS_FILESYSTEM` is true. Git compares device numbers, so a
+bind mount of the same file system is not a boundary. A value that Git does not
+read as a boolean gives no Git root. After a repository is found,
+`GIT_WORK_TREE` selects its working tree. Relative values start at the workspace
+folder; Git resolves symlinks and path components. An empty value or an invalid
+intermediate component gives no Git root. For an outside-tree override, trailing
+whitespace is removed from the resolved path as in the upstream CLI probe.
+An explicitly empty `GIT_DIR`, or one that names a missing repository or an
+invalid gitfile target, gives no Git root; parent discovery does not replace it.
+As in Git 2.54 and later, when `stat` fails on a `.git` entry, parent discovery
+continues only if the entry is missing, which includes a symbolic link to a
+missing path or through a regular file. Any other `stat` failure gives no Git
+root: for example a symbolic link loop, a name that is too long, or a link into
+a folder that cannot be searched. A `.git` entry that is not a folder must be a
+gitfile: a gitfile that cannot be opened or read, or a special file such as a
+FIFO, also gives no Git root. A `.git` folder is tested as a repository instead,
+and a folder that fails that test, such as one that cannot be read, does not
+stop parent discovery.
+Gitfiles must start with literal `gitdir:` followed by one space and a repository
+path. Only final CR and LF bytes are removed; other whitespace and interior
+newlines belong to the path. Gitfiles larger than 1 MiB give no Git root.
+A relative gitfile target starts at the gitfile's folder and keeps its path
+components, as Git does: a symbolic link is resolved before a later `..`, and
+a regular file or a missing folder before `..` gives no Git root.
+Repository admission checks the first 255 bytes of `HEAD` for a `ref:` target
+starting with `refs/` or a 40-digit hexadecimal object ID. A symbolic-link
+`HEAD` must point to a path starting with `refs/`; its target need not exist.
+A `commondir` pointer selects the common folder whose `objects` and `refs`
+paths must pass Git's executable-access check. Relative pointers start at the
+administrative folder; final CR and LF bytes are removed. A failed pointer read
+or path resolution ends discovery. A resolved folder without those signatures
+is not a repository; parent discovery can continue past a `.git` directory.
+After the `.git` entry, each folder is also tested as a repository, as Git does.
+When the workspace is in a bare repository or in a `.git` folder, Git reports no
+working tree, and the workspace folder is the Git root. The global
+`safe.bareRepository` setting is not read.
+`GIT_OBJECT_DIRECTORY` replaces the `objects` signature path during admission.
+Relative values start at the workspace folder and retain physical path traversal.
+An empty or inaccessible value fails admission; `refs` is still checked in the
+common folder. `GIT_COMMON_DIR` replaces the `commondir` pointer, which is then
+not read. Relative values start at the workspace folder and retain physical
+path traversal; an empty value checks `/objects` and `/refs`, as Git does.
+Git keeps the value as given: its repository format check starts a relative
+value at the folder where it found the repository, or at the workspace folder
+for `GIT_DIR`, and its config read after setup at its working folder.
+The common-folder mount option reads pointer lines separately,
+as upstream does.
+Git's repository format check then reads the common folder's `config`, and
+`config.worktree` when `extensions.worktreeConfig` is set. Config that Git
+rejects gives no Git root: a syntax error, a directory or an unreadable file,
+a `core.repositoryformatversion` that is not an integer or is above 1, an
+invalid `core.bare`, `extensions.worktreeConfig` or `extensions.preciousObjects`
+boolean, and `core.worktree` or `extensions.partialClone` without a value. A
+special file, such as a FIFO or a device, is read as a stream. A FIFO waits
+for a writer with no time limit. The format check stops at the first syntax
+or typed value error, or at the end of the stream; a read error also ends the
+stream.
+The format check does not follow includes. The full read after setup opens
+these files again and follows their includes.
+Extensions follow Git 2.55 built without Rust. Git checks each extension value
+whatever the repository version: `extensions.objectFormat` and
+`extensions.compatObjectFormat` must be `sha1` or `sha256`,
+`extensions.refStorage` must name `files` or `reftable`, optionally followed by
+`://` and a payload, and `extensions.relativeWorktrees` and
+`extensions.submodulePathConfig` must be booleans. A second
+`extensions.compatObjectFormat` gives no Git root. When
+`core.repositoryformatversion` is 1, an extension that Git does not know gives
+no Git root, and so does any `extensions.compatObjectFormat`. When it is 0,
+`extensions.noop-v1` or one of these version 1 extensions gives no Git root;
+other unknown extensions are ignored. `dcb` applies these rules whatever Git is
+installed. The upstream CLI runs the installed `git`, and other Git versions and
+builds accept other repositories, so the two can mount different folders: Git
+before 2.54 does not know `extensions.submodulePathConfig` or the `://` payload
+form, Git before 2.48 `extensions.relativeWorktrees`, Git before 2.45
+`extensions.compatObjectFormat` and Git before 2.44 `extensions.refStorage`.
+Git 2.45 to 2.53, and Git built with Rust, accept a compatibility object format
+that differs from the object format. Integers
+are read as Git built against a C23 C library, such as glibc 2.38 or later,
+reads them: decimal, octal with a leading `0`, hexadecimal with `0x` and binary
+with `0b`, with an optional `k`, `m` or `g` unit. When
+`core.repositoryformatversion` is 0 or 1, a true `core.bare` leaves a discovered
+repository without a working tree, and the workspace folder is the Git root. A
+linked worktree and `GIT_COMMON_DIR` ignore `core.bare` in the common config.
+Otherwise `core.worktree` selects the working tree, with the same version and
+common-config rules; `GIT_WORK_TREE` and a true `core.bare` take precedence. An
+absolute value is resolved as `GIT_WORK_TREE` is. A relative value starts at
+the repository folder and must name an existing folder that the effective user
+and capabilities can search, as Git's `chdir` requires; its symbolic links are
+resolved before `..` components. Git changes to the
+repository folder first, so the folder and the value are separate lookups, each
+with its own symbolic link and path length limits. A `.git` folder above the
+workspace folder and a gitfile target first pass through Git's own path
+resolution, which allows 33 symbolic links. On Linux, the selected folder is
+named from `/proc`, or without it by a thread that unshares its working
+folder. Where a seccomp profile also blocks `unshare`, as Docker's default
+profile does, both lookups are repeated one component at a time, so the value
+can pass a folder whose physical path exceeds `PATH_MAX`; the selected folder's
+own path must fit in `PATH_MAX`, as Git's working folder must.
+Builds for hosts other than Linux and macOS instead join the repository
+folder's physical path and the value, which must fit the host's path length
+limit. An empty value or one that Git cannot resolve gives no Git
+root. Inside that working tree, the Git root keeps the workspace folder's path;
+outside it, the Git root is the working tree's physical path. The format check
+does not follow includes, and other config keys are not interpreted.
+Relative values start at the workspace folder. A valid `GIT_DIR` selects the
+workspace folder without parent discovery; `GIT_WORK_TREE` or the repository
+config can select its working tree. Other Git
+environment overrides
+and ownership checks are not applied. `exec`, `run-user-commands`, `set-up`,
+and an `up` that
 reuses a container use the folder where that container mounts the workspace,
 read from its bind mounts, whatever flags created it. A configured
 `workspaceFolder` still wins. When the container mounts no folder that holds
 the workspace, these commands calculate the folder from the flags, as
 `read-configuration` does. `read-configuration`
 returns the folder and mounts in its `workspace` object. A configuration that
-sets `workspaceMount` keeps its mount. A configuration that sets
+sets `workspaceMount` keeps its mount. An explicitly empty `"workspaceMount": ""`
+disables the default workspace mount; additional `mounts` and `--mount` values
+still apply. `read-configuration` keeps the empty `workspaceMount` value. A
+configuration that sets
 `workspaceFolder` without `workspaceMount` keeps that folder and mounts the
 workspace or its Git root at `/workspaces/<name>`, according to the Git-root
 and worktree flags. Set `workspaceMount` to mount at a specific target.
@@ -736,3 +1054,173 @@ dcb up --workspace-folder . --omit-config-remote-env-from-metadata
 `userEnvProbe` takes precedence. The probe reads the container user's shell
 environment before applying remote environment values. If shell startup takes
 more than 10 seconds, dcb warns and continues with no probed environment.
+
+## Git workspace discovery
+
+| `dcb` | Upstream CLI |
+| --- | --- |
+| Finds the Git root with the credentials of its own process. See [Process credentials](#process-credentials). | Runs `git`, which can start with different credentials. |
+| Finds the Git root as the latest stable Git release does, with the repository format rules of Git 2.55 built without Rust. See [Workspace mounts](/docs/dcb/usage#workspace-mounts-and-container-selection) and [the decision](https://github.com/wyrd-company/devcontainer-builder/blob/main/docs/decisions/follow-latest-stable-git-behavior.yml). | Runs the installed `git`, whose version and build decide which configuration and repository formats it accepts. |
+| Linux release builds look up accounts in `/etc/passwd` only. They skip an `include.path` of `~name/` whose account is not there, as if the included file were missing. Builds with cgo and macOS builds ask the account services. Bob approved this difference. See [Workspace mounts](/docs/dcb/usage#workspace-mounts-and-container-selection). | Runs `git`, which asks every account service of the host. It rejects a name that no service knows, and an included file that it cannot parse, so the upstream CLI finds no Git root. |
+| Reads an `include.path` of `%(prefix)/` followed by a relative path below the prefix that `--git-prefix` names, as Git reads it below the prefix of its build. Without `--git-prefix`, it does not read that file, as if it were missing. Bob approved this default. See [Workspace mounts](/docs/dcb/usage#workspace-mounts-and-container-selection) and [the decision](https://github.com/wyrd-company/devcontainer-builder/blob/main/docs/decisions/explicit-git-prefix-setting.yml). | Runs `git`, which reads that file below the prefix of its own build and rejects a file that it cannot parse, so the upstream CLI finds no Git root. Has no `--git-prefix` flag. |
+
+### Process credentials
+
+`dcb` and its Go packages read workspace, configuration and Git files with
+the credentials that the process has at the time of each read: its user and
+groups, and on Linux its capabilities. They do not change these credentials.
+A permission that the caller dropped stays dropped, and a permission that the
+caller holds is used.
+
+To find the Git root, the upstream CLI starts `git`. Starting a program can
+change its credentials, and `dcb` does not copy these changes:
+
+- A root process that cleared its effective capabilities can get them back
+  in `git`, unless `SECBIT_NOROOT` is set.
+- With `SECBIT_NOROOT`, the `git` of a root process starts with only the
+  ambient capabilities of that process.
+- File capabilities or a set-user-ID or set-group-ID bit on `git`, and a
+  security module that changes domain when `git` starts, also change its
+  credentials.
+
+In these cases, `dcb` and the upstream CLI can find different Git roots and
+mount different folders. When the process has the credentials that a started
+`git` gets, credentials cause no difference between them. A `dcb` started from
+a shell has these credentials when neither `dcb` nor `git` has file
+capabilities, a set-user-ID or set-group-ID bit, or a security module domain
+change when it starts. The Dev Container specification does not define how the
+Git root is found.
+
+## Published Template metadata
+
+```sh
+dcb templates metadata ghcr.io/example/templates/sample:1
+```
+
+`templates metadata` reads the `dev.containers.metadata` annotation from an OCI
+artifact manifest. It writes the annotation's JSON value directly to stdout,
+without the usual result envelope. Missing references or metadata write `{}`
+and exit 1. Diagnostics use stderr. It does not download Template files.
+References include a registry and repository, use `latest` when no tag is given,
+and accept `@sha256:...` to verify a specific manifest. Reference text is
+lowercased, as upstream. A reference includes a collection namespace before its
+Template name. Registry authentication uses Docker client credentials; exactly
+`localhost` uses plain HTTP, as upstream. Malformed metadata, missing manifest
+configuration, and digest mismatches exit 1 without JSON on stdout.
+
+### Generate Template documentation
+
+```sh
+dcb templates generate-docs --project-folder ./templates
+```
+
+Each visible child of `--project-folder` (alias `-p`, default `.`) supplies a
+`devcontainer-template.json` and optional `NOTES.md`. The command replaces its
+README.md with the Template name, description, options, notes and metadata link.
+It skips children without an ID or metadata file. It does not search `src`
+automatically. `--github-owner` and `--github-repo` set the metadata link.
+Existing README symlinks are unlinked before writing. A failure can leave other
+children already written. Success writes no stdout; progress uses stderr.
+The library entry point is `templates.GenerateDocumentation`.
+
+## Report Feature versions
+
+```sh
+dcb outdated --workspace-folder .
+dcb outdated --config .devcontainer/devcontainer.json --output-format json
+```
+
+The default text table has Feature, Current, Wanted, and Latest columns.
+Unavailable values appear as `-`. JSON returns a `features` object keyed by the
+configured identifiers, in configuration order. Each entry can have `current`,
+`wanted`, `wantedMajor`, `latest`, and `latestMajor`; unavailable fields are omitted.
+The report has no `outcome` field. Operation failures use stderr and exit 1.
+
+Current is the lockfile version, or wanted when there is no locked version.
+Wanted is the newest full semver tag that satisfies the configured tag; `latest`
+selects the highest published semver, including prereleases. Latest is the
+highest published full semver regardless of the configured tag. Major and minor
+alias tags are excluded from the version list. Digest references use the locked
+version, then manifest metadata, then metadata in the first Feature layer.
+Local paths and identifiers that cannot be versioned are omitted. Unavailable
+or syntactically invalid registry tag responses leave version fields unavailable.
+A valid response with a non-array tags value fails the operation when that value
+is truthy, as upstream does.
+
+Discovery checks `.devcontainer/devcontainer.json`, then `.devcontainer.json` in
+`--workspace-folder` (default current folder). `--config` is relative to the
+current folder. A reporting configuration does not require image or build fields.
+Feature identifiers are object keys and are not substituted; options do not
+change the report. Lockfiles are read beside the configuration and are unchanged.
+
+`--user-data-folder` is accepted and unused, as upstream. `--log-level` accepts
+info, debug, or trace; `--log-format` accepts text or json. `--terminal-columns`
+and `--terminal-rows` must be supplied together. Reporting uses native OCI HTTP
+and existing registry credentials; no Docker daemon is needed.
+
+### Published Feature information
+
+```sh
+dcb features info manifest ghcr.io/example/collection/sample:1 --output-format json
+dcb features info tags ghcr.io/example/collection/sample:1
+dcb features info dependencies ghcr.io/example/collection/sample:1
+dcb features info verbose ghcr.io/example/collection/sample:1
+```
+
+Every mode requires a published Feature manifest. `manifest` includes the
+canonical digest identifier. `tags` preserves registry order and duplicate tags.
+`dependencies` renders a Mermaid flowchart with hard and soft dependencies.
+`verbose` combines these reports. Text is the default; `--output-format json`
+emits manifest, canonicalId, and publishedTags when requested. JSON dependencies
+emits `{}` without loading dependency metadata. Registry authentication uses the
+existing Docker credential configuration. These reports do not stage Features
+or write a lockfile.
+
+## Resolve Feature dependencies
+
+```sh
+dcb features resolve-dependencies --workspace-folder .
+```
+
+This command reads `.devcontainer.json` first, then
+`.devcontainer/devcontainer.json`. It prints a Mermaid `flowchart` followed by
+pretty JSON with an ordered `installOrder` array. Each entry has `id` and
+`options`; OCI identifiers use the resolved manifest digest. Options retain
+object property order and scalar string or boolean values.
+
+Resolution supports local Features, HTTPS archives, OCI metadata annotations,
+and metadata from OCI layers. It applies configuration substitutions, lockfile
+integrity pins, hard dependencies, soft dependencies, aliases and
+`overrideFeatureInstallOrder`. It does not install Features or write lockfiles.
+A dependency cycle returns exit code 1 after printing the graph. An absent or
+empty `features` object fails before graph output. `--log-level` accepts
+`error` (default), `info`, `debug`, or `trace`.
+
+If HTTPS archive metadata cannot be retrieved or its integrity check fails,
+reporting retains the archive entry without dependency metadata, as upstream
+does. The report does not establish that a later installation will succeed.
+
+## Upgrade Feature requirements and lockfiles
+
+```sh
+dcb upgrade --workspace-folder .
+dcb upgrade --workspace-folder . --dry-run
+dcb upgrade --config .devcontainer/devcontainer.json \
+  --feature registry.example/collection/sample --target-version 2
+```
+
+`upgrade` resolves configured Features and their dependencies and writes the
+lockfile beside the configuration. Discovery checks `.devcontainer/devcontainer.json`
+before `.devcontainer.json`. Existing lockfile integrity pins remain in use.
+The paired `--feature` (`-f`) and `--target-version` (`-v`) flags change the first
+matching Feature requirement. The target accepts `x`, `x.y`, or `x.y.z`.
+Configuration comments and formatting remain, with upstream's global regular
+expression replacement of the matching identifier throughout the file.
+
+`--dry-run` prints pretty lockfile JSON with a trailing newline. It still writes
+a requested configuration change and refreshes an existing lockfile during
+resolution. Without `--dry-run`, success writes no stdout and forces a canonical
+lockfile rewrite. A resolution failure can leave the configuration update in place.
+An absent or empty Features object fails. Operation errors go to stderr and
+exit 1;
+invalid invocations use the normal JSON error result and exit 2.

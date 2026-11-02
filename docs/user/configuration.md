@@ -15,8 +15,14 @@ Comments and trailing commas are allowed.
 | Source | Properties |
 | --- | --- |
 | Image | `image` |
-| Dockerfile | `build.dockerfile` (or `dockerFile`), `build.context`, `build.args`, `build.target`, `build.cacheFrom` |
+| Dockerfile | `build.dockerfile` with `build.context`, or `dockerFile` with `context`; `build.args`, `build.target`, `build.cacheFrom` |
 | Docker Compose | `dockerComposeFile`, `service`, `runServices` |
+
+Dockerfile paths and context paths are relative to `devcontainer.json`. Without
+a context, the Dockerfile directory is the build context. Top-level `dockerFile`
+can use `build.args`, `build.target`, and `build.cacheFrom`. `dockerComposeFile`
+and `build.cacheFrom` accept a string or an array of strings. Lifecycle command
+objects accept string or string-array values. Nested command objects are invalid.
 
 Features are installed on top of each source. With Docker Compose, `dcb`
 creates the networks, volumes, and containers of the Compose project through
@@ -37,7 +43,7 @@ sees it.
 | `mounts` | |
 | `init`, `privileged`, `capAdd`, `securityOpt` | |
 | `runArgs` | See [runArgs](#runargs). |
-| `appPort` | A bare port is published on `127.0.0.1`. A `host:container` entry is used as given. |
+| `appPort` | Numeric values map to the same port on `127.0.0.1`. Strings use Docker publishing syntax unchanged; `"8080"` requests an allocated host port. |
 | `forwardPorts` | Not published, as upstream. |
 | `overrideCommand` | |
 | `onCreateCommand`, `updateContentCommand`, `postCreateCommand`, `postStartCommand`, `postAttachCommand` | String, array, and object forms. Object entries run in parallel. |
@@ -80,8 +86,21 @@ variables above are substituted.
 `runArgs` is read as `docker run` flags and applied to the container through
 the Engine API. Flags that add to a property, such as `--cap-add`, add to it
 and do not replace it. An unknown flag is an error, so that a typing error does
-not change the container. `--entrypoint` is an error, because `dcb` sets the
-entrypoint that keeps the container running.
+not change the container. `--entrypoint` is accepted and replaced by the
+keepalive entrypoint, as in the upstream CLI.
+
+`--env-file` and `--label-file` use Docker file syntax. Files load in file order,
+then explicit environment and label flags override them, regardless of argv
+position. File paths are relative to the process working directory. Bare file
+environment keys inherit host values when set; bare file label keys are omitted.
+Merged `init`, `privileged`, `capAdd`, and `securityOpt` flags follow `runArgs`,
+as in the upstream CLI.
+
+Boolean assignments, combined short booleans such as `-it`, and attached short
+values such as `-eSAMPLE=value` are accepted. `--rm`, stdin, and TTY settings reach
+the Engine API. Bare environment keys inherit the host value; unset keys stay
+bare so that Engine removes image defaults. Detach and signal proxy flags control
+the Docker CLI process and have no container setting.
 
 `--name sample-dev` and `--name=sample-dev` set the Docker container name.
 Without `--name`, Docker chooses the name. dcb finds and reuses containers by
@@ -91,7 +110,12 @@ dcb does not remove that container.
 
 ### mounts
 
-Mounts accept strings or objects. Objects have only `type` (`bind` or `volume`),
+Mounts accept strings or objects. Docker mount strings use Docker CSV syntax,
+including quoted values, bind propagation, volume options, and tmpfs options.
+A string without `type` defaults to a volume mount. The same parser applies to
+`workspaceMount`, `mounts`, and `runArgs --mount`. Invalid options return an error.
+
+Objects follow the upstream schema. Objects have only `type` (`bind` or `volume`),
 `source`, and `target`. The `type` and `target` strings are required; `source`
 is optional. A plain object mount is read-write:
 

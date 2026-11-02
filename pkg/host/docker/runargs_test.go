@@ -1,6 +1,8 @@
 package docker
 
 import (
+	"os"
+	"path/filepath"
 	"reflect"
 	"sort"
 	"strings"
@@ -41,14 +43,42 @@ func TestApplyRunArgs_BooleanFlags(t *testing.T) {
 	}
 }
 
-func TestApplyRunArgs_CombinedShortNoOps(t *testing.T) {
-	// -it / -itd / -dit are all just terminal/foreground flags and
-	// have no effect on a long-lived devcontainer; they must parse
-	// without error.
-	for _, combo := range []string{"-i", "-t", "-d", "-it", "-ti", "-itd", "-dit"} {
-		if _, _, err := tryApply([]string{combo}); err != nil {
-			t.Errorf("%q should be a no-op, got error: %v", combo, err)
+func TestApplyRunArgs_CombinedShortBooleans(t *testing.T) {
+	for _, combo := range []string{"-it", "-ti", "-itd", "-dit", "-itP"} {
+		cfg, host := applyForTest(t, []string{combo})
+		if !cfg.OpenStdin || !cfg.Tty {
+			t.Fatalf("%s: stdin=%v tty=%v", combo, cfg.OpenStdin, cfg.Tty)
 		}
+		if combo == "-itP" && !host.PublishAllPorts {
+			t.Fatal("publish all lost")
+		}
+	}
+}
+
+func TestApplyRunArgs_BooleanAssignments(t *testing.T) {
+	cfg, host := applyForTest(t, []string{"--rm", "-it", "--privileged", "--read-only", "--init=true", "--privileged=false", "--read-only=false", "--publish-all=true"})
+	if !host.AutoRemove || !cfg.OpenStdin || !cfg.Tty || host.Init == nil || !*host.Init || host.Privileged || host.ReadonlyRootfs || !host.PublishAllPorts {
+		t.Fatalf("config=%+v host=%+v", cfg, host)
+	}
+	cfg, host = applyForTest(t, []string{"--rm=false", "-i=false", "-t=false", "--init=false", "-P=false"})
+	if host.AutoRemove || cfg.OpenStdin || cfg.Tty || host.Init == nil || *host.Init || host.PublishAllPorts {
+		t.Fatal("false assignments lost")
+	}
+	for _, flag := range []string{"--init", "--privileged", "--read-only", "--publish-all", "--rm", "-i", "-t", "-d", "--sig-proxy"} {
+		if _, _, err := tryApply([]string{flag + "=invalid"}); err == nil {
+			t.Errorf("%s accepted invalid boolean", flag)
+		}
+	}
+}
+
+func TestApplyRunArgs_AttachedShortValues(t *testing.T) {
+	cfg, host := applyForTest(t, []string{"-hwork", "-u1000:1000", "-w/work", "-eSAMPLE=value", "-lkind=sample", "-p9080:8080", "-v/data:/data", "-m64m", "-c512"})
+	if cfg.Hostname != "work" || cfg.User != "1000:1000" || cfg.WorkingDir != "/work" || !reflect.DeepEqual(cfg.Env, []string{"SAMPLE=value"}) || cfg.Labels["kind"] != "sample" || len(host.PortBindings) != 1 || len(host.Binds) != 1 || host.Memory != 64*1024*1024 || host.CPUShares != 512 {
+		t.Fatalf("config=%+v host=%+v", cfg, host)
+	}
+	cfg, _ = applyForTest(t, []string{"-iteSAMPLE=value"})
+	if !cfg.OpenStdin || !cfg.Tty || !reflect.DeepEqual(cfg.Env, []string{"SAMPLE=value"}) {
+		t.Fatalf("mixed cluster: %+v", cfg)
 	}
 }
 
@@ -217,9 +247,32 @@ func TestApplyRunArgs_EnvAndLabels(t *testing.T) {
 	}
 }
 
-func TestApplyRunArgs_BareEnvRejected(t *testing.T) {
-	if _, _, err := tryApply([]string{"-e", "FOO"}); err == nil {
-		t.Error("bare -e FOO should error (we don't read host env in this package)")
+func TestApplyRunArgs_EnvironmentInheritance(t *testing.T) {
+	t.Setenv("SAMPLE_INHERITED", "host=value")
+	t.Setenv("SAMPLE_EMPTY", "")
+	t.Setenv("SAMPLE_UNSET", "temporary")
+	if err := os.Unsetenv("SAMPLE_UNSET"); err != nil {
+		t.Fatal(err)
+	}
+	cfg, _ := applyForTest(t, []string{"--env", "SAMPLE_INHERITED", "-eSAMPLE_EMPTY", "--env=SAMPLE_UNSET"})
+	if !reflect.DeepEqual(cfg.Env, []string{"SAMPLE_INHERITED=host=value", "SAMPLE_EMPTY=", "SAMPLE_UNSET"}) {
+		t.Fatalf("env=%q", cfg.Env)
+	}
+}
+
+func TestApplyRunArgs_EnvironmentOrder(t *testing.T) {
+	t.Setenv("SAMPLE_UNSET", "temporary")
+	if err := os.Unsetenv("SAMPLE_UNSET"); err != nil {
+		t.Fatal(err)
+	}
+	cfg, _ := applyForTest(t, []string{"-eSAMPLE_UNSET=first", "-eSAMPLE_UNSET", "-eSAMPLE_UNSET=last"})
+	if !reflect.DeepEqual(cfg.Env, []string{"SAMPLE_UNSET=first", "SAMPLE_UNSET", "SAMPLE_UNSET=last"}) {
+		t.Fatalf("env order=%q", cfg.Env)
+	}
+	for _, arg := range []string{"", "=value"} {
+		if _, _, err := tryApply([]string{"--env", arg}); err == nil {
+			t.Errorf("empty key %q accepted", arg)
+		}
 	}
 }
 
@@ -355,10 +408,18 @@ func TestApplyRunArgs_PositionalRejected(t *testing.T) {
 	}
 }
 
-func TestApplyRunArgs_EntrypointRejected(t *testing.T) {
-	_, _, err := tryApply([]string{"--entrypoint", "/bin/bash"})
-	if err == nil || !strings.Contains(err.Error(), "entrypoint") {
-		t.Errorf("--entrypoint should be rejected, got: %v", err)
+func TestApplyRunArgs_EntrypointOverridden(t *testing.T) {
+	for _, args := range [][]string{{"--entrypoint", "/bin/bash"}, {"--entrypoint="}} {
+		cfg := &container.Config{Entrypoint: []string{"/bin/sh"}}
+		if _, err := applyRunArgs(args, cfg, &container.HostConfig{}); err != nil {
+			t.Fatal(err)
+		}
+		if len(cfg.Entrypoint) != 1 || cfg.Entrypoint[0] != "/bin/sh" {
+			t.Fatal("keepalive entrypoint replaced")
+		}
+	}
+	if _, _, err := tryApply([]string{"--entrypoint"}); err == nil {
+		t.Fatal("missing entrypoint accepted")
 	}
 }
 
@@ -369,7 +430,7 @@ func TestApplyRunArgs_MissingValue(t *testing.T) {
 }
 
 func TestBuildContainerConfig_RunArgsMergesWithStructuredFields(t *testing.T) {
-	// runArgs cap-add appends to the spec's CapAdd, doesn't replace.
+	// Upstream appends structured CapAdd after runArgs without replacement.
 	dc := &spec.DevContainer{
 		CapAdd:  []string{"SYS_PTRACE"},
 		RunArgs: []string{"--cap-add=NET_ADMIN", "--network=host"},
@@ -378,7 +439,7 @@ func TestBuildContainerConfig_RunArgsMergesWithStructuredFields(t *testing.T) {
 	if err != nil {
 		t.Fatalf("buildContainerConfig: %v", err)
 	}
-	want := []string{"SYS_PTRACE", "NET_ADMIN"}
+	want := []string{"NET_ADMIN", "SYS_PTRACE"}
 	if !reflect.DeepEqual([]string(host.CapAdd), want) {
 		t.Errorf("cap-add merge: %+v", host.CapAdd)
 	}
@@ -407,4 +468,69 @@ func tryApply(args []string) (*container.Config, *container.HostConfig, error) {
 	host := &container.HostConfig{}
 	_, err := applyRunArgs(args, cfg, host)
 	return cfg, host, err
+}
+
+// File parsing and precedence follow Docker CLI opts.ReadKV{Env,}Strings.
+func TestApplyRunArgs_FilePrecedence(t *testing.T) {
+	dir := t.TempDir()
+	first, second := filepath.Join(dir, "first"), filepath.Join(dir, "second")
+	t.Setenv("SAMPLE_INHERIT", "host-value")
+	t.Setenv("SAMPLE_LABEL", "not-inherited")
+	for path, data := range map[string]string{first: "# comment\nSAMPLE=file-first\nSAMPLE_INHERIT\nSAMPLE_LABEL\n", second: "SAMPLE=file-second\nOTHER=value=with=equals\n"} {
+		if err := os.WriteFile(path, []byte(data), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	cfg, _ := applyForTest(t, []string{"-eSAMPLE=explicit", "--env-file", first, "--env-file=" + second, "-lSAMPLE=explicit", "--label-file", first, "--label-file=" + second})
+	want := []string{"SAMPLE=file-first", "SAMPLE_INHERIT=host-value", "SAMPLE_LABEL=not-inherited", "SAMPLE=file-second", "OTHER=value=with=equals", "SAMPLE=explicit"}
+	if !reflect.DeepEqual(cfg.Env, want) {
+		t.Fatalf("env got %q want %q", cfg.Env, want)
+	}
+	labels := map[string]string{"SAMPLE": "explicit", "OTHER": "value=with=equals"}
+	if !reflect.DeepEqual(cfg.Labels, labels) {
+		t.Fatalf("labels got %v want %v", cfg.Labels, labels)
+	}
+}
+
+func TestApplyRunArgs_FileErrors(t *testing.T) {
+	for _, flag := range []string{"--env-file", "--label-file"} {
+		t.Run(flag, func(t *testing.T) {
+			for _, mode := range []string{"missing-value", "missing-file", "invalid-file"} {
+				t.Run(mode, func(t *testing.T) {
+					args := []string{flag}
+					if mode != "missing-value" {
+						path := filepath.Join(t.TempDir(), "values")
+						if mode == "invalid-file" {
+							if err := os.WriteFile(path, []byte("=invalid\n"), 0600); err != nil {
+								t.Fatal(err)
+							}
+						}
+						args = append(args, path)
+					}
+					_, _, _, err := buildContainerConfig(&spec.DevContainer{Image: "alpine", RunArgs: args}, nil, "alpine", "", "", "")
+					if err == nil || !strings.Contains(err.Error(), flag) {
+						t.Fatalf("expected contextual %s error, got %v", flag, err)
+					}
+				})
+			}
+		})
+	}
+}
+
+func TestBuildContainerConfig_FileOverrides(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "values")
+	if err := os.WriteFile(path, []byte("SAMPLE=file\ndevcontainer.local_folder=file\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	dc := &spec.DevContainer{Image: "alpine", ContainerEnv: map[string]any{"SAMPLE": "config"}, RunArgs: []string{"--env-file", path, "--label-file", path}}
+	cfg, _, _, err := buildContainerConfig(dc, nil, "alpine", "", "/workspace", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Labels[LabelLocalFolder] != "/workspace" {
+		t.Fatalf("identity label: %v", cfg.Labels)
+	}
+	if cfg.Env[len(cfg.Env)-1] != "SAMPLE=config" {
+		t.Fatalf("explicit config env must follow files: %q", cfg.Env)
+	}
 }

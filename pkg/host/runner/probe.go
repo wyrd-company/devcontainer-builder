@@ -6,6 +6,7 @@ package runner
 import (
 	"context"
 	"crypto/rand"
+	"encoding/json"
 	"fmt"
 	"path"
 	"strings"
@@ -18,8 +19,10 @@ const DefaultUserEnvProbe = "loginInteractiveShell"
 // changes are available. Docker and Compose provide both, as upstream's CLI.
 type ProbeOptions struct {
 	CanPatchSystemConfig bool
-	diagnosticAfter      time.Duration
-	timeout              time.Duration
+	// ContainerSessionDataFolder stores mode-specific probe results; empty disables caching.
+	ContainerSessionDataFolder string
+	diagnosticAfter            time.Duration
+	timeout                    time.Duration
 }
 
 func ValidUserEnvProbe(mode string) bool {
@@ -53,6 +56,9 @@ func ProbeUserEnv(ctx context.Context, execer Execer, configured, fallback, user
 		if logf != nil {
 			logf(format, args...)
 		}
+	}
+	if env := readProbeCache(ctx, execer, user, mode, options.ContainerSessionDataFolder, log); env != nil {
+		return env
 	}
 	// Run as the selected user so id resolves the default user and uid:gid forms.
 	res, err := execer.Exec(ctx, ExecRequest{User: user, Cmd: []string{"/bin/sh", "-c", `uid=$(id -u); (command -v getent >/dev/null 2>&1 && getent passwd "$uid" || grep -E "^[^:]*:[^:]*:$uid:" /etc/passwd) | cut -d: -f7; printf '%s\n' "$uid"`}})
@@ -111,7 +117,9 @@ func ProbeUserEnv(ctx context.Context, execer Execer, configured, fallback, user
 				<-done
 				diagnostic.Stop()
 				log("userEnvProbe is taking longer than 10 seconds. Avoid waiting for user input in your shell's startup scripts. Continuing.")
-				return map[string]string{}
+				env := map[string]string{}
+				writeProbeCache(ctx, execer, user, mode, options.ContainerSessionDataFolder, env, log)
+				return env
 			case <-ctx.Done():
 				cancel()
 				<-done
@@ -128,7 +136,9 @@ func ProbeUserEnv(ctx context.Context, execer Execer, configured, fallback, user
 		}
 		if resultValue.err != nil {
 			log("Error reading shell environment: %v", resultValue.err)
-			return nil
+			env := map[string]string{}
+			writeProbeCache(ctx, execer, user, mode, options.ContainerSessionDataFolder, env, log)
+			return env
 		}
 		raw := string(resultValue.res.Stdout)
 		start := strings.Index(raw, mark)
@@ -150,6 +160,7 @@ func ProbeUserEnv(ctx context.Context, execer Execer, configured, fallback, user
 		if !options.CanPatchSystemConfig && env["PATH"] != "" && containerEnv["PATH"] != "" {
 			env["PATH"] = mergePaths(env["PATH"], containerEnv["PATH"], root)
 		}
+		writeProbeCache(ctx, execer, user, mode, options.ContainerSessionDataFolder, env, log)
 		return env
 	}
 	return nil
@@ -185,4 +196,46 @@ func mergePaths(shellPath, containerPath string, root bool) string {
 		}
 	}
 	return strings.Join(result, ":")
+}
+
+// Cache files follow the upstream mode-only key and contain the probe result,
+// before remoteEnv or lifecycle secrets are layered onto it.
+func readProbeCache(ctx context.Context, execer Execer, user, mode, folder string, log func(string, ...any)) map[string]string {
+	if folder == "" {
+		return nil
+	}
+	file := shellSQ(path.Join(folder, "env-"+mode+".json"))
+	res, err := execer.Exec(ctx, ExecRequest{User: user, Cmd: []string{"/bin/sh", "-c", "test -f " + file + " && cat " + file}})
+	if err != nil {
+		log("Failed to read/parse user env cache: %v", err)
+		return nil
+	}
+	if res.ExitCode != 0 {
+		return nil
+	}
+	var env map[string]string
+	if err := json.Unmarshal(res.Stdout, &env); err != nil {
+		log("Failed to read/parse user env cache: %v", err)
+		return nil
+	}
+	return env
+}
+
+func writeProbeCache(ctx context.Context, execer Execer, user, mode, folder string, env map[string]string, log func(string, ...any)) {
+	if folder == "" {
+		return
+	}
+	data, err := json.MarshalIndent(env, "", "\t")
+	if err != nil {
+		log("Failed to cache user env: %v", err)
+		return
+	}
+	file := path.Join(folder, "env-"+mode+".json")
+	res, err := execer.Exec(ctx, ExecRequest{User: user, Cmd: []string{"/bin/sh", "-c", "mkdir -p " + shellSQ(path.Dir(file)) + " && cat > " + shellSQ(file)}, Stdin: strings.NewReader(string(data) + "\n")})
+	if err == nil && res.ExitCode != 0 {
+		err = fmt.Errorf("cache write exited with code %d", res.ExitCode)
+	}
+	if err != nil {
+		log("Failed to cache user env: %v", err)
+	}
 }

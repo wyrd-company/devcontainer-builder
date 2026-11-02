@@ -12,7 +12,7 @@ import (
 func (a *application) terminalFlags(root *cobra.Command) {
 	for _, cmd := range root.Commands() {
 		switch cmd.Name() {
-		case "up", "set-up", "run-user-commands", "read-configuration", "exec":
+		case "outdated", "up", "set-up", "run-user-commands", "read-configuration", "exec":
 		default:
 			continue
 		}

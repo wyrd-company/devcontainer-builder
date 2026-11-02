@@ -4,6 +4,7 @@ description: Build and manage development containers with dcb, inspect configura
 relationships:
   references: [CONTRIBUTING]
 ---
+
 # Development containers with dcb
 
 Use `dcb --help` to read command descriptions, common flags, and examples.
@@ -14,10 +15,27 @@ alternate content while relative paths stay based on `--config` (or the
 workspace configuration path). For commands other than `exec`, flags can
 follow positional arguments.
 
+Use upstream configuration forms: `build.dockerfile` with `build.context`, or
+`dockerFile` with top-level `context`. Both paths resolve from `devcontainer.json`.
+`dockerComposeFile` and `build.cacheFrom` accept strings or string arrays;
+parallel lifecycle command values are strings or string arrays.
+
 `exec` stops reading options at the container command; every later argument
 passes through unchanged. An explicit `--` before the command also works.
 
 Invocations except help and exec normally emit one JSON object on one stdout line.
+`outdated` emits its version report instead.
+`upgrade` writes no stdout on success, or pretty lockfile JSON with `--dry-run`.
+It retains existing integrity pins. The paired `--feature`/`--target-version`
+flags update a requirement before resolution, including during dry-run.
+Dry-run can refresh an existing lockfile. Operation errors use stderr and exit 1.
+`features resolve-dependencies` emits a Mermaid graph followed by pretty JSON
+installation order. It reads `.devcontainer.json` before
+`.devcontainer/devcontainer.json`, uses lockfile pins, and does not install
+Features or write lockfiles. Cycles fail after graph output.
+`features info <mode> <feature>` emits published Feature information as text
+or JSON (`--output-format json`). Modes are manifest, tags, dependencies, and
+verbose. Every mode requires a manifest; JSON dependencies returns `{}`.
 Archive exports to stdout emit only archive bytes. An interactive terminal is
 refused with exit code 2 and a JSON error result; use a pipe or file destination.
 Check `outcome`: `success` or `error`. Errors include `message` and
@@ -63,14 +81,44 @@ without invoking another container CLI. Docker connection settings use the
 standard `DOCKER_*` environment. Builds use Docker Engine's BuildKit by
 default; `--buildkit-addr` selects a separate BuildKit instance.
 
+Numeric `appPort` values map to the same port on loopback. Strings retain Docker
+publishing syntax; `"8080"` requests an allocated host port. Docker mount strings
+in `workspaceMount`, `mounts`, and `runArgs --mount` retain Docker options and CSV
+quoting. An omitted string mount type defaults to volume. Invalid options fail.
+
 Build or inspect build artifacts:
 
 ```sh
 dcb build --workspace-folder . --image-name example:dev
 dcb generate --workspace-folder . --work-dir ./generated
 dcb features --workspace-folder . --out ./staged-features
+dcb features package ./src --output-folder ./packaged
+dcb features generate-docs -p ./src -n example/collection
+dcb features resolve-dependencies --workspace-folder .
+dcb features info verbose ghcr.io/example/collection/sample:1
+dcb templates generate-docs -p ./templates
 dcb server --out ./server --platform linux/amd64
 ```
+
+`features package <target>` packages local Features without Docker. The target
+is required, and output defaults to `./output`. An existing
+output directory is refused unless `-f` removes it first. Use `-o` to choose the
+output folder. The result contains Feature metadata; archives and
+`devcontainer-collection.json` stay in the output folder.
+
+`features generate-docs` writes README.md in visible Feature child folders of
+`--project-folder` (`-p`, default `.`). `--namespace` (`-n`) is required;
+`--registry` (`-r`) defaults to `ghcr.io`. Supply both `--github-owner` and
+`--github-repo` for metadata links. It includes options, VS Code extensions,
+NOTES.md, and deprecation/legacy-ID notices. Missing metadata or IDs are skipped
+with diagnostics; other failures can leave partial results. It replaces existing
+READMEs and returns the normal JSON result. It needs no Docker or registry.
+String flags without values use their declared defaults; explicit empty strings
+stay empty. Conversion/map errors preserve that entry's README while sibling
+entries can complete.
+Dotted publication properties convert only when used. A shadowed `toString`
+method can fail the operation; empty collections, skipped entries, and unused
+GitHub link values do not perform that conversion.
 
 `build` loads into Docker by default and returns an `imageName` array.
 Use `--push` for registry export, `--platform` for target platforms,
@@ -143,13 +191,15 @@ as the remote user; the container needs `git`. A failed install still gives a
 JSON object of string, number or boolean values (numbers and booleans become
 their JavaScript text). Both apply only to that command's lifecycle
 commands and dotfiles install; `exec` does not get them. For these commands,
-configuration `remoteEnv` wins over `--remote-env`; secrets win over both. Secret values,
+configuration `remoteEnv` wins over `--remote-env`; secrets win over both.
+Secret values,
 and their quoted, JSON, base64 and URL-escaped forms, show as `********` in stderr
 and the result. An unreadable or malformed
 secrets file exits `1` and names the path, not the content.
 
 `dcb version` and `dcb --version` return the version. `dcb skills --list`
-lists bundled skills; `dcb skills dcb` prints this skill in the result's `skills[].content`.
+lists bundled skills; `dcb skills dcb` prints this skill in the result's
+`skills[].content`.
 `dcb skills install --dir .agents/skills` writes `dcb/SKILL.md` below the
 chosen directory.
 
@@ -163,12 +213,13 @@ independently of the include flags. Without a container, container environment
 references remain unresolved. Ordinary reads without an explicit container ID
 also work when Docker is unreachable.
 
-### Data folders
+## Data folders
 
 Use `--user-data-folder` on build, exec, read-configuration, run-user-commands,
 set-up, and up to place private feature/build staging inside a selected host
 folder. Explicit `--work-dir` overrides build staging. Existing contents stay
-intact. Compose up also stores inline configs and environment-backed configs/secrets there
+intact. Compose up also stores inline configs and environment-backed
+configs/secrets there
 (default: `$TMPDIR/dcb-compose`). Down discovers their private directories from
 Docker ownership records without repeating the folder option or supplying the
 source configuration. It removes materialized copies, preserves file-backed
@@ -182,8 +233,9 @@ user's home). Exec does not write markers. Use `--container-system-data-folder`
 (default: `/var/devcontainer`) for the root environment and profile patch
 markers on up and set-up. These patches run before lifecycle commands, including
 under `--skip-post-create`; skipped lifecycle commands do not probe the user's
-shell environment. Session folder flags are accepted on their upstream commands;
-probe-cache persistence is not implemented.
+shell environment. Use `--container-session-data-folder` on up, set-up, and
+run-user-commands to persist and reuse `env-<probe-mode>.json` in the container.
+Cache failures are non-fatal. The default empty folder disables persistence.
 
 ### Terminal dimensions
 
@@ -212,3 +264,28 @@ remain. `up --omit-config-remote-env-from-metadata` omits configuration remoteEn
 from new metadata labels; remoteEnv persists by default and remains available to
 runtime commands. `build --omit-syntax-directive` and `up --omit-syntax-directive`
 ignore authored syntax directives and omit generated directives.
+
+`templates generate-docs` writes README.md in visible Template child folders from
+`devcontainer-template.json` and optional NOTES.md. It uses `-p` (default `.`),
+`--github-owner`, and `--github-repo`; success leaves stdout empty.
+
+## Report Feature versions
+
+Use `dcb outdated --workspace-folder .` for a text table, or add
+`--output-format json` for a `features` report with current, wanted, wantedMajor,
+latest, and latestMajor fields. Unavailable JSON fields are omitted. The report
+has no outcome field. Config order is retained. Local Features are omitted.
+Current uses the lockfile when present; wanted follows the configured tag or
+digest metadata; latest uses the highest full semver tag. Lockfiles are unchanged.
+This command needs registry access and no Docker daemon. `--config` selects an
+explicit file. User data folder is accepted and unused. Log levels are info,
+debug, and trace. Terminal dimensions must be supplied together.
+
+Docker `runArgs` accepts boolean assignments, combined short booleans, attached
+short values, and bare environment keys. `--rm`, stdin and TTY settings reach
+the Engine API. `--entrypoint` is replaced by the upstream keepalive entrypoint.
+
+Docker `runArgs --env-file` and `--label-file` use native Docker file parsing.
+Files load before explicit environment and label flags. Paths use the process
+working directory. Merged init, privileged, capability and security option flags
+follow runArgs, as in the upstream CLI.

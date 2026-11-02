@@ -1,0 +1,180 @@
+{
+  "Cases": [
+    {
+      "Name": "repeat-0",
+      "Args": [
+        "--namespace.foo=x",
+        "--namespace.bar=y"
+      ],
+      "Exit": 0,
+      "Readme": "\n# sample\n\n\n\n## Example Usage\n\n```json\n\"features\": {\n    \"ghcr.io/[object Object]/sample:latest\": {}\n}\n```\n\n\n\n\n\n---\n\n_Note: This file was auto-generated from the [devcontainer-feature.json](devcontainer-feature.json).  Add additional notes to a `NOTES.md`._\n"
+    },
+    {
+      "Name": "repeat-1",
+      "Args": [
+        "--namespace.foo=x",
+        "--namespace.foo=y"
+      ],
+      "Exit": 0,
+      "Readme": "\n# sample\n\n\n\n## Example Usage\n\n```json\n\"features\": {\n    \"ghcr.io/[object Object]/sample:latest\": {}\n}\n```\n\n\n\n\n\n---\n\n_Note: This file was auto-generated from the [devcontainer-feature.json](devcontainer-feature.json).  Add additional notes to a `NOTES.md`._\n"
+    },
+    {
+      "Name": "repeat-2",
+      "Args": [
+        "-n",
+        "example/collection",
+        "--registry.foo=x",
+        "--registry.bar=y"
+      ],
+      "Exit": 0,
+      "Readme": "\n# sample\n\n\n\n## Example Usage\n\n```json\n\"features\": {\n    \"[object Object]/example/collection/sample:latest\": {}\n}\n```\n\n\n\n\n\n---\n\n_Note: This file was auto-generated from the [devcontainer-feature.json](devcontainer-feature.json).  Add additional notes to a `NOTES.md`._\n"
+    },
+    {
+      "Name": "repeat-3",
+      "Args": [
+        "--namespace.foo=x",
+        "-n",
+        "value",
+        "--namespace.bar=y"
+      ],
+      "Exit": 0,
+      "Readme": "\n# sample\n\n\n\n## Example Usage\n\n```json\n\"features\": {\n    \"ghcr.io/[object Object],value,[object Object]/sample:latest\": {}\n}\n```\n\n\n\n\n\n---\n\n_Note: This file was auto-generated from the [devcontainer-feature.json](devcontainer-feature.json).  Add additional notes to a `NOTES.md`._\n"
+    },
+    {
+      "Name": "repeat-4",
+      "Args": [
+        "-n",
+        "value",
+        "--namespace.foo=x",
+        "--namespace.bar=y"
+      ],
+      "Exit": 0,
+      "Readme": "\n# sample\n\n\n\n## Example Usage\n\n```json\n\"features\": {\n    \"ghcr.io/value,[object Object],[object Object]/sample:latest\": {}\n}\n```\n\n\n\n\n\n---\n\n_Note: This file was auto-generated from the [devcontainer-feature.json](devcontainer-feature.json).  Add additional notes to a `NOTES.md`._\n"
+    },
+    {
+      "Name": "repeat-5",
+      "Args": [
+        "--namespace.foo=x",
+        "--namespace.bar=y",
+        "-n",
+        "value"
+      ],
+      "Exit": 0,
+      "Readme": "\n# sample\n\n\n\n## Example Usage\n\n```json\n\"features\": {\n    \"ghcr.io/[object Object],value/sample:latest\": {}\n}\n```\n\n\n\n\n\n---\n\n_Note: This file was auto-generated from the [devcontainer-feature.json](devcontainer-feature.json).  Add additional notes to a `NOTES.md`._\n"
+    },
+    {
+      "Name": "repeat-6",
+      "Args": [
+        "-n.foo=x",
+        "--namespace.bar=y"
+      ],
+      "Exit": 0,
+      "Readme": "\n# sample\n\n\n\n## Example Usage\n\n```json\n\"features\": {\n    \"ghcr.io/[object Object]/sample:latest\": {}\n}\n```\n\n\n\n\n\n---\n\n_Note: This file was auto-generated from the [devcontainer-feature.json](devcontainer-feature.json).  Add additional notes to a `NOTES.md`._\n"
+    },
+    {
+      "Name": "repeat-7",
+      "Args": [
+        "--namespace.foo=x",
+        "-n.bar=y"
+      ],
+      "Exit": 0,
+      "Readme": "\n# sample\n\n\n\n## Example Usage\n\n```json\n\"features\": {\n    \"ghcr.io/[object Object]/sample:latest\": {}\n}\n```\n\n\n\n\n\n---\n\n_Note: This file was auto-generated from the [devcontainer-feature.json](devcontainer-feature.json).  Add additional notes to a `NOTES.md`._\n"
+    },
+    {
+      "Name": "repeat-8",
+      "Args": [
+        "--namespace.foo",
+        "x",
+        "--namespace.bar",
+        "y"
+      ],
+      "Exit": 0,
+      "Readme": "\n# sample\n\n\n\n## Example Usage\n\n```json\n\"features\": {\n    \"ghcr.io/[object Object]/sample:latest\": {}\n}\n```\n\n\n\n\n\n---\n\n_Note: This file was auto-generated from the [devcontainer-feature.json](devcontainer-feature.json).  Add additional notes to a `NOTES.md`._\n"
+    },
+    {
+      "Name": "repeat-9",
+      "Args": [
+        "--namespace.foo=x",
+        "--namespace.bar",
+        "--registry",
+        "registry.example"
+      ],
+      "Exit": 0,
+      "Readme": "\n# sample\n\n\n\n## Example Usage\n\n```json\n\"features\": {\n    \"registry.example/[object Object]/sample:latest\": {}\n}\n```\n\n\n\n\n\n---\n\n_Note: This file was auto-generated from the [devcontainer-feature.json](devcontainer-feature.json).  Add additional notes to a `NOTES.md`._\n"
+    },
+    {
+      "Name": "repeat-10",
+      "Args": [
+        "-n",
+        "example/collection",
+        "--githubOwner.foo=x",
+        "--github-owner.bar=y",
+        "--githubRepo",
+        "example-repo"
+      ],
+      "Exit": 0,
+      "Readme": "\n# sample\n\n\n\n## Example Usage\n\n```json\n\"features\": {\n    \"ghcr.io/example/collection/sample:latest\": {}\n}\n```\n\n\n\n\n\n---\n\n_Note: This file was auto-generated from the [devcontainer-feature.json](https://github.com/[object Object]/example-repo/blob/main/./sample/devcontainer-feature.json).  Add additional notes to a `NOTES.md`._\n"
+    },
+    {
+      "Name": "repeat-11",
+      "Args": [
+        "--namespace.foo=x",
+        "--namespace",
+        "first",
+        "--namespace",
+        "second",
+        "--namespace.bar=y"
+      ],
+      "Exit": 0,
+      "Readme": "\n# sample\n\n\n\n## Example Usage\n\n```json\n\"features\": {\n    \"ghcr.io/[object Object],first,second,[object Object]/sample:latest\": {}\n}\n```\n\n\n\n\n\n---\n\n_Note: This file was auto-generated from the [devcontainer-feature.json](devcontainer-feature.json).  Add additional notes to a `NOTES.md`._\n"
+    },
+    {
+      "Name": "repeat-12",
+      "Args": [
+        "-n",
+        "example/collection",
+        "--projectFolder.foo=x",
+        "--project-folder.bar=y"
+      ],
+      "Exit": 1,
+      "Readme": "old readme"
+    },
+    {
+      "Name": "repeat-13",
+      "Args": [
+        "-n",
+        "example/collection",
+        "--githubRepo.foo=x",
+        "--github-repo.bar=y",
+        "--githubOwner",
+        "example-owner"
+      ],
+      "Exit": 0,
+      "Readme": "\n# sample\n\n\n\n## Example Usage\n\n```json\n\"features\": {\n    \"ghcr.io/example/collection/sample:latest\": {}\n}\n```\n\n\n\n\n\n---\n\n_Note: This file was auto-generated from the [devcontainer-feature.json](https://github.com/example-owner/[object Object]/blob/main/./sample/devcontainer-feature.json).  Add additional notes to a `NOTES.md`._\n"
+    },
+    {
+      "Name": "repeat-14",
+      "Args": [
+        "-n",
+        "first",
+        "-n",
+        "second"
+      ],
+      "Exit": 0,
+      "Readme": "\n# sample\n\n\n\n## Example Usage\n\n```json\n\"features\": {\n    \"ghcr.io/first,second/sample:latest\": {}\n}\n```\n\n\n\n\n\n---\n\n_Note: This file was auto-generated from the [devcontainer-feature.json](devcontainer-feature.json).  Add additional notes to a `NOTES.md`._\n"
+    },
+    {
+      "Name": "repeat-15",
+      "Args": [
+        "-n",
+        "example/collection",
+        "-r",
+        "first",
+        "-r",
+        "second"
+      ],
+      "Exit": 0,
+      "Readme": "\n# sample\n\n\n\n## Example Usage\n\n```json\n\"features\": {\n    \"first,second/example/collection/sample:latest\": {}\n}\n```\n\n\n\n\n\n---\n\n_Note: This file was auto-generated from the [devcontainer-feature.json](devcontainer-feature.json).  Add additional notes to a `NOTES.md`._\n"
+    }
+  ]
+}

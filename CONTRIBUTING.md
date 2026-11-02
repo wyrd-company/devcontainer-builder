@@ -13,13 +13,16 @@ Use the repository devcontainer for Go, Docker, Task, Intentional, Actionlint,
 and Lefthook. Run `task check` before review. Docker integration checks require
 a working Docker daemon; Kubernetes validation uses kubeconform without a cluster.
 Optional upstream fixture tests run when the reference submodules are initialized.
+The Git account-lookup test builds a C fixture and runs when a C compiler is installed.
+`task test` also runs the workspace tests with the `gitthreadcwd` tag, which
+uses the macOS lookup of relative Git config file names on Linux.
 `task parity` compares `dcb` with the upstream CLI; see the
 [parity harness](test/parity/README.md). Report a parity change in the pull request.
 `task docs:check` checks the public Markdown in `docs/user/`, and `DESIGN.md`,
 which describes the logo, favicon and social image. `task docs:social` renders
 the social image.
 The docs publish to wyrd.foo through the `Publish docs` workflow, which calls
-the wyrd.foo `publish-docs` workflow, pinned to a 2.0.0 commit SHA. It runs
+the wyrd.foo `publish-docs` workflow, pinned to a commit SHA. It runs
 after a successful `Release` run for a release tag, on a `dcb-docs@X.Y.Z`
 record, and on a manual run with a `ref`. A push to `main` does not publish.
 The `dcb-docs` unit is tag-only and has no GitHub Release. Keep `version` and
