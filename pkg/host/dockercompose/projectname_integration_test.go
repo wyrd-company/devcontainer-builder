@@ -54,7 +54,7 @@ func TestComposeProjectIdentityIntegration(t *testing.T) {
 			if err := os.MkdirAll(dir, 0o755); err != nil {
 				t.Fatal(err)
 			}
-			body := "services:\n  app:\n    image: alpine:3.20\n    configs: [sample]\n  sidecar:\n    image: alpine:3.20\n    command: [sleep, infinity]\nconfigs:\n  sample:\n    content: sample-content\n"
+			body := "services:\n  app:\n    image: alpine:3.20\n    command: [sleep, infinity]\n    configs: [sample]\n  sidecar:\n    image: alpine:3.20\n    command: [sleep, infinity]\nconfigs:\n  sample:\n    content: sample-content\n"
 			if composeName != "" {
 				body = "name: " + composeName + "\n" + body
 			}

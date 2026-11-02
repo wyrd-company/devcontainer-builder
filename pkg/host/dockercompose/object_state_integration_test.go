@@ -54,7 +54,7 @@ func TestComposeObjectRemoveIntegration(t *testing.T) {
 				sources = append(sources, source)
 				writeNameFile(t, source, "source-sentinel")
 				writeNameFile(t, config, `{"dockerComposeFile":"compose.yml","service":"app"}`)
-				writeNameFile(t, compose, "services:\n  app:\n    image: alpine:3.20\n    configs: [sample, original]\n    secrets: [token]\nconfigs:\n  sample:\n    content: synthetic-config\n  original:\n    file: ./source\nsecrets:\n  token:\n    environment: SAMPLE_TOKEN\n")
+				writeNameFile(t, compose, "services:\n  app:\n    image: alpine:3.20\n    command: [sleep, infinity]\n    configs: [sample, original]\n    secrets: [token]\nconfigs:\n  sample:\n    content: synthetic-config\n  original:\n    file: ./source\nsecrets:\n  token:\n    environment: SAMPLE_TOKEN\n")
 				dc, err := spec.Load(config)
 				if err != nil {
 					t.Fatal(err)
@@ -473,7 +473,7 @@ func TestComposeObjectContainerRemovalFailureIntegration(t *testing.T) {
 	h := New(cli, Options{UserDataFolder: parent})
 	config := filepath.Join(workspace, ".devcontainer", "devcontainer.json")
 	writeNameFile(t, config, `{"dockerComposeFile":"compose.yml","service":"app"}`)
-	writeNameFile(t, filepath.Join(filepath.Dir(config), "compose.yml"), "services:\n  app:\n    image: alpine:3.20\n    secrets: [token]\nsecrets:\n  token:\n    environment: SAMPLE_TOKEN\n")
+	writeNameFile(t, filepath.Join(filepath.Dir(config), "compose.yml"), "services:\n  app:\n    image: alpine:3.20\n    command: [sleep, infinity]\n    secrets: [token]\nsecrets:\n  token:\n    environment: SAMPLE_TOKEN\n")
 	dc, err := spec.Load(config)
 	if err != nil {
 		t.Fatal(err)

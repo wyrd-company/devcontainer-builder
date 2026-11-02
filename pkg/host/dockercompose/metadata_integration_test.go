@@ -191,7 +191,7 @@ func TestMetadataDerivedComposeIntegration(t *testing.T) {
 	cli := metadataDocker(t, ctx)
 	h := dockercompose.New(cli, dockercompose.Options{Logger: t.Logf})
 	workspace := metadataWorkspace(t)
-	metadataWrite(t, filepath.Join(workspace, "compose.yml"), "services:\n  app:\n    image: alpine:3.20\n    volumes: [\".:/workspace\"]\n")
+	metadataWrite(t, filepath.Join(workspace, "compose.yml"), "services:\n  app:\n    image: alpine:3.20\n    command: [sleep, infinity]\n    volumes: [\".:/workspace\"]\n")
 	feature := filepath.Join(workspace, "sample-feature")
 	if err := os.Mkdir(feature, 0755); err != nil {
 		t.Fatal(err)

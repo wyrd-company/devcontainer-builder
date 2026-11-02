@@ -415,6 +415,7 @@ func writeComposeFixture(t *testing.T, workspace, primaryTag, helperTag, appVers
 	body := fmt.Sprintf(`services:
   app:
     image: %q
+    command: [sleep, infinity]
     build:
       context: %q
     environment:

@@ -70,7 +70,7 @@ func TestComposeObjectRecreateCleanupIntegration(t *testing.T) {
 				if extraMounts != "" {
 					volumes = "    volumes:\n" + extraMounts
 				}
-				body := fmt.Sprintf("name: %s\nservices:\n  app:\n    image: alpine:3.20\n    environment: {VERSION: %q}\n    configs: [sample]\n    secrets: [token]\n%s  worker:\n    image: alpine:3.20\n    command: [sleep, infinity]\n    environment: {VERSION: %q}\n    configs: [sample]\n    secrets: [token]\nconfigs:\n  sample:\n    content: synthetic-config\nsecrets:\n  token:\n    environment: SAMPLE_TOKEN\n", project, app, volumes, worker)
+				body := fmt.Sprintf("name: %s\nservices:\n  app:\n    image: alpine:3.20\n    command: [sleep, infinity]\n    environment: {VERSION: %q}\n    configs: [sample]\n    secrets: [token]\n%s  worker:\n    image: alpine:3.20\n    command: [sleep, infinity]\n    environment: {VERSION: %q}\n    configs: [sample]\n    secrets: [token]\nconfigs:\n  sample:\n    content: synthetic-config\nsecrets:\n  token:\n    environment: SAMPLE_TOKEN\n", project, app, volumes, worker)
 				writeNameFile(t, filepath.Join(filepath.Dir(config), "compose.yml"), body)
 			}
 			writeCompose("one", "one")

@@ -187,7 +187,7 @@ func writeIdentityWorkspace(t *testing.T, workspace, service string) string {
 		t.Fatal(err)
 	}
 	// Distinct workspace sources make replacement change the service hash.
-	metadataWrite(t, filepath.Join(dir, "compose.yml"), fmt.Sprintf("services:\n  %s:\n    image: alpine:3.20\n    volumes: [\"..:/workspace\"]\n    configs: [sample]\n  sidecar:\n    image: alpine:3.20\n    command: [sleep, infinity]\nconfigs:\n  sample:\n    content: sample-content\n", service))
+	metadataWrite(t, filepath.Join(dir, "compose.yml"), fmt.Sprintf("services:\n  %s:\n    image: alpine:3.20\n    command: [sleep, infinity]\n    volumes: [\"..:/workspace\"]\n    configs: [sample]\n  sidecar:\n    image: alpine:3.20\n    command: [sleep, infinity]\nconfigs:\n  sample:\n    content: sample-content\n", service))
 	config := filepath.Join(dir, "devcontainer.json")
 	metadataWrite(t, config, fmt.Sprintf(`{"dockerComposeFile":"compose.yml","service":%q,"mounts":["type=volume,source=sample-cache,target=/sample-cache"]}`, service))
 	return config
