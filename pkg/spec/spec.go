@@ -28,7 +28,7 @@ type DevContainer struct {
 	Dockerfile           string         `json:"dockerFile,omitempty"`
 	Context              string         `json:"context,omitempty"`
 	Build                *Build         `json:"build,omitempty"`
-	DockerComposeFile    StringOrSlice  `json:"dockerComposeFile,omitempty"`
+	DockerComposeFile    StringOrSlice  `json:"dockerComposeFile,omitzero"`
 	Service              string         `json:"service,omitempty"`
 	RunServices          []string       `json:"runServices,omitempty"`
 	ShutdownAction       string         `json:"shutdownAction,omitempty"`

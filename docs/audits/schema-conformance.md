@@ -24,7 +24,8 @@ converted through its wire representation with unknown fields rejected so that
 the Engine client cannot silently discard an option.
 
 Common-only documents are accepted by configuration reads. Build and up require
-a source. Empty Compose file arrays discover files from the supplied workspace
+a source. Configuration and merged output preserve empty Compose declarations.
+Empty Compose file arrays discover files from the supplied workspace
 and environment: COMPOSE_FILE, literal workspace .env COMPOSE_FILE, then
 legacy docker-compose.yml and its existing file override. Explicit paths remain
 relative to the configuration directory. Resolved discovery paths reach runtime

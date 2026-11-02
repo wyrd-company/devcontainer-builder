@@ -28,6 +28,7 @@ and `build.cacheFrom` accept a string or an array of strings. Lifecycle command
 objects accept string or string-array values. Nested command objects are invalid.
 
 An empty `dockerComposeFile` array selects discovery from the workspace folder.
+Configuration and merged output retain the empty array.
 Discovery uses `COMPOSE_FILE` from the supplied host environment, then the first
 `COMPOSE_FILE=...` line in the workspace `.env` file, then `docker-compose.yml`
 and an existing `docker-compose.override.yml` file. File lists in `COMPOSE_FILE`
