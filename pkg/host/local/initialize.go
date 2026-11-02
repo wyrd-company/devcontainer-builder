@@ -182,18 +182,23 @@ func hostExecutable(name, workspace string, env []string) (string, error) {
 		entries = []string{""}
 	}
 	for _, entry := range entries {
-		originalEntry := entry
-		if !filepath.IsAbs(entry) {
-			entry = filepath.Join(dir, entry)
-		}
 		for _, suffix := range suffixes {
-			candidate := filepath.Join(entry, name+suffix)
-			info, err := os.Stat(candidate)
+			candidate := name + suffix
+			if entry != "" {
+				candidate = entry + string(filepath.Separator) + candidate
+			}
+			lookup := candidate
+			if !filepath.IsAbs(lookup) {
+				lookup = dir + string(filepath.Separator) + lookup
+			}
+			// Preserve filesystem path components: symlink/.. must be resolved
+			// by the host, and the script name must retain its native spelling.
+			info, err := os.Stat(lookup)
 			if err == nil && !info.IsDir() && (runtime.GOOS == "windows" || info.Mode()&0111 != 0) {
 				if runtime.GOOS != "windows" {
-					return filepath.Join(originalEntry, name+suffix), nil
+					return candidate, nil
 				}
-				return candidate, nil
+				return lookup, nil
 			}
 		}
 	}

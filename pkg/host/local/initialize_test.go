@@ -235,3 +235,47 @@ func TestInitializeExecutableScriptFallback(t *testing.T) {
 		})
 	}
 }
+
+func TestInitializePathComponents(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("POSIX symlink and script-name fixtures")
+	}
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "actual", "child"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("actual/child", filepath.Join(dir, "linked")); err != nil {
+		t.Fatal(err)
+	}
+	for _, file := range []struct{ path, body string }{
+		{filepath.Join(dir, "sample-command"), "printf wrong-program"},
+		{filepath.Join(dir, "actual", "sample-command"), "printf right-program"},
+	} {
+		if err := os.WriteFile(file.path, []byte(file.body), 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, path := range []string{"linked/..", dir + "/linked/.."} {
+		var output bytes.Buffer
+		err := Initialize(context.Background(), spec.Command{Args: []string{"sample-command"}}, InitializeOptions{Workspace: dir, Env: []string{"PATH=" + path}, Output: &output})
+		if err != nil || output.String() != "right-program" {
+			t.Fatalf("PATH=%q output=%q err=%v", path, output.String(), err)
+		}
+	}
+	if err := os.Mkdir(filepath.Join(dir, "bin"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"sample-command", "bin/sample-command"} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte("printf '%s' \"$0\""), 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, path := range []string{".", "./bin", "./bin/"} {
+		var output bytes.Buffer
+		err := Initialize(context.Background(), spec.Command{Args: []string{"sample-command"}}, InitializeOptions{Workspace: dir, Env: []string{"PATH=" + path}, Output: &output})
+		want := path + "/sample-command"
+		if err != nil || output.String() != want {
+			t.Fatalf("PATH=%q output=%q want=%q err=%v", path, output.String(), want, err)
+		}
+	}
+}
