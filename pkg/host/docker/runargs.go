@@ -27,13 +27,32 @@ func applyRunArgs(args []string, cfg *container.Config, host *container.HostConf
 			return "", err
 		}
 	}
+	// Docker loads every file before explicit flags, regardless of argv order.
+	env, err := dockeropts.ReadKVEnvStrings(p.envFiles, cfg.Env)
+	if err != nil {
+		return "", fmt.Errorf("runArgs: --env-file: %w", err)
+	}
+	cfg.Env = env
+	labels, err := dockeropts.ReadKVStrings(p.labelFiles, nil)
+	if err != nil {
+		return "", fmt.Errorf("runArgs: --label-file: %w", err)
+	}
+	if len(labels) > 0 {
+		merged := dockeropts.ConvertKVStringsToMap(labels)
+		for k, v := range cfg.Labels {
+			merged[k] = v
+		}
+		cfg.Labels = merged
+	}
 	return p.name, nil
 }
 
 type runArgsParser struct {
-	args []string
-	i    int
-	name string
+	args       []string
+	i          int
+	name       string
+	envFiles   []string
+	labelFiles []string
 }
 
 func (p *runArgsParser) more() bool { return p.i < len(p.args) }
@@ -395,6 +414,16 @@ func (p *runArgsParser) step(cfg *container.Config, host *container.HostConfig) 
 			return err
 		}
 		host.DeviceCgroupRules = append(host.DeviceCgroupRules, v)
+	case "--env-file", "--label-file":
+		v, err := take()
+		if err != nil {
+			return err
+		}
+		if flag == "--env-file" {
+			p.envFiles = append(p.envFiles, v)
+		} else {
+			p.labelFiles = append(p.labelFiles, v)
+		}
 	case "-l", "--label":
 		v, err := take()
 		if err != nil {

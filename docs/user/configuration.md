@@ -89,6 +89,13 @@ and do not replace it. An unknown flag is an error, so that a typing error does
 not change the container. `--entrypoint` is accepted and replaced by the
 keepalive entrypoint, as in the upstream CLI.
 
+`--env-file` and `--label-file` use Docker file syntax. Files load in file order,
+then explicit environment and label flags override them, regardless of argv
+position. File paths are relative to the process working directory. Bare file
+environment keys inherit host values when set; bare file label keys are omitted.
+Merged `init`, `privileged`, `capAdd`, and `securityOpt` flags follow `runArgs`,
+as in the upstream CLI.
+
 Boolean assignments, combined short booleans such as `-it`, and attached short
 values such as `-eSAMPLE=value` are accepted. `--rm`, stdin, and TTY settings reach
 the Engine API. Bare environment keys inherit the host value; unset keys stay

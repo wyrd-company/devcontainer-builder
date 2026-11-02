@@ -284,3 +284,8 @@ debug, and trace. Terminal dimensions must be supplied together.
 Docker `runArgs` accepts boolean assignments, combined short booleans, attached
 short values, and bare environment keys. `--rm`, stdin and TTY settings reach
 the Engine API. `--entrypoint` is replaced by the upstream keepalive entrypoint.
+
+Docker `runArgs --env-file` and `--label-file` use native Docker file parsing.
+Files load before explicit environment and label flags. Paths use the process
+working directory. Merged init, privileged, capability and security option flags
+follow runArgs, as in the upstream CLI.

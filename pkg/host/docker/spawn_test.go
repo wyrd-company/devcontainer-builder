@@ -224,3 +224,34 @@ func TestBuildContainerConfig_SpecContainerEnvWinsOverFeature(t *testing.T) {
 		t.Fatalf("env = %v", cfg.Env)
 	}
 }
+
+func TestBuildContainerConfig_FeatureFlagPrecedence(t *testing.T) {
+	yes := true
+	resolved := []features.Resolved{{Metadata: features.Metadata{Init: &yes, Privileged: &yes, CapAdd: []string{"SYS_PTRACE"}, SecurityOpt: []string{"seccomp=unconfined"}}}}
+	dc := &spec.DevContainer{Image: "alpine", RunArgs: []string{"--init=false", "--privileged=false", "--cap-add=NET_ADMIN", "--security-opt=apparmor=unconfined"}}
+	_, host, _, err := buildContainerConfig(dc, resolved, "alpine", "", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if host.Init == nil || !*host.Init || !host.Privileged {
+		t.Fatalf("feature booleans must follow runArgs: %+v", host)
+	}
+	if !reflect.DeepEqual([]string(host.CapAdd), []string{"NET_ADMIN", "SYS_PTRACE"}) {
+		t.Fatalf("capability order: %v", host.CapAdd)
+	}
+	if !reflect.DeepEqual(host.SecurityOpt, []string{"apparmor=unconfined", "seccomp=unconfined"}) {
+		t.Fatalf("security option order: %v", host.SecurityOpt)
+	}
+	// False merged fields emit no flags and must leave explicit runArgs intact.
+	no := false
+	dc.Init = &no
+	dc.Privileged = &no
+	dc.RunArgs = []string{"--init", "--privileged"}
+	_, host, _, err = buildContainerConfig(dc, nil, "alpine", "", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if host.Init == nil || !*host.Init || !host.Privileged {
+		t.Fatal("false fields must not override runArgs")
+	}
+}
