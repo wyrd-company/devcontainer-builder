@@ -387,3 +387,14 @@ layers based on `build.target`. With Features, the
 `dev_containers_feature_content_normalize` target exports the root-owned builtin
 environment preparation stage. Metadata and user inference still use the
 configured `build.target` independently of the option.
+
+Build options accept repeated `build.options --cache-from` and
+`build.options --cache-to` with native buildx CSV syntax, including quoted
+values, typed backends and bare registry references. Invalid entries return
+errors. Library cache imports precede `build.cacheFrom`, followed by option
+imports. Library cache exports precede option exports. No-cache builds omit
+library and configured imports but retain explicit option imports. Native
+BuildKit sessions transfer local cache stores and use the existing registry
+credentials. The default inline-cache build argument can be overridden through
+`build.args`, build options or explicit library arguments. Backend availability
+and export support depend on the BuildKit worker.

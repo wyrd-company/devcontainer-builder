@@ -20,6 +20,8 @@ type dockerBuildOptions struct {
 	Network   string
 	Labels    map[string]string
 	Args      map[string]string
+	CacheFrom []string
+	CacheTo   []string
 }
 
 // buildNetworkMode retains the network-only view used by callers and tests.
@@ -40,6 +42,8 @@ func parseBuildOptions(dc *spec.DevContainer) (dockerBuildOptions, error) {
 	var mode string
 	var labels []string
 	var args []string
+	flags.StringArrayVar(&parsed.CacheFrom, "cache-from", nil, "cache import sources")
+	flags.StringArrayVar(&parsed.CacheTo, "cache-to", nil, "cache export destinations")
 	flags.StringVar(&parsed.Target, "target", "", "target build stage")
 	flags.StringArrayVar(&args, "build-arg", nil, "build-time variables")
 	flags.StringArrayVar(&labels, "label", nil, "image labels")

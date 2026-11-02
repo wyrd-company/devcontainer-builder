@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/containerd/platforms"
@@ -173,6 +174,12 @@ func dockerfileFrontendAttrs(b *DockerfileBuild, bs buildSettings) map[string]st
 // dockerfileSolveOptions grants the entitlement requested by an explicit host
 // network. The daemon still decides whether that entitlement is available.
 func dockerfileSolveOptions(b *DockerfileBuild, opt SolveOptions) SolveOptions {
+	if b != nil {
+		if enabled, _ := strconv.ParseBool(b.BuildArgs["BUILDKIT_INLINE_CACHE"]); enabled {
+			opt.CacheExports = append(append([]CacheRef(nil), opt.CacheExports...), CacheRef{Type: "inline", Attrs: map[string]string{}})
+		}
+	}
+
 	if b != nil && b.NetworkMode == "host" {
 		opt.allowedEntitlements = []string{string(entitlements.EntitlementNetworkHost)}
 	}

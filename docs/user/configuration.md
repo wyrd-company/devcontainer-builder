@@ -36,7 +36,8 @@ objects accept string or string-array values. Nested command objects are invalid
 value uses the default network. These options control Dockerfile `RUN`
 instructions. Host mode requests BuildKit's `network.host` entitlement; the
 daemon must allow it. Custom container network names are not BuildKit build
-networks. Image labels, build arguments, and target selection are also supported,
+networks. Image labels, build arguments, target selection and cache settings
+are supported,
 as described below. Remaining build flags return an explicit unsupported-option
 error.
 
@@ -403,3 +404,14 @@ layers based on `build.target`. With Features, the
 `dev_containers_feature_content_normalize` target exports the root-owned builtin
 environment preparation stage. Metadata and user inference still use the
 configured `build.target` independently of the option.
+
+Build options accept repeated `build.options --cache-from` and
+`build.options --cache-to` with native buildx CSV syntax, including quoted
+values, typed backends and bare registry references. Invalid entries return
+errors. Library cache imports precede `build.cacheFrom`, followed by option
+imports. Library cache exports precede option exports. No-cache builds omit
+library and configured imports but retain explicit option imports. Native
+BuildKit sessions transfer local cache stores and use the existing registry
+credentials. The default inline-cache build argument can be overridden through
+`build.args`, build options or explicit library arguments. Backend availability
+and export support depend on the BuildKit worker.

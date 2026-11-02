@@ -29,6 +29,7 @@ type fakeGateway struct {
 	resolveOpts   []sourceresolver.Opt
 	solved        []*pb.Definition
 	frontends     []gateway.SolveRequest
+	requests      []gateway.SolveRequest
 }
 
 func (f *fakeGateway) ResolveImageConfig(_ context.Context, _ string, opt sourceresolver.Opt) (string, digest.Digest, []byte, error) {
@@ -37,6 +38,7 @@ func (f *fakeGateway) ResolveImageConfig(_ context.Context, _ string, opt source
 }
 
 func (f *fakeGateway) Solve(_ context.Context, req gateway.SolveRequest) (*gateway.Result, error) {
+	f.requests = append(f.requests, req)
 	res := gateway.NewResult()
 	res.SetRef(fakeRef{})
 	if req.Frontend != "" {

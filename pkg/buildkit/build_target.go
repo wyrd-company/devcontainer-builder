@@ -51,7 +51,7 @@ func solveSelectedStage(ctx context.Context, gc gateway.Client, state llb.State,
 	if err != nil {
 		return nil, nil, err
 	}
-	res, err := gc.Solve(ctx, gateway.SolveRequest{Definition: def.ToPB(), Evaluate: true})
+	res, err := gc.Solve(ctx, gateway.SolveRequest{Definition: def.ToPB(), CacheImports: bs.cacheImports, Evaluate: true})
 	if err != nil {
 		return nil, nil, err
 	}

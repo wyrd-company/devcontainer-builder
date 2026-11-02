@@ -62,3 +62,6 @@ ordered precedence and independent config-only metadata and user inference.
 
 Map build.options target selection to authored and generated stages while retaining
 independent configured-target metadata and user inference.
+
+Map build cache options through native buildx parsing and BuildKit cache sessions,
+including inline cache, local export/import, ordering and contextual errors.

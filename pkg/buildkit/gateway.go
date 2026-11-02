@@ -74,6 +74,12 @@ func SolveDevcontainer(ctx context.Context, spec BuildSpec, opt SolveOptions) (*
 	return runSolve(ctx, opt, multi, localMounts, func(ctx context.Context, conn *Connection, so client.SolveOpt, ch chan *client.SolveStatus) (*client.SolveResponse, error) {
 		bs := buildSettings{resolveMode: resolveMode(opt, conn), noCache: opt.NoCache}
 		buildFunc := func(ctx context.Context, gc gateway.Client) (*gateway.Result, error) {
+			// Use native client-resolved local cache digests and session stores.
+			if raw := gc.BuildOpts().Opts["cache-imports"]; raw != "" {
+				if err := json.Unmarshal([]byte(raw), &bs.cacheImports); err != nil {
+					return nil, fmt.Errorf("cache imports: %w", err)
+				}
+			}
 			return runBuildFunc(ctx, gc, spec, targetPlatforms, multi, bs)
 		}
 		return conn.BuildKit.Build(ctx, so, "devcontainer-builder", buildFunc, ch)
@@ -84,8 +90,9 @@ func SolveDevcontainer(ctx context.Context, spec BuildSpec, opt SolveOptions) (*
 // the solve runs against.
 type buildSettings struct {
 	// resolveMode is a pb.AttrImageResolveMode* value.
-	resolveMode string
-	noCache     bool
+	resolveMode  string
+	noCache      bool
+	cacheImports []gateway.CacheOptionsEntry
 }
 
 // parseTargetPlatforms converts the SolveOptions list into ocispecs
@@ -258,8 +265,9 @@ func buildOnePlatform(
 	}
 
 	res, err := gc.Solve(ctx, gateway.SolveRequest{
-		Definition: def.ToPB(),
-		Evaluate:   true,
+		Definition:   def.ToPB(),
+		CacheImports: bs.cacheImports,
+		Evaluate:     true,
 	})
 	if err != nil {
 		return nil, nil, err

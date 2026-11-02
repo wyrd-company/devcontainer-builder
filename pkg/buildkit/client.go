@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"strings"
 
@@ -177,6 +178,12 @@ func runSolve(ctx context.Context, opt SolveOptions, multi bool, localMounts map
 		return nil, fmt.Errorf("progress display: %w", err)
 	}
 
+	// Native cache imports add cache-imports to FrontendAttrs. BuildKit expects
+	// a writable map, including for gateway builds without authored attributes.
+	frontendAttrs := maps.Clone(opt.FrontendAttrs)
+	if frontendAttrs == nil {
+		frontendAttrs = make(map[string]string)
+	}
 	credentials := newSessionAuth(opt.RegistryAuth)
 	so := client.SolveOpt{
 		AllowedEntitlements: opt.allowedEntitlements,
@@ -184,7 +191,7 @@ func runSolve(ctx context.Context, opt SolveOptions, multi bool, localMounts map
 		LocalMounts:         localMounts,
 		CacheImports:        cacheEntries(opt.CacheImports),
 		CacheExports:        cacheEntries(opt.CacheExports),
-		FrontendAttrs:       opt.FrontendAttrs,
+		FrontendAttrs:       frontendAttrs,
 		Session:             []session.Attachable{credentials},
 	}
 

@@ -214,7 +214,7 @@ func (b *Builder) prepareBuildContext(ctx context.Context, opts Options, logf fu
 	if err != nil {
 		return
 	}
-	if err = validateBuildSupport(dc); err != nil {
+	if err = validateBuildCaches(dc, opts); err != nil {
 		return
 	}
 	logf("loaded spec from %s", dc.Path)
@@ -328,7 +328,10 @@ func (b *Builder) runBuildKit(ctx context.Context, opts Options, ctxDir string,
 	resolved []features.Resolved, sr *vscode.Result,
 	logf func(string, ...any),
 ) error {
-	solveOpts := solveOptions(opts, ctxDir, dc)
+	solveOpts, err := solveOptions(opts, ctxDir, dc)
+	if err != nil {
+		return err
+	}
 	if opts.Push && len(opts.Tags) == 0 {
 		return fmt.Errorf("--push requires at least one --tag")
 	}
@@ -363,7 +366,11 @@ func (b *Builder) runBuildKit(ctx context.Context, opts Options, ctxDir string,
 
 // solveOptions are the BuildKit options of a build whose staging context
 // is ctxDir.
-func solveOptions(opts Options, ctxDir string, dc *spec.DevContainer) buildkit.SolveOptions {
+func solveOptions(opts Options, ctxDir string, dc *spec.DevContainer) (buildkit.SolveOptions, error) {
+	imports, exports, err := buildCaches(dc, opts)
+	if err != nil {
+		return buildkit.SolveOptions{}, err
+	}
 	return buildkit.SolveOptions{
 		Address:          opts.BuildKitAddress,
 		Docker:           opts.Docker,
@@ -375,8 +382,8 @@ func solveOptions(opts Options, ctxDir string, dc *spec.DevContainer) buildkit.S
 		Output:           opts.Output,
 		OutputWriter:     opts.OutputWriter,
 		OutputDir:        opts.OutputDir,
-		CacheImports:     buildkit.ParseCacheRefs(mergeSlices(buildCacheFrom(dc), opts.CacheFrom)),
-		CacheExports:     buildkit.ParseCacheRefs(opts.CacheTo),
+		CacheImports:     imports,
+		CacheExports:     exports,
 		Platforms:        opts.Platforms,
 		NoCache:          opts.NoCache,
 		Pull:             opts.Pull,
@@ -384,7 +391,7 @@ func solveOptions(opts Options, ctxDir string, dc *spec.DevContainer) buildkit.S
 		Progress:         opts.Progress,
 		Stdout:           opts.Stdout,
 		Stderr:           opts.Stderr,
-	}
+	}, nil
 }
 
 // resolver is the feature resolver of one call: a copy of b.Resolver, so
@@ -446,7 +453,7 @@ func prepareBaseImage(dc *spec.DevContainer, opts Options) (string, *buildkit.Do
 		ContextDir:          upstreamCtx,
 		DockerfileDir:       filepath.Dir(dfPath),
 		Filename:            filepath.Base(dfPath),
-		BuildArgs:           mergeArgs(mergeArgs(buildArgsFromSpec(dc), parsed.Args), opts.BuildArgs),
+		BuildArgs:           mergeArgs(mergeArgs(mergeArgs(defaultCacheBuildArgs(opts), buildArgsFromSpec(dc)), parsed.Args), opts.BuildArgs),
 	}
 	if dc.Build != nil && dc.Build.Target != "" {
 		upstream.Target = dc.Build.Target

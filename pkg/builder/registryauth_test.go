@@ -308,11 +308,14 @@ func TestGenerate_RegistryAuthIsPerCall(t *testing.T) {
 
 func TestSolveOptions_ForwardsRegistryAuth(t *testing.T) {
 	auth := registryauth.Static{"registry.example.test": {Username: "testuser"}}
-	got := solveOptions(Options{RegistryAuth: auth}, t.TempDir(), &spec.DevContainer{})
+	got, err := solveOptions(Options{RegistryAuth: auth}, t.TempDir(), &spec.DevContainer{})
+	if err != nil {
+		t.Fatal(err)
+	}
 	if s, ok := got.RegistryAuth.(registryauth.Static); !ok || s["registry.example.test"].Username != "testuser" {
 		t.Fatalf("SolveOptions.RegistryAuth = %#v, want the injected source", got.RegistryAuth)
 	}
-	if got := solveOptions(Options{}, t.TempDir(), &spec.DevContainer{}); got.RegistryAuth != nil {
+	if got, err := solveOptions(Options{}, t.TempDir(), &spec.DevContainer{}); err != nil || got.RegistryAuth != nil {
 		t.Fatalf("SolveOptions.RegistryAuth = %#v, want nil for the BuildKit default", got.RegistryAuth)
 	}
 }
