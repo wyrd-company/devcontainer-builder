@@ -4,8 +4,11 @@
 package docker
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
+	dockeropts "github.com/docker/cli/opts"
 	"path"
 	"strings"
 
@@ -172,11 +175,19 @@ func buildContainerConfigWithEntrypoints(dc *spec.DevContainer, resolved []featu
 	}
 
 	mounts := []mount.Mount{}
-	if m := workspaceMount(dc, localFolder, containerWorkspaceFolder); m != nil {
+	m, err := workspaceMount(dc, localFolder, containerWorkspaceFolder)
+	if err != nil {
+		return nil, nil, "", fmt.Errorf("workspaceMount: %w", err)
+	}
+	if m != nil {
 		mounts = append(mounts, *m)
 	}
-	for _, raw := range dc.Mounts {
-		if m := parseMount(raw); m != nil {
+	for i, raw := range dc.Mounts {
+		m, err := parseMount(raw)
+		if err != nil {
+			return nil, nil, "", fmt.Errorf("mounts[%d]: %w", i, err)
+		}
+		if m != nil {
 			mounts = append(mounts, *m)
 		}
 	}
@@ -197,72 +208,64 @@ func buildContainerConfigWithEntrypoints(dc *spec.DevContainer, resolved []featu
 // workspaceMount returns the bind mount for the workspace, honoring
 // dc.WorkspaceMount when declared, including an empty value. Returns nil for an empty workspace
 // (allowed: the user may not need one for container-image-only specs).
-func workspaceMount(dc *spec.DevContainer, localFolder, containerFolder string) *mount.Mount {
+func workspaceMount(dc *spec.DevContainer, localFolder, containerFolder string) (*mount.Mount, error) {
 	if dc.DeclaresWorkspaceMount() && dc.WorkspaceMount == "" {
-		return nil
+		return nil, nil
 	}
 	if dc.WorkspaceMount != "" {
-		if m := parseMountString(dc.WorkspaceMount); m != nil {
-			return m
-		}
+		return parseMountString(dc.WorkspaceMount)
 	}
 	if localFolder == "" || containerFolder == "" {
-		return nil
+		return nil, nil
 	}
 	return &mount.Mount{
 		Type:   mount.TypeBind,
 		Source: localFolder,
 		Target: containerFolder,
-	}
+	}, nil
 }
 
 // parseMount accepts either a string ("type=bind,source=/x,target=/y")
 // or an object form ({"type": "bind", "source": "/x", "target": "/y"})
 // — both are valid in devcontainer.json.
-func parseMount(raw any) *mount.Mount {
+func parseMount(raw any) (*mount.Mount, error) {
 	switch v := raw.(type) {
 	case string:
 		return parseMountString(v)
 	case map[string]any:
 		return parseMountObject(v)
 	}
-	return nil
+	return nil, fmt.Errorf("expected a mount string or object")
 }
 
-func parseMountString(s string) *mount.Mount {
-	m := &mount.Mount{}
-	for _, kv := range strings.Split(s, ",") {
-		kv = strings.TrimSpace(kv)
-		k, v := kv, ""
-		if eq := strings.IndexByte(kv, '='); eq >= 0 {
-			k = strings.TrimSpace(kv[:eq])
-			v = strings.TrimSpace(kv[eq+1:])
-		}
-		switch k {
-		case "type":
-			m.Type = mount.Type(v)
-		case "source", "src":
-			m.Source = v
-		case "target", "dst", "destination":
-			m.Target = v
-		case "readonly", "ro":
-			m.ReadOnly = v == "" || v == "true" || v == "1"
-		case "consistency":
-			m.Consistency = mount.Consistency(v)
-		}
+// parseMountString delegates Docker CSV syntax and validation to the Docker CLI.
+func parseMountString(s string) (*mount.Mount, error) {
+	var option dockeropts.MountOpt
+	if err := option.Set(s); err != nil {
+		return nil, err
 	}
-	if m.Type == "" {
-		m.Type = mount.TypeBind
+	// Docker CLI uses the split Moby API module. Bridge its wire representation
+	// to the Engine client type, rejecting fields the client cannot represent.
+	parsed := option.Value()[0]
+	if parsed.Target == "" {
+		return nil, fmt.Errorf("missing target")
 	}
-	if m.Target == "" {
-		return nil
+	data, err := json.Marshal(parsed)
+	if err != nil {
+		return nil, err
 	}
-	return m
+	var result mount.Mount
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&result); err != nil {
+		return nil, fmt.Errorf("mount options: %w", err)
+	}
+	return &result, nil
 }
 
 // parseMountObject uses upstream generateMountCommand's serialization. Options
 // in target, such as "/data,readonly", are Docker mount options, not path text.
-func parseMountObject(o map[string]any) *mount.Mount {
+func parseMountObject(o map[string]any) (*mount.Mount, error) {
 	typ, _ := o["type"].(string)
 	source, _ := o["source"].(string)
 	target, _ := o["target"].(string)
