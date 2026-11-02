@@ -136,7 +136,7 @@ from lifecycle `--secrets-file` values.
 
 Kubernetes image-source `runArgs` maps native boolean assignments, combined and
 attached short forms, stdin and TTY. Bare environment keys use `LocalEnv` (nil
-uses the process environment); explicit empty maps disable inheritance. Unset
+uses the process environment); explicit empty maps disable inheritance. Final unset
 keys require `ImageConfig`; removing an image-owned variable returns an error.
 Merged security flags follow `runArgs`. Detach conflicts with inherited output
 attachment, and enabled init has no PodSpec equivalent. Other Docker flag and

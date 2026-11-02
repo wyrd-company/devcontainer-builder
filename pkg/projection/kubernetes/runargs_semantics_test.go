@@ -163,3 +163,29 @@ func TestRunArgsMergedInitError(t *testing.T) {
 		}
 	}
 }
+
+func TestRunArgsUnsetThenSetEnvironment(t *testing.T) {
+	for _, image := range []*oci.ImageConfig{nil, {}, {Env: []string{"SAMPLE_ABSENT=image"}}} {
+		for _, value := range []string{"final", ""} {
+			req := ProjectRequest{Spec: &spec.DevContainer{RunArgs: []string{"-eSAMPLE_ABSENT", "-eSAMPLE_ABSENT=" + value}}, Image: "alpine", ImageConfig: image, LocalEnv: map[string]string{}}
+			pj, err := Project(req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got := envAsMap(pj.Pod.Spec.Containers[0].Env)
+			if actual, ok := got["SAMPLE_ABSENT"]; !ok || actual != value {
+				t.Fatalf("env=%v want explicit %q", got, value)
+			}
+			// A final unset still needs inspection / no image-owned key.
+			req.Spec.RunArgs = append(req.Spec.RunArgs, "-eSAMPLE_ABSENT")
+			_, err = Project(req)
+			if image == nil || len(image.Env) > 0 {
+				if err == nil {
+					t.Fatal("final unset accepted")
+				}
+			} else if err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+}

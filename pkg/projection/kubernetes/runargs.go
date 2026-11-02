@@ -3,6 +3,7 @@ package kubernetes
 import (
 	"fmt"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -29,10 +30,23 @@ import (
 // Interactive stdin and TTY map to native container fields. Detach conflicts
 // with the pinned inherited output attachment; signal proxy is client-owned.
 func applyRunArgs(args []string, pod *corev1.Pod, c *corev1.Container, localEnv map[string]string, imageConfig *oci.ImageConfig) error {
-	p := &runArgsParser{args: args, localEnv: localEnv, imageConfig: imageConfig}
+	p := &runArgsParser{args: args, localEnv: localEnv}
 	for p.more() {
 		if err := p.step(pod, c); err != nil {
 			return err
+		}
+	}
+	for _, k := range p.unsetEnv {
+		// Pod Env cannot remove image-owned variables. Require inspection
+		// before accepting an unset key, and reject an inherited image key.
+		if imageConfig == nil {
+			return fmt.Errorf("runArgs: --env %q: ImageConfig is required for an unset host key", k)
+		}
+		for _, imageEnv := range imageConfig.Env {
+			imageKey, _, _ := strings.Cut(imageEnv, "=")
+			if imageKey == k {
+				return fmt.Errorf("runArgs: --env %q: unsetting image environment has no Kubernetes equivalent", k)
+			}
 		}
 	}
 	if p.init {
@@ -48,8 +62,8 @@ func applyRunArgs(args []string, pod *corev1.Pod, c *corev1.Container, localEnv 
 }
 
 type runArgsParser struct {
+	unsetEnv         []string
 	init, publishAll bool
-	imageConfig      *oci.ImageConfig
 	args             []string
 	i                int
 	localEnv         map[string]string
@@ -446,17 +460,7 @@ func (p *runArgsParser) step(pod *corev1.Pod, c *corev1.Container) error {
 				ev, set = os.LookupEnv(k)
 			}
 			if !set {
-				// Pod Env cannot remove image-owned variables. Require inspection
-				// before accepting an unset key, and reject an inherited image key.
-				if p.imageConfig == nil {
-					return fmt.Errorf("runArgs: --env %q: ImageConfig is required for an unset host key", k)
-				}
-				for _, imageEnv := range p.imageConfig.Env {
-					imageKey, _, _ := strings.Cut(imageEnv, "=")
-					if imageKey == k {
-						return fmt.Errorf("runArgs: --env %q: unsetting image environment has no Kubernetes equivalent", k)
-					}
-				}
+				p.unsetEnv = append(p.unsetEnv, k)
 				out := c.Env[:0]
 				for _, e := range c.Env {
 					if e.Name != k {
@@ -467,6 +471,7 @@ func (p *runArgsParser) step(pod *corev1.Pod, c *corev1.Container) error {
 				break
 			}
 		}
+		p.unsetEnv = slices.DeleteFunc(p.unsetEnv, func(key string) bool { return key == k })
 		c.Env = upsertEnvVar(c.Env, k, ev)
 	case "--add-host":
 		v, err := take()
