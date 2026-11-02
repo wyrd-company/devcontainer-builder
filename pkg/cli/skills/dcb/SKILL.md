@@ -81,6 +81,11 @@ without invoking another container CLI. Docker connection settings use the
 standard `DOCKER_*` environment. Builds use Docker Engine's BuildKit by
 default; `--buildkit-addr` selects a separate BuildKit instance.
 
+Numeric `appPort` values map to the same port on loopback. Strings retain Docker
+publishing syntax; `"8080"` requests an allocated host port. Docker mount strings
+in `workspaceMount`, `mounts`, and `runArgs --mount` retain Docker options and CSV
+quoting. An omitted string mount type defaults to volume. Invalid options fail.
+
 Build or inspect build artifacts:
 
 ```sh

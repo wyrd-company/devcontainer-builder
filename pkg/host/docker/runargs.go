@@ -536,9 +536,9 @@ func (p *runArgsParser) step(cfg *container.Config, host *container.HostConfig) 
 		if err != nil {
 			return err
 		}
-		m := parseMountString(v)
-		if m == nil {
-			return fmt.Errorf("runArgs: --mount %q: missing target", v)
+		m, err := parseMountString(v)
+		if err != nil {
+			return fmt.Errorf("runArgs: --mount %q: %w", v, err)
 		}
 		host.Mounts = append(host.Mounts, *m)
 	case "--gpus":

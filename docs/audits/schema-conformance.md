@@ -15,15 +15,19 @@ Dockerfile can carry `build` options. File lists and cache sources accept string
 or string arrays. Parallel lifecycle commands contain string or string-array
 values, without nested command objects.
 
+Docker publishing preserves string `appPort` values. Numeric values map to the
+same port on loopback. Docker mount strings use the native Docker CLI parser
+across `workspaceMount`, `mounts`, object target options, and `runArgs --mount`.
+The parser retains CSV quoting, volume defaults, bind, volume, image, and tmpfs
+options. Invalid options return contextual errors. The split Moby mount type is
+converted through its wire representation with unknown fields rejected so that
+the Engine client cannot silently discard an option.
+
 ## Audit work queue
 
 Configuration conformance takes priority over additional command work. These
 runtime consumers require pinned differential checks and corrections:
 
-- String `appPort` values must retain Docker publishing syntax. Only numeric
-  values receive the upstream loopback mapping.
-- String mounts must retain Docker mount options across `workspaceMount`,
-  `mounts`, and `runArgs --mount`.
 - Docker `runArgs` must preserve container-affecting flags, boolean assignments,
   attached short options, and environment inheritance.
 - Empty Compose file arrays require upstream Compose file discovery.

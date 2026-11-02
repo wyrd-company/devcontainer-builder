@@ -43,7 +43,7 @@ sees it.
 | `mounts` | |
 | `init`, `privileged`, `capAdd`, `securityOpt` | |
 | `runArgs` | See [runArgs](#runargs). |
-| `appPort` | A bare port is published on `127.0.0.1`. A `host:container` entry is used as given. |
+| `appPort` | Numeric values map to the same port on `127.0.0.1`. Strings use Docker publishing syntax unchanged; `"8080"` requests an allocated host port. |
 | `forwardPorts` | Not published, as upstream. |
 | `overrideCommand` | |
 | `onCreateCommand`, `updateContentCommand`, `postCreateCommand`, `postStartCommand`, `postAttachCommand` | String, array, and object forms. Object entries run in parallel. |
@@ -97,7 +97,12 @@ dcb does not remove that container.
 
 ### mounts
 
-Mounts accept strings or objects. Objects have only `type` (`bind` or `volume`),
+Mounts accept strings or objects. Docker mount strings use Docker CSV syntax,
+including quoted values, bind propagation, volume options, and tmpfs options.
+A string without `type` defaults to a volume mount. The same parser applies to
+`workspaceMount`, `mounts`, and `runArgs --mount`. Invalid options return an error.
+
+Objects follow the upstream schema. Objects have only `type` (`bind` or `volume`),
 `source`, and `target`. The `type` and `target` strings are required; `source`
 is optional. A plain object mount is read-write:
 

@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
-	"strings"
 
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/go-connections/nat"
@@ -13,11 +12,9 @@ import (
 // applyPorts publishes the spec's appPort entries on the container
 // Config / HostConfig.
 //
-// As upstream does, only appPort becomes daemon port publishing:
-// forwardPorts are for a connected tool to forward on demand and are
-// not published. A bare port number binds 127.0.0.1:N:N so listeners
-// stay on loopback by default. Strings already in "host:container" or
-// "iface:host:container" form are honored verbatim.
+// Numeric appPort entries bind 127.0.0.1:N:N. String entries retain Docker
+// publishing syntax, including dynamically allocated host ports. forwardPorts
+// are forwarded by a connected tool and are not daemon port publications.
 func applyPorts(app any, cfg *container.Config, host *container.HostConfig) error {
 	specs, err := portSpecs(app)
 	if err != nil {
@@ -58,31 +55,20 @@ func portSpecs(app any) ([]string, error) {
 			if err != nil {
 				return nil, err
 			}
-			if s != "" {
-				out = append(out, s)
-			}
+			out = append(out, s)
 		}
 	default:
 		s, err := normalizePort(v, "appPort")
 		if err != nil {
 			return nil, err
 		}
-		if s != "" {
-			out = append(out, s)
-		}
+		out = append(out, s)
 	}
 	return out, nil
 }
 
 // normalizePort accepts a number or string appPort entry and returns a
 // docker -p compatible spec.
-//
-// Rules:
-//   - Numeric N or "N"          → "127.0.0.1:N:N"
-//   - "N/proto"                 → "127.0.0.1:N:N/proto"
-//   - "N-M" or "N-M/proto"      → "127.0.0.1:N-M:N-M[/proto]"
-//   - "host:container[/proto]"  → as-is (binds all interfaces)
-//   - "iface:host:container..." → as-is
 func normalizePort(raw any, field string) (string, error) {
 	switch v := raw.(type) {
 	case nil:
@@ -100,26 +86,7 @@ func normalizePort(raw any, field string) (string, error) {
 		}
 		return numericPortSpec(int(n), field)
 	case string:
-		s := strings.TrimSpace(v)
-		if s == "" {
-			return "", nil
-		}
-		// Already an "iface:host:container" or "host:container" form?
-		// Anything with a colon is left alone — the user has been
-		// explicit about the binding shape.
-		if strings.ContainsRune(s, ':') {
-			return s, nil
-		}
-		// Bare "N", "N/proto", "N-M", "N-M/proto" — split off the proto.
-		port, proto, hasProto := strings.Cut(s, "/")
-		if _, err := parsePortRange(port); err != nil {
-			return "", fmt.Errorf("%s: %q: %w", field, v, err)
-		}
-		spec := "127.0.0.1:" + port + ":" + port
-		if hasProto {
-			spec += "/" + proto
-		}
-		return spec, nil
+		return v, nil
 	default:
 		return "", fmt.Errorf("%s: unsupported entry %T", field, raw)
 	}
@@ -131,22 +98,4 @@ func numericPortSpec(n int, field string) (string, error) {
 	}
 	s := strconv.Itoa(n)
 	return "127.0.0.1:" + s + ":" + s, nil
-}
-
-// parsePortRange validates "N" or "N-M". Returns "" on success or an
-// error describing the malformation.
-func parsePortRange(s string) (string, error) {
-	if s == "" {
-		return "", fmt.Errorf("empty port")
-	}
-	low, high, hasRange := strings.Cut(s, "-")
-	if _, err := strconv.Atoi(low); err != nil {
-		return "", fmt.Errorf("invalid port %q", s)
-	}
-	if hasRange {
-		if _, err := strconv.Atoi(high); err != nil {
-			return "", fmt.Errorf("invalid port range %q", s)
-		}
-	}
-	return s, nil
 }

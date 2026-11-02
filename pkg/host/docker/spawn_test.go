@@ -25,8 +25,8 @@ func TestParseMountString(t *testing.T) {
 			&mount.Mount{Type: mount.TypeVolume, Source: "node-modules", Target: "/workspaces/proj/node_modules"},
 		},
 		{
-			"source=/x,target=/y", // type omitted -> defaults to bind
-			&mount.Mount{Type: mount.TypeBind, Source: "/x", Target: "/y"},
+			"source=sample-data,target=/y", // Docker defaults to volume
+			&mount.Mount{Type: mount.TypeVolume, Source: "sample-data", Target: "/y"},
 		},
 		{
 			"type=bind,source=/x,target=/y,readonly", // bare "readonly" flag
@@ -34,16 +34,19 @@ func TestParseMountString(t *testing.T) {
 		},
 	}
 	for _, c := range cases {
-		got := parseMountString(c.in)
+		got, err := parseMountString(c.in)
+		if err != nil {
+			t.Fatal(err)
+		}
 		if !reflect.DeepEqual(got, c.want) {
 			t.Errorf("parseMountString(%q):\n got  %+v\n want %+v", c.in, got, c.want)
 		}
 	}
 }
 
-func TestParseMountString_NoTargetReturnsNil(t *testing.T) {
-	if parseMountString("type=bind,source=/x") != nil {
-		t.Error("missing target should yield nil mount")
+func TestParseMountString_NoTargetReturnsError(t *testing.T) {
+	if _, err := parseMountString("type=bind,source=/x"); err == nil {
+		t.Error("missing target should return an error")
 	}
 }
 
