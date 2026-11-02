@@ -301,6 +301,12 @@ retain Docker integer parsing and final scalar values, including zero.
 `--oom-kill-disable` uses Docker boolean spellings. Daemon resource validation
 still applies.
 
+Docker storage options (`--storage-opt`) retain key/value entries and the last
+value for each key. Windows resource flags (`--cpu-count`, `--cpu-percent`,
+`--io-maxbandwidth`, `--io-maxiops`) map to Engine creation fields. CPU and IOPS
+values use Docker base-zero integers; bandwidth uses Docker memory-size units.
+The daemon and platform determine whether these controls are supported.
+
 Docker per-device block I/O flags (`--blkio-weight-device`,
 `--device-read-bps`, `--device-write-bps`, `--device-read-iops`, and
 `--device-write-iops`) use native Docker validation. Repeated entries retain

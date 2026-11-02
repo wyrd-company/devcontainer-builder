@@ -41,6 +41,9 @@ runtime consumers require pinned differential checks and corrections:
   shares, PID limits, and OOM score adjustments accept base-zero integers;
   OOM disable uses native boolean spellings. Per-device block I/O weight and
   byte/IOPS throttles use native validators and retain ordered repeated entries.
+  Storage options retain last-value-per-key semantics. Windows CPU count, CPU
+  percent, system-drive bandwidth and IOPS map to Engine creation fields with
+  native integer and memory-size grammar. Platform enforcement is daemon-owned.
 - Empty Compose file arrays require upstream Compose file discovery.
 - Reading a common-only document must not require a build/run source.
 - Environment values require schema type checks and pinned null-value behavior.

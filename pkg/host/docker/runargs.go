@@ -342,6 +342,53 @@ func (p *runArgsParser) step(cfg *container.Config, host *container.HostConfig) 
 	// ---------------------------------------------------------------
 	// Resource limits.
 	// ---------------------------------------------------------------
+	case "--cpu-count", "--cpu-percent":
+		v, err := take()
+		if err != nil {
+			return err
+		}
+		n, err := strconv.ParseInt(v, 0, 64)
+		if err != nil {
+			return fmt.Errorf("runArgs: %s: %w", flag, err)
+		}
+		if flag == "--cpu-count" {
+			host.CPUCount = n
+		} else {
+			host.CPUPercent = n
+		}
+	case "--io-maxiops":
+		v, err := take()
+		if err != nil {
+			return err
+		}
+		n, err := strconv.ParseUint(v, 0, 64)
+		if err != nil {
+			return fmt.Errorf("runArgs: %s: %w", flag, err)
+		}
+		host.IOMaximumIOps = n
+	case "--io-maxbandwidth":
+		v, err := take()
+		if err != nil {
+			return err
+		}
+		var n dockeropts.MemBytes
+		if err := n.Set(v); err != nil {
+			return fmt.Errorf("runArgs: %s: %w", flag, err)
+		}
+		host.IOMaximumBandwidth = uint64(n)
+	case "--storage-opt":
+		v, err := take()
+		if err != nil {
+			return err
+		}
+		k, value, ok := strings.Cut(v, "=")
+		if !ok {
+			return fmt.Errorf("runArgs: --storage-opt: invalid storage option")
+		}
+		if host.StorageOpt == nil {
+			host.StorageOpt = make(map[string]string)
+		}
+		host.StorageOpt[k] = value
 	case "--memory-swappiness":
 		v, err := take()
 		if err != nil {

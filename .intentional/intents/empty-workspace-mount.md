@@ -28,3 +28,6 @@ shares, PID limits and OOM scores, and native OOM disable boolean spellings.
 
 Preserve Docker per-device block I/O weights and byte/IOPS throttle lists,
 including native validation, size units, repeated devices, and zero values.
+
+Preserve Docker storage options and Windows CPU and system-drive I/O creation
+controls with native value parsing and final-value precedence.
