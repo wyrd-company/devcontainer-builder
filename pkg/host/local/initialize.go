@@ -70,11 +70,9 @@ func Initialize(ctx context.Context, command spec.Command, opts InitializeOption
 		if len(args) == 0 {
 			return nil
 		}
-		// Go resolves ./program against the caller cwd before applying Cmd.Dir.
-		// Resolve relative paths with separators against the workspace instead.
-		executable := args[0]
-		if !filepath.IsAbs(executable) && strings.ContainsAny(executable, `/\`) {
-			executable = filepath.Join(opts.Workspace, executable)
+		executable, err := hostExecutable(args[0], opts.Workspace, opts.Env)
+		if err != nil {
+			return fmt.Errorf("the initializeCommand in the devcontainer.json failed: %w", err)
 		}
 		cmd := exec.CommandContext(ctx, executable, args[1:]...)
 		cmd.Dir, cmd.Env, cmd.Stdin = opts.Workspace, opts.Env, opts.Stdin
@@ -85,7 +83,7 @@ func Initialize(ctx context.Context, command spec.Command, opts InitializeOption
 		} else {
 			cmd.Stdout, cmd.Stderr = writer, writer
 		}
-		err := cmd.Run()
+		err = cmd.Run()
 		if name != "" {
 			output(buffered.Bytes())
 		}
@@ -126,3 +124,61 @@ var errInterrupted = errors.New("initializeCommand interrupted")
 type writerFunc func([]byte) (int, error)
 
 func (f writerFunc) Write(p []byte) (int, error) { return f(p) }
+
+// hostExecutable resolves argv against the child environment and directory.
+// exec.CommandContext otherwise uses the parent's PATH and resolves relative
+// PATH entries before Cmd.Dir takes effect.
+func hostExecutable(name, workspace string, env []string) (string, error) {
+	dir, err := filepath.Abs(workspace)
+	if err != nil {
+		return "", err
+	}
+	if filepath.IsAbs(name) {
+		return name, nil
+	}
+	if strings.ContainsAny(name, `/\`) {
+		return filepath.Join(dir, name), nil
+	}
+	if env == nil {
+		env = os.Environ()
+	}
+	value := func(key string) (string, bool) {
+		for i := len(env) - 1; i >= 0; i-- {
+			k, v, ok := strings.Cut(env[i], "=")
+			if ok && (k == key || runtime.GOOS == "windows" && strings.EqualFold(k, key)) {
+				return v, true
+			}
+		}
+		return "", false
+	}
+	path, found := value("PATH")
+	if !found && runtime.GOOS != "windows" {
+		path = "/usr/bin:/bin"
+	}
+	suffixes := []string{""}
+	if runtime.GOOS == "windows" && filepath.Ext(name) == "" {
+		extensions, ok := value("PATHEXT")
+		if !ok {
+			extensions = ".COM;.EXE;.BAT;.CMD"
+		}
+		suffixes = strings.Split(extensions, ";")
+	}
+	// SplitList drops an empty string; execvp treats empty PATH as the cwd.
+	entries := filepath.SplitList(path)
+	if path == "" {
+		entries = []string{""}
+	}
+	for _, entry := range entries {
+		if !filepath.IsAbs(entry) {
+			entry = filepath.Join(dir, entry)
+		}
+		for _, suffix := range suffixes {
+			candidate := filepath.Join(entry, name+suffix)
+			info, err := os.Stat(candidate)
+			if err == nil && !info.IsDir() && (runtime.GOOS == "windows" || info.Mode()&0111 != 0) {
+				return candidate, nil
+			}
+		}
+	}
+	return "", &exec.Error{Name: name, Err: exec.ErrNotFound}
+}

@@ -162,3 +162,45 @@ func TestInitializeParallelInterruptReturnsBeforeSibling(t *testing.T) {
 		}
 	}
 }
+
+func TestInitializeWorkspacePath(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("POSIX executable fixtures")
+	}
+	dir := t.TempDir()
+	bin := filepath.Join(dir, "bin")
+	if err := os.Mkdir(bin, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(bin, "sample-command"), []byte("#!/bin/sh\nprintf workspace-command"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name, path string
+		inherit    bool
+	}{
+		{"inherited-relative", "bin", true}, {"explicit-relative", "bin", false}, {"explicit-absolute", bin, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var env []string
+			if tc.inherit {
+				t.Setenv("PATH", tc.path)
+			} else {
+				env = []string{"PATH=" + tc.path}
+			}
+			var output bytes.Buffer
+			err := Initialize(context.Background(), spec.Command{Args: []string{"sample-command"}}, InitializeOptions{Workspace: dir, Env: env, Output: &output})
+			if err != nil || output.String() != "workspace-command" {
+				t.Fatalf("output=%q err=%v", output.String(), err)
+			}
+		})
+	}
+	// An explicitly empty PATH searches the workspace, unlike an absent PATH.
+	if err := os.WriteFile(filepath.Join(dir, "sample-command"), []byte("#!/bin/sh\nprintf cwd-command"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	var output bytes.Buffer
+	if err := Initialize(context.Background(), spec.Command{Args: []string{"sample-command"}}, InitializeOptions{Workspace: dir, Env: []string{"PATH="}, Output: &output}); err != nil || output.String() != "cwd-command" {
+		t.Fatalf("empty PATH: %q %v", output.String(), err)
+	}
+}
