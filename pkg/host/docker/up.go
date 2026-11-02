@@ -345,14 +345,15 @@ func (h *Host) create(
 	ctx context.Context, dc *spec.DevContainer, req UpRequest, containerWorkspace string,
 ) (string, error) {
 	networking := &network.NetworkingConfig{}
+	controls := &runControls{}
 	var cfg *container.Config
 	var host *container.HostConfig
 	var name string
 	var err error
 	if req.metadataEntries != nil {
-		cfg, host, name, err = buildContainerConfigWithEntrypoints(dc, nil, req.entrypoints, req.Image, containerWorkspace, req.LocalWorkspace, req.SpecPath, networking)
+		cfg, host, name, err = buildContainerConfigEntrypointsControls(dc, nil, req.entrypoints, req.Image, containerWorkspace, req.LocalWorkspace, req.SpecPath, controls, networking)
 	} else {
-		cfg, host, name, err = buildContainerConfig(dc, req.Features, req.Image, containerWorkspace, req.LocalWorkspace, req.SpecPath, networking)
+		cfg, host, name, err = buildContainerConfigControls(dc, req.Features, req.Image, containerWorkspace, req.LocalWorkspace, req.SpecPath, controls, networking)
 	}
 	if err == nil && req.metadataEntries != nil {
 		value, encodeErr := metadata.Encode(req.metadataEntries)
@@ -377,7 +378,7 @@ func (h *Host) create(
 			appendImageCommand(cfg, img.Config.Entrypoint, img.Config.Cmd)
 		}
 	}
-	resp, err := h.client.ContainerCreate(ctx, cfg, host, networking, nil, name)
+	resp, err := h.createWithRunControls(ctx, controls, cfg, host, networking, name)
 	if err != nil {
 		if name != "" && errdefs.IsConflict(err) {
 			return "", errorf("create: container name %q is already in use; choose another --name or remove the conflicting container: %w", name, err)

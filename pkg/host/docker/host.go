@@ -26,6 +26,7 @@ package docker
 import (
 	"errors"
 	"fmt"
+	mobyclient "github.com/moby/moby/client"
 	"io"
 	"time"
 
@@ -45,6 +46,11 @@ var ErrContainerNotFound = errors.New("docker host: container not found")
 
 // Options tunes a Host. All fields are optional.
 type Options struct {
+	// NewCreateClient constructs an owned native client for controls absent from
+	// legacy Engine types, such as umask. It must use the same daemon and
+	// connection policy as the supplied legacy client. Host closes the returned
+	// client after creation and confirmation. Ordinary creates use the legacy client.
+	NewCreateClient func() (*mobyclient.Client, error)
 	// TerminalSize is the optional lifecycle PTY size [rows, columns].
 	TerminalSize *[2]uint
 	// Logger receives informational messages. If nil, messages are

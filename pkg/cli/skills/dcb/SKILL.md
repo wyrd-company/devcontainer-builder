@@ -290,6 +290,12 @@ Files load before explicit environment and label flags. Paths use the process
 working directory. Merged init, privileged, capability and security option flags
 follow runArgs, as in the upstream CLI.
 
+`--umask` uses Docker octal parsing and the final value, including explicit zero.
+Creation confirms the value in daemon inspection before start. If the daemon
+omits or changes it, dcb removes the new container and reports an error.
+`--kernel-memory` validates Docker memory-size syntax and has no effect, as in
+the native Docker CLI's deprecated flag.
+
 Docker CPU run arguments preserve exact NanoCPU values through native Docker parsing.
 `--cpu-period`, `--cpu-quota`, `--cpu-rt-period`, and `--cpu-rt-runtime`
 retain Docker integer parsing and the final scalar value, including zero.

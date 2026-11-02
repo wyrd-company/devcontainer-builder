@@ -25,6 +25,10 @@ import (
 // ignored: a silent drop of e.g. --network or --gpus could leave the
 // container running with surprising defaults.
 func applyRunArgs(args []string, cfg *container.Config, host *container.HostConfig, networking ...*network.NetworkingConfig) (string, error) {
+	return applyRunArgsControls(args, cfg, host, nil, networking...)
+}
+
+func applyRunArgsControls(args []string, cfg *container.Config, host *container.HostConfig, controls *runControls, networking ...*network.NetworkingConfig) (string, error) {
 	p := &runArgsParser{args: args}
 	for p.more() {
 		if err := p.step(cfg, host); err != nil {
@@ -65,13 +69,21 @@ func applyRunArgs(args []string, cfg *container.Config, host *container.HostConf
 	for _, target := range networking {
 		*target = *netConfig
 	}
+	if controls != nil {
+		controls.Umask = p.umask.Value()
+	}
 	return p.name, nil
+}
+
+type runControls struct {
+	Umask *uint32
 }
 
 type runArgsParser struct {
 	args               []string
 	i                  int
 	name               string
+	umask              dockeropts.UmaskOpt
 	envFiles           []string
 	labelFiles         []string
 	health             container.HealthConfig
@@ -161,6 +173,26 @@ func (p *runArgsParser) step(cfg *container.Config, host *container.HostConfig) 
 		case "--rm":
 			host.AutoRemove = v
 			// Detach and signal proxy control the CLI process, not creation.
+		}
+
+	case "--umask":
+		v, err := take()
+		if err != nil {
+			return err
+		}
+		if err := p.umask.Set(v); err != nil {
+			return fmt.Errorf("runArgs: --umask: %w", err)
+		}
+
+	case "--kernel-memory":
+		// Native Docker validates a deprecated memory-size stub, then discards it.
+		v, err := take()
+		if err != nil {
+			return err
+		}
+		var stub dockeropts.MemBytes
+		if err := stub.Set(v); err != nil {
+			return fmt.Errorf("runArgs: --kernel-memory: %w", err)
 		}
 
 	case "--no-healthcheck":

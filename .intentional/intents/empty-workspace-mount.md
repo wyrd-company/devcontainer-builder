@@ -34,3 +34,6 @@ controls with native value parsing and final-value precedence.
 
 Preserve native Docker network attachments, endpoint addresses, aliases, MAC
 addresses, and per-network options through Engine container creation.
+
+Preserve Docker umask through native creation and daemon confirmation; validate
+the deprecated kernel-memory flag without applying it.

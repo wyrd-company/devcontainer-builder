@@ -72,6 +72,13 @@ res, err := host.Up(ctx, docker.UpRequest{
 })
 ```
 
+Docker `runArgs --umask` needs `docker.Options.NewCreateClient`, a factory for
+an owned `github.com/moby/moby/client.Client`. Configure it for the same daemon,
+TLS, headers and API policy as the legacy client. The host closes each returned
+client after creation and umask confirmation. The CLI supplies this factory.
+Other creation calls use the supplied legacy client. A library call with umask
+and no factory returns an explicit error.
+
 `ImageBuilt` tells `Up` that the image was built from this configuration, so
 its metadata label already holds the feature and configuration entries.
 Without `ImageBuilt`, the Docker and Compose hosts add each feature's

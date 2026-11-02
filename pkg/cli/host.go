@@ -14,6 +14,7 @@ import (
 	"runtime"
 
 	dockerclient "github.com/docker/docker/client"
+	mobyclient "github.com/moby/moby/client"
 	"github.com/spf13/cobra"
 	"github.com/wyrd-company/devcontainer-builder/pkg/builder"
 	"github.com/wyrd-company/devcontainer-builder/pkg/features"
@@ -30,8 +31,14 @@ func newDockerClient() (*dockerclient.Client, error) {
 }
 
 func (a *application) dockerHost(cli *dockerclient.Client) *hostdocker.Host {
-	return hostdocker.New(cli, hostdocker.Options{TerminalSize: a.terminalSize, Logger: a.logf, Stdout: a.logs, Stderr: a.logs, RegistryAuth: registryauth.FromEnvironment()})
+	return hostdocker.New(cli, hostdocker.Options{NewCreateClient: newNativeCreateClient, TerminalSize: a.terminalSize, Logger: a.logf, Stdout: a.logs, Stderr: a.logs, RegistryAuth: registryauth.FromEnvironment()})
 }
+
+// newNativeCreateClient uses the CLI's common Docker connection source.
+func newNativeCreateClient() (*mobyclient.Client, error) {
+	return mobyclient.New(mobyclient.FromEnv)
+}
+
 func (a *application) composeHost(cli *dockerclient.Client) *dockercompose.Host {
 	return dockercompose.New(cli, dockercompose.Options{RegistryAuth: registryauth.FromEnvironment(), UserDataFolder: a.userDataFolder, Logger: a.logf, Stdout: a.logs, Stderr: a.logs})
 }

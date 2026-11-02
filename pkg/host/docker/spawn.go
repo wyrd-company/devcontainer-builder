@@ -113,11 +113,19 @@ func buildContainerConfig(
 	image, containerWorkspaceFolder, localFolder, configFilePath string,
 	networking ...*network.NetworkingConfig,
 ) (*container.Config, *container.HostConfig, string, error) {
+	return buildContainerConfigControls(dc, resolved, image, containerWorkspaceFolder, localFolder, configFilePath, nil, networking...)
+}
+
+func buildContainerConfigControls(dc *spec.DevContainer, resolved []features.Resolved, image, containerWorkspaceFolder, localFolder, configFilePath string, controls *runControls, networking ...*network.NetworkingConfig) (*container.Config, *container.HostConfig, string, error) {
 	merged := metadata.Merge(dc, metadata.Collect(nil, resolved, dc))
-	return buildContainerConfigWithEntrypoints(merged.DevContainer, resolved, merged.Entrypoints, image, containerWorkspaceFolder, localFolder, configFilePath, networking...)
+	return buildContainerConfigEntrypointsControls(merged.DevContainer, resolved, merged.Entrypoints, image, containerWorkspaceFolder, localFolder, configFilePath, controls, networking...)
 }
 
 func buildContainerConfigWithEntrypoints(dc *spec.DevContainer, resolved []features.Resolved, entrypoints []string, image, containerWorkspaceFolder, localFolder, configFilePath string, networking ...*network.NetworkingConfig) (*container.Config, *container.HostConfig, string, error) {
+	return buildContainerConfigEntrypointsControls(dc, resolved, entrypoints, image, containerWorkspaceFolder, localFolder, configFilePath, nil, networking...)
+}
+
+func buildContainerConfigEntrypointsControls(dc *spec.DevContainer, resolved []features.Resolved, entrypoints []string, image, containerWorkspaceFolder, localFolder, configFilePath string, controls *runControls, networking ...*network.NetworkingConfig) (*container.Config, *container.HostConfig, string, error) {
 	if err := dc.ValidateMounts(); err != nil {
 		return nil, nil, "", err
 	}
@@ -186,7 +194,7 @@ func buildContainerConfigWithEntrypoints(dc *spec.DevContainer, resolved []featu
 		return nil, nil, "", err
 	}
 
-	name, err := applyRunArgs(dc.RunArgs, cfg, host, networking...)
+	name, err := applyRunArgsControls(dc.RunArgs, cfg, host, controls, networking...)
 	if err != nil {
 		return nil, nil, "", err
 	}
