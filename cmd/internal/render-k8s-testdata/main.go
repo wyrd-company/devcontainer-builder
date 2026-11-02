@@ -8,6 +8,7 @@ import (
 
 	composeloader "github.com/compose-spec/compose-go/v2/loader"
 	composetypes "github.com/compose-spec/compose-go/v2/types"
+	oci "github.com/opencontainers/image-spec/specs-go/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 
 	k8sprojection "github.com/wyrd-company/devcontainer-builder/pkg/projection/kubernetes"
@@ -129,6 +130,7 @@ func buildObjects() ([]runtime.Object, error) {
 		return nil, err
 	}
 	cp, err := k8sprojection.ProjectCompose(k8sprojection.ComposeProjectRequest{
+		PrimaryImageConfig: &oci.ImageConfig{},
 		Spec: &spec.DevContainer{
 			DockerComposeFile: spec.StringOrSlice{"docker-compose.yml"},
 			Service:           "app",

@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	oci "github.com/opencontainers/image-spec/specs-go/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer/json"
@@ -147,12 +148,13 @@ secrets:
 	dc, proj, _ := loadProjectForTest(t, composeBody, specBody)
 
 	out, err := ProjectCompose(ComposeProjectRequest{
-		Spec:           dc,
-		SpecPath:       "/repo/.devcontainer/devcontainer.json",
-		LocalWorkspace: "/repo",
-		Project:        proj,
-		Name:           "compose-workspace",
-		Namespace:      "dev",
+		PrimaryImageConfig: &oci.ImageConfig{},
+		Spec:               dc,
+		SpecPath:           "/repo/.devcontainer/devcontainer.json",
+		LocalWorkspace:     "/repo",
+		Project:            proj,
+		Name:               "compose-workspace",
+		Namespace:          "dev",
 		Labels: map[string]string{
 			"app.kubernetes.io/name": "devcontainer",
 		},
@@ -183,12 +185,13 @@ secrets:
 	specBody := `{"dockerComposeFile": "docker-compose.yml", "service": "app"}`
 	dc, proj, _ := loadProjectForTest(t, composeBody, specBody)
 	out, err := ProjectCompose(ComposeProjectRequest{
-		Spec:           dc,
-		LocalWorkspace: "/repo",
-		Project:        proj,
-		Name:           "roundtrip-workspace",
-		Namespace:      "dev",
-		LocalEnv:       map[string]string{"API_KEY": "abc123"},
+		PrimaryImageConfig: &oci.ImageConfig{},
+		Spec:               dc,
+		LocalWorkspace:     "/repo",
+		Project:            proj,
+		Name:               "roundtrip-workspace",
+		Namespace:          "dev",
+		LocalEnv:           map[string]string{"API_KEY": "abc123"},
 	})
 	if err != nil {
 		t.Fatalf("ProjectCompose: %v", err)

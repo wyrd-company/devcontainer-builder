@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"sort"
 	"strconv"
+	"strings"
 
 	composetypes "github.com/compose-spec/compose-go/v2/types"
+	oci "github.com/opencontainers/image-spec/specs-go/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -64,6 +66,13 @@ type ComposeProjectRequest struct {
 	// compose `image:`. Used to point the Pod at a feature-derived
 	// image produced by pkg/host/dockercompose.BuildPrimaryImage.
 	PrimaryImage string
+
+	// PrimaryImageConfig is the selected primary image configuration. Required
+	// when a preserved service command needs image Entrypoint or Cmd fallback.
+	// Also required for final nil service environment values so image-owned
+	// removals can be rejected. An explicit empty configuration represents
+	// an image with no command or environment.
+	PrimaryImageConfig *oci.ImageConfig
 
 	// Features as resolved by pkg/features. Their containerEnv,
 	// init/privileged/capAdd/securityOpt, and mounts merge into the
@@ -461,14 +470,67 @@ func buildPrimaryContainer(
 		Stdin:      true,
 	}
 
-	envSlice := envFromMap(stringMap(dc.ContainerEnv))
+	// The pinned Compose wrapper defaults overrideCommand to false.
+	if dc.OverrideCommand == nil || !*dc.OverrideCommand {
+		entry := svc.Entrypoint
+		command := svc.Command
+		if entry == nil {
+			if req.PrimaryImageConfig == nil {
+				return c, nil, fmt.Errorf("kubernetes projection: primary service %q: PrimaryImageConfig is required for image entrypoint fallback", dc.Service)
+			}
+			entry = req.PrimaryImageConfig.Entrypoint
+		}
+		if command == nil && svc.Entrypoint == nil {
+			if req.PrimaryImageConfig == nil {
+				return c, nil, fmt.Errorf("kubernetes projection: primary service %q: PrimaryImageConfig is required for image command fallback", dc.Service)
+			}
+			command = req.PrimaryImageConfig.Cmd
+		}
+		c.Args = append(c.Args, entry...)
+		c.Args = append(c.Args, command...)
+	}
+	var entrypoints []string
+	for _, f := range req.Features {
+		if f.Metadata.Entrypoint != "" {
+			entrypoints = append(entrypoints, f.Metadata.Entrypoint)
+		}
+	}
+	if len(entrypoints) > 0 {
+		c.Args[1] = strings.Replace(keepaliveCmd, `exec "$@"`, strings.Join(entrypoints, "\n")+"\n"+`exec "$@"`, 1)
+	}
+	envSlice := composeEnvToK8s(svc.Environment)
 	for _, f := range req.Features {
 		for k, v := range f.Metadata.ContainerEnv {
 			envSlice = upsertEnv(envSlice, k, v)
 		}
 	}
-	for _, kv := range sortedComposeEnv(svc.Environment) {
-		envSlice = upsertEnv(envSlice, kv.k, kv.v)
+	for k, v := range stringMap(dc.ContainerEnv) {
+		envSlice = upsertEnv(envSlice, k, v)
+	}
+	// A nil Compose value removes a variable unless a later overlay sets it.
+	// Pod env omission inherits image values, so reject an unrepresentable removal.
+	for k, v := range svc.Environment {
+		if v != nil {
+			continue
+		}
+		overridden := false
+		for _, e := range envSlice {
+			if e.Name == k {
+				overridden = true
+				break
+			}
+		}
+		if overridden {
+			continue
+		}
+		if req.PrimaryImageConfig == nil {
+			return c, nil, fmt.Errorf("kubernetes projection: primary service %q: PrimaryImageConfig is required for unset environment key %q", dc.Service, k)
+		}
+		for _, e := range req.PrimaryImageConfig.Env {
+			if strings.SplitN(e, "=", 2)[0] == k {
+				return c, nil, fmt.Errorf("kubernetes projection: primary service %q: unset environment key %q has no Kubernetes equivalent for an image-owned variable", dc.Service, k)
+			}
+		}
 	}
 	c.Env = envSlice
 
@@ -559,6 +621,12 @@ func buildPrimaryContainer(
 		// container-level fields are enough.
 	}
 
+	for i, arg := range c.Args {
+		c.Args[i] = strings.ReplaceAll(arg, "$", "$$")
+	}
+	for i := range c.Env {
+		c.Env[i].Value = strings.ReplaceAll(c.Env[i].Value, "$", "$$")
+	}
 	return c, vols, nil
 }
 

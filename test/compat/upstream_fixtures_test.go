@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	oci "github.com/opencontainers/image-spec/specs-go/v1"
 	corev1 "k8s.io/api/core/v1"
 
 	"github.com/wyrd-company/devcontainer-builder/pkg/builder"
@@ -160,11 +161,12 @@ func TestCuratedCLIConfigFixtures(t *testing.T) {
 		}
 
 		out, err := kubeprojection.ProjectCompose(kubeprojection.ComposeProjectRequest{
-			Spec:           dc,
-			SpecPath:       dc.Path,
-			LocalWorkspace: workspace,
-			Project:        project,
-			Name:           "compat-compose",
+			PrimaryImageConfig: &oci.ImageConfig{},
+			Spec:               dc,
+			SpecPath:           dc.Path,
+			LocalWorkspace:     workspace,
+			Project:            project,
+			Name:               "compat-compose",
 		})
 		if err != nil {
 			t.Fatalf("ProjectCompose: %v", err)

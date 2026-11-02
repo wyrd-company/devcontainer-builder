@@ -1,6 +1,8 @@
 ---
 relationships:
-  references: [upstream-options, ../../reference/spec/schemas/devContainer.base.schema.json, ../../reference/cli/src/spec-node/singleContainer.ts, ../user/configuration]
+  references: [upstream-options,
+  ../../reference/spec/schemas/devContainer.base.schema.json,
+  ../../reference/cli/src/spec-node/singleContainer.ts, ../user/configuration]
 ---
 
 # Configuration schema conformance
@@ -11,7 +13,8 @@ comparison contract; their commits stay unchanged during application changes.
 
 Dockerfile paths and contexts support both upstream forms: `build.dockerfile`
 with `build.context`, and `dockerFile` with top-level `context`. A top-level
-Dockerfile can carry `build` options. File lists and cache sources accept strings
+Dockerfile can carry `build` options. File lists and cache sources accept
+strings
 or string arrays. Parallel lifecycle commands contain string or string-array
 values, without nested command objects.
 
@@ -43,19 +46,23 @@ runtime consumers require pinned differential checks and corrections:
   stdin, TTY, removal, environment inheritance, and overridden entrypoints are
   supported. Native Docker environment and label files load before explicit
   flags. Merged init, privileged, capability and security option flags follow
-  runArgs. Health and logging options retain native Docker values, final scalar precedence,
+  runArgs. Health and logging options retain native Docker values, final scalar
+  precedence,
   health conflict checks and logging key precedence. Remaining Docker flag
   coverage stays queued. Umask uses native octal parsing, a configured native
   creation client and daemon confirmation before start. Deprecated kernel-memory
   uses native memory-size validation without applying a resource limit. Explicit
   attachment follows upstream's inherited stdout/stderr streams, native stream
-  validation, interactive stdin union, and detach conflict. New containers attach
+  validation, interactive stdin union, and detach conflict. New containers
+  attach
   before start; streams follow the caller context. Cidfile reserves a local path
   before creation, writes exact ID bytes before start, removes unwritten
-  reservations, and retains written IDs on both creation routes. Network endpoint flags retain first-attachment legacy
+  reservations, and retains written IDs on both creation routes. Network
+  endpoint flags retain first-attachment legacy
   values, repeated native CSV attachments, aliases, IP addresses, MAC addresses,
   links, driver options, gateway priority, and conflict validation. Endpoint
-  configuration reaches Engine creation; daemon enforcement stays daemon-owned. CPU period, quota, and realtime values use Docker integer
+  configuration reaches Engine creation; daemon enforcement stays daemon-owned.
+  CPU period, quota, and realtime values use Docker integer
   parsing; NanoCPU values use the native exact rational parser. Swappiness and
   block I/O weight retain Docker integer forms and final scalar values. CPU
   shares, PID limits, and OOM score adjustments accept base-zero integers;
@@ -66,19 +73,22 @@ runtime consumers require pinned differential checks and corrections:
   native integer and memory-size grammar. Platform enforcement is daemon-owned.
 - `build.options --network` maps default/empty, none and host modes to the
   Dockerfile frontend, with final scalar precedence and host entitlement on
-  both solve routes. Image labels map to the final image configuration. Build arguments map to native frontend arguments. Cache options use native buildx parsing and BuildKit sessions. Other build flags still
+  both solve routes. Image labels map to the final image configuration. Build
+  arguments map to native frontend arguments. Cache options use native buildx
+  parsing and BuildKit sessions. Other build flags still
   need native mappings. The network
   comparison covers pinned argv and native BuildKit acceptance, not network
   traffic enforcement or full build flag coverage.
 - `initializeCommand` runs natively on the host for every CLI up before build
-  and container startup. The pinned entry point, workspace cwd, host environment,
+  and container startup. The pinned entry point, workspace cwd, host
+  environment,
   shell/argv/parallel forms, error and interrupt behavior define this mapping.
   This does not claim full schema validation or terminal emulation parity.
 - Kubernetes image-source projection uses the pinned shell wrapper and Feature
   entrypoints. Explicit false command override requires native OCI image
   configuration and appends Entrypoint then Cmd. Configuration environment wins
-  over ordered Features, above native image inheritance. Compose command/env
-  parity and supported Docker argument translations still need checks.
+  over ordered Features, above native image inheritance. Supported Docker
+  argument translations still need checks.
 
 Build options image labels use native buildx array parsing and last-key
 precedence. Empty keys fail before staging. Final image configuration retains
@@ -95,11 +105,13 @@ Each correction needs tests, valid guard mutations with green controls, a clean
 full gate, and independent review. The command option inventory is a separate
 measurement and does not establish configuration schema conformance.
 
-Build options accept repeated `--build-arg KEY=VALUE` and `--build-arg=KEY=VALUE`.
+Build options accept repeated `--build-arg KEY=VALUE` and `--build-
+arg=KEY=VALUE`.
 Arguments override `build.args`; explicit library build arguments apply last.
 Bare keys inherit the host environment when set. Unset bare keys leave earlier
 values intact; explicit empty values remain empty. Empty keys are invalid.
-Metadata and image user inference use `build.args` independently of these options,
+Metadata and image user inference use `build.args` independently of these
+options,
 as in the pinned upstream CLI. Generated feature arguments retain their own
 staging and final image handling.
 
@@ -136,9 +148,22 @@ from lifecycle `--secrets-file` values.
 
 Kubernetes image-source `runArgs` maps native boolean assignments, combined and
 attached short forms, stdin and TTY. Bare environment keys use `LocalEnv` (nil
-uses the process environment); explicit empty maps disable inheritance. Final unset
+uses the process environment); explicit empty maps disable inheritance. Final
+unset
 keys require `ImageConfig`; removing an image-owned variable returns an error.
 Merged security flags follow `runArgs`; merged security options use first-seen
 union order. Detach conflicts with inherited output
 attachment, and enabled init has no PodSpec equivalent. Other Docker flag and
-Compose translations remain separate coverage.
+remaining Compose translations remain separate coverage.
+
+Kubernetes `ProjectCompose` primary command projection defaults
+`overrideCommand`
+to false. Its shell wrapper runs Feature entrypoints in order, then the service
+entrypoint and command. Absent service values fall back to the image; an
+explicit
+empty entrypoint suppresses both image Entrypoint and Cmd, and an explicit empty
+command suppresses image Cmd. Configuration `containerEnv` overrides ordered
+Features, then service environment, above inherited image environment. Dollars
+remain literal. Sidecar empty-command and environment-unset semantics, full
+Compose `runArgs`, and native host Compose command overrides need separate
+checks.

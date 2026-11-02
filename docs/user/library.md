@@ -428,4 +428,23 @@ keys require `ImageConfig`; removing an image-owned variable returns an error.
 Merged security flags follow `runArgs`; merged security options use first-seen
 union order. Detach conflicts with inherited output
 attachment, and enabled init has no PodSpec equivalent. Other Docker flag and
-Compose translations remain separate coverage.
+remaining Compose translations remain separate coverage.
+
+Kubernetes `ProjectCompose` primary command projection defaults `overrideCommand`
+to false. Its shell wrapper runs Feature entrypoints in order, then the service
+entrypoint and command. Absent service values fall back to the image; an explicit
+empty entrypoint suppresses both image Entrypoint and Cmd, and an explicit empty
+command suppresses image Cmd. Configuration `containerEnv` overrides ordered
+Features, then service environment, above inherited image environment. Dollars
+remain literal. Sidecar empty-command and environment-unset semantics, full
+Compose `runArgs`, and native host Compose command overrides need separate checks.
+
+Pass the selected image's native OCI configuration as
+`ComposeProjectRequest.PrimaryImageConfig` when image command fallback is needed.
+A nil value returns a contextual error; an explicit empty `oci.ImageConfig`
+represents an image with no command. `overrideCommand: true` needs no image
+configuration for commands. Explicit service entrypoints also need no image
+command fallback. A final nil service environment value requires image
+configuration so projection can determine whether omission is sufficient.
+Removing an image-owned variable returns an error; a Feature or configuration
+overlay can replace the nil value. These are library inputs, not schema fields.

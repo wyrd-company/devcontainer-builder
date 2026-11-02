@@ -9,6 +9,7 @@ import (
 
 	composeloader "github.com/compose-spec/compose-go/v2/loader"
 	composetypes "github.com/compose-spec/compose-go/v2/types"
+	oci "github.com/opencontainers/image-spec/specs-go/v1"
 	corev1 "k8s.io/api/core/v1"
 
 	"github.com/wyrd-company/devcontainer-builder/pkg/spec"
@@ -60,11 +61,12 @@ func TestProjectCompose_PrimaryAndSidecar(t *testing.T) {
 	dc, proj, workspace := loadProjectForTest(t, composeBody, specBody)
 
 	out, err := ProjectCompose(ComposeProjectRequest{
-		Spec:           dc,
-		LocalWorkspace: workspace,
-		Project:        proj,
-		Name:           "alice-dev",
-		Namespace:      "dev",
+		PrimaryImageConfig: &oci.ImageConfig{},
+		Spec:               dc,
+		LocalWorkspace:     workspace,
+		Project:            proj,
+		Name:               "alice-dev",
+		Namespace:          "dev",
 	})
 	if err != nil {
 		t.Fatalf("ProjectCompose: %v", err)
@@ -127,10 +129,11 @@ volumes:
 	dc, proj, workspace := loadProjectForTest(t, composeBody, specBody)
 
 	out, err := ProjectCompose(ComposeProjectRequest{
-		Spec:           dc,
-		LocalWorkspace: workspace,
-		Project:        proj,
-		Name:           "alice-dev",
+		PrimaryImageConfig: &oci.ImageConfig{},
+		Spec:               dc,
+		LocalWorkspace:     workspace,
+		Project:            proj,
+		Name:               "alice-dev",
 	})
 	if err != nil {
 		t.Fatalf("ProjectCompose: %v", err)
@@ -205,10 +208,11 @@ volumes:
 	dc, proj, workspace := loadProjectForTest(t, composeBody, specBody)
 
 	out, err := ProjectCompose(ComposeProjectRequest{
-		Spec:           dc,
-		LocalWorkspace: workspace,
-		Project:        proj,
-		Name:           "alice-dev",
+		PrimaryImageConfig: &oci.ImageConfig{},
+		Spec:               dc,
+		LocalWorkspace:     workspace,
+		Project:            proj,
+		Name:               "alice-dev",
 	})
 	if err != nil {
 		t.Fatalf("ProjectCompose: %v", err)
@@ -243,10 +247,11 @@ func TestProjectCompose_BindBecomesHostPath(t *testing.T) {
 	dc, proj, workspace := loadProjectForTest(t, composeBody, specBody)
 
 	out, err := ProjectCompose(ComposeProjectRequest{
-		Spec:           dc,
-		LocalWorkspace: workspace,
-		Project:        proj,
-		Name:           "alice-dev",
+		PrimaryImageConfig: &oci.ImageConfig{},
+		Spec:               dc,
+		LocalWorkspace:     workspace,
+		Project:            proj,
+		Name:               "alice-dev",
 	})
 	if err != nil {
 		t.Fatalf("ProjectCompose: %v", err)
@@ -279,10 +284,11 @@ func TestProjectCompose_RejectsCommodeRunAsSidecarWithoutImage(t *testing.T) {
 	dc, proj, workspace := loadProjectForTest(t, composeBody, specBody)
 
 	_, err := ProjectCompose(ComposeProjectRequest{
-		Spec:           dc,
-		LocalWorkspace: workspace,
-		Project:        proj,
-		Name:           "alice-dev",
+		PrimaryImageConfig: &oci.ImageConfig{},
+		Spec:               dc,
+		LocalWorkspace:     workspace,
+		Project:            proj,
+		Name:               "alice-dev",
 	})
 	if err == nil {
 		t.Fatal("expected error for sidecar without image; got nil")
@@ -301,11 +307,12 @@ func TestProjectCompose_PrimaryImageOverride(t *testing.T) {
 	dc, proj, workspace := loadProjectForTest(t, composeBody, specBody)
 
 	out, err := ProjectCompose(ComposeProjectRequest{
-		Spec:           dc,
-		LocalWorkspace: workspace,
-		Project:        proj,
-		PrimaryImage:   "registry/derived:tag",
-		Name:           "alice-dev",
+		PrimaryImageConfig: &oci.ImageConfig{},
+		Spec:               dc,
+		LocalWorkspace:     workspace,
+		Project:            proj,
+		PrimaryImage:       "registry/derived:tag",
+		Name:               "alice-dev",
 	})
 	if err != nil {
 		t.Fatalf("ProjectCompose: %v", err)
@@ -332,10 +339,11 @@ func TestProjectCompose_HostAliasesForServiceNameDNS(t *testing.T) {
 	dc, proj, workspace := loadProjectForTest(t, composeBody, specBody)
 
 	out, err := ProjectCompose(ComposeProjectRequest{
-		Spec:           dc,
-		LocalWorkspace: workspace,
-		Project:        proj,
-		Name:           "alice-dev",
+		PrimaryImageConfig: &oci.ImageConfig{},
+		Spec:               dc,
+		LocalWorkspace:     workspace,
+		Project:            proj,
+		Name:               "alice-dev",
 	})
 	if err != nil {
 		t.Fatalf("ProjectCompose: %v", err)
@@ -372,11 +380,12 @@ func TestProjectCompose_HostAliasesIncludeProfileEnabledServices(t *testing.T) {
 	dc, proj, workspace := loadProjectForTest(t, composeBody, specBody)
 
 	out, err := ProjectCompose(ComposeProjectRequest{
-		Spec:           dc,
-		LocalWorkspace: workspace,
-		Project:        proj,
-		Name:           "alice-dev",
-		Profiles:       []string{"full"},
+		PrimaryImageConfig: &oci.ImageConfig{},
+		Spec:               dc,
+		LocalWorkspace:     workspace,
+		Project:            proj,
+		Name:               "alice-dev",
+		Profiles:           []string{"full"},
 	})
 	if err != nil {
 		t.Fatalf("ProjectCompose: %v", err)

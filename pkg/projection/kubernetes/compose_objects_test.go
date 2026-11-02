@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	oci "github.com/opencontainers/image-spec/specs-go/v1"
 	corev1 "k8s.io/api/core/v1"
 )
 
@@ -28,11 +29,12 @@ configs:
 	dc, proj, workspace := loadProjectForTest(t, composeBody, specBody)
 
 	out, err := ProjectCompose(ComposeProjectRequest{
-		Spec:           dc,
-		LocalWorkspace: workspace,
-		Project:        proj,
-		Name:           "alice-dev",
-		Namespace:      "dev",
+		PrimaryImageConfig: &oci.ImageConfig{},
+		Spec:               dc,
+		LocalWorkspace:     workspace,
+		Project:            proj,
+		Name:               "alice-dev",
+		Namespace:          "dev",
 	})
 	if err != nil {
 		t.Fatalf("ProjectCompose: %v", err)
@@ -83,12 +85,13 @@ secrets:
 	dc, proj, workspace := loadProjectForTest(t, composeBody, specBody)
 
 	out, err := ProjectCompose(ComposeProjectRequest{
-		Spec:           dc,
-		LocalWorkspace: workspace,
-		Project:        proj,
-		Name:           "alice-dev",
-		Namespace:      "dev",
-		LocalEnv:       map[string]string{"API_KEY": "abc123"},
+		PrimaryImageConfig: &oci.ImageConfig{},
+		Spec:               dc,
+		LocalWorkspace:     workspace,
+		Project:            proj,
+		Name:               "alice-dev",
+		Namespace:          "dev",
+		LocalEnv:           map[string]string{"API_KEY": "abc123"},
 	})
 	if err != nil {
 		t.Fatalf("ProjectCompose: %v", err)
@@ -134,10 +137,11 @@ secrets:
 	dc, proj, workspace := loadProjectForTest(t, composeBody, specBody)
 
 	out, err := ProjectCompose(ComposeProjectRequest{
-		Spec:           dc,
-		LocalWorkspace: workspace,
-		Project:        proj,
-		Name:           "alice-dev",
+		PrimaryImageConfig: &oci.ImageConfig{},
+		Spec:               dc,
+		LocalWorkspace:     workspace,
+		Project:            proj,
+		Name:               "alice-dev",
 	})
 	if err != nil {
 		t.Fatalf("ProjectCompose: %v", err)
@@ -169,10 +173,11 @@ func TestProjectCompose_ProfilesFilter(t *testing.T) {
 
 	// Without profiles, only app comes through.
 	out, err := ProjectCompose(ComposeProjectRequest{
-		Spec:           dc,
-		LocalWorkspace: workspace,
-		Project:        proj,
-		Name:           "alice-dev",
+		PrimaryImageConfig: &oci.ImageConfig{},
+		Spec:               dc,
+		LocalWorkspace:     workspace,
+		Project:            proj,
+		Name:               "alice-dev",
 	})
 	if err != nil {
 		t.Fatalf("ProjectCompose: %v", err)
@@ -183,11 +188,12 @@ func TestProjectCompose_ProfilesFilter(t *testing.T) {
 
 	// With debug profile, perftools comes too.
 	out, err = ProjectCompose(ComposeProjectRequest{
-		Spec:           dc,
-		LocalWorkspace: workspace,
-		Project:        proj,
-		Name:           "alice-dev",
-		Profiles:       []string{"debug"},
+		PrimaryImageConfig: &oci.ImageConfig{},
+		Spec:               dc,
+		LocalWorkspace:     workspace,
+		Project:            proj,
+		Name:               "alice-dev",
+		Profiles:           []string{"debug"},
 	})
 	if err != nil {
 		t.Fatalf("ProjectCompose: %v", err)
@@ -211,10 +217,11 @@ secrets:
 	dc, proj, workspace := loadProjectForTest(t, composeBody, specBody)
 
 	_, err := ProjectCompose(ComposeProjectRequest{
-		Spec:           dc,
-		LocalWorkspace: workspace,
-		Project:        proj,
-		Name:           "alice-dev",
+		PrimaryImageConfig: &oci.ImageConfig{},
+		Spec:               dc,
+		LocalWorkspace:     workspace,
+		Project:            proj,
+		Name:               "alice-dev",
 		// LocalEnv intentionally omits API_KEY.
 	})
 	if err == nil {

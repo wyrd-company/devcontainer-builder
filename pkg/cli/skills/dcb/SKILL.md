@@ -1,6 +1,8 @@
 ---
 name: dcb
-description: Build and manage development containers with dcb, inspect configuration, run container commands and lifecycle hooks, or stage features and VS Code server archives.
+description: Build and manage development containers with dcb, inspect
+configuration, run container commands and lifecycle hooks, or stage features and
+VS Code server archives.
 relationships:
   references: [CONTRIBUTING]
 ---
@@ -16,31 +18,38 @@ workspace configuration path). For commands other than `exec`, flags can
 follow positional arguments.
 
 Use upstream configuration forms: `build.dockerfile` with `build.context`, or
-`dockerFile` with top-level `context`. Both paths resolve from `devcontainer.json`.
+`dockerFile` with top-level `context`. Both paths resolve from
+`devcontainer.json`.
 `dockerComposeFile` and `build.cacheFrom` accept strings or string arrays;
 parallel lifecycle command values are strings or string arrays.
 
 Common-only configurations can be read; build and up require a source.
-An empty `dockerComposeFile` array discovers files from workspace `COMPOSE_FILE`,
+An empty `dockerComposeFile` array discovers files from workspace
+`COMPOSE_FILE`,
 then workspace `.env`, then `docker-compose.yml` and its existing override file.
 `containerEnv` values are strings; `remoteEnv` values are strings or null.
 Remote null becomes the literal string `"null"` for exec and lifecycle commands.
 
 Kubernetes library image-source projection uses the upstream command wrapper and
-Feature entrypoints. With `overrideCommand: false`, supply native OCI ImageConfig
+Feature entrypoints. With `overrideCommand: false`, supply native OCI
+ImageConfig
 in the projection or host request; missing image configuration is an error.
-Configuration environment overrides Features; the image supplies inherited values.
-This is a library surface; Kubernetes runArgs and Compose parity remain separate.
+Configuration environment overrides Features; the image supplies inherited
+values.
+This is a library surface; remaining Kubernetes argument translations need
+checks.
 
 `exec` stops reading options at the container command; every later argument
 passes through unchanged. An explicit `--` before the command also works.
 
-Invocations except help and exec normally emit one JSON object on one stdout line.
+Invocations except help and exec normally emit one JSON object on one stdout
+line.
 `outdated` emits its version report instead.
 `upgrade` writes no stdout on success, or pretty lockfile JSON with `--dry-run`.
 It retains existing integrity pins. The paired `--feature`/`--target-version`
 flags update a requirement before resolution, including during dry-run.
-Dry-run can refresh an existing lockfile. Operation errors use stderr and exit 1.
+Dry-run can refresh an existing lockfile. Operation errors use stderr and exit
+1.
 `features resolve-dependencies` emits a Mermaid graph followed by pretty JSON
 installation order. It reads `.devcontainer.json` before
 `.devcontainer/devcontainer.json`, uses lockfile pins, and does not install
@@ -49,7 +58,8 @@ Features or write lockfiles. Cycles fail after graph output.
 or JSON (`--output-format json`). Modes are manifest, tags, dependencies, and
 verbose. Every mode requires a manifest; JSON dependencies returns `{}`.
 Archive exports to stdout emit only archive bytes. An interactive terminal is
-refused with exit code 2 and a JSON error result; use a pipe or file destination.
+refused with exit code 2 and a JSON error result; use a pipe or file
+destination.
 Check `outcome`: `success` or `error`. Errors include `message` and
 `description`. Invalid invocations exit 2 and retain this JSON error result,
 including invalid exec invocations. Other operation failures exit 1.
@@ -58,7 +68,8 @@ including invalid exec invocations. Other operation failures exit 1.
 log modes, emits no result line, and returns the child's exit code. Capture
 stdout to capture command output. With `--tty`, the terminal combines child
 streams on stdout. If dcb fails before or outside the child, stdout is empty,
-stderr carries a dcb error, and dcb exits 1. A child exit code of 1 is ambiguous;
+stderr carries a dcb error, and dcb exits 1. A child exit code of 1 is
+ambiguous;
 dcb marks its text-mode error diagnostic on stderr with `dcb: error: `.
 In JSON mode, the error record has `type: diagnostic`, `level: error`, and the
 message in `text` without the text-mode prefix. These identify dcb diagnostics;
@@ -94,8 +105,10 @@ standard `DOCKER_*` environment. Builds use Docker Engine's BuildKit by
 default; `--buildkit-addr` selects a separate BuildKit instance.
 
 Numeric `appPort` values map to the same port on loopback. Strings retain Docker
-publishing syntax; `"8080"` requests an allocated host port. Docker mount strings
-in `workspaceMount`, `mounts`, and `runArgs --mount` retain Docker options and CSV
+publishing syntax; `"8080"` requests an allocated host port. Docker mount
+strings
+in `workspaceMount`, `mounts`, and `runArgs --mount` retain Docker options and
+CSV
 quoting. An omitted string mount type defaults to volume. Invalid options fail.
 
 Build or inspect build artifacts:
@@ -136,10 +149,12 @@ GitHub link values do not perform that conversion.
 Use `--push` for registry export, `--platform` for target platforms,
 `--no-cache` to disable cache, and repeated `--cache-from` / `--cache-to`
 for cache settings. Use `build --load=false` to warm the build cache without
-exporting an image. `--output` accepts a buildx exporter specification or directory
+exporting an image. `--output` accepts a buildx exporter specification or
+directory
 and cannot be
 combined with `--push` or `--load`. The result contains `cacheOnly: true`
-for a cache-only build, or `output` for an exporter (`outputDir` also names a local
+for a cache-only build, or `output` for an exporter (`outputDir` also names a
+local
 destination). Archive exports to stdout omit the JSON result. `generate` returns
 `dockerfile` and `contextDir` paths and retains its output folder.
 `build` and `up` remove staging on success and failure unless `--keep` is set,
@@ -155,7 +170,8 @@ options win. Invalid JSON exits `2`.
 `up` uses `--build-no-cache` to disable build cache. Export flags `--push`,
 `--load`, and `--output`, and `--no-cache`, belong to `build`.
 `up --update-remote-user-uid-default on` remaps unless the configuration sets
-`updateRemoteUserUID: false`; on Linux, `off` remaps only with an explicit `true`;
+`updateRemoteUserUID: false`; on Linux, `off` remaps only with an explicit
+`true`;
 `never` disables remapping. Linux remaps by default. macOS requires explicit
 `--update-remote-user-uid-default on`, even with `updateRemoteUserUID: true`.
 
@@ -211,7 +227,8 @@ their JavaScript text). Both apply only to that command's lifecycle
 commands and dotfiles install; `exec` does not get them. For these commands,
 configuration `remoteEnv` wins over `--remote-env`; secrets win over both.
 Secret values,
-and their quoted, JSON, base64 and URL-escaped forms, show as `********` in stderr
+and their quoted, JSON, base64 and URL-escaped forms, show as `********` in
+stderr
 and the result. An unreadable or malformed
 secrets file exits `1` and names the path, not the content.
 
@@ -222,7 +239,8 @@ lists bundled skills; `dcb skills dcb` prints this skill in the result's
 chosen directory.
 
 `up` and `set-up` accept `--include-configuration` and
-`--include-merged-configuration` to add configuration snapshots to their results.
+`--include-merged-configuration` to add configuration snapshots to their
+results.
 Both default to false. `read-configuration --include-features-configuration`
 adds resolved feature metadata, values and sources as `featuresConfiguration`
 when features exist. `read-configuration` substitutes the existing container's
@@ -278,23 +296,28 @@ Upstream feature controls are hidden and default to false.
 and `run-user-commands` disables legacy feature identifier mapping.
 `build --skip-persisting-customizations-from-features` omits referenced feature
 customizations from image metadata. Configuration and inherited customizations
-remain. `up --omit-config-remote-env-from-metadata` omits configuration remoteEnv
+remain. `up --omit-config-remote-env-from-metadata` omits configuration
+remoteEnv
 from new metadata labels; remoteEnv persists by default and remains available to
-runtime commands. `build --omit-syntax-directive` and `up --omit-syntax-directive`
+runtime commands. `build --omit-syntax-directive` and `up --omit-syntax-
+directive`
 ignore authored syntax directives and omit generated directives.
 
-`templates generate-docs` writes README.md in visible Template child folders from
+`templates generate-docs` writes README.md in visible Template child folders
+from
 `devcontainer-template.json` and optional NOTES.md. It uses `-p` (default `.`),
 `--github-owner`, and `--github-repo`; success leaves stdout empty.
 
 ## Report Feature versions
 
 Use `dcb outdated --workspace-folder .` for a text table, or add
-`--output-format json` for a `features` report with current, wanted, wantedMajor,
+`--output-format json` for a `features` report with current, wanted,
+wantedMajor,
 latest, and latestMajor fields. Unavailable JSON fields are omitted. The report
 has no outcome field. Config order is retained. Local Features are omitted.
 Current uses the lockfile when present; wanted follows the configured tag or
-digest metadata; latest uses the highest full semver tag. Lockfiles are unchanged.
+digest metadata; latest uses the highest full semver tag. Lockfiles are
+unchanged.
 This command needs registry access and no Docker daemon. `--config` selects an
 explicit file. User data folder is accepted and unused. Log levels are info,
 debug, and trace. Terminal dimensions must be supplied together.
@@ -306,7 +329,8 @@ the Engine API. `--entrypoint` is replaced by the upstream keepalive entrypoint.
 New Docker containers inherit stdout/stderr attachment. `--attach` validates
 case-insensitive stdin/stdout/stderr; `-i` also attaches stdin. A final true
 `--detach` conflicts with inherited attachment; `--detach=false` is valid.
-`--cidfile` reserves a client-side path before creation and writes the ID without
+`--cidfile` reserves a client-side path before creation and writes the ID
+without
 a newline before start. Existing files stop creation unchanged; failed creation
 or writing removes the unwritten reservation. Written IDs persist. Repeated
 paths use the final value; an empty final value disables the file.
@@ -316,13 +340,15 @@ Files load before explicit environment and label flags. Paths use the process
 working directory. Merged init, privileged, capability and security option flags
 follow runArgs, as in the upstream CLI.
 
-`--umask` uses Docker octal parsing and the final value, including explicit zero.
+`--umask` uses Docker octal parsing and the final value, including explicit
+zero.
 Creation confirms the value in daemon inspection before start. If the daemon
 omits or changes it, dcb removes the new container and reports an error.
 `--kernel-memory` validates Docker memory-size syntax and has no effect, as in
 the native Docker CLI's deprecated flag.
 
-Docker CPU run arguments preserve exact NanoCPU values through native Docker parsing.
+Docker CPU run arguments preserve exact NanoCPU values through native Docker
+parsing.
 `--cpu-period`, `--cpu-quota`, `--cpu-rt-period`, and `--cpu-rt-runtime`
 retain Docker integer parsing and the final scalar value, including zero.
 Daemon resource and platform validation still applies.
@@ -355,28 +381,35 @@ kernel determine whether the requested limits can be enforced.
 
 Docker `runArgs` health options (`--health-cmd`, `--health-interval`,
 `--health-timeout`, `--health-start-period`, `--health-start-interval`, and
-`--health-retries`) retain Docker values. `--no-healthcheck` disables image health
+`--health-retries`) retain Docker values. `--no-healthcheck` disables image
+health
 checks and conflicts with nonzero health options. Repeated scalar flags use the
-last value. `--log-driver` and `--log-opt` preserve logging configuration; repeated
-option keys use the last value. Docker rejects logging options for driver `none`.
+last value. `--log-driver` and `--log-opt` preserve logging configuration;
+repeated
+option keys use the last value. Docker rejects logging options for driver
+`none`.
 
 `build.options --network` supports default, none and host for Dockerfile RUN
 instructions. Repeated values use the last value. Host mode requests the native
-BuildKit network.host entitlement. The daemon must allow it. Build flags other than network, image labels, build arguments and target selection
+BuildKit network.host entitlement. The daemon must allow it. Build flags other
+than network, image labels, build arguments and target selection
 currently return an explicit unsupported-option error.
 
 `build.options --label` sets image labels through native BuildKit. Repeated
 keys use the last value; bare keys use empty values. Empty keys fail before
 staging. Explicit library labels override configuration labels.
 
-Scratch-only Dockerfiles can build without filesystem layers. Image configuration
+Scratch-only Dockerfiles can build without filesystem layers. Image
+configuration
 is retained when the Dockerfile frontend returns an empty filesystem.
 
-Build options accept repeated `--build-arg KEY=VALUE` and `--build-arg=KEY=VALUE`.
+Build options accept repeated `--build-arg KEY=VALUE` and `--build-
+arg=KEY=VALUE`.
 Arguments override `build.args`; explicit library build arguments apply last.
 Bare keys inherit the host environment when set. Unset bare keys leave earlier
 values intact; explicit empty values remain empty. Empty keys are invalid.
-Metadata and image user inference use `build.args` independently of these options,
+Metadata and image user inference use `build.args` independently of these
+options,
 as in the pinned upstream CLI. Generated feature arguments retain their own
 staging and final image handling.
 
@@ -413,9 +446,22 @@ from lifecycle `--secrets-file` values.
 
 Kubernetes image-source `runArgs` maps native boolean assignments, combined and
 attached short forms, stdin and TTY. Bare environment keys use `LocalEnv` (nil
-uses the process environment); explicit empty maps disable inheritance. Final unset
+uses the process environment); explicit empty maps disable inheritance. Final
+unset
 keys require `ImageConfig`; removing an image-owned variable returns an error.
 Merged security flags follow `runArgs`; merged security options use first-seen
 union order. Detach conflicts with inherited output
 attachment, and enabled init has no PodSpec equivalent. Other Docker flag and
-Compose translations remain separate coverage.
+remaining Compose translations remain separate coverage.
+
+Kubernetes `ProjectCompose` primary command projection defaults
+`overrideCommand`
+to false. Its shell wrapper runs Feature entrypoints in order, then the service
+entrypoint and command. Absent service values fall back to the image; an
+explicit
+empty entrypoint suppresses both image Entrypoint and Cmd, and an explicit empty
+command suppresses image Cmd. Configuration `containerEnv` overrides ordered
+Features, then service environment, above inherited image environment. Dollars
+remain literal. Sidecar empty-command and environment-unset semantics, full
+Compose `runArgs`, and native host Compose command overrides need separate
+checks.

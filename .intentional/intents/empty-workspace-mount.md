@@ -77,3 +77,8 @@ configuration and preserve Feature/configuration environment precedence.
 
 Preserve Kubernetes image-source runArgs booleans, short forms, stdin, TTY,
 host environment inheritance and merged security flag precedence.
+
+Preserve Kubernetes Compose primary service command defaults, explicit empty
+commands, image fallback, Feature entrypoints, literal dollars and configuration
+environment precedence. Report missing image configuration and unrepresentable
+image environment removals with primary service context.
