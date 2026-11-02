@@ -284,7 +284,16 @@ func TestCuratedCLIUnsupportedBuildOptionsError(t *testing.T) {
 	root := referenceRoot(t, "cli")
 	workspace := filepath.Join(root, "reference", "cli", "src", "test", "configs", "dockerfile-with-target")
 
-	_, err := builder.New().Build(context.Background(), builder.Options{
+	// This pinned fixture contains --label, which is supported. Keep the
+	// unsupported-option contract on a native session flag that remains unmapped.
+	dc, err := spec.LoadFromWorkspace(workspace)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dc.Build.Options = append(dc.Build.Options, "--ssh", "default")
+
+	_, err = builder.New().Build(context.Background(), builder.Options{
+		Spec:         dc,
 		Workspace:    workspace,
 		WorkDir:      t.TempDir(),
 		SkipFeatures: true,
@@ -294,6 +303,34 @@ func TestCuratedCLIUnsupportedBuildOptionsError(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "build.options is not supported") {
 		t.Fatalf("error = %q, want stable build.options message", err.Error())
+	}
+}
+
+// TestCuratedCLIBuildOptionLabels accepts the unmodified pinned label fixture.
+// The native Engine label regression verifies the final exported image labels.
+func TestCuratedCLIBuildOptionLabels(t *testing.T) {
+	root := referenceRoot(t, "cli")
+	workspace := filepath.Join(root, "reference", "cli", "src", "test", "configs", "dockerfile-with-target")
+	dc, err := spec.LoadFromWorkspace(workspace)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !equalStrings(dc.Build.Options, []string{"--label", "test_build_options=success"}) {
+		t.Fatalf("pinned fixture options=%v", dc.Build.Options)
+	}
+	result, err := builder.New().Generate(context.Background(), builder.Options{Spec: dc, Workspace: workspace, WorkDir: t.TempDir(), SkipFeatures: true, SkipImageMetaResolve: true})
+	if err != nil {
+		t.Fatalf("Generate pinned labels: %v", err)
+	}
+	if result.FinalDockerfile == "" {
+		t.Fatal("no generated Dockerfile")
+	}
+
+	// Build must admit the label fixture before reaching this independent,
+	// deterministic exporter check. Generate alone does not parse build options.
+	_, err = builder.New().Build(context.Background(), builder.Options{Spec: dc, Workspace: workspace, WorkDir: t.TempDir(), SkipFeatures: true, SkipImageMetaResolve: true, Push: true})
+	if err == nil || err.Error() != "--push requires at least one --tag" {
+		t.Fatalf("Build did not admit pinned labels before exporter validation: %v", err)
 	}
 }
 
