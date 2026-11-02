@@ -107,6 +107,12 @@ Docker CPU run arguments preserve exact NanoCPU values through native Docker par
 retain Docker integer parsing and the final scalar value, including zero.
 Daemon resource and platform validation still applies.
 
+`--memory-swappiness` accepts Docker integer forms and final values of -1 or
+0–100. `--blkio-weight`, `--cpu-shares`, `--pids-limit`, and `--oom-score-adj`
+retain Docker integer parsing and final scalar values, including zero.
+`--oom-kill-disable` uses Docker boolean spellings. Daemon resource validation
+still applies.
+
 Docker `runArgs` health options (`--health-cmd`, `--health-interval`,
 `--health-timeout`, `--health-start-period`, `--health-start-interval`, and
 `--health-retries`) retain Docker values. `--no-healthcheck` disables image health

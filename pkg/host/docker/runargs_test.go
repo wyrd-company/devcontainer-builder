@@ -580,3 +580,86 @@ func TestRunArgsCPUPeriodErrors(t *testing.T) {
 		}
 	}
 }
+
+func TestRunArgsMemorySwappiness(t *testing.T) {
+	for _, tc := range []struct {
+		args []string
+		want int64
+	}{
+		{[]string{"--memory-swappiness=0"}, 0},
+		{[]string{"--memory-swappiness=0x64"}, 100},
+		{[]string{"--memory-swappiness=-1"}, -1},
+		{[]string{"--memory-swappiness=101", "--memory-swappiness=010"}, 8},
+		{[]string{"--memory-swappiness=100", "--memory-swappiness=0"}, 0},
+	} {
+		_, h := applyForTest(t, tc.args)
+		if h.MemorySwappiness == nil || *h.MemorySwappiness != tc.want {
+			t.Fatalf("%v: got %v want %d", tc.args, h.MemorySwappiness, tc.want)
+		}
+	}
+}
+func TestRunArgsMemorySwappinessErrors(t *testing.T) {
+	for _, v := range []string{"-2", "101", "invalid", "9223372036854775808"} {
+		if _, _, err := tryApply([]string{"--memory-swappiness=" + v}); err == nil {
+			t.Fatalf("accepted swappiness %s", v)
+		}
+	}
+}
+func TestRunArgsBlkioWeight(t *testing.T) {
+	for _, tc := range []struct {
+		args []string
+		want uint16
+	}{
+		{[]string{"--blkio-weight=0x1f4"}, 500},
+		{[]string{"--blkio-weight=010"}, 8},
+		{[]string{"--blkio-weight=65535"}, 65535},
+		{[]string{"--blkio-weight=500", "--blkio-weight=0"}, 0},
+	} {
+		_, h := applyForTest(t, tc.args)
+		if h.BlkioWeight != tc.want {
+			t.Fatalf("%v: got %d want %d", tc.args, h.BlkioWeight, tc.want)
+		}
+	}
+	// Docker's CLI accepts uint16 values; the daemon owns effective weight bounds.
+}
+func TestRunArgsIntegerResources(t *testing.T) {
+	_, h := applyForTest(t, []string{"-c0x200", "--pids-limit=010", "--oom-score-adj=-0x64"})
+	if h.CPUShares != 512 || h.PidsLimit == nil || *h.PidsLimit != 8 || h.OomScoreAdj != -100 {
+		t.Fatalf("integer resources: %+v", h.Resources)
+	}
+	_, h = applyForTest(t, []string{"--cpu-shares=512", "--cpu-shares=0", "--pids-limit=-1", "--pids-limit=0", "--oom-score-adj=100", "--oom-score-adj=0"})
+	if h.CPUShares != 0 || h.PidsLimit == nil || *h.PidsLimit != 0 || h.OomScoreAdj != 0 {
+		t.Fatal("final scalar zero lost")
+	}
+}
+func TestRunArgsIntegerResourceErrors(t *testing.T) {
+	for _, flag := range []string{"--memory-swappiness", "--blkio-weight", "--cpu-shares", "--pids-limit", "--oom-score-adj"} {
+		for _, suffix := range []string{"", "=invalid", "=0x", "=18446744073709551616"} {
+			if _, _, err := tryApply([]string{flag + suffix}); err == nil {
+				t.Fatalf("accepted %s%s", flag, suffix)
+			}
+		}
+	}
+	for _, v := range []string{"-1", "65536"} {
+		if _, _, err := tryApply([]string{"--blkio-weight=" + v}); err == nil {
+			t.Fatalf("accepted uint16 %s", v)
+		}
+	}
+}
+func TestRunArgsOOMBoolean(t *testing.T) {
+	for _, v := range []string{"true", "1", "TRUE", "True", "t", "T", "false", "0", "FALSE", "False", "f", "F"} {
+		_, h := applyForTest(t, []string{"--oom-kill-disable=" + v})
+		if h.OomKillDisable == nil {
+			t.Fatal("missing bool")
+		}
+	}
+	_, h := applyForTest(t, []string{"--oom-kill-disable", "--oom-kill-disable=false"})
+	if h.OomKillDisable == nil || *h.OomKillDisable {
+		t.Fatal("final false lost")
+	}
+	for _, v := range []string{"yes", "no", "invalid"} {
+		if _, _, err := tryApply([]string{"--oom-kill-disable=" + v}); err == nil {
+			t.Fatalf("accepted non-Docker bool %s", v)
+		}
+	}
+}

@@ -31,6 +31,13 @@ func applyRunArgs(args []string, cfg *container.Config, host *container.HostConf
 	if err := p.applyHealthAndLogging(cfg, host); err != nil {
 		return "", err
 	}
+	if p.swappiness != nil {
+		n := *p.swappiness
+		if n != -1 && (n < 0 || n > 100) {
+			return "", fmt.Errorf("runArgs: --memory-swappiness: invalid value %d (expected -1 or 0-100)", n)
+		}
+		host.MemorySwappiness = p.swappiness
+	}
 	// Docker loads every file before explicit flags, regardless of argv order.
 	env, err := dockeropts.ReadKVEnvStrings(p.envFiles, cfg.Env)
 	if err != nil {
@@ -61,6 +68,7 @@ type runArgsParser struct {
 	noHealthcheck bool
 	logDriver     string
 	logOptions    []string
+	swappiness    *int64
 }
 
 func (p *runArgsParser) more() bool { return p.i < len(p.args) }
@@ -333,6 +341,26 @@ func (p *runArgsParser) step(cfg *container.Config, host *container.HostConfig) 
 	// ---------------------------------------------------------------
 	// Resource limits.
 	// ---------------------------------------------------------------
+	case "--memory-swappiness":
+		v, err := take()
+		if err != nil {
+			return err
+		}
+		n, err := strconv.ParseInt(v, 0, 64)
+		if err != nil {
+			return fmt.Errorf("runArgs: %s: %w", flag, err)
+		}
+		p.swappiness = &n
+	case "--blkio-weight":
+		v, err := take()
+		if err != nil {
+			return err
+		}
+		n, err := strconv.ParseUint(v, 0, 16)
+		if err != nil {
+			return fmt.Errorf("runArgs: %s: %w", flag, err)
+		}
+		host.BlkioWeight = uint16(n)
 	case "-m", "--memory":
 		v, err := take()
 		if err != nil {
@@ -412,7 +440,7 @@ func (p *runArgsParser) step(cfg *container.Config, host *container.HostConfig) 
 		if err != nil {
 			return err
 		}
-		n, err := strconv.ParseInt(v, 10, 64)
+		n, err := strconv.ParseInt(v, 0, 64)
 		if err != nil {
 			return fmt.Errorf("runArgs: --cpu-shares: %w", err)
 		}
@@ -434,7 +462,7 @@ func (p *runArgsParser) step(cfg *container.Config, host *container.HostConfig) 
 		if err != nil {
 			return err
 		}
-		n, err := strconv.ParseInt(v, 10, 64)
+		n, err := strconv.ParseInt(v, 0, 64)
 		if err != nil {
 			return fmt.Errorf("runArgs: --pids-limit: %w", err)
 		}
@@ -444,23 +472,17 @@ func (p *runArgsParser) step(cfg *container.Config, host *container.HostConfig) 
 		if err != nil {
 			return err
 		}
-		n, err := strconv.Atoi(v)
+		n, err := strconv.ParseInt(v, 0, strconv.IntSize)
 		if err != nil {
 			return fmt.Errorf("runArgs: --oom-score-adj: %w", err)
 		}
-		host.OomScoreAdj = n
+		host.OomScoreAdj = int(n)
 	case "--oom-kill-disable":
-		// docker allows --oom-kill-disable as a bool with optional value.
-		if !hasVal {
-			b := true
-			host.OomKillDisable = &b
-		} else {
-			b, err := parseBool(val)
-			if err != nil {
-				return fmt.Errorf("runArgs: --oom-kill-disable: %w", err)
-			}
-			host.OomKillDisable = &b
+		b, err := boolean()
+		if err != nil {
+			return err
 		}
+		host.OomKillDisable = &b
 
 	// ---------------------------------------------------------------
 	// Repeatable list flags.

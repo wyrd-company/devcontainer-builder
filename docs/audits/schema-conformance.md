@@ -36,7 +36,10 @@ runtime consumers require pinned differential checks and corrections:
   runArgs. Health and logging options retain native Docker values, final scalar precedence,
   health conflict checks and logging key precedence. Remaining Docker flag
   coverage stays queued. CPU period, quota, and realtime values use Docker integer
-  parsing; NanoCPU values use the native exact rational parser.
+  parsing; NanoCPU values use the native exact rational parser. Swappiness and
+  block I/O weight retain Docker integer forms and final scalar values. CPU
+  shares, PID limits, and OOM score adjustments accept base-zero integers;
+  OOM disable uses native boolean spellings.
 - Empty Compose file arrays require upstream Compose file discovery.
 - Reading a common-only document must not require a build/run source.
 - Environment values require schema type checks and pinned null-value behavior.

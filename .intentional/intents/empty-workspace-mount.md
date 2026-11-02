@@ -22,3 +22,6 @@ Accept Docker health and logging run arguments with native value precedence and
 conflict checks.
 
 Preserve exact Docker NanoCPU values and CPU period, quota, and realtime flags.
+
+Preserve Docker swappiness and block I/O weight, native integer forms for CPU
+shares, PID limits and OOM scores, and native OOM disable boolean spellings.
