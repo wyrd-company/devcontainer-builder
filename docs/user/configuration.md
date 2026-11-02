@@ -36,9 +36,9 @@ objects accept string or string-array values. Nested command objects are invalid
 value uses the default network. These options control Dockerfile `RUN`
 instructions. Host mode requests BuildKit's `network.host` entitlement; the
 daemon must allow it. Custom container network names are not BuildKit build
-networks. Image labels and build arguments are also supported, as described below.
-Remaining build flags
-return an explicit unsupported-option error.
+networks. Image labels, build arguments, and target selection are also supported,
+as described below. Remaining build flags return an explicit unsupported-option
+error.
 
 Build options also accept repeated `--label KEY=VALUE` or `--label=KEY=VALUE`.
 The last value for a key wins. Bare keys have empty values and do not inherit
