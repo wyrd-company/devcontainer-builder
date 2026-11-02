@@ -75,6 +75,10 @@ func Initialize(ctx context.Context, command spec.Command, opts InitializeOption
 			return fmt.Errorf("the initializeCommand in the devcontainer.json failed: %w", err)
 		}
 		cmd := exec.CommandContext(ctx, executable, args[1:]...)
+		// The resolver already selected the child executable. Avoid a second
+		// lookup of a bare name through the parent environment.
+		cmd.Path, cmd.Err = executable, nil
+		cmd.Args[0] = args[0]
 		cmd.Dir, cmd.Env, cmd.Stdin = opts.Workspace, opts.Env, opts.Stdin
 		var buffered bytes.Buffer
 		writer := writerFunc(func(p []byte) (int, error) { output(p); return len(p), nil })
@@ -84,6 +88,12 @@ func Initialize(ctx context.Context, command spec.Command, opts InitializeOption
 			cmd.Stdout, cmd.Stderr = writer, writer
 		}
 		err = cmd.Run()
+		if runtime.GOOS != "windows" && errors.Is(err, syscall.ENOEXEC) {
+			fallback := exec.CommandContext(ctx, "/bin/sh", append([]string{executable}, args[1:]...)...)
+			fallback.Dir, fallback.Env, fallback.Stdin = cmd.Dir, cmd.Env, cmd.Stdin
+			fallback.Stdout, fallback.Stderr = cmd.Stdout, cmd.Stderr
+			err = fallback.Run()
+		}
 		if name != "" {
 			output(buffered.Bytes())
 		}
@@ -137,6 +147,9 @@ func hostExecutable(name, workspace string, env []string) (string, error) {
 		return name, nil
 	}
 	if strings.ContainsAny(name, `/\`) {
+		if runtime.GOOS != "windows" {
+			return name, nil
+		}
 		return filepath.Join(dir, name), nil
 	}
 	if env == nil {
@@ -169,6 +182,7 @@ func hostExecutable(name, workspace string, env []string) (string, error) {
 		entries = []string{""}
 	}
 	for _, entry := range entries {
+		originalEntry := entry
 		if !filepath.IsAbs(entry) {
 			entry = filepath.Join(dir, entry)
 		}
@@ -176,6 +190,9 @@ func hostExecutable(name, workspace string, env []string) (string, error) {
 			candidate := filepath.Join(entry, name+suffix)
 			info, err := os.Stat(candidate)
 			if err == nil && !info.IsDir() && (runtime.GOOS == "windows" || info.Mode()&0111 != 0) {
+				if runtime.GOOS != "windows" {
+					return filepath.Join(originalEntry, name+suffix), nil
+				}
 				return candidate, nil
 			}
 		}

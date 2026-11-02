@@ -161,7 +161,8 @@ explicit service GPU reservations and `gpus` selection take precedence.
 
 `initializeCommand` runs on the host on every `up`, before build/start, in the
 local workspace with the host environment. Strings use the host shell, arrays
-execute directly, and object entries run in parallel. Failures abort startup;
+execute directly, and object entries run in parallel. Executable POSIX text
+scripts without a shebang use `/bin/sh`. Failures abort startup;
 SIGINT reports interruption and continues. It has no marker and does not run
 on build, generate, read-configuration, set-up, exec or run-user-commands.
 `up --skip-post-create` skips container lifecycle commands;

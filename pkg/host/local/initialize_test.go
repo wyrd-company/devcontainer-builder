@@ -26,6 +26,7 @@ func TestInitializeForms(t *testing.T) {
 	for _, tc := range []struct{ name, raw, want string }{
 		{"shell", `"printf '%s' \"$SAMPLE_VALUE\""`, "host-value"},
 		{"argv", `["printf","%s","$SAMPLE_VALUE"]`, "$SAMPLE_VALUE"},
+		{"argv-zero", `["sh","-c","printf %s \"$0\""]`, "sh"},
 		{"substitution", `["printf","%s","${localEnv:SAMPLE_VALUE}"]`, "host-value"},
 		{"empty", `[]`, ""}, {"whitespace", `"  "`, ""}, {"parallel-empty", `{"a":[],"b":""}`, ""},
 	} {
@@ -202,5 +203,35 @@ func TestInitializeWorkspacePath(t *testing.T) {
 	var output bytes.Buffer
 	if err := Initialize(context.Background(), spec.Command{Args: []string{"sample-command"}}, InitializeOptions{Workspace: dir, Env: []string{"PATH="}, Output: &output}); err != nil || output.String() != "cwd-command" {
 		t.Fatalf("empty PATH: %q %v", output.String(), err)
+	}
+}
+
+func TestInitializeExecutableScriptFallback(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("POSIX execvp fixtures")
+	}
+	for _, tc := range []struct {
+		name, body string
+		mode       os.FileMode
+		want       string
+		fail       bool
+	}{
+		{"text", "printf '%s|%s|%s' \"$0\" \"$1\" \"$SAMPLE_VALUE\"", 0700, "./sample-command|argument with spaces|host-value", false},
+		{"shebang", "#!/bin/sh\nprintf '%s|%s|%s' \"$0\" \"$1\" \"$SAMPLE_VALUE\"", 0700, "./sample-command|argument with spaces|host-value", false},
+		{"not-executable", "printf forbidden", 0600, "", true},
+		{"text-error", "exit 7", 0700, "", true},
+		{"text-interrupt", "exit 130", 0700, "initializeCommand interrupted.\n", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			if err := os.WriteFile(filepath.Join(dir, "sample-command"), []byte(tc.body), tc.mode); err != nil {
+				t.Fatal(err)
+			}
+			var output bytes.Buffer
+			err := Initialize(context.Background(), spec.Command{Args: []string{"./sample-command", "argument with spaces"}}, InitializeOptions{Workspace: dir, Env: []string{"SAMPLE_VALUE=host-value"}, Output: &output})
+			if (err != nil) != tc.fail || output.String() != tc.want {
+				t.Fatalf("output=%q err=%v want=%q fail=%v", output.String(), err, tc.want, tc.fail)
+			}
+		})
 	}
 }

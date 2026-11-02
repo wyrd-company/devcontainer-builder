@@ -92,6 +92,7 @@ starting containers, including with `--skip-post-create`. The working directory
 is the local workspace folder. Commands inherit the host environment;
 container and remote environment settings do not apply. Strings run through
 `/bin/sh -c` (Windows: `ComSpec /c`, default `cmd.exe`); arrays execute directly.
+Executable POSIX text scripts without a shebang use the native `/bin/sh` fallback.
 Object entries run in parallel and buffer each named command's output until it
 finishes. Empty commands do nothing. A failure aborts startup without cancelling
 parallel siblings; SIGINT reports an interruption and allows startup to continue.
