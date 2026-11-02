@@ -41,7 +41,6 @@ the environment. Empty keys are invalid. Commas, equals signs in values, and
 whitespace are retained using native buildx parsing. Labels reach the final image;
 explicit library image labels take precedence.
 
-
 An empty `dockerComposeFile` array selects discovery from the workspace folder.
 Configuration and merged output retain the empty array.
 Discovery uses `COMPOSE_FILE` from the supplied host environment, then the first
