@@ -96,7 +96,7 @@ func TestOverrideLiteralDollarsAndRemoteEnvExclusion(t *testing.T) {
 	dir := t.TempDir()
 	dc := &spec.DevContainer{Service: "app", DockerComposeFile: spec.StringOrSlice{filepath.Join(dir, "compose.yml")}}
 	// LoadProject uses a native file and compose-go interpolation.
-	writeComposeFixture(t, dir)
+	writeCommandEnvironmentFixture(t, dir)
 	out, err := OverrideYAML(OverrideInputs{Spec: dc, OverrideCommand: true, ContainerEnv: map[string]string{"VALUE": "$VALUE:${VALUE}:$$"}, RemoteEnv: map[string]string{"REMOTE": "exec"}, Labels: map[string]string{"literal": "$VALUE"}, Entrypoints: []string{`printf '%s' "$VALUE"`}})
 	if err != nil {
 		t.Fatal(err)
@@ -120,7 +120,7 @@ func TestOverrideLiteralDollarsAndRemoteEnvExclusion(t *testing.T) {
 	}
 }
 
-func writeComposeFixture(t *testing.T, dir string) {
+func writeCommandEnvironmentFixture(t *testing.T, dir string) {
 	t.Helper()
 	if err := os.WriteFile(filepath.Join(dir, "compose.yml"), []byte("services:\n  app:\n    image: alpine\n"), 0600); err != nil {
 		t.Fatal(err)
