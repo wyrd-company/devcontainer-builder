@@ -280,8 +280,9 @@ func buildOnePlatform(
 // image. It clones whatever the base resolver/upstream returned (so
 // ENV / USER / WORKDIR / ENTRYPOINT carry through) and then layers in
 // the devcontainer's own image-time contributions: containerEnv,
-// the ENV from each feature, and labels. Like upstream, the base USER and
-// WORKDIR are kept; remoteUser and remoteEnv apply at runtime to exec/attach.
+// the ENV from each feature, and labels. Feature builds restore the inferred
+// USER; other builds retain the base USER. WORKDIR is retained; remoteUser and
+// remoteEnv apply at runtime to exec/attach.
 func mergeImageConfig(base []byte, g GraphInputs, labels map[string]string, p ocispecs.Platform) ([]byte, error) {
 	var img dockerspec.DockerOCIImage
 	if len(base) > 0 {

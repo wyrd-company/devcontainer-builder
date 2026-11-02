@@ -61,8 +61,10 @@ func TestFeatureInstallIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("inspect image %s: %v", tag, err)
 	}
-	if img.Config == nil || img.Config.User != "" {
-		t.Fatalf("image user = %+v, want the base image's default root user", img.Config)
+	// The pinned feature template restores imageBuildInfo.user, whose
+	// fallback is the explicit string root (imageMetadata.ts), after installs.
+	if img.Config == nil || img.Config.User != "root" {
+		t.Fatalf("image user = %+v, want the generated feature stage's explicit root user", img.Config)
 	}
 
 	out := hostRunCommand(t, os.Environ(), bin,
