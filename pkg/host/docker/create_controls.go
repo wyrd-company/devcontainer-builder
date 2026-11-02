@@ -18,6 +18,22 @@ import (
 // createWithRunControls preserves caller connection policy through an injected
 // native operation. Inspect confirms that the daemon retained the control.
 func (h *Host) createWithRunControls(ctx context.Context, controls *runControls, cfg *container.Config, host *container.HostConfig, networking *network.NetworkingConfig, name string) (container.CreateResponse, error) {
+	cid, err := newCIDFile(host.ContainerIDFile)
+	if err != nil {
+		return container.CreateResponse{}, err
+	}
+	defer cid.Close()
+	resp, err := h.createEngine(ctx, controls, cfg, host, networking, name)
+	if err != nil {
+		return resp, err
+	}
+	if err := cid.Write(resp.ID); err != nil {
+		return container.CreateResponse{}, err
+	}
+	return resp, nil
+}
+
+func (h *Host) createEngine(ctx context.Context, controls *runControls, cfg *container.Config, host *container.HostConfig, networking *network.NetworkingConfig, name string) (container.CreateResponse, error) {
 	if controls.Umask == nil {
 		return h.client.ContainerCreate(ctx, cfg, host, networking, nil, name)
 	}

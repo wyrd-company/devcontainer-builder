@@ -35,6 +35,13 @@ func applyRunArgsControls(args []string, cfg *container.Config, host *container.
 			return "", err
 		}
 	}
+	// The pinned upstream spawn always supplies -a STDOUT -a STDERR.
+	if p.detach {
+		return "", fmt.Errorf("runArgs: conflicting options: cannot specify both --attach and --detach")
+	}
+	cfg.AttachStdout, cfg.AttachStderr = true, true
+	cfg.AttachStdin = p.attachStdin || cfg.OpenStdin
+	cfg.StdinOnce = cfg.OpenStdin && cfg.AttachStdin
 	if err := p.applyHealthAndLogging(cfg, host); err != nil {
 		return "", err
 	}
@@ -83,6 +90,8 @@ type runArgsParser struct {
 	args               []string
 	i                  int
 	name               string
+	detach             bool
+	attachStdin        bool
 	umask              dockeropts.UmaskOpt
 	envFiles           []string
 	labelFiles         []string
@@ -124,7 +133,7 @@ func (p *runArgsParser) step(cfg *container.Config, host *container.HostConfig) 
 		if strings.ContainsRune("ditP", rune(a[1])) {
 			p.args = append(append([]string{}, p.args[:p.i]...), append([]string{"-" + a[2:]}, p.args[p.i:]...)...)
 			a = a[:2]
-		} else if strings.ContainsRune("huwelpvmc", rune(a[1])) {
+		} else if strings.ContainsRune("ahuwelpvmc", rune(a[1])) {
 			a = a[:2] + "=" + a[2:]
 		}
 	}
@@ -172,8 +181,30 @@ func (p *runArgsParser) step(cfg *container.Config, host *container.HostConfig) 
 			cfg.Tty = v
 		case "--rm":
 			host.AutoRemove = v
-			// Detach and signal proxy control the CLI process, not creation.
+		case "-d", "--detach":
+			p.detach = v
+			// Signal proxy is disabled by the upstream spawn; the API client
+			// does not own or forward process signals.
 		}
+
+	case "-a", "--attach":
+		v, err := take()
+		if err != nil {
+			return err
+		}
+		switch strings.ToLower(v) {
+		case "stdin":
+			p.attachStdin = true
+		case "stdout", "stderr": // Already inherited from upstream.
+		default:
+			return fmt.Errorf("runArgs: --attach: valid streams are STDIN, STDOUT and STDERR")
+		}
+	case "--cidfile":
+		v, err := take()
+		if err != nil {
+			return err
+		}
+		host.ContainerIDFile = v
 
 	case "--umask":
 		v, err := take()

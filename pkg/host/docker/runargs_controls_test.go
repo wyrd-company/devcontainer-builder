@@ -102,13 +102,18 @@ func TestCreateUmaskRequest(t *testing.T) {
 		if merged {
 			req.metadataEntries = []metadata.Entry{}
 		}
-		dc := &spec.DevContainer{RunArgs: []string{"--umask=0022", "--memory=64m", "--network=name=sample,ip=192.0.2.2"}}
+		cidpath := filepath.Join(t.TempDir(), "id")
+		dc := &spec.DevContainer{RunArgs: []string{"--umask=0022", "--memory=64m", "--network=name=sample,ip=192.0.2.2", "--cidfile", cidpath}}
 		native, err := mobyclient.New(mobyclient.WithHost("tcp://" + srv.Listener.Addr().String()))
 		if err != nil {
 			t.Fatal(err)
 		}
 		defer native.Close()
 		id, err := New(cli, Options{NewCreateClient: func() (*mobyclient.Client, error) { return native, nil }}).create(context.Background(), dc, req, "")
+		data, readErr := os.ReadFile(cidpath)
+		if readErr != nil || string(data) != "sample-id" {
+			t.Fatalf("umask cidfile %q %v", data, readErr)
+		}
 		cli.Close()
 		srv.Close()
 		if err != nil || id != "sample-id" || calls != 1 {

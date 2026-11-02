@@ -261,7 +261,11 @@ func (h *Host) Up(ctx context.Context, req UpRequest) (*UpResult, error) {
 		}
 	}
 	if !inspect.State.Running {
-		if err := h.client.ContainerStart(ctx, id, container.StartOptions{}); err != nil {
+		if res.CreatedThisCall {
+			if err := h.startAttached(ctx, id, inspect.Config); err != nil {
+				return res, err
+			}
+		} else if err := h.client.ContainerStart(ctx, id, container.StartOptions{}); err != nil {
 			return res, errorf("start: %w", err)
 		}
 		res.StartedThisCall = true

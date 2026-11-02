@@ -99,8 +99,20 @@ as in the upstream CLI.
 Boolean assignments, combined short booleans such as `-it`, and attached short
 values such as `-eSAMPLE=value` are accepted. `--rm`, stdin, and TTY settings reach
 the Engine API. Bare environment keys inherit the host value; unset keys stay
-bare so that Engine removes image defaults. Detach and signal proxy flags control
-the Docker CLI process and have no container setting.
+bare so that Engine removes image defaults.
+
+Like upstream, new containers inherit stdout and stderr attachment. `--attach`
+accepts case-insensitive `stdin`, `stdout`, and `stderr`, including `-aSTDIN`.
+Interactive mode also attaches stdin and sets close-on-disconnect behavior.
+A final true `--detach` conflicts with the inherited attachments; `--detach=false`
+is valid. The Engine client does not forward host process signals.
+
+`--cidfile` reserves a client-side file before Engine creation and writes the
+container ID without a newline before start. Existing files are left untouched
+and stop creation. A failed create or write removes the unwritten reservation;
+a written ID remains even if start fails. Repeated paths use the final value;
+an empty final value disables the file. Relative paths use the process working
+directory.
 
 `--umask` uses Docker octal parsing and the final value, including explicit zero.
 Creation confirms the value in daemon inspection before start. If the daemon

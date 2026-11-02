@@ -57,8 +57,13 @@ type Options struct {
 	// discarded — appropriate for a service or operator that handles
 	// its own structured logging via context.
 	Logger func(format string, args ...any)
+	// Stdin supplies input for runArgs -i or -a stdin. Nil sends no input.
+	// A blocking reader must be released by its owner when ctx is canceled.
+	Stdin io.Reader
 	// Stdout / Stderr default to nil (silent). Lifecycle command output
-	// is written to these unless the per-call request overrides.
+	// is written to these unless the per-call request overrides. New container
+	// output is also written here until stream EOF or Up context cancellation.
+	// Writers must support concurrent container and lifecycle output.
 	Stdout io.Writer
 	Stderr io.Writer
 	// StopTimeout bounds how long Stop waits for graceful shutdown

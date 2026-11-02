@@ -285,6 +285,14 @@ Docker `runArgs` accepts boolean assignments, combined short booleans, attached
 short values, and bare environment keys. `--rm`, stdin and TTY settings reach
 the Engine API. `--entrypoint` is replaced by the upstream keepalive entrypoint.
 
+New Docker containers inherit stdout/stderr attachment. `--attach` validates
+case-insensitive stdin/stdout/stderr; `-i` also attaches stdin. A final true
+`--detach` conflicts with inherited attachment; `--detach=false` is valid.
+`--cidfile` reserves a client-side path before creation and writes the ID without
+a newline before start. Existing files stop creation unchanged; failed creation
+or writing removes the unwritten reservation. Written IDs persist. Repeated
+paths use the final value; an empty final value disables the file.
+
 Docker `runArgs --env-file` and `--label-file` use native Docker file parsing.
 Files load before explicit environment and label flags. Paths use the process
 working directory. Merged init, privileged, capability and security option flags

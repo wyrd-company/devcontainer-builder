@@ -46,7 +46,12 @@ func TestApplyRunArgs_BooleanFlags(t *testing.T) {
 
 func TestApplyRunArgs_CombinedShortBooleans(t *testing.T) {
 	for _, combo := range []string{"-it", "-ti", "-itd", "-dit", "-itP"} {
-		cfg, host := applyForTest(t, []string{combo})
+		// Upstream's inherited -a flags conflict with a final true -d.
+		args := []string{combo}
+		if strings.Contains(combo, "d") {
+			args = append(args, "--detach=false")
+		}
+		cfg, host := applyForTest(t, args)
 		if !cfg.OpenStdin || !cfg.Tty {
 			t.Fatalf("%s: stdin=%v tty=%v", combo, cfg.OpenStdin, cfg.Tty)
 		}

@@ -38,7 +38,11 @@ runtime consumers require pinned differential checks and corrections:
   coverage stays queued. Umask uses native octal parsing, a configured native
   creation client and daemon confirmation before start. Deprecated kernel-memory
   uses native memory-size validation without applying a resource limit. Explicit
-  attach and cidfile client behavior remains queued. Network endpoint flags retain first-attachment legacy
+  attachment follows upstream's inherited stdout/stderr streams, native stream
+  validation, interactive stdin union, and detach conflict. New containers attach
+  before start; streams follow the caller context. Cidfile reserves a local path
+  before creation, writes exact ID bytes before start, removes unwritten
+  reservations, and retains written IDs on both creation routes. Network endpoint flags retain first-attachment legacy
   values, repeated native CSV attachments, aliases, IP addresses, MAC addresses,
   links, driver options, gateway priority, and conflict validation. Endpoint
   configuration reaches Engine creation; daemon enforcement stays daemon-owned. CPU period, quota, and realtime values use Docker integer

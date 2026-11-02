@@ -72,6 +72,15 @@ res, err := host.Up(ctx, docker.UpRequest{
 })
 ```
 
+New containers attach before start. `Up` returns after start and lifecycle work,
+without waiting for container exit. Container output uses `Options.Stdout` and
+`Options.Stderr` until EOF or cancellation of the `Up` context. Nil writers
+discard output. Writers must support concurrent container and lifecycle output.
+`Options.Stdin` supplies input when stdin is attached; nil sends no input. The
+reader owner must release a blocking reader on cancellation. The Engine client
+does not forward host process signals. `runArgs --cidfile` writes on the client
+filesystem, with the same reservation behavior on ordinary and umask creates.
+
 Docker `runArgs --umask` needs `docker.Options.NewCreateClient`, a factory for
 an owned `github.com/moby/moby/client.Client`. Configure it for the same daemon,
 TLS, headers and API policy as the legacy client. The host closes each returned

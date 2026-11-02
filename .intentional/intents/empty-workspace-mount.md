@@ -37,3 +37,7 @@ addresses, and per-network options through Engine container creation.
 
 Preserve Docker umask through native creation and daemon confirmation; validate
 the deprecated kernel-memory flag without applying it.
+
+Honor upstream Docker stdout/stderr attachment, native stream validation and
+interactive stdin, with detach conflict checks. Reserve and write cidfile paths
+on the client before start, retaining written IDs and removing failed reservations.
