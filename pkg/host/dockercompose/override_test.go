@@ -1,3 +1,6 @@
+// relationships:
+//
+//	references: [override, project]
 package dockercompose
 
 import (
@@ -27,7 +30,7 @@ func TestOverrideYAML_KeepaliveRunsFeatureEntrypoints(t *testing.T) {
 		t.Fatal(err)
 	}
 	cmd := doc.Services["app"].Command
-	want := "trap \"exit 0\" 15\n/usr/local/share/alpha-init.sh\n/usr/local/share/beta-init.sh\nexec \"$@\""
+	want := "trap \"exit 0\" 15\n/usr/local/share/alpha-init.sh\n/usr/local/share/beta-init.sh\nexec \"$$@\""
 	if len(cmd) != 2 || !strings.Contains(cmd[0], want) {
 		t.Fatalf("command = %q, want script containing %q", cmd, want)
 	}

@@ -1,3 +1,6 @@
+// relationships:
+//
+//	references: [spawn]
 package dockercompose
 
 import (
@@ -180,11 +183,11 @@ func TestTranslateService_ConfiguresHealthcheck(t *testing.T) {
 	}
 }
 
-func TestSortedEnv_DropsNil(t *testing.T) {
+func TestSortedEnv_PreservesUnset(t *testing.T) {
 	val := "v"
 	env := types.MappingWithEquals{"A": &val, "B": nil, "C": &val}
 	got := sortedEnv(env)
-	want := []string{"A=v", "C=v"}
+	want := []string{"A=v", "B", "C=v"}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("sortedEnv: got %v want %v", got, want)
 	}

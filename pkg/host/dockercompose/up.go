@@ -246,15 +246,7 @@ func (h *Host) Up(ctx context.Context, req UpRequest) (*UpResult, error) {
 		}
 		applyPrimaryMetadata(proj, dc, req, subCtx)
 		primary.Spec, primary.Entrypoints = dc, merged.Entrypoints
-		primary.OverrideCommand = dc.OverrideCommand == nil || *dc.OverrideCommand
-		if primary.OverrideCommand {
-			svc = proj.Services[dc.Service]
-			svc.Entrypoint = types.ShellCommand{"/bin/sh", "-c"}
-			svc.Command = types.ShellCommand{keepaliveScript(primary.Entrypoints), "-"}
-			svc.StdinOpen, svc.Tty = true, true
-			proj.Services[dc.Service] = svc
-		}
-		if err := h.wrapPrimaryCommand(ctx, proj, primary); err != nil {
+		if err := h.applyPrimaryCommand(ctx, proj, primary); err != nil {
 			return nil, err
 		}
 	}
@@ -393,6 +385,9 @@ func (h *Host) bringUp(
 	}
 	created := false
 	if id == "" {
+		if err := h.resolveEmptyCommand(ctx, &svc); err != nil {
+			return "", false, false, false, err
+		}
 		t, err := translateService(proj, svc, containerName, labels, netNames, volNames, materializer)
 		if err != nil {
 			return "", false, false, false, err

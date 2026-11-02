@@ -20,17 +20,15 @@ type OverrideInputs struct {
 	// PrimaryImage, when non-empty, replaces the primary service's
 	// `image:` (used after a derived feature build).
 	PrimaryImage string
-	// RemoteEnv is layered onto the primary service's environment.
-	// Values flow from devcontainer.json's `remoteEnv`.
+	// ContainerEnv is layered onto the primary service environment.
+	ContainerEnv map[string]string
+	// RemoteEnv is retained for source compatibility. It is exec-only and
+	// never added to a container environment.
 	RemoteEnv map[string]string
-	// OverrideCommand: when true (matching the spec's default in compose
-	// mode), the primary service's command is replaced by a long-running
-	// keepalive so lifecycle commands and exec attach have a live
-	// container regardless of the image's ENTRYPOINT/CMD. When false,
-	// the original entrypoint/command are preserved.
+	// OverrideCommand defaults to false in Compose mode. True replaces the
+	// original command with the Feature wrapper and keepalive.
 	OverrideCommand bool
-	// Entrypoints are the features' entrypoint contributions, run by the
-	// keepalive command when OverrideCommand is true.
+	// Entrypoints are the ordered Feature contributions used by the wrapper.
 	Entrypoints []string
 	// Labels merged onto the primary service.
 	Labels map[string]string
@@ -61,8 +59,8 @@ func OverrideYAML(in OverrideInputs) ([]byte, error) {
 	if in.PrimaryImage != "" {
 		svc["image"] = in.PrimaryImage
 	}
-	if len(in.RemoteEnv) > 0 {
-		svc["environment"] = stringMapToSortedSlice(in.RemoteEnv)
+	if len(in.ContainerEnv) > 0 {
+		svc["environment"] = stringMapToSortedSlice(in.ContainerEnv)
 	}
 	if in.OverrideCommand {
 		// `/bin/sh -c <script> -` — the trailing "-" sets $0 so the
@@ -70,8 +68,7 @@ func OverrideYAML(in OverrideInputs) ([]byte, error) {
 		// actually keeps the process alive.
 		svc["entrypoint"] = []any{"/bin/sh", "-c"}
 		svc["command"] = []any{keepaliveScript(in.Entrypoints), "-"}
-		svc["stdin_open"] = true
-		svc["tty"] = true
+
 	}
 	if len(in.Labels) > 0 {
 		svc["labels"] = stringMapToSortedSlice(in.Labels)
@@ -82,6 +79,9 @@ func OverrideYAML(in OverrideInputs) ([]byte, error) {
 			in.Spec.Service: svc,
 		},
 	}
+	// This document is read by compose-go interpolation. Runtime assignments
+	// after loading use literal single dollars instead.
+	escapeComposeDollars(doc)
 	out, err := yaml.Marshal(doc)
 	if err != nil {
 		return nil, fmt.Errorf("marshal override: %w", err)
@@ -102,4 +102,21 @@ func stringMapToSortedSlice(m map[string]string) []any {
 		out = append(out, k+"="+m[k])
 	}
 	return out
+}
+
+func escapeComposeDollars(m map[string]any) {
+	for k, value := range m {
+		switch v := value.(type) {
+		case string:
+			m[k] = strings.ReplaceAll(v, "$", "$$")
+		case map[string]any:
+			escapeComposeDollars(v)
+		case []any:
+			for i, item := range v {
+				if text, ok := item.(string); ok {
+					v[i] = strings.ReplaceAll(text, "$", "$$")
+				}
+			}
+		}
+	}
 }

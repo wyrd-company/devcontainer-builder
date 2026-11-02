@@ -87,3 +87,8 @@ Preserve Kubernetes Compose sidecar empty command overrides and literal dollars.
 Use native image configuration for empty-command fallback and final environment
 unset checks, with contextual errors for unrepresentable image-owned removals.
 Normalize the native single-empty-string sidecar entrypoint reset.
+
+Preserve native Docker Compose command defaults, empty command overrides, image
+fallback, ordered Feature entrypoints and literal dollars. Keep remoteEnv
+exec-only, preserve environment precedence and remove unset image variables.
+Do not add stdin or TTY with the primary wrapper.

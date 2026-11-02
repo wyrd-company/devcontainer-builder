@@ -1,3 +1,6 @@
+// relationships:
+//
+//	references: [entrypoint]
 package dockercompose
 
 import (
@@ -26,6 +29,8 @@ func TestWrapServiceCommand(t *testing.T) {
 		wantArgs, wantCommand string
 	}{
 		{"image entrypoint and command", nil, nil, "/image-entrypoint.sh", "image-cmd"},
+		{"empty entrypoint drops image defaults", types.ShellCommand{}, nil, "", ""},
+		{"empty command drops image cmd", nil, types.ShellCommand{}, "/image-entrypoint.sh", ""},
 		{"service entrypoint drops image command", types.ShellCommand{"/svc-entrypoint.sh"}, nil, "/svc-entrypoint.sh", ""},
 		{"service command keeps image entrypoint", nil, types.ShellCommand{"svc-cmd"}, "/image-entrypoint.sh", "svc-cmd"},
 		{"service entrypoint and command", types.ShellCommand{"/svc-entrypoint.sh"}, types.ShellCommand{"svc-cmd"}, "/svc-entrypoint.sh", "svc-cmd"},
@@ -113,10 +118,9 @@ func TestWrapPrimaryCommand_UsesImageCommandWhenOverrideCommandFalse(t *testing.
 	}
 }
 
-func TestWrapPrimaryCommand_NoOpWithoutEntrypointsOrWhenOverriding(t *testing.T) {
+func TestWrapPrimaryCommand_NoOpWhenOverriding(t *testing.T) {
 	h, requests := fakeImageDaemon(t, `{}`)
 	for _, in := range []OverrideInputs{
-		{Spec: &spec.DevContainer{Service: "app"}},
 		{Spec: &spec.DevContainer{Service: "app"}, OverrideCommand: true, Entrypoints: []string{"/usr/local/share/alpha-init.sh"}},
 	} {
 		proj := &types.Project{Services: types.Services{"app": {Name: "app", ContainerSpec: types.ContainerSpec{Image: "img:latest"}}}}

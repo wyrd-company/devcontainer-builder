@@ -61,12 +61,16 @@ func translateService(
 	if svc.HealthCheck != nil {
 		cfg.Healthcheck = translateHealthcheck(svc.HealthCheck)
 	}
-	if len(svc.Entrypoint) > 0 {
-		cfg.Entrypoint = strslice.StrSlice(svc.Entrypoint)
+	cfg.Entrypoint = strslice.StrSlice(svc.Entrypoint)
+	cfg.Cmd = strslice.StrSlice(svc.Command)
+	// Engine merges empty Cmd from the image unless Entrypoint is nonempty.
+	// [""] is its native reset sentinel; it suppresses image defaults then
+	// disappears before execution.
+	if svc.Entrypoint != nil && len(svc.Entrypoint) == 0 {
+		cfg.Entrypoint = strslice.StrSlice{""}
 	}
-	if len(svc.Command) > 0 {
-		cfg.Cmd = strslice.StrSlice(svc.Command)
-	}
+	// An explicitly empty command still needs the image entrypoint. The
+	// caller resolves that case before translation.
 	cfg.Env = sortedEnv(svc.Environment)
 
 	exposed := nat.PortSet{}
@@ -281,11 +285,7 @@ func tmpfsList(t types.StringList) map[string]string {
 	return out
 }
 
-// sortedEnv returns the service environment as KEY=VAL strings in
-// stable order. Compose `MappingWithEquals` distinguishes nil values
-// (=> drop the variable from the env that would otherwise be set by
-// envFile / shell) from "" (=> set to empty); we treat nil as "drop"
-// by skipping it, matching docker compose's behavior.
+// sortedEnv retains bare keys so Engine removes inherited image variables.
 func sortedEnv(env types.MappingWithEquals) []string {
 	if len(env) == 0 {
 		return nil
@@ -299,6 +299,7 @@ func sortedEnv(env types.MappingWithEquals) []string {
 	for _, k := range keys {
 		v := env[k]
 		if v == nil {
+			out = append(out, k)
 			continue
 		}
 		out = append(out, k+"="+*v)

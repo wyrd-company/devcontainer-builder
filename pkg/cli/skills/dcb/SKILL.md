@@ -463,9 +463,7 @@ explicit
 empty entrypoint suppresses both image Entrypoint and Cmd, and an explicit empty
 command suppresses image Cmd. Configuration `containerEnv` overrides ordered
 Features, then service environment, above inherited image environment. Dollars
-remain literal. Full Compose `runArgs` and native host Compose command
-overrides need separate
-checks.
+remain literal. Full Compose `runArgs` needs separate checks.
 
 Kubernetes Compose sidecars preserve service command and entrypoint defaults,
 including explicit empty overrides and the `[""]` entrypoint reset.
@@ -477,3 +475,19 @@ no executable returns a contextual error. Unset image-owned environment values
 return an error because Pod environment omission inherits image values. Explicit
 empty environment values remain empty. Authored command and environment dollars
 remain literal. Sidecars receive no primary configuration or Feature overlays.
+
+Native Docker Compose defaults `overrideCommand` to false. The primary shell
+wrapper always runs ordered Feature entrypoints, then the preserved service or
+image command. True uses the wrapper with no original command. The wrapper does
+not enable stdin or TTY. Empty service entrypoints suppress image Entrypoint and
+Cmd; empty commands suppress image Cmd. Sidecars use Engine's native entrypoint
+reset, including `[""]`; the primary preserves that argument inside the pinned
+upstream wrapper. Image inspection for command fallback is needed only when the
+service entrypoint is absent.
+
+Configuration `containerEnv` wins over ordered Features, then service values,
+above image inheritance. Unset service environment keys remove image variables;
+empty values stay empty. Generated override YAML escapes dollars for Compose
+interpolation; direct runtime values retain literal dollars. `remoteEnv` applies
+to exec and lifecycle commands. These checks cover native host command and
+environment handling; full Compose and schema conformance remain separate work.

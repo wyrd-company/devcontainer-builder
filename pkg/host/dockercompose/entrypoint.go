@@ -1,3 +1,6 @@
+// relationships:
+//
+//	references: [up, override, spawn]
 package dockercompose
 
 import (
@@ -27,13 +30,10 @@ func wrapServiceCommand(svc *types.ServiceConfig, entrypoints, imageEntrypoint, 
 	svc.Command = types.ShellCommand(userCommand)
 }
 
-// wrapPrimaryCommand applies wrapServiceCommand to the primary service
-// when overrideCommand is false and features contribute entrypoints
-// (with overrideCommand true the override's keepalive runs them). The
-// image is inspected only when the service lacks an entrypoint or
-// command of its own.
+// wrapPrimaryCommand always wraps a preserved primary command, including when
+// there are no Features. Image defaults are read only for an absent entrypoint.
 func (h *Host) wrapPrimaryCommand(ctx context.Context, proj *types.Project, in OverrideInputs) error {
-	if in.OverrideCommand || len(in.Entrypoints) == 0 {
+	if in.OverrideCommand {
 		return nil
 	}
 	svc, ok := proj.Services[in.Spec.Service]
@@ -41,7 +41,7 @@ func (h *Host) wrapPrimaryCommand(ctx context.Context, proj *types.Project, in O
 		return nil
 	}
 	var imageEntrypoint, imageCmd []string
-	if svc.Entrypoint == nil || svc.Command == nil {
+	if svc.Entrypoint == nil {
 		img, err := dockerimage.InspectConfig(ctx, h.client, svc.Image, svc.Platform, h.opts.RegistryAuth, h.stderrOr(nil))
 		if err != nil {
 			return errorf("inspect image %s: %w", svc.Image, err)
@@ -52,5 +52,35 @@ func (h *Host) wrapPrimaryCommand(ctx context.Context, proj *types.Project, in O
 	}
 	wrapServiceCommand(&svc, in.Entrypoints, imageEntrypoint, imageCmd)
 	proj.Services[in.Spec.Service] = svc
+	return nil
+}
+
+// applyPrimaryCommand uses the Compose default (false), independently of the
+// image/Dockerfile default. Both modes run the same Feature wrapper.
+func (h *Host) applyPrimaryCommand(ctx context.Context, proj *types.Project, in OverrideInputs) error {
+	in.OverrideCommand = in.Spec.OverrideCommand != nil && *in.Spec.OverrideCommand
+	if in.OverrideCommand {
+		svc := proj.Services[in.Spec.Service]
+		svc.Entrypoint = types.ShellCommand{"/bin/sh", "-c", keepaliveScript(in.Entrypoints), "-"}
+		svc.Command = types.ShellCommand{}
+		proj.Services[in.Spec.Service] = svc
+	}
+	return h.wrapPrimaryCommand(ctx, proj, in)
+}
+
+// resolveEmptyCommand prevents Engine from restoring image Cmd for an explicit
+// empty Compose command, while retaining the image Entrypoint.
+func (h *Host) resolveEmptyCommand(ctx context.Context, svc *types.ServiceConfig) error {
+	if svc.Entrypoint != nil || svc.Command == nil || len(svc.Command) != 0 {
+		return nil
+	}
+	img, err := dockerimage.InspectConfig(ctx, h.client, svc.Image, svc.Platform, h.opts.RegistryAuth, h.stderrOr(nil))
+	if err != nil {
+		return errorf("inspect image %s for empty command: %w", svc.Image, err)
+	}
+	svc.Entrypoint = types.ShellCommand{}
+	if img != nil {
+		svc.Entrypoint = append(svc.Entrypoint, img.Entrypoint...)
+	}
 	return nil
 }

@@ -40,7 +40,7 @@ func TestLoadProject_MergesAndAppliesOverride(t *testing.T) {
 	override, err := OverrideYAML(OverrideInputs{
 		Spec:            dc,
 		PrimaryImage:    "registry/derived:tag",
-		RemoteEnv:       map[string]string{"FOO": "bar"},
+		ContainerEnv:    map[string]string{"FOO": "bar"},
 		OverrideCommand: true,
 	})
 	if err != nil {
