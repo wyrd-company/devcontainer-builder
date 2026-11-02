@@ -64,7 +64,11 @@ runtime consumers require pinned differential checks and corrections:
   Storage options retain last-value-per-key semantics. Windows CPU count, CPU
   percent, system-drive bandwidth and IOPS map to Engine creation fields with
   native integer and memory-size grammar. Platform enforcement is daemon-owned.
-- `build.options` needs a native BuildKit mapping; nonempty values are rejected.
+- `build.options --network` maps default/empty, none and host modes to the
+  Dockerfile frontend, with final scalar precedence and host entitlement on
+  both solve routes. Other build flags still need native mappings. The network
+  comparison covers pinned argv and native BuildKit acceptance, not network
+  traffic enforcement or full build flag coverage.
 - `initializeCommand` is preserved but not executed. The public configuration
   guide describes this limitation.
 - Kubernetes projection needs checks for command override, environment ordering,

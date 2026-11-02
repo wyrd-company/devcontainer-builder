@@ -10,6 +10,7 @@ import (
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/exporter/containerimage/exptypes"
 	gateway "github.com/moby/buildkit/frontend/gateway/client"
+	"github.com/moby/buildkit/util/entitlements"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	fsutil "github.com/tonistiigi/fsutil"
 )
@@ -20,6 +21,8 @@ import (
 // as the rest of the LLB graph so no docker round-trip is required, or
 // a standalone image (SolveDockerfile).
 type DockerfileBuild struct {
+	// NetworkMode is the Dockerfile RUN network: empty/sandbox, host, or none.
+	NetworkMode string
 	// OmitSyntaxDirective removes syntax directives from the frontend input.
 	OmitSyntaxDirective bool
 	// ContextDir is the host directory exposed to the dockerfile
@@ -59,6 +62,7 @@ func SolveDockerfile(ctx context.Context, b DockerfileBuild, opt SolveOptions) (
 	if err := addDockerfileMounts(localMounts, &b); err != nil {
 		return nil, err
 	}
+	opt = dockerfileSolveOptions(&b, opt)
 	return runSolve(ctx, opt, len(opt.Platforms) > 1, localMounts, func(ctx context.Context, conn *Connection, so client.SolveOpt, ch chan *client.SolveStatus) (*client.SolveResponse, error) {
 		bs := buildSettings{resolveMode: resolveMode(opt, conn), noCache: opt.NoCache}
 		attrs := dockerfileFrontendAttrs(&b, bs)
@@ -146,6 +150,9 @@ func dockerfileFrontendAttrs(b *DockerfileBuild, bs buildSettings) map[string]st
 		"dockerfilekey":      dockerfileDockerfileLocal,
 		"image-resolve-mode": bs.resolveMode,
 	}
+	if b.NetworkMode != "" {
+		attrs["force-network-mode"] = b.NetworkMode
+	}
 	if b.Target != "" {
 		attrs["target"] = b.Target
 	}
@@ -159,4 +166,13 @@ func dockerfileFrontendAttrs(b *DockerfileBuild, bs buildSettings) map[string]st
 		attrs["label:"+k] = b.Labels[k]
 	}
 	return attrs
+}
+
+// dockerfileSolveOptions grants the entitlement requested by an explicit host
+// network. The daemon still decides whether that entitlement is available.
+func dockerfileSolveOptions(b *DockerfileBuild, opt SolveOptions) SolveOptions {
+	if b != nil && b.NetworkMode == "host" {
+		opt.allowedEntitlements = []string{string(entitlements.EntitlementNetworkHost)}
+	}
+	return opt
 }

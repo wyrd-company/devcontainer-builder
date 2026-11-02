@@ -11,6 +11,8 @@ Docker Engine API. Commands other than `outdated`, `features info`, and
 stdout, except
 help, a valid `exec` invocation, and archive exports to stdout.
 
+Dockerfile build network options map to native BuildKit controls.
+
 Documentation is at [wyrd.foo/docs/dcb](https://wyrd.foo/docs/dcb), published
 from [`docs/user/`](docs/user).
 

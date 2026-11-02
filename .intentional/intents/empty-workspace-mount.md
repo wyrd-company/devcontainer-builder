@@ -46,3 +46,7 @@ Accept common-only configuration reads while requiring sources for build and up.
 Discover Compose files for empty file arrays from the caller's environment and
 workspace. Validate environment value types and preserve upstream remote null
 behavior in exec and lifecycle commands.
+
+Map build.options --network to native BuildKit Dockerfile networking and request
+host entitlement for explicit host mode. Preserve final-value precedence and
+report unmapped build flags explicitly.

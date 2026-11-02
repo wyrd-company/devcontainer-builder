@@ -427,7 +427,12 @@ func prepareBaseImage(dc *spec.DevContainer, opts Options) (string, *buildkit.Do
 		return "", nil, err
 	}
 
+	network, err := buildNetworkMode(dc)
+	if err != nil {
+		return "", nil, err
+	}
 	upstream := &buildkit.DockerfileBuild{
+		NetworkMode:         network,
 		OmitSyntaxDirective: opts.OmitSyntaxDirective,
 		ContextDir:          upstreamCtx,
 		DockerfileDir:       filepath.Dir(dfPath),
@@ -440,14 +445,10 @@ func prepareBaseImage(dc *spec.DevContainer, opts Options) (string, *buildkit.Do
 	return "", upstream, nil
 }
 
-// validateBuildSupport rejects spec fields the BuildKit build cannot
-// honor. build.options are `docker build` command-line flags, which
-// have no BuildKit equivalent without the docker CLI.
+// validateBuildSupport checks the currently mapped docker build flags.
 func validateBuildSupport(dc *spec.DevContainer) error {
-	if dc == nil || dc.Build == nil || len(dc.Build.Options) == 0 {
-		return nil
-	}
-	return fmt.Errorf("build.options is not supported: dcb builds with BuildKit directly, not the docker CLI; remove build.options")
+	_, err := buildNetworkMode(dc)
+	return err
 }
 
 func buildArgsFromSpec(dc *spec.DevContainer) map[string]string {

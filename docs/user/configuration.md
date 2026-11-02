@@ -27,6 +27,13 @@ can use `build.args`, `build.target`, and `build.cacheFrom`. `dockerComposeFile`
 and `build.cacheFrom` accept a string or an array of strings. Lifecycle command
 objects accept string or string-array values. Nested command objects are invalid.
 
+`build.options` supports `--network default`, `--network none`, and
+`--network host`, including `--network=value`. The last value wins; an empty
+value uses the default network. These options control Dockerfile `RUN`
+instructions. Host mode requests BuildKit's `network.host` entitlement; the
+daemon must allow it. Custom container network names are not BuildKit build
+networks. Other build flags return an explicit unsupported-option error.
+
 An empty `dockerComposeFile` array selects discovery from the workspace folder.
 Configuration and merged output retain the empty array.
 Discovery uses `COMPOSE_FILE` from the supplied host environment, then the first

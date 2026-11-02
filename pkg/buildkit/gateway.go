@@ -70,6 +70,7 @@ func SolveDevcontainer(ctx context.Context, spec BuildSpec, opt SolveOptions) (*
 		}
 	}
 
+	opt = dockerfileSolveOptions(spec.Upstream, opt)
 	return runSolve(ctx, opt, multi, localMounts, func(ctx context.Context, conn *Connection, so client.SolveOpt, ch chan *client.SolveStatus) (*client.SolveResponse, error) {
 		bs := buildSettings{resolveMode: resolveMode(opt, conn), noCache: opt.NoCache}
 		buildFunc := func(ctx context.Context, gc gateway.Client) (*gateway.Result, error) {

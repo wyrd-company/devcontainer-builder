@@ -347,3 +347,8 @@ Docker `runArgs` health options (`--health-cmd`, `--health-interval`,
 checks and conflicts with nonzero health options. Repeated scalar flags use the
 last value. `--log-driver` and `--log-opt` preserve logging configuration; repeated
 option keys use the last value. Docker rejects logging options for driver `none`.
+
+`build.options --network` supports default, none and host for Dockerfile RUN
+instructions. Repeated values use the last value. Host mode requests the native
+BuildKit network.host entitlement. The daemon must allow it. Other build flags
+currently return an explicit unsupported-option error.

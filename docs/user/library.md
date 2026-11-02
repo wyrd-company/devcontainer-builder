@@ -360,3 +360,8 @@ configuration. `Feature` and `TargetVersion` update a requirement before
 resolution, including in dry-run mode. Existing lockfile pins remain in use;
 dry-run can refresh an existing lockfile. Resolution uses the resolver's native
 OCI client and does not build or install Features.
+
+Dockerfile builds accept `build.options --network` with default, none or host.
+The builder maps these to `DockerfileBuild.NetworkMode`; standalone and nested
+Dockerfile solves request the host entitlement only for host mode. Other build
+flags remain unsupported.

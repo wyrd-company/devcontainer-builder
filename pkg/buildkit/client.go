@@ -20,6 +20,7 @@ import (
 // SolveOptions describes which BuildKit to use and how to export the
 // resulting image.
 type SolveOptions struct {
+	allowedEntitlements []string
 	// Address is the BuildKit endpoint. When empty, BUILDKIT_HOST is
 	// consulted; when that is empty too, the Docker daemon's built-in
 	// BuildKit is used through the Engine API.
@@ -178,12 +179,13 @@ func runSolve(ctx context.Context, opt SolveOptions, multi bool, localMounts map
 
 	credentials := newSessionAuth(opt.RegistryAuth)
 	so := client.SolveOpt{
-		Exports:       plan.entries,
-		LocalMounts:   localMounts,
-		CacheImports:  cacheEntries(opt.CacheImports),
-		CacheExports:  cacheEntries(opt.CacheExports),
-		FrontendAttrs: opt.FrontendAttrs,
-		Session:       []session.Attachable{credentials},
+		AllowedEntitlements: opt.allowedEntitlements,
+		Exports:             plan.entries,
+		LocalMounts:         localMounts,
+		CacheImports:        cacheEntries(opt.CacheImports),
+		CacheExports:        cacheEntries(opt.CacheExports),
+		FrontendAttrs:       opt.FrontendAttrs,
+		Session:             []session.Attachable{credentials},
 	}
 
 	g, gctx := errgroup.WithContext(ctx)
