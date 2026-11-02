@@ -181,11 +181,16 @@ func buildOnePlatform(
 		if err != nil {
 			return nil, nil, err
 		}
-		st, err := ref.ToState()
-		if err != nil {
-			return nil, nil, fmt.Errorf("upstream ref to state: %w", err)
+		// A Dockerfile with no filesystem operations (for example FROM
+		// scratch with only LABEL) returns a nil reference from BuildKit.
+		baseState = llb.Scratch()
+		if ref != nil {
+			st, err := ref.ToState()
+			if err != nil {
+				return nil, nil, fmt.Errorf("upstream ref to state: %w", err)
+			}
+			baseState = st
 		}
-		baseState = st
 		baseConfig = cfg
 	} else {
 		imageRef, err := normalizeImageRef(spec.Graph.BaseImage)

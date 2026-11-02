@@ -191,3 +191,29 @@ func TestBuildOptionsLabelsEngine(t *testing.T) {
 		}
 	}
 }
+
+// TestScratchOnlyBuildEngine covers the public builder route and final image config.
+func TestScratchOnlyBuildEngine(t *testing.T) {
+	ctx := context.Background()
+	cli := requireEngine(t, ctx)
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "Dockerfile"), "FROM scratch\nLABEL sample=base preserved=base\n")
+	writeFile(t, filepath.Join(dir, "payload"), "sample")
+	dc := &spec.DevContainer{Path: filepath.Join(dir, "devcontainer.json"), Build: &spec.Build{Dockerfile: "Dockerfile", Options: []string{"--label=sample=first", "--label=sample=last", "--label=bare", "--label=explicit=config"}}}
+	tag := fmt.Sprintf("dcb-scratch-test:%d", time.Now().UnixNano())
+	t.Cleanup(func() { _, _ = cli.ImageRemove(context.Background(), tag, imagetypes.RemoveOptions{Force: true}) })
+	_, err := New().Build(ctx, Options{Spec: dc, Workspace: dir, WorkDir: t.TempDir(), Docker: cli, Tags: []string{tag}, Load: true, SkipImageMetaResolve: true, Labels: map[string]string{"explicit": "library"}, Progress: "plain", Stdout: io.Discard, Stderr: io.Discard})
+	if err != nil {
+		t.Fatal(err)
+	}
+	img, err := cli.ImageInspect(ctx, tag)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for k, want := range map[string]string{"sample": "last", "bare": "", "explicit": "library", "preserved": "base"} {
+		got, ok := img.Config.Labels[k]
+		if !ok || got != want {
+			t.Fatalf("label %q=%q present=%v want=%q", k, got, ok, want)
+		}
+	}
+}

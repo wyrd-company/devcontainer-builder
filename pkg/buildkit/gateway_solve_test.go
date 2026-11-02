@@ -24,10 +24,11 @@ import (
 // buildOnePlatform calls are implemented.
 type fakeGateway struct {
 	gateway.Client
-	baseConfig  []byte
-	resolveOpts []sourceresolver.Opt
-	solved      []*pb.Definition
-	frontends   []gateway.SolveRequest
+	emptyFrontend bool
+	baseConfig    []byte
+	resolveOpts   []sourceresolver.Opt
+	solved        []*pb.Definition
+	frontends     []gateway.SolveRequest
 }
 
 func (f *fakeGateway) ResolveImageConfig(_ context.Context, _ string, opt sourceresolver.Opt) (string, digest.Digest, []byte, error) {
@@ -39,6 +40,9 @@ func (f *fakeGateway) Solve(_ context.Context, req gateway.SolveRequest) (*gatew
 	res := gateway.NewResult()
 	res.SetRef(fakeRef{})
 	if req.Frontend != "" {
+		if f.emptyFrontend {
+			res.SetRef(nil)
+		}
 		f.frontends = append(f.frontends, req)
 		res.AddMeta(exptypes.ExporterImageConfigKey, f.baseConfig)
 		return res, nil

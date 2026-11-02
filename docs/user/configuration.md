@@ -21,6 +21,10 @@ A common-only document, such as `{"remoteUser":"root"}`, can be read with
 | Dockerfile | `build.dockerfile` with `build.context`, or `dockerFile` with `context`; `build.args`, `build.target`, `build.cacheFrom` |
 | Docker Compose | `dockerComposeFile`, `service`, `runServices` |
 
+Scratch-only Dockerfiles are supported, including image configuration without
+filesystem layers. Build steps that run commands still require those commands
+to exist in the selected image.
+
 Dockerfile paths and context paths are relative to `devcontainer.json`. Without
 a context, the Dockerfile directory is the build context. Top-level `dockerFile`
 can use `build.args`, `build.target`, and `build.cacheFrom`. `dockerComposeFile`

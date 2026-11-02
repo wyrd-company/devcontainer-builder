@@ -81,8 +81,10 @@ base labels, applies configuration labels, then explicit library labels.
 Build arguments, target selection, cache, secrets and SSH remain queued. Target
 selection must account for upstream generated Dockerfile feature stages.
 
-Dockerfile gateway solves must also handle a valid scratch-only Dockerfile
-whose frontend result has no filesystem reference. This case remains queued.
+Dockerfile gateway solves use native LLB scratch state when the frontend returns
+no filesystem reference. Scratch-only builds retain their image configuration;
+nonempty frontend references and conversion errors retain their normal handling.
+Standalone and nested local exports cover empty filesystems and COPY controls.
 
 Main integration requires a simulated rebase before any remote branch rewrite.
 Each correction needs tests, valid guard mutations with green controls, a clean

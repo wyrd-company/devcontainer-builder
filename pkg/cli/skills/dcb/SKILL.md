@@ -356,3 +356,6 @@ currently return an explicit unsupported-option error.
 `build.options --label` sets image labels through native BuildKit. Repeated
 keys use the last value; bare keys use empty values. Empty keys fail before
 staging. Explicit library labels override configuration labels.
+
+Scratch-only Dockerfiles can build without filesystem layers. Image configuration
+is retained when the Dockerfile frontend returns an empty filesystem.
