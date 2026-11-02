@@ -95,12 +95,16 @@ func Initialize(ctx context.Context, command spec.Command, opts InitializeOption
 		var exit *exec.ExitError
 		if errors.As(err, &exit) && (exit.ExitCode() == 130 || exit.ProcessState.Sys().(syscall.WaitStatus).Signal() == syscall.SIGINT) {
 			output([]byte("initializeCommand interrupted.\n"))
-			return nil
+			return errInterrupted
 		}
 		return fmt.Errorf("the initializeCommand in the devcontainer.json failed: %w", err)
 	}
 	if len(command.Parallel) == 0 {
-		return run(command, "")
+		err := run(command, "")
+		if errors.Is(err, errInterrupted) {
+			return nil
+		}
+		return err
 	}
 	results := make(chan error, len(command.Parallel))
 	for name, child := range command.Parallel {
@@ -108,11 +112,16 @@ func Initialize(ctx context.Context, command spec.Command, opts InitializeOption
 	}
 	for range command.Parallel {
 		if err := <-results; err != nil {
+			if errors.Is(err, errInterrupted) {
+				return nil
+			}
 			return err
 		}
 	}
 	return nil
 }
+
+var errInterrupted = errors.New("initializeCommand interrupted")
 
 type writerFunc func([]byte) (int, error)
 

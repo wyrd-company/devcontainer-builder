@@ -48,7 +48,7 @@ func TestInitializeWorkspaceAndRepeatedInvocation(t *testing.T) {
 		t.Skip("POSIX command fixtures")
 	}
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "script"), []byte("#!/bin/sh\nprintf x >> marker\nprintf '%s' \"$PWD\"\n"), 0755); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "script"), []byte("#!/bin/sh\nprintf x >> \"$0.marker\"\nprintf '%s' \"$PWD\"\n"), 0755); err != nil {
 		t.Fatal(err)
 	}
 	for range 2 {
@@ -58,7 +58,7 @@ func TestInitializeWorkspaceAndRepeatedInvocation(t *testing.T) {
 			t.Fatalf("cwd=%q err=%v", output.String(), err)
 		}
 	}
-	data, err := os.ReadFile(filepath.Join(dir, "marker"))
+	data, err := os.ReadFile(filepath.Join(dir, "script.marker"))
 	if err != nil || string(data) != "xx" {
 		t.Fatalf("marker=%q err=%v", data, err)
 	}
@@ -137,3 +137,28 @@ type lockedBuffer struct {
 
 func (b *lockedBuffer) Write(p []byte) (int, error) { b.Lock(); defer b.Unlock(); return b.b.Write(p) }
 func (b *lockedBuffer) String() string              { b.Lock(); defer b.Unlock(); return b.b.String() }
+
+func TestInitializeParallelInterruptReturnsBeforeSibling(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("POSIX command fixtures")
+	}
+	dir := t.TempDir()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	var output lockedBuffer
+	err := Initialize(ctx, spec.Command{Parallel: map[string]spec.Command{"interrupt": {Shell: "exit 130"}, "continue": {Shell: "while [ ! -f release ]; do sleep 0.01; done; printf completed"}}}, InitializeOptions{Workspace: dir, Output: &output})
+	if err != nil || ctx.Err() != nil {
+		t.Fatalf("interrupt did not resolve promptly: %v %v", err, ctx.Err())
+	}
+	if err := os.WriteFile(filepath.Join(dir, "release"), nil, 0600); err != nil {
+		t.Fatal(err)
+	}
+	for !strings.Contains(output.String(), "completed") {
+		select {
+		case <-ctx.Done():
+			t.Fatal("sibling cancelled")
+		default:
+			time.Sleep(time.Millisecond)
+		}
+	}
+}
