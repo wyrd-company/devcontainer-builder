@@ -245,3 +245,61 @@ func TestBuildOptionsArgsEngine(t *testing.T) {
 		}
 	}
 }
+
+// TestBuildOptionsTargetEngine exercises actual target selection and overlay bypass.
+func TestBuildOptionsTargetEngine(t *testing.T) {
+	ctx := context.Background()
+	cli := requireEngine(t, ctx)
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "Dockerfile"), "FROM alpine AS configured\nLABEL selected=configured\nFROM alpine AS other\nLABEL selected=other\n")
+	writeFile(t, filepath.Join(dir, "feature", "devcontainer-feature.json"), `{"id":"sample","version":"1.0.0"}`)
+	writeFile(t, filepath.Join(dir, "feature", "install.sh"), "#!/bin/sh\nset -eu\necho installed >/feature-marker\n")
+	for _, tc := range []struct {
+		target, selected string
+		final, normalize bool
+	}{
+		{"other", "other", false, false}, {"configured", "configured", false, false},
+		{"dev_containers_target_stage", "configured", true, false}, {"", "configured", true, false},
+		{"dev_containers_feature_content_normalize", "configured", false, true},
+	} {
+		t.Run(tc.target, func(t *testing.T) {
+			var dc spec.DevContainer
+			dc.Path = filepath.Join(dir, "devcontainer.json")
+			dc.Build = &spec.Build{Dockerfile: "Dockerfile", Target: "configured", Options: []string{"--target=" + tc.target}}
+			if err := dc.Features.UnmarshalJSON([]byte(`{"./feature":{}}`)); err != nil {
+				t.Fatal(err)
+			}
+			dc.ContainerEnv = map[string]any{"OVERLAY": "present"}
+			tag := fmt.Sprintf("dcb-target-test:%d", time.Now().UnixNano())
+			t.Cleanup(func() { _, _ = cli.ImageRemove(context.Background(), tag, imagetypes.RemoveOptions{Force: true}) })
+			_, err := New().Build(ctx, Options{Spec: &dc, Workspace: dir, WorkDir: t.TempDir(), Docker: cli, Tags: []string{tag}, Load: true, SkipFeatureAutoMapping: true, SkipImageMetaResolve: true, Labels: map[string]string{"explicit": "kept"}, Stdout: io.Discard, Stderr: io.Discard})
+			if err != nil {
+				t.Fatal(err)
+			}
+			img, err := cli.ImageInspect(ctx, tag)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if img.Config.Labels["selected"] != tc.selected || img.Config.Labels["explicit"] != "kept" {
+				t.Fatalf("labels=%v", img.Config.Labels)
+			}
+			if strings.Contains(strings.Join(img.Config.Env, "\n"), "OVERLAY=present") != tc.final {
+				t.Fatalf("env=%v", img.Config.Env)
+			}
+			if (img.Config.Labels["devcontainer.metadata"] != "") != tc.final {
+				t.Fatalf("labels=%v", img.Config.Labels)
+			}
+			if tc.final && strings.TrimSpace(readImageFile(t, ctx, cli, tag, "/feature-marker")) != "installed" {
+				t.Fatal("missing feature marker")
+			}
+			if tc.normalize {
+				if img.Config.User != "root" {
+					t.Fatalf("user=%q", img.Config.User)
+				}
+				if !strings.Contains(readImageFile(t, ctx, cli, tag, "/tmp/build-features/devcontainer-features.builtin.env"), "_CONTAINER_USER=") {
+					t.Fatal("missing builtin env")
+				}
+			}
+		})
+	}
+}

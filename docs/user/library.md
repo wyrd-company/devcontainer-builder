@@ -364,7 +364,7 @@ OCI client and does not build or install Features.
 Dockerfile builds accept `build.options --network` with default, none or host.
 The builder maps these to `DockerfileBuild.NetworkMode`; standalone and nested
 Dockerfile solves request the host entitlement only for host mode. Remaining build
-flags other than image labels and build arguments remain unsupported.
+flags other than image labels, build arguments and target selection remain unsupported.
 
 `build.options --label` supplies final image labels with native buildx array
 parsing and last-key precedence. Bare keys use empty values. Explicit
@@ -377,3 +377,12 @@ values intact; explicit empty values remain empty. Empty keys are invalid.
 Metadata and image user inference use `build.args` independently of these options,
 as in the pinned upstream CLI. Generated feature arguments retain their own
 staging and final image handling.
+
+Build options accept `--target STAGE` and `--target=STAGE`; the last value wins.
+These options select from the generated Dockerfile. An authored stage bypasses
+feature installation, configuration environment, and generated metadata. The
+`dev_containers_target_stage` target, or an empty target, keeps the final image
+layers based on `build.target`. With Features, the
+`dev_containers_feature_content_normalize` target exports the root-owned builtin
+environment preparation stage. Metadata and user inference still use the
+configured `build.target` independently of the option.

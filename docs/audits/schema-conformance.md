@@ -78,8 +78,7 @@ runtime consumers require pinned differential checks and corrections:
 Build options image labels use native buildx array parsing and last-key
 precedence. Empty keys fail before staging. Final image configuration retains
 base labels, applies configuration labels, then explicit library labels.
-Target selection, cache, secrets and SSH remain queued. Target
-selection must account for upstream generated Dockerfile feature stages.
+Cache, secrets and SSH remain queued.
 
 Dockerfile gateway solves use native LLB scratch state when the frontend returns
 no filesystem reference. Scratch-only builds retain their image configuration;
@@ -98,3 +97,12 @@ values intact; explicit empty values remain empty. Empty keys are invalid.
 Metadata and image user inference use `build.args` independently of these options,
 as in the pinned upstream CLI. Generated feature arguments retain their own
 staging and final image handling.
+
+Build options accept `--target STAGE` and `--target=STAGE`; the last value wins.
+These options select from the generated Dockerfile. An authored stage bypasses
+feature installation, configuration environment, and generated metadata. The
+`dev_containers_target_stage` target, or an empty target, keeps the final image
+layers based on `build.target`. With Features, the
+`dev_containers_feature_content_normalize` target exports the root-owned builtin
+environment preparation stage. Metadata and user inference still use the
+configured `build.target` independently of the option.

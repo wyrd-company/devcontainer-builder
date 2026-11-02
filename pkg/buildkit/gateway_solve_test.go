@@ -249,3 +249,61 @@ func TestDockerfileFrontendAttrs(t *testing.T) {
 		t.Error("no-cache set without noCache")
 	}
 }
+
+func TestBuildOnePlatform_AuthoredTargetBypassesOverlays(t *testing.T) {
+	s := imageBaseSpec()
+	s.Graph.Spec.ContainerEnv = map[string]any{"OVERLAY": "absent"}
+	s.Upstream = &DockerfileBuild{Target: "sample", Stage: AuthoredStage}
+	s.Labels = map[string]string{"explicit": "kept"}
+	gc := &fakeGateway{baseConfig: []byte(`{"config":{"User":"sample","Env":["BASE=kept"],"Labels":{"base":"kept"}}}`)}
+	_, cfg, err := buildOnePlatform(context.Background(), gc, s, amd64, buildSettings{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var img dockerspec.DockerOCIImage
+	if err := json.Unmarshal(cfg, &img); err != nil {
+		t.Fatal(err)
+	}
+	if img.Config.User != "sample" || !reflect.DeepEqual(img.Config.Env, []string{"BASE=kept"}) || !reflect.DeepEqual(img.Config.Labels, map[string]string{"base": "kept", "explicit": "kept"}) {
+		t.Fatalf("config=%s", cfg)
+	}
+	if len(gc.frontends) != 1 || gc.frontends[0].FrontendOpt["target"] != "sample" {
+		t.Fatalf("frontends=%v", gc.frontends)
+	}
+}
+
+func TestBuildOnePlatform_NormalizeTarget(t *testing.T) {
+	s := imageBaseSpec()
+	s.Graph.Spec.ContainerUser = "worker"
+	s.Graph.Spec.RemoteUser = "remote"
+	s.Graph.Spec.ContainerEnv = map[string]any{"OVERLAY": "absent"}
+	s.Upstream = &DockerfileBuild{Target: "configured", Stage: NormalizeStage}
+	gc := &fakeGateway{baseConfig: []byte(`{"config":{"User":"sample","Env":["BASE=kept"]}}`)}
+	_, cfg, err := buildOnePlatform(context.Background(), gc, s, amd64, buildSettings{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var img dockerspec.DockerOCIImage
+	if err := json.Unmarshal(cfg, &img); err != nil {
+		t.Fatal(err)
+	}
+	if img.Config.User != "root" || !reflect.DeepEqual(img.Config.Env, []string{"BASE=kept"}) || len(img.Config.Labels) != 0 {
+		t.Fatalf("config=%s", cfg)
+	}
+	found := false
+	for _, op := range decodeOps(t, gc.solved[0]) {
+		if f := op.GetFile(); f != nil {
+			for _, a := range f.Actions {
+				if mk := a.GetMkfile(); mk != nil && mk.Path == "/tmp/build-features/devcontainer-features.builtin.env" {
+					found = true
+					if mk.Mode != 0755 || string(mk.Data) != "_CONTAINER_USER=worker\n_REMOTE_USER=remote\n" {
+						t.Fatalf("file=%v", mk)
+					}
+				}
+			}
+		}
+	}
+	if !found {
+		t.Fatal("missing normalized builtin env")
+	}
+}

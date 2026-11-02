@@ -35,6 +35,8 @@ type DockerfileBuild struct {
 	Filename string
 	// Target selects a specific build stage.
 	Target string
+	// Stage selects the generated devcontainer stage, or an authored stage only.
+	Stage DevcontainerStage
 	// BuildArgs become "build-arg:KEY=VAL" frontend opts.
 	BuildArgs map[string]string
 	// Labels become "label:KEY=VAL" frontend opts.

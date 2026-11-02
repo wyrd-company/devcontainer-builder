@@ -59,3 +59,6 @@ while retaining image configuration and normal nonempty filesystem builds.
 
 Map build.options build arguments to native Dockerfile solves with host inheritance,
 ordered precedence and independent config-only metadata and user inference.
+
+Map build.options target selection to authored and generated stages while retaining
+independent configured-target metadata and user inference.

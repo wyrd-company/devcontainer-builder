@@ -179,3 +179,24 @@ func TestMergeImageConfigEmptyMetadata(t *testing.T) {
 		})
 	}
 }
+
+func TestMergeImageConfig_FeatureTargetUser(t *testing.T) {
+	for _, inferred := range []string{"", "configured"} {
+		g := GraphInputs{Spec: &spec.DevContainer{}, ImageUser: inferred, Features: []features.Resolved{{Source: "./sample"}}}
+		out, err := mergeImageConfig([]byte(`{"config":{}}`), g, nil, ocispecs.Platform{OS: "linux", Architecture: "amd64"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var img dockerspec.DockerOCIImage
+		if err := json.Unmarshal(out, &img); err != nil {
+			t.Fatal(err)
+		}
+		want := inferred
+		if want == "" {
+			want = "root"
+		}
+		if img.Config.User != want {
+			t.Fatalf("user=%q want=%q", img.Config.User, want)
+		}
+	}
+}

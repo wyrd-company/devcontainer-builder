@@ -15,9 +15,11 @@ import (
 )
 
 type dockerBuildOptions struct {
-	Network string
-	Labels  map[string]string
-	Args    map[string]string
+	Target    string
+	TargetSet bool
+	Network   string
+	Labels    map[string]string
+	Args      map[string]string
 }
 
 // buildNetworkMode retains the network-only view used by callers and tests.
@@ -38,6 +40,7 @@ func parseBuildOptions(dc *spec.DevContainer) (dockerBuildOptions, error) {
 	var mode string
 	var labels []string
 	var args []string
+	flags.StringVar(&parsed.Target, "target", "", "target build stage")
 	flags.StringArrayVar(&args, "build-arg", nil, "build-time variables")
 	flags.StringArrayVar(&labels, "label", nil, "image labels")
 	flags.StringVar(&mode, "network", "default", "network for Dockerfile RUN instructions")
@@ -47,6 +50,7 @@ func parseBuildOptions(dc *spec.DevContainer) (dockerBuildOptions, error) {
 	if len(flags.Args()) != 0 {
 		return parsed, fmt.Errorf("build.options: unexpected positional arguments %q", flags.Args())
 	}
+	parsed.TargetSet = flags.Changed("target")
 	for _, value := range labels {
 		key, _, _ := strings.Cut(value, "=")
 		if key == "" {

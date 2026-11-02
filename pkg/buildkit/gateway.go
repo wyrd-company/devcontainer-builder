@@ -228,6 +228,9 @@ func buildOnePlatform(
 		graph.ImageUser = imageUser(baseConfig)
 	}
 	graph.BaseState = &baseState
+	if spec.Upstream != nil && spec.Upstream.Stage != FinalStage {
+		return solveSelectedStage(ctx, gc, baseState, baseConfig, graph, spec.Upstream.Stage, spec.Labels, bs)
+	}
 
 	// Feature builtins use the metadata's effective users. Keep graph.Spec
 	// unchanged for label collection so inherited entries are not appended twice.
@@ -290,6 +293,15 @@ func mergeImageConfig(base []byte, g GraphInputs, labels map[string]string, p oc
 	img.Architecture = p.Architecture
 	if p.Variant != "" {
 		img.Variant = p.Variant
+	}
+
+	if len(g.Features) > 0 {
+		if g.ImageUser != "" {
+			img.Config.User = g.ImageUser
+		}
+		if img.Config.User == "" {
+			img.Config.User = "root"
+		}
 	}
 
 	// Features first, each expanded against the environment as built, then

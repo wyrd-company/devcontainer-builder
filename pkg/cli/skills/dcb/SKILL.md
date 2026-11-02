@@ -350,7 +350,7 @@ option keys use the last value. Docker rejects logging options for driver `none`
 
 `build.options --network` supports default, none and host for Dockerfile RUN
 instructions. Repeated values use the last value. Host mode requests the native
-BuildKit network.host entitlement. The daemon must allow it. Build flags other than network, image labels and build arguments
+BuildKit network.host entitlement. The daemon must allow it. Build flags other than network, image labels, build arguments and target selection
 currently return an explicit unsupported-option error.
 
 `build.options --label` sets image labels through native BuildKit. Repeated
@@ -367,3 +367,12 @@ values intact; explicit empty values remain empty. Empty keys are invalid.
 Metadata and image user inference use `build.args` independently of these options,
 as in the pinned upstream CLI. Generated feature arguments retain their own
 staging and final image handling.
+
+Build options accept `--target STAGE` and `--target=STAGE`; the last value wins.
+These options select from the generated Dockerfile. An authored stage bypasses
+feature installation, configuration environment, and generated metadata. The
+`dev_containers_target_stage` target, or an empty target, keeps the final image
+layers based on `build.target`. With Features, the
+`dev_containers_feature_content_normalize` target exports the root-owned builtin
+environment preparation stage. Metadata and user inference still use the
+configured `build.target` independently of the option.

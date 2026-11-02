@@ -337,11 +337,16 @@ func (b *Builder) runBuildKit(ctx context.Context, opts Options, ctxDir string,
 	if err != nil {
 		return err
 	}
+	imageUser := b.baseImageUser(ctx, dc, opts, logf)
+	if imageUser == "" {
+		imageUser = "root"
+	}
 	bspec := buildkit.BuildSpec{
 		Graph: buildkit.GraphInputs{
 			Spec:                  dc,
 			Metadata:              opts.Metadata,
 			BaseImage:             baseImage,
+			ImageUser:             imageUser,
 			Features:              resolved,
 			VSCodeServer:          sr,
 			LocalContextName:      featuresLocalName,
@@ -445,6 +450,9 @@ func prepareBaseImage(dc *spec.DevContainer, opts Options) (string, *buildkit.Do
 	}
 	if dc.Build != nil && dc.Build.Target != "" {
 		upstream.Target = dc.Build.Target
+	}
+	if err := selectBuildTarget(dc, parsed, upstream); err != nil {
+		return "", nil, err
 	}
 	return "", upstream, nil
 }

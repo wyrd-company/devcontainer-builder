@@ -102,7 +102,7 @@ embedded in a service or an operator. See
 [Go libraries](https://wyrd.foo/docs/dcb/library).
 
 Dockerfile `build.options` supports native BuildKit networking, image labels,
-and build arguments.
+build arguments, and generated Dockerfile target selection.
 Other build option mappings remain explicit limitations; see
 [configuration conformance](docs/audits/schema-conformance.md).
 
