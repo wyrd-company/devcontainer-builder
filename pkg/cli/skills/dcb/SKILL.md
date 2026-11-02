@@ -368,7 +368,8 @@ Metadata and image user inference use `build.args` independently of these option
 as in the pinned upstream CLI. Generated feature arguments retain their own
 staging and final image handling.
 
-Build options accept `--target STAGE` and `--target=STAGE`; the last value wins.
+Build options accept `build.options --target STAGE` and
+`build.options --target=STAGE`; the last value wins.
 These options select from the generated Dockerfile. An authored stage bypasses
 feature installation, configuration environment, and generated metadata. The
 `dev_containers_target_stage` target, or an empty target, keeps the final image
