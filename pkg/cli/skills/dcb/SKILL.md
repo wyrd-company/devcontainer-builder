@@ -280,3 +280,7 @@ digest metadata; latest uses the highest full semver tag. Lockfiles are unchange
 This command needs registry access and no Docker daemon. `--config` selects an
 explicit file. User data folder is accepted and unused. Log levels are info,
 debug, and trace. Terminal dimensions must be supplied together.
+
+Docker `runArgs` accepts boolean assignments, combined short booleans, attached
+short values, and bare environment keys. `--rm`, stdin and TTY settings reach
+the Engine API. `--entrypoint` is replaced by the upstream keepalive entrypoint.

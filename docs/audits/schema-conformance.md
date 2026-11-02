@@ -28,8 +28,10 @@ the Engine client cannot silently discard an option.
 Configuration conformance takes priority over additional command work. These
 runtime consumers require pinned differential checks and corrections:
 
-- Docker `runArgs` must preserve container-affecting flags, boolean assignments,
-  attached short options, and environment inheritance.
+- Docker `runArgs` needs remaining flag coverage, ordering, and precedence
+  checks. Boolean assignments, combined short booleans, attached short values,
+  stdin, TTY, removal, environment inheritance, and overridden entrypoints are
+  supported.
 - Empty Compose file arrays require upstream Compose file discovery.
 - Reading a common-only document must not require a build/run source.
 - Environment values require schema type checks and pinned null-value behavior.

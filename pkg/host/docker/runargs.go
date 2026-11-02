@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	dockeropts "github.com/docker/cli/opts"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/go-connections/nat"
 	"github.com/docker/go-units"
@@ -57,11 +58,15 @@ func (p *runArgsParser) step(cfg *container.Config, host *container.HostConfig) 
 		return fmt.Errorf("runArgs: positional argument %q is not allowed (only flags belong in runArgs)", a)
 	}
 
-	// Combined boolean shorts like -it / -itd. Expand them when every
-	// letter is a known no-op short, otherwise fall through and let the
-	// switch reject the unknown form.
-	if isCombinedBoolShort(a) {
-		return nil
+	// Docker/pflag short options allow clusters and attached values. A boolean
+	// consumes only its letter; a value option consumes the remaining suffix.
+	if len(a) > 2 && a[0] == '-' && a[1] != '-' && a[2] != '=' {
+		if strings.ContainsRune("ditP", rune(a[1])) {
+			p.args = append(append([]string{}, p.args[:p.i]...), append([]string{"-" + a[2:]}, p.args[p.i:]...)...)
+			a = a[:2]
+		} else if strings.ContainsRune("huwelpvmc", rune(a[1])) {
+			a = a[:2] + "=" + a[2:]
+		}
 	}
 
 	flag, val, hasVal := splitFlag(a)
@@ -74,43 +79,42 @@ func (p *runArgsParser) step(cfg *container.Config, host *container.HostConfig) 
 		}
 		return p.pop(), nil
 	}
-	requireNoValue := func() error {
-		if hasVal {
-			return fmt.Errorf("runArgs: flag %s does not take a value", flag)
+	boolean := func() (bool, error) {
+		if !hasVal {
+			return true, nil
 		}
-		return nil
+		v, err := strconv.ParseBool(val)
+		if err != nil {
+			return false, fmt.Errorf("runArgs: flag %s: %w", flag, err)
+		}
+		return v, nil
 	}
 
 	switch flag {
-	// ---------------------------------------------------------------
-	// Boolean flags.
-	// ---------------------------------------------------------------
-	case "--init":
-		if err := requireNoValue(); err != nil {
+	case "--init", "--privileged", "--read-only", "-P", "--publish-all",
+		"-i", "--interactive", "-t", "--tty", "--rm", "-d", "--detach", "--sig-proxy":
+		v, err := boolean()
+		if err != nil {
 			return err
 		}
-		t := true
-		host.Init = &t
-	case "--privileged":
-		if err := requireNoValue(); err != nil {
-			return err
+		switch flag {
+		case "--init":
+			host.Init = &v
+		case "--privileged":
+			host.Privileged = v
+		case "--read-only":
+			host.ReadonlyRootfs = v
+		case "-P", "--publish-all":
+			host.PublishAllPorts = v
+		case "-i", "--interactive":
+			cfg.OpenStdin = v
+		case "-t", "--tty":
+			cfg.Tty = v
+		case "--rm":
+			host.AutoRemove = v
+			// Detach and signal proxy control the CLI process, not creation.
 		}
-		host.Privileged = true
-	case "--read-only":
-		if err := requireNoValue(); err != nil {
-			return err
-		}
-		host.ReadonlyRootfs = true
-	case "-P", "--publish-all":
-		if err := requireNoValue(); err != nil {
-			return err
-		}
-		host.PublishAllPorts = true
 
-	// Irrelevant to a long-lived devcontainer; tolerated so users can
-	// paste runArgs from a docker run invocation without surprise.
-	case "-d", "--detach", "-i", "--interactive", "-t", "--tty", "--rm", "--sig-proxy":
-		// no-op
 	case "--name":
 		v, err := take()
 		if err != nil {
@@ -409,11 +413,13 @@ func (p *runArgsParser) step(cfg *container.Config, host *container.HostConfig) 
 		if err != nil {
 			return err
 		}
-		if !strings.ContainsRune(v, '=') {
-			return fmt.Errorf("runArgs: --env %q: bare KEY form not supported, use KEY=VALUE", v)
+		v, err = dockeropts.ValidateEnv(v)
+		if err != nil {
+			return fmt.Errorf("runArgs: --env: %w", err)
 		}
-		k, ev := splitKV(v)
-		cfg.Env = upsertEnv(cfg.Env, k, ev)
+		// Keep argument order, including bare unset keys, for Engine's merge
+		// with image defaults and repeated environment overrides.
+		cfg.Env = append(cfg.Env, v)
 	case "--add-host":
 		v, err := take()
 		if err != nil {
@@ -565,11 +571,11 @@ func (p *runArgsParser) step(cfg *container.Config, host *container.HostConfig) 
 		}
 		host.Annotations[k] = av
 
-	// Flags whose semantics conflict with how this package keeps a
-	// devcontainer alive (we own entrypoint/cmd via keepaliveScript) and
-	// would silently break lifecycle if accepted.
 	case "--entrypoint":
-		return fmt.Errorf("runArgs: --entrypoint is not supported (the docker host owns the keepalive entrypoint)")
+		// Upstream places its keepalive entrypoint after runArgs, overriding it.
+		if _, err := take(); err != nil {
+			return err
+		}
 
 	default:
 		return fmt.Errorf("runArgs: unsupported flag %q", flag)
@@ -584,22 +590,6 @@ func splitFlag(a string) (flag, val string, hasVal bool) {
 		return a[:eq], a[eq+1:], true
 	}
 	return a, "", false
-}
-
-// isCombinedBoolShort recognizes "-it", "-ti", "-itd", "-dit", etc.,
-// where every letter after the leading "-" is one of i/t/d (all
-// no-ops). Returns false for the bare "-i" / "-d" / "-t" cases (those
-// are handled by the main switch as individual flags).
-func isCombinedBoolShort(a string) bool {
-	if len(a) < 3 || a[0] != '-' || a[1] == '-' {
-		return false
-	}
-	for _, c := range a[1:] {
-		if c != 'i' && c != 't' && c != 'd' {
-			return false
-		}
-	}
-	return true
 }
 
 // splitKV splits "k=v" into ("k", "v"). For "k" alone, returns ("k", "").

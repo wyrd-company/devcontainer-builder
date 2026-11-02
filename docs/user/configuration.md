@@ -86,8 +86,14 @@ variables above are substituted.
 `runArgs` is read as `docker run` flags and applied to the container through
 the Engine API. Flags that add to a property, such as `--cap-add`, add to it
 and do not replace it. An unknown flag is an error, so that a typing error does
-not change the container. `--entrypoint` is an error, because `dcb` sets the
-entrypoint that keeps the container running.
+not change the container. `--entrypoint` is accepted and replaced by the
+keepalive entrypoint, as in the upstream CLI.
+
+Boolean assignments, combined short booleans such as `-it`, and attached short
+values such as `-eSAMPLE=value` are accepted. `--rm`, stdin, and TTY settings reach
+the Engine API. Bare environment keys inherit the host value; unset keys stay
+bare so that Engine removes image defaults. Detach and signal proxy flags control
+the Docker CLI process and have no container setting.
 
 `--name sample-dev` and `--name=sample-dev` set the Docker container name.
 Without `--name`, Docker chooses the name. dcb finds and reuses containers by
