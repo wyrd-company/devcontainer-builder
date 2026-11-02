@@ -18,7 +18,7 @@ import (
 
 // foreignFlags are flags the documentation names for other tools: the
 // upstream CLI and the docker run vocabulary that runArgs accepts.
-var foreignFlags = map[string]bool{"--docker-path": true, "--entrypoint": true, "--cap-add": true, "--name": true, "--rm": true, "--env-file": true, "--label-file": true}
+var foreignFlags = map[string]bool{"--docker-path": true, "--entrypoint": true, "--cap-add": true, "--name": true, "--rm": true, "--env-file": true, "--label-file": true, "--health-cmd": true, "--health-interval": true, "--health-timeout": true, "--health-start-period": true, "--health-start-interval": true, "--health-retries": true, "--no-healthcheck": true, "--log-driver": true, "--log-opt": true}
 
 var (
 	inlineCode = regexp.MustCompile("`([^`\n]+)`")
@@ -109,6 +109,15 @@ func TestCheckCommand(t *testing.T) {
 		{"dcb build --load=false", true},
 		{"dcb up --push", false},
 		{"dcb up --rm", false},
+		{"dcb up --health-cmd value", false},
+		{"dcb up --health-interval 1s", false},
+		{"dcb up --health-timeout 1s", false},
+		{"dcb up --health-start-period 1s", false},
+		{"dcb up --health-start-interval 1s", false},
+		{"dcb up --health-retries 2", false},
+		{"dcb up --no-healthcheck", false},
+		{"dcb up --log-driver none", false},
+		{"dcb up --log-opt tag=sample", false},
 		{"dcb up --env-file values", false},
 		{"dcb up --label-file values", false},
 		{"dcb skills --dir x", false},

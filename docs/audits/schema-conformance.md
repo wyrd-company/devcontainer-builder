@@ -33,7 +33,9 @@ runtime consumers require pinned differential checks and corrections:
   stdin, TTY, removal, environment inheritance, and overridden entrypoints are
   supported. Native Docker environment and label files load before explicit
   flags. Merged init, privileged, capability and security option flags follow
-  runArgs. Health, logging and remaining Docker flag coverage stay queued.
+  runArgs. Health and logging options retain native Docker values, final scalar precedence,
+  health conflict checks and logging key precedence. Remaining Docker flag
+  coverage stays queued.
 - Empty Compose file arrays require upstream Compose file discovery.
 - Reading a common-only document must not require a build/run source.
 - Environment values require schema type checks and pinned null-value behavior.

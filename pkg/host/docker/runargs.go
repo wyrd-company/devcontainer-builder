@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	dockeropts "github.com/docker/cli/opts"
 	"github.com/docker/docker/api/types/container"
@@ -27,6 +28,9 @@ func applyRunArgs(args []string, cfg *container.Config, host *container.HostConf
 			return "", err
 		}
 	}
+	if err := p.applyHealthAndLogging(cfg, host); err != nil {
+		return "", err
+	}
 	// Docker loads every file before explicit flags, regardless of argv order.
 	env, err := dockeropts.ReadKVEnvStrings(p.envFiles, cfg.Env)
 	if err != nil {
@@ -48,11 +52,15 @@ func applyRunArgs(args []string, cfg *container.Config, host *container.HostConf
 }
 
 type runArgsParser struct {
-	args       []string
-	i          int
-	name       string
-	envFiles   []string
-	labelFiles []string
+	args          []string
+	i             int
+	name          string
+	envFiles      []string
+	labelFiles    []string
+	health        container.HealthConfig
+	noHealthcheck bool
+	logDriver     string
+	logOptions    []string
 }
 
 func (p *runArgsParser) more() bool { return p.i < len(p.args) }
@@ -133,6 +141,63 @@ func (p *runArgsParser) step(cfg *container.Config, host *container.HostConfig) 
 			host.AutoRemove = v
 			// Detach and signal proxy control the CLI process, not creation.
 		}
+
+	case "--no-healthcheck":
+		v, err := boolean()
+		if err != nil {
+			return err
+		}
+		p.noHealthcheck = v
+	case "--health-cmd":
+		v, err := take()
+		if err != nil {
+			return err
+		}
+		p.health.Test = nil
+		if v != "" {
+			p.health.Test = []string{"CMD-SHELL", v}
+		}
+	case "--health-interval", "--health-timeout", "--health-start-period", "--health-start-interval":
+		v, err := take()
+		if err != nil {
+			return err
+		}
+		d, err := time.ParseDuration(v)
+		if err != nil {
+			return fmt.Errorf("runArgs: %s: %w", flag, err)
+		}
+		switch flag {
+		case "--health-interval":
+			p.health.Interval = d
+		case "--health-timeout":
+			p.health.Timeout = d
+		case "--health-start-period":
+			p.health.StartPeriod = d
+		case "--health-start-interval":
+			p.health.StartInterval = d
+		}
+	case "--health-retries":
+		v, err := take()
+		if err != nil {
+			return err
+		}
+		n, err := strconv.ParseInt(v, 0, strconv.IntSize)
+		if err != nil {
+			return fmt.Errorf("runArgs: %s: %w", flag, err)
+		}
+		p.health.Retries = int(n)
+	case "--log-driver":
+		v, err := take()
+		if err != nil {
+			return err
+		}
+		p.logDriver = v
+	case "--log-opt":
+		v, err := take()
+		if err != nil {
+			return err
+		}
+		p.logOptions = append(p.logOptions, v)
 
 	case "--name":
 		v, err := take()
@@ -780,4 +845,39 @@ func parseBool(s string) (bool, error) {
 		return false, nil
 	}
 	return false, fmt.Errorf("invalid boolean %q", s)
+}
+
+// applyHealthAndLogging follows Docker CLI container/opts.go. These health
+// assembly and logging validation helpers are private in the native CLI.
+// Validate final values, so a later scalar flag can replace an earlier value.
+func (p *runArgsParser) applyHealthAndLogging(cfg *container.Config, host *container.HostConfig) error {
+	h := p.health
+	have := len(h.Test) > 0 || h.Interval != 0 || h.Timeout != 0 || h.StartPeriod != 0 || h.StartInterval != 0 || h.Retries != 0
+	if p.noHealthcheck {
+		if have {
+			return fmt.Errorf("runArgs: --no-healthcheck conflicts with --health-* options")
+		}
+		cfg.Healthcheck = &container.HealthConfig{Test: []string{"NONE"}}
+	} else if have {
+		for _, field := range []struct {
+			name     string
+			negative bool
+		}{
+			{"--health-interval", h.Interval < 0},
+			{"--health-timeout", h.Timeout < 0},
+			{"--health-retries", h.Retries < 0},
+			{"--health-start-period", h.StartPeriod < 0},
+			{"--health-start-interval", h.StartInterval < 0},
+		} {
+			if field.negative {
+				return fmt.Errorf("runArgs: %s cannot be negative", field.name)
+			}
+		}
+		cfg.Healthcheck = &h
+	}
+	if p.logDriver == "none" && len(p.logOptions) > 0 {
+		return fmt.Errorf("runArgs: invalid logging opts for driver %s", p.logDriver)
+	}
+	host.LogConfig = container.LogConfig{Type: p.logDriver, Config: dockeropts.ConvertKVStringsToMap(p.logOptions)}
+	return nil
 }

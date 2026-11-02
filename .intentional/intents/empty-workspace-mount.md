@@ -17,3 +17,6 @@ entrypoints as in the upstream CLI.
 
 Accept Docker environment and label files with native file precedence, and apply
 merged feature flags after runArgs.
+
+Accept Docker health and logging run arguments with native value precedence and
+conflict checks.

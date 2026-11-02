@@ -289,3 +289,10 @@ Docker `runArgs --env-file` and `--label-file` use native Docker file parsing.
 Files load before explicit environment and label flags. Paths use the process
 working directory. Merged init, privileged, capability and security option flags
 follow runArgs, as in the upstream CLI.
+
+Docker `runArgs` health options (`--health-cmd`, `--health-interval`,
+`--health-timeout`, `--health-start-period`, `--health-start-interval`, and
+`--health-retries`) retain Docker values. `--no-healthcheck` disables image health
+checks and conflicts with nonzero health options. Repeated scalar flags use the
+last value. `--log-driver` and `--log-opt` preserve logging configuration; repeated
+option keys use the last value. Docker rejects logging options for driver `none`.
