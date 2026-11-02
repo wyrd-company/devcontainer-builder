@@ -275,7 +275,7 @@ func TestDockerComposeObjectCleanupCLI(t *testing.T) {
 			if err := os.WriteFile(config, []byte(`{"dockerComposeFile":"compose.yml","service":"app"}`), 0600); err != nil {
 				t.Fatal(err)
 			}
-			body := "services:\n  app:\n    image: alpine:3.20\n    configs: [sample]\n    secrets: [token]\nconfigs:\n  sample:\n    content: synthetic-config\nsecrets:\n  token:\n    environment: SAMPLE_TOKEN\n"
+			body := "services:\n  app:\n    image: alpine:3.20\n    command: [sleep, infinity]\n    configs: [sample]\n    secrets: [token]\nconfigs:\n  sample:\n    content: synthetic-config\nsecrets:\n  token:\n    environment: SAMPLE_TOKEN\n"
 			if err := os.WriteFile(filepath.Join(filepath.Dir(config), "compose.yml"), []byte(body), 0600); err != nil {
 				t.Fatal(err)
 			}
