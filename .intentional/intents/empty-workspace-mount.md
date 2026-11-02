@@ -10,3 +10,7 @@ not upstream configuration forms.
 
 Preserve string appPort publishing and Docker mount options across workspace,
 additional mounts, and runArgs, including CSV quoting and volume defaults.
+
+Preserve Docker runArgs boolean assignments, combined and attached short forms,
+stdin, TTY, automatic removal, and host environment inheritance. Accept overridden
+entrypoints as in the upstream CLI.
