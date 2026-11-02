@@ -18,7 +18,7 @@ import (
 
 // foreignFlags are flags the documentation names for other tools: the
 // upstream CLI and the docker run vocabulary that runArgs accepts.
-var foreignFlags = map[string]bool{"--storage-opt": true, "--cpu-count": true, "--cpu-percent": true, "--io-maxbandwidth": true, "--io-maxiops": true, "--blkio-weight-device": true, "--device-read-bps": true, "--device-write-bps": true, "--device-read-iops": true, "--device-write-iops": true, "--docker-path": true, "--entrypoint": true, "--cap-add": true, "--name": true, "--rm": true, "--env-file": true, "--label-file": true, "--health-cmd": true, "--health-interval": true, "--health-timeout": true, "--health-start-period": true, "--health-start-interval": true, "--health-retries": true, "--no-healthcheck": true, "--log-driver": true, "--log-opt": true, "--cpu-period": true, "--cpu-quota": true, "--cpu-rt-period": true, "--cpu-rt-runtime": true, "--memory-swappiness": true, "--blkio-weight": true, "--cpu-shares": true, "--pids-limit": true, "--oom-score-adj": true, "--oom-kill-disable": true}
+var foreignFlags = map[string]bool{"--ip": true, "--link-local-ip": true, "--storage-opt": true, "--cpu-count": true, "--cpu-percent": true, "--io-maxbandwidth": true, "--io-maxiops": true, "--blkio-weight-device": true, "--device-read-bps": true, "--device-write-bps": true, "--device-read-iops": true, "--device-write-iops": true, "--docker-path": true, "--entrypoint": true, "--cap-add": true, "--name": true, "--rm": true, "--env-file": true, "--label-file": true, "--health-cmd": true, "--health-interval": true, "--health-timeout": true, "--health-start-period": true, "--health-start-interval": true, "--health-retries": true, "--no-healthcheck": true, "--log-driver": true, "--log-opt": true, "--cpu-period": true, "--cpu-quota": true, "--cpu-rt-period": true, "--cpu-rt-runtime": true, "--memory-swappiness": true, "--blkio-weight": true, "--cpu-shares": true, "--pids-limit": true, "--oom-score-adj": true, "--oom-kill-disable": true}
 
 var (
 	inlineCode = regexp.MustCompile("`([^`\n]+)`")
@@ -121,6 +121,9 @@ func TestCheckCommand(t *testing.T) {
 		{"dcb up --memory-swappiness 50", false},
 		{"dcb up --blkio-weight 500", false},
 		{"dcb up --storage-opt size=1G", false},
+		{"dcb up --ip 192.0.2.2", false},
+		{"dcb up --ip6 2001:db8::2", false},
+		{"dcb up --link-local-ip 169.254.1.2", false},
 		{"dcb up --cpu-count 1", false},
 		{"dcb up --cpu-percent 10", false},
 		{"dcb up --io-maxbandwidth 1mb", false},

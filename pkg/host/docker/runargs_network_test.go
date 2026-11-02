@@ -102,3 +102,29 @@ func TestCreateNetworkRequest(t *testing.T) {
 		}
 	}
 }
+
+func TestRunArgsEmptyIPAssignments(t *testing.T) {
+	for _, flag := range []string{"--ip", "--ip6"} {
+		for _, prior := range []string{"", "192.0.2.2", "2001:db8::2"} {
+			args := []string{"--net=sample"}
+			if prior != "" {
+				args = append(args, flag+"="+prior)
+			}
+			cfg, host, want := &container.Config{}, &container.HostConfig{}, &network.NetworkingConfig{}
+			if _, err := applyRunArgs(args, cfg, host, want); err != nil {
+				t.Fatal(err)
+			}
+			args = append(args, flag+"=")
+			got := &network.NetworkingConfig{}
+			if _, err := applyRunArgs(args, &container.Config{}, &container.HostConfig{}, got); err != nil {
+				t.Fatal(err)
+			}
+			if !reflect.DeepEqual(got, want) {
+				t.Fatalf("%v: got %+v want %+v", args, got, want)
+			}
+		}
+		if _, err := applyRunArgs([]string{flag + "= "}, &container.Config{}, &container.HostConfig{}); err == nil {
+			t.Fatalf("accepted whitespace %s", flag)
+		}
+	}
+}

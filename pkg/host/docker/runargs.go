@@ -293,6 +293,10 @@ func (p *runArgsParser) step(cfg *container.Config, host *container.HostConfig) 
 		if err != nil {
 			return err
 		}
+		// pflag IP assignments treat exactly empty input as a no-op.
+		if v == "" {
+			return nil
+		}
 		ip := net.ParseIP(strings.TrimSpace(v))
 		if ip == nil {
 			return fmt.Errorf("runArgs: invalid IP address %q", v)
