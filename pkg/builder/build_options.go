@@ -16,17 +16,21 @@ import (
 )
 
 type dockerBuildOptions struct {
-	ShmSize   int64
-	Ulimits   string
-	Target    string
-	TargetSet bool
-	Network   string
-	Labels    map[string]string
-	Args      map[string]string
-	CacheFrom []string
-	CacheTo   []string
-	Secrets   buildflags.Secrets
-	SSH       []*buildflags.SSH
+	NoCache    bool
+	NoCacheSet bool
+	Pull       bool
+	PullSet    bool
+	ShmSize    int64
+	Ulimits    string
+	Target     string
+	TargetSet  bool
+	Network    string
+	Labels     map[string]string
+	Args       map[string]string
+	CacheFrom  []string
+	CacheTo    []string
+	Secrets    buildflags.Secrets
+	SSH        []*buildflags.SSH
 }
 
 // buildNetworkMode retains the network-only view used by callers and tests.
@@ -44,6 +48,8 @@ func parseBuildOptions(dc *spec.DevContainer) (dockerBuildOptions, error) {
 	}
 	flags := pflag.NewFlagSet("build.options", pflag.ContinueOnError)
 	flags.SetOutput(io.Discard)
+	flags.BoolVar(&parsed.NoCache, "no-cache", false, "Disable build cache")
+	flags.BoolVar(&parsed.Pull, "pull", false, "Always pull referenced images")
 	var shmSize dockeropts.MemBytes
 	ulimits := dockeropts.NewUlimitOpt(nil)
 	flags.Var(&shmSize, "shm-size", "Shared memory size for build containers")
@@ -66,6 +72,8 @@ func parseBuildOptions(dc *spec.DevContainer) (dockerBuildOptions, error) {
 	if len(flags.Args()) != 0 {
 		return parsed, fmt.Errorf("build.options: unexpected positional arguments %q", flags.Args())
 	}
+	parsed.NoCacheSet = flags.Changed("no-cache")
+	parsed.PullSet = flags.Changed("pull")
 	parsed.ShmSize = shmSize.Value()
 	var limits []string
 	for _, limit := range ulimits.GetList() {

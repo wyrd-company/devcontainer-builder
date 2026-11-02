@@ -103,7 +103,8 @@ embedded in a service or an operator. Image-source Kubernetes projection support
 command overrides and configuration-over-Feature environment precedence. See
 [Go libraries](https://wyrd.foo/docs/dcb/library).
 
-Dockerfile `build.options` supports native BuildKit networking, image labels,
+Dockerfile `build.options` supports native BuildKit cache bypass, image pulling,
+networking, image labels,
 build arguments, generated Dockerfile target selection, cache imports/exports,
 build secrets, SSH session forwarding, shared memory size and build resource limits.
 Other build option mappings remain explicit limitations; see

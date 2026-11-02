@@ -367,6 +367,10 @@ func (b *Builder) runBuildKit(ctx context.Context, opts Options, ctxDir string,
 // solveOptions are the BuildKit options of a build whose staging context
 // is ctxDir.
 func solveOptions(opts Options, ctxDir string, dc *spec.DevContainer) (buildkit.SolveOptions, error) {
+	parsed, err := parseBuildOptions(dc)
+	if err != nil {
+		return buildkit.SolveOptions{}, err
+	}
 	imports, exports, err := buildCaches(dc, opts)
 	if err != nil {
 		return buildkit.SolveOptions{}, err
@@ -374,6 +378,18 @@ func solveOptions(opts Options, ctxDir string, dc *spec.DevContainer) (buildkit.
 	sessions, err := buildSessions(dc)
 	if err != nil {
 		return buildkit.SolveOptions{}, err
+	}
+	// The pinned CLI emits generated booleans before build.options. Cache
+	// import generation above still uses the invocation setting.
+	noCache, pull := opts.NoCache, opts.Pull
+	if opts.NoCache && dc != nil && dc.DockerfilePath() != "" {
+		pull = true
+	}
+	if parsed.NoCacheSet {
+		noCache = parsed.NoCache
+	}
+	if parsed.PullSet {
+		pull = parsed.Pull
 	}
 	return buildkit.SolveOptions{
 		Session:          sessions,
@@ -390,8 +406,8 @@ func solveOptions(opts Options, ctxDir string, dc *spec.DevContainer) (buildkit.
 		CacheImports:     imports,
 		CacheExports:     exports,
 		Platforms:        opts.Platforms,
-		NoCache:          opts.NoCache,
-		Pull:             opts.Pull,
+		NoCache:          noCache,
+		Pull:             pull,
 		RegistryAuth:     opts.RegistryAuth,
 		Progress:         opts.Progress,
 		Stdout:           opts.Stdout,

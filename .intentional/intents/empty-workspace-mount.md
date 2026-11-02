@@ -99,3 +99,6 @@ deletion instead of silently ignoring enabled runArgs --rm.
 
 Map build.options shared memory size and per-name resource limits to native
 BuildKit Dockerfile frontend settings with Docker parsing and precedence.
+
+Preserve native no-cache and pull build option booleans and generated flag
+precedence in both Dockerfile solve routes.

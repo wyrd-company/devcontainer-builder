@@ -496,3 +496,11 @@ size wins; zero uses the BuildKit worker default. Resource limits use native
 Docker validation, shorthand single values and unlimited values. The last limit
 for each name wins. Both Dockerfile solve routes pass these settings to the
 native BuildKit frontend; worker enforcement remains platform-dependent.
+
+Build options accept `build.options --no-cache` and `build.options --pull`
+with native Docker boolean assignments and last-value precedence. Dockerfile
+invocation no-cache enables both cache bypass and image pulling before these
+options apply. Explicit false values can override those generated flags. Cache
+import generation still uses invocation no-cache; option-only cache bypass
+retains configured imports. These settings reach standalone and nested
+Dockerfile solves.

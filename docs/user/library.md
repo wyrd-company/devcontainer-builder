@@ -468,3 +468,11 @@ overrides it. Authored `--entrypoint` values are parsed and replaced by the
 wrapper on Docker and Kubernetes. Docker `--rm` uses native Engine automatic
 deletion. Kubernetes reports enabled `--rm` as unsupported because a standalone
 Pod has no equivalent deletion behavior; a final `--rm=false` is accepted.
+
+Build options accept `build.options --no-cache` and `build.options --pull`
+with native Docker boolean assignments and last-value precedence. Dockerfile
+invocation no-cache enables both cache bypass and image pulling before these
+options apply. Explicit false values can override those generated flags. Cache
+import generation still uses invocation no-cache; option-only cache bypass
+retains configured imports. These settings reach standalone and nested
+Dockerfile solves.
