@@ -160,19 +160,6 @@ func buildContainerConfigWithEntrypoints(dc *spec.DevContainer, resolved []featu
 	host := &container.HostConfig{
 		AutoRemove: false,
 	}
-	if dc.Init != nil && *dc.Init {
-		t := true
-		host.Init = &t
-	}
-	if dc.Privileged != nil && *dc.Privileged {
-		host.Privileged = true
-	}
-	if len(dc.CapAdd) > 0 {
-		host.CapAdd = append(host.CapAdd, dc.CapAdd...)
-	}
-	if len(dc.SecurityOpt) > 0 {
-		host.SecurityOpt = append(host.SecurityOpt, dc.SecurityOpt...)
-	}
 
 	mounts := []mount.Mount{}
 	m, err := workspaceMount(dc, localFolder, containerWorkspaceFolder)
@@ -200,6 +187,21 @@ func buildContainerConfigWithEntrypoints(dc *spec.DevContainer, resolved []featu
 	name, err := applyRunArgs(dc.RunArgs, cfg, host)
 	if err != nil {
 		return nil, nil, "", err
+	}
+
+	// Upstream appends merged feature flags after runArgs.
+	if dc.Init != nil && *dc.Init {
+		t := true
+		host.Init = &t
+	}
+	if dc.Privileged != nil && *dc.Privileged {
+		host.Privileged = true
+	}
+	if len(dc.CapAdd) > 0 {
+		host.CapAdd = append(host.CapAdd, dc.CapAdd...)
+	}
+	if len(dc.SecurityOpt) > 0 {
+		host.SecurityOpt = append(host.SecurityOpt, dc.SecurityOpt...)
 	}
 
 	return cfg, host, name, nil

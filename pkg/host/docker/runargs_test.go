@@ -2,8 +2,10 @@ package docker
 
 import (
 	"os"
+	"path/filepath"
 	"reflect"
 	"sort"
+	"strings"
 	"testing"
 
 	"github.com/docker/docker/api/types/container"
@@ -428,7 +430,7 @@ func TestApplyRunArgs_MissingValue(t *testing.T) {
 }
 
 func TestBuildContainerConfig_RunArgsMergesWithStructuredFields(t *testing.T) {
-	// runArgs cap-add appends to the spec's CapAdd, doesn't replace.
+	// Upstream appends structured CapAdd after runArgs without replacement.
 	dc := &spec.DevContainer{
 		CapAdd:  []string{"SYS_PTRACE"},
 		RunArgs: []string{"--cap-add=NET_ADMIN", "--network=host"},
@@ -437,7 +439,7 @@ func TestBuildContainerConfig_RunArgsMergesWithStructuredFields(t *testing.T) {
 	if err != nil {
 		t.Fatalf("buildContainerConfig: %v", err)
 	}
-	want := []string{"SYS_PTRACE", "NET_ADMIN"}
+	want := []string{"NET_ADMIN", "SYS_PTRACE"}
 	if !reflect.DeepEqual([]string(host.CapAdd), want) {
 		t.Errorf("cap-add merge: %+v", host.CapAdd)
 	}
@@ -466,4 +468,69 @@ func tryApply(args []string) (*container.Config, *container.HostConfig, error) {
 	host := &container.HostConfig{}
 	_, err := applyRunArgs(args, cfg, host)
 	return cfg, host, err
+}
+
+// File parsing and precedence follow Docker CLI opts.ReadKV{Env,}Strings.
+func TestApplyRunArgs_FilePrecedence(t *testing.T) {
+	dir := t.TempDir()
+	first, second := filepath.Join(dir, "first"), filepath.Join(dir, "second")
+	t.Setenv("SAMPLE_INHERIT", "host-value")
+	t.Setenv("SAMPLE_LABEL", "not-inherited")
+	for path, data := range map[string]string{first: "# comment\nSAMPLE=file-first\nSAMPLE_INHERIT\nSAMPLE_LABEL\n", second: "SAMPLE=file-second\nOTHER=value=with=equals\n"} {
+		if err := os.WriteFile(path, []byte(data), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	cfg, _ := applyForTest(t, []string{"-eSAMPLE=explicit", "--env-file", first, "--env-file=" + second, "-lSAMPLE=explicit", "--label-file", first, "--label-file=" + second})
+	want := []string{"SAMPLE=file-first", "SAMPLE_INHERIT=host-value", "SAMPLE_LABEL=not-inherited", "SAMPLE=file-second", "OTHER=value=with=equals", "SAMPLE=explicit"}
+	if !reflect.DeepEqual(cfg.Env, want) {
+		t.Fatalf("env got %q want %q", cfg.Env, want)
+	}
+	labels := map[string]string{"SAMPLE": "explicit", "OTHER": "value=with=equals"}
+	if !reflect.DeepEqual(cfg.Labels, labels) {
+		t.Fatalf("labels got %v want %v", cfg.Labels, labels)
+	}
+}
+
+func TestApplyRunArgs_FileErrors(t *testing.T) {
+	for _, flag := range []string{"--env-file", "--label-file"} {
+		t.Run(flag, func(t *testing.T) {
+			for _, mode := range []string{"missing-value", "missing-file", "invalid-file"} {
+				t.Run(mode, func(t *testing.T) {
+					args := []string{flag}
+					if mode != "missing-value" {
+						path := filepath.Join(t.TempDir(), "values")
+						if mode == "invalid-file" {
+							if err := os.WriteFile(path, []byte("=invalid\n"), 0600); err != nil {
+								t.Fatal(err)
+							}
+						}
+						args = append(args, path)
+					}
+					_, _, _, err := buildContainerConfig(&spec.DevContainer{Image: "alpine", RunArgs: args}, nil, "alpine", "", "", "")
+					if err == nil || !strings.Contains(err.Error(), flag) {
+						t.Fatalf("expected contextual %s error, got %v", flag, err)
+					}
+				})
+			}
+		})
+	}
+}
+
+func TestBuildContainerConfig_FileOverrides(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "values")
+	if err := os.WriteFile(path, []byte("SAMPLE=file\ndevcontainer.local_folder=file\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	dc := &spec.DevContainer{Image: "alpine", ContainerEnv: map[string]any{"SAMPLE": "config"}, RunArgs: []string{"--env-file", path, "--label-file", path}}
+	cfg, _, _, err := buildContainerConfig(dc, nil, "alpine", "", "/workspace", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Labels[LabelLocalFolder] != "/workspace" {
+		t.Fatalf("identity label: %v", cfg.Labels)
+	}
+	if cfg.Env[len(cfg.Env)-1] != "SAMPLE=config" {
+		t.Fatalf("explicit config env must follow files: %q", cfg.Env)
+	}
 }

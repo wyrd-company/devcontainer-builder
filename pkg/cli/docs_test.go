@@ -18,7 +18,7 @@ import (
 
 // foreignFlags are flags the documentation names for other tools: the
 // upstream CLI and the docker run vocabulary that runArgs accepts.
-var foreignFlags = map[string]bool{"--docker-path": true, "--entrypoint": true, "--cap-add": true, "--name": true, "--rm": true}
+var foreignFlags = map[string]bool{"--docker-path": true, "--entrypoint": true, "--cap-add": true, "--name": true, "--rm": true, "--env-file": true, "--label-file": true}
 
 var (
 	inlineCode = regexp.MustCompile("`([^`\n]+)`")
@@ -109,6 +109,8 @@ func TestCheckCommand(t *testing.T) {
 		{"dcb build --load=false", true},
 		{"dcb up --push", false},
 		{"dcb up --rm", false},
+		{"dcb up --env-file values", false},
+		{"dcb up --label-file values", false},
 		{"dcb skills --dir x", false},
 		{"dcb features generate-docs --namespace example/collection --projectFolder .", true},
 		{"dcb features generate-docs --namespace example/collection --projectMissing .", false},

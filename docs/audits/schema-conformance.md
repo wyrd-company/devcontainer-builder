@@ -31,7 +31,9 @@ runtime consumers require pinned differential checks and corrections:
 - Docker `runArgs` needs remaining flag coverage, ordering, and precedence
   checks. Boolean assignments, combined short booleans, attached short values,
   stdin, TTY, removal, environment inheritance, and overridden entrypoints are
-  supported.
+  supported. Native Docker environment and label files load before explicit
+  flags. Merged init, privileged, capability and security option flags follow
+  runArgs. Health, logging and remaining Docker flag coverage stay queued.
 - Empty Compose file arrays require upstream Compose file discovery.
 - Reading a common-only document must not require a build/run source.
 - Environment values require schema type checks and pinned null-value behavior.
