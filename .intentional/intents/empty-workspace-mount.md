@@ -50,3 +50,6 @@ behavior in exec and lifecycle commands.
 Map build.options --network to native BuildKit Dockerfile networking and request
 host entitlement for explicit host mode. Preserve final-value precedence and
 report unmapped build flags explicitly.
+
+Map build.options image labels to final native BuildKit image configuration
+with native array grammar, empty-key validation and last-key precedence.

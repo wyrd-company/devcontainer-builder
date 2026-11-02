@@ -333,6 +333,10 @@ func (b *Builder) runBuildKit(ctx context.Context, opts Options, ctxDir string,
 		return fmt.Errorf("--push requires at least one --tag")
 	}
 	logf("solving via buildkit (%s, platforms=%d)", buildKitEndpoint(solveOpts), max(1, len(opts.Platforms)))
+	labels, err := buildImageLabels(dc, opts.Labels)
+	if err != nil {
+		return err
+	}
 	bspec := buildkit.BuildSpec{
 		Graph: buildkit.GraphInputs{
 			Spec:                  dc,
@@ -346,9 +350,9 @@ func (b *Builder) runBuildKit(ctx context.Context, opts Options, ctxDir string,
 			ResolveImageConfig:    !opts.SkipImageMetaResolve,
 		},
 		Upstream: upstream,
-		Labels:   opts.Labels,
+		Labels:   labels,
 	}
-	_, err := buildkit.SolveDevcontainer(ctx, bspec, solveOpts)
+	_, err = buildkit.SolveDevcontainer(ctx, bspec, solveOpts)
 	return err
 }
 

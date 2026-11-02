@@ -350,5 +350,9 @@ option keys use the last value. Docker rejects logging options for driver `none`
 
 `build.options --network` supports default, none and host for Dockerfile RUN
 instructions. Repeated values use the last value. Host mode requests the native
-BuildKit network.host entitlement. The daemon must allow it. Other build flags
+BuildKit network.host entitlement. The daemon must allow it. Build flags other than network and image labels
 currently return an explicit unsupported-option error.
+
+`build.options --label` sets image labels through native BuildKit. Repeated
+keys use the last value; bare keys use empty values. Empty keys fail before
+staging. Explicit library labels override configuration labels.

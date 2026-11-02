@@ -17,6 +17,7 @@ import (
 	"github.com/docker/docker/api/types/filters"
 	imagetypes "github.com/docker/docker/api/types/image"
 	dockerclient "github.com/docker/docker/client"
+	"github.com/wyrd-company/devcontainer-builder/pkg/spec"
 )
 
 // TestEngineBuildIntegration builds the smoke fixtures through the
@@ -163,4 +164,30 @@ type testLogWriter struct{ t *testing.T }
 func (w testLogWriter) Write(p []byte) (int, error) {
 	w.t.Log(strings.TrimRight(string(p), "\n"))
 	return len(p), nil
+}
+
+// TestBuildOptionsLabelsEngine exercises the actual builder-to-gateway label wire.
+func TestBuildOptionsLabelsEngine(t *testing.T) {
+	ctx := context.Background()
+	cli := requireEngine(t, ctx)
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "Dockerfile"), "FROM scratch\nCOPY payload /payload\nLABEL sample=base preserved=base\n")
+	writeFile(t, filepath.Join(dir, "payload"), "sample")
+	dc := &spec.DevContainer{Path: filepath.Join(dir, "devcontainer.json"), Build: &spec.Build{Dockerfile: "Dockerfile", Options: []string{"--label=sample=first", "--label=sample=last", "--label=bare", "--label=explicit=config"}}}
+	tag := fmt.Sprintf("dcb-label-test:%d", time.Now().UnixNano())
+	t.Cleanup(func() { _, _ = cli.ImageRemove(context.Background(), tag, imagetypes.RemoveOptions{Force: true}) })
+	_, err := New().Build(ctx, Options{Spec: dc, Workspace: dir, WorkDir: t.TempDir(), Docker: cli, Tags: []string{tag}, Load: true, SkipImageMetaResolve: true, Labels: map[string]string{"explicit": "library"}, Progress: "plain", Stdout: io.Discard, Stderr: io.Discard})
+	if err != nil {
+		t.Fatal(err)
+	}
+	img, err := cli.ImageInspect(ctx, tag)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for k, want := range map[string]string{"sample": "last", "bare": "", "explicit": "library", "preserved": "base"} {
+		got, ok := img.Config.Labels[k]
+		if !ok || got != want {
+			t.Fatalf("label %q=%q present=%v want=%q", k, got, ok, want)
+		}
+	}
 }

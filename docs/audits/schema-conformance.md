@@ -66,13 +66,23 @@ runtime consumers require pinned differential checks and corrections:
   native integer and memory-size grammar. Platform enforcement is daemon-owned.
 - `build.options --network` maps default/empty, none and host modes to the
   Dockerfile frontend, with final scalar precedence and host entitlement on
-  both solve routes. Other build flags still need native mappings. The network
+  both solve routes. Image labels map to the final image configuration. Other build flags still
+  need native mappings. The network
   comparison covers pinned argv and native BuildKit acceptance, not network
   traffic enforcement or full build flag coverage.
 - `initializeCommand` is preserved but not executed. The public configuration
   guide describes this limitation.
 - Kubernetes projection needs checks for command override, environment ordering,
   and its supported Docker argument translations.
+
+Build options image labels use native buildx array parsing and last-key
+precedence. Empty keys fail before staging. Final image configuration retains
+base labels, applies configuration labels, then explicit library labels.
+Build arguments, target selection, cache, secrets and SSH remain queued. Target
+selection must account for upstream generated Dockerfile feature stages.
+
+Dockerfile gateway solves must also handle a valid scratch-only Dockerfile
+whose frontend result has no filesystem reference. This case remains queued.
 
 Main integration requires a simulated rebase before any remote branch rewrite.
 Each correction needs tests, valid guard mutations with green controls, a clean
