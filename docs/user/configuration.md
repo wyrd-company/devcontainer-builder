@@ -37,7 +37,7 @@ value uses the default network. These options control Dockerfile `RUN`
 instructions. Host mode requests BuildKit's `network.host` entitlement; the
 daemon must allow it. Custom container network names are not BuildKit build
 networks. Image labels, build arguments, target selection, cache settings,
-secrets and SSH sources
+secrets, SSH sources, shared memory size and resource limits
 are supported,
 as described below. Remaining build flags return an explicit unsupported-option
 error.
@@ -489,3 +489,10 @@ overrides it. Authored `--entrypoint` values are parsed and replaced by the
 wrapper on Docker and Kubernetes. Docker `--rm` uses native Engine automatic
 deletion. Kubernetes reports enabled `--rm` as unsupported because a standalone
 Pod has no equivalent deletion behavior; a final `--rm=false` is accepted.
+
+Build options accept `build.options --shm-size` with Docker memory-size syntax
+and repeated `build.options --ulimit NAME=SOFT:HARD`. The last shared memory
+size wins; zero uses the BuildKit worker default. Resource limits use native
+Docker validation, shorthand single values and unlimited values. The last limit
+for each name wins. Both Dockerfile solve routes pass these settings to the
+native BuildKit frontend; worker enforcement remains platform-dependent.

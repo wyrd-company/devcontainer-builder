@@ -454,6 +454,8 @@ func prepareBaseImage(dc *spec.DevContainer, opts Options) (string, *buildkit.Do
 	}
 	upstream := &buildkit.DockerfileBuild{
 		NetworkMode:         parsed.Network,
+		ShmSize:             parsed.ShmSize,
+		Ulimits:             parsed.Ulimits,
 		OmitSyntaxDirective: opts.OmitSyntaxDirective,
 		ContextDir:          upstreamCtx,
 		DockerfileDir:       filepath.Dir(dfPath),

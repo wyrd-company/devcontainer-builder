@@ -105,7 +105,7 @@ command overrides and configuration-over-Feature environment precedence. See
 
 Dockerfile `build.options` supports native BuildKit networking, image labels,
 build arguments, generated Dockerfile target selection, cache imports/exports,
-build secrets and SSH session forwarding.
+build secrets, SSH session forwarding, shared memory size and build resource limits.
 Other build option mappings remain explicit limitations; see
 [configuration conformance](docs/audits/schema-conformance.md).
 

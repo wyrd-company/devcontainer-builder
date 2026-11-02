@@ -16,6 +16,8 @@ import (
 )
 
 type dockerBuildOptions struct {
+	ShmSize   int64
+	Ulimits   string
 	Target    string
 	TargetSet bool
 	Network   string
@@ -42,6 +44,10 @@ func parseBuildOptions(dc *spec.DevContainer) (dockerBuildOptions, error) {
 	}
 	flags := pflag.NewFlagSet("build.options", pflag.ContinueOnError)
 	flags.SetOutput(io.Discard)
+	var shmSize dockeropts.MemBytes
+	ulimits := dockeropts.NewUlimitOpt(nil)
+	flags.Var(&shmSize, "shm-size", "Shared memory size for build containers")
+	flags.Var(ulimits, "ulimit", "Build container ulimits")
 	var mode string
 	var labels []string
 	var args []string
@@ -60,6 +66,12 @@ func parseBuildOptions(dc *spec.DevContainer) (dockerBuildOptions, error) {
 	if len(flags.Args()) != 0 {
 		return parsed, fmt.Errorf("build.options: unexpected positional arguments %q", flags.Args())
 	}
+	parsed.ShmSize = shmSize.Value()
+	var limits []string
+	for _, limit := range ulimits.GetList() {
+		limits = append(limits, limit.String())
+	}
+	parsed.Ulimits = strings.Join(limits, ",")
 	parsed.TargetSet = flags.Changed("target")
 	var err error
 	parsed.Secrets, err = buildflags.ParseSecretSpecs(secrets)

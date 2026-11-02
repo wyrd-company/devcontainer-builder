@@ -96,3 +96,6 @@ Do not add stdin or TTY with the primary wrapper.
 Preserve the unconditional image-source wrapper and native image stop signal.
 Translate overridden Kubernetes entrypoints and report unsupported Pod automatic
 deletion instead of silently ignoring enabled runArgs --rm.
+
+Map build.options shared memory size and per-name resource limits to native
+BuildKit Dockerfile frontend settings with Docker parsing and precedence.

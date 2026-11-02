@@ -24,6 +24,10 @@ import (
 type DockerfileBuild struct {
 	// NetworkMode is the Dockerfile RUN network: empty/sandbox, host, or none.
 	NetworkMode string
+	// ShmSize is the build container shared memory size in bytes; nonpositive uses the worker default.
+	ShmSize int64
+	// Ulimits is the native Dockerfile frontend comma-separated resource limit list.
+	Ulimits string
 	// OmitSyntaxDirective removes syntax directives from the frontend input.
 	OmitSyntaxDirective bool
 	// ContextDir is the host directory exposed to the dockerfile
@@ -155,6 +159,12 @@ func dockerfileFrontendAttrs(b *DockerfileBuild, bs buildSettings) map[string]st
 	}
 	if b.NetworkMode != "" {
 		attrs["force-network-mode"] = b.NetworkMode
+	}
+	if b.ShmSize > 0 {
+		attrs["shm-size"] = strconv.FormatInt(b.ShmSize, 10)
+	}
+	if b.Ulimits != "" {
+		attrs["ulimit"] = b.Ulimits
 	}
 	if b.Target != "" {
 		attrs["target"] = b.Target
