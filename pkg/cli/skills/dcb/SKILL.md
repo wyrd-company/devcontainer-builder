@@ -533,3 +533,9 @@ cache sources, build options, and feature option values. Build-time environment
 and feature users also resolve configuration variables. Configuration keys stay
 literal. Explicit command-line or library build arguments apply last and stay
 literal. Runtime contributions keep their authored values for the host phase.
+
+Use `dcb up --no-start` to create before binding external resources. It returns
+`started: false` and skips container setup and lifecycle. Run ordinary `up` to
+start the same container. `initializeCommand` runs on the host on each invocation.
+Bind sources must exist for devcontainer mounts; do not replace them with `-v`.
+Compose creates selected services and defers dependency readiness until normal up.

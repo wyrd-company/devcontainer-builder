@@ -111,3 +111,6 @@ Docker worker host gateway resolution on both Dockerfile solve routes.
 
 Resolve local environment and workspace variables in pre-container build inputs;
 let library callers select the environment used for build argument substitution.
+
+Create Docker and Compose containers without starting them through `up --no-start`
+and the Go host request NoStart field, then start them with ordinary up.

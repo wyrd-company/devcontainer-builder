@@ -147,7 +147,7 @@ func TestUpFlagSurface(t *testing.T) {
 		}
 		invoke(t, 2, "up", "--"+name+"=value")
 	}
-	for _, name := range []string{"build-no-cache", "workspace-folder", "image-name", "label", "allow-project-conflict"} {
+	for _, name := range []string{"no-start", "build-no-cache", "workspace-folder", "image-name", "label", "allow-project-conflict"} {
 		if up.Flags().Lookup(name) == nil {
 			t.Errorf("up missing --%s", name)
 		}

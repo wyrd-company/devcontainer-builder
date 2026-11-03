@@ -490,3 +490,15 @@ cache sources, build options, and feature option values. Build-time environment
 and feature users also resolve configuration variables. Configuration keys stay
 literal. Explicit command-line or library build arguments apply last and stay
 literal. Runtime contributions keep their authored values for the host phase.
+
+## Create without starting
+
+Set `docker.UpRequest.NoStart` or `dockercompose.UpRequest.NoStart` when calling
+`Host.Up`. Build the image through `pkg/builder` (or Compose's
+`BuildPrimaryImage`) as for ordinary `Up`. The result retains the container ID
+and creation fields; the start and lifecycle fields remain empty or false.
+Call `Up` again with `NoStart: false` to start the same container and run setup
+and lifecycle commands. Host initialization remains an explicit call to
+`pkg/host/local.Initialize` for each invocation. See
+[Create before first start](usage.md#create-before-first-start) for Compose,
+bind-source, and repeat behavior.

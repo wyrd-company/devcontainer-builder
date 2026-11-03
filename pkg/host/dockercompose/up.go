@@ -24,6 +24,9 @@ import (
 // (typically via pkg/features) and optionally supplies a derived image from
 // BuildPrimaryImage. Otherwise the primary Compose service selects the image.
 type UpRequest struct {
+	// NoStart creates selected services without starting them, waiting for
+	// dependency readiness, or running container lifecycle commands.
+	NoStart bool
 	// ContainerDataFolder selects lifecycle and dotfiles marker storage.
 	ContainerDataFolder string
 	// ContainerSystemDataFolder selects the upstream system patch marker folder.
@@ -297,8 +300,10 @@ func (h *Host) Up(ctx context.Context, req UpRequest) (*UpResult, error) {
 		// deps before creating the dependent. ForEachService visits in
 		// topological order, so the dep's container ID is already in
 		// res.ContainerIDs by the time we get here.
-		if err := h.waitDependencies(ctx, *svc, res.ContainerIDs); err != nil {
-			return fmt.Errorf("service %q: %w", name, err)
+		if !req.NoStart {
+			if err := h.waitDependencies(ctx, *svc, res.ContainerIDs); err != nil {
+				return fmt.Errorf("service %q: %w", name, err)
+			}
 		}
 		hash := serviceConfigHash(*svc)
 		labels := containerLabels(scope, name, hash, dependsOnList(*svc), isPrimary)
@@ -308,7 +313,7 @@ func (h *Host) Up(ctx context.Context, req UpRequest) (*UpResult, error) {
 			}
 		}
 
-		id, created, started, recreated, err := h.bringUp(ctx, proj, *svc, labels, hash, netNames, volNames, materializer)
+		id, created, started, recreated, err := h.bringUp(ctx, proj, *svc, labels, hash, netNames, volNames, materializer, req.NoStart)
 		if err != nil {
 			return fmt.Errorf("service %q: %w", name, err)
 		}
@@ -338,8 +343,10 @@ func (h *Host) Up(ctx context.Context, req UpRequest) (*UpResult, error) {
 	sort.Strings(res.StartedThisCall)
 	sort.Strings(res.RecreatedThisCall)
 
-	if err := h.runLifecycle(ctx, req, subCtx, res.PrimaryContainerID, containerWorkspace, res); err != nil {
-		return res, err
+	if !req.NoStart {
+		if err := h.runLifecycle(ctx, req, subCtx, res.PrimaryContainerID, containerWorkspace, res); err != nil {
+			return res, err
+		}
 	}
 	if err := h.removeRetiredObjects(ctx, previousObjects); err != nil {
 		return res, err
@@ -361,7 +368,7 @@ func (h *Host) bringUp(
 	ctx context.Context, proj *types.Project, svc types.ServiceConfig,
 	labels map[string]string, expectedHash string,
 	netNames, volNames map[string]string,
-	materializer *objectMaterializer,
+	materializer *objectMaterializer, noStart bool,
 ) (string, bool, bool, bool, error) {
 	containerName := composeContainerName(proj.Name, svc.Name)
 	id, err := FindExisting(ctx, h.client, proj.Name, svc.Name)
@@ -408,6 +415,10 @@ func (h *Host) bringUp(
 		h.logf("created container %s (%s)", containerName, short(id))
 	} else {
 		h.logf("reusing container %s (%s)", containerName, short(id))
+	}
+
+	if noStart {
+		return id, created, false, recreated, nil
 	}
 
 	inspect, err := h.client.ContainerInspect(ctx, id)

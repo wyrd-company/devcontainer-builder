@@ -28,6 +28,9 @@ import (
 // CLI's responsibility, kept out of the package so a service or
 // operator can supply a curated environment.
 type UpRequest struct {
+	// NoStart creates or reuses the container without starting it or running
+	// container setup, UID updates, probes, dotfiles, or lifecycle commands.
+	NoStart bool
 	// ContainerDataFolder selects lifecycle and dotfiles marker storage.
 	ContainerDataFolder string
 	// ContainerSystemDataFolder selects the upstream system patch marker folder.
@@ -234,6 +237,10 @@ func (h *Host) Up(ctx context.Context, req UpRequest) (*UpResult, error) {
 	} else {
 		res.ContainerID = id
 		h.logf("reusing container %s", short(id))
+	}
+
+	if req.NoStart {
+		return res, nil
 	}
 
 	// 2. Start if not running.

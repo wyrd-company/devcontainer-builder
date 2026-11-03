@@ -175,3 +175,7 @@ overrides it. Authored `--entrypoint` values are parsed and replaced by the
 wrapper on Docker and Kubernetes. Docker `--rm` uses native Engine automatic
 deletion. Kubernetes reports enabled `--rm` as unsupported because a standalone
 Pod has no equivalent deletion behavior; a final `--rm=false` is accepted.
+
+Create containers before their first start with `dcb up --no-start`, then bind
+external resources and run ordinary `dcb up`. The Go hosts expose the same mode
+through `UpRequest.NoStart`. See [usage](docs/user/usage.md#create-before-first-start).

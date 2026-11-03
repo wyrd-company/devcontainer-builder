@@ -91,7 +91,7 @@ func TestComposeServiceImagePull(t *testing.T) {
 				labels[LabelPrimary] = "true"
 			}
 			h := New(cli, Options{RegistryAuth: serviceImageAuth{}, NoRecreate: tc.existing})
-			_, _, _, _, err = h.bringUp(context.Background(), &types.Project{Name: "sample"}, svc, labels, "", nil, nil, nil)
+			_, _, _, _, err = h.bringUp(context.Background(), &types.Project{Name: "sample"}, svc, labels, "", nil, nil, nil, false)
 			if (err != nil) != tc.wantError {
 				t.Fatalf("err=%v wantError=%v", err, tc.wantError)
 			}

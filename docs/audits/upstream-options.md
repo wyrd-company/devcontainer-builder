@@ -581,3 +581,10 @@ Dependency reporting follows the upstream HTTPS metadata fallback: retrieval or
 integrity failure leaves an unexpanded archive node. OCI digest mismatch fails
 resolution. Locale collation applies to installation ordering; object option
 keys retain JavaScript's sorted-key comparison and output insertion order.
+
+## Create-only extension
+
+`up --no-start` is a dcb extension with library request fields in both Docker
+hosts. It uses ordinary creation and discovery, defers all container execution,
+and retains ordinary up behavior when absent. Compose dependency readiness is
+deferred until startup. See [usage](../user/usage.md#create-before-first-start).

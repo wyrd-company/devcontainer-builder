@@ -35,6 +35,39 @@ dcb down --workspace-folder .
 {"containerId":"3f1c…","outcome":"success","remoteUser":"vscode","remoteWorkspaceFolder":"/workspaces/project"}
 ```
 
+## Create before first start
+
+Use `dcb up --no-start --workspace-folder .` to build and create a container
+before binding external sockets or other resources to it. The result includes
+`containerId`, `outcome`, and `"started": false`. Names, mounts, labels, run
+arguments, and metadata use the same creation path as ordinary `up`.
+
+Repeat `--no-start` safely to reuse the existing container. It does not stop an
+already running container. After binding resources, run
+`dcb up --workspace-folder .`
+to start the same container and run its lifecycle commands. Container setup,
+UID changes, probes, dotfiles, and lifecycle commands wait for ordinary `up`.
+The image entrypoint first runs when the container starts.
+
+`initializeCommand` runs once on the host for each `up` invocation, including
+`--no-start` and the later ordinary `up`, as it does on repeated upstream `up`.
+Library callers run host initialization explicitly with `pkg/host/local.Initialize`.
+The hosts do not run it internally.
+
+Compose creates all selected services in dependency order without starting any
+of them. Health and successful-completion dependency checks run during the later
+ordinary `up`. Runtime namespace dependencies that require a running peer can
+still prevent creation. Compose retains its ordinary configuration drift rules:
+changing the configuration between create and start can recreate a service.
+
+Bind sources must exist before creation. A missing source in a devcontainer
+`mounts` entry produces an Engine error; `dcb` does not replace it with a `-v`
+bind or create its directory. Compose-authored short volume syntax retains
+Compose host-path creation behavior; use long bind syntax with
+`bind.create_host_path: false` when the source must already exist.
+
+This mode extends the upstream CLI. Ordinary `up` behavior stays the same.
+
 ## Commands
 
 | Command | What it does |
