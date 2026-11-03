@@ -98,7 +98,7 @@ These upstream command families are not yet supported:
 `dcb outdated` reports current, wanted, and latest OCI Feature versions as a text
 table or with `--output-format json`. It does not need Docker or change lockfiles.
 
-## Go libraries
+## Developers
 
 The packages under [`pkg/`](pkg) build images, run containers on Docker or
 Kubernetes, and convert configurations into Kubernetes Pods. They can be

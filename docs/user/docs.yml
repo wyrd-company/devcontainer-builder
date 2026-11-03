@@ -53,6 +53,15 @@ products:
         alt: >-
           Terminal output of dcb up and dcb down, each ending in a JSON result
           line, and of dcb exec, which prints the output of its command.
+    nav:
+      - section: Users
+        groups:
+          - group: Guide
+            pages: [overview, install, usage, configuration]
+      - section: Developers
+        groups:
+          - group: Go libraries
+            pages: [library]
     kinds:
       - kind: cli
         install:
