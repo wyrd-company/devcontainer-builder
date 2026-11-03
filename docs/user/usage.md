@@ -62,9 +62,9 @@ changing the configuration between create and start can recreate a service.
 
 Bind sources must exist before creation. A missing source in a devcontainer
 `mounts` entry produces an Engine error; `dcb` does not replace it with a `-v`
-bind or create its directory. Compose-authored short volume syntax retains
-Compose host-path creation behavior; use long bind syntax with
-`bind.create_host_path: false` when the source must already exist.
+bind or create its directory. Create-only also requires existing
+sources for Compose bind volumes, including short volume syntax. Ordinary
+Compose `up` retains its configured host-path creation behavior.
 
 This mode extends the upstream CLI. Ordinary `up` behavior stays the same.
 

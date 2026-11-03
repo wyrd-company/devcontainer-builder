@@ -395,6 +395,22 @@ func (h *Host) bringUp(
 		if err := h.resolveEmptyCommand(ctx, &svc); err != nil {
 			return "", false, false, false, err
 		}
+		// Create-only never allocates missing host bind directories. Keep the
+		// hash of the authored service so ordinary Up reuses this container.
+		if noStart {
+			svc.Volumes = append([]types.ServiceVolumeConfig(nil), svc.Volumes...)
+			for i := range svc.Volumes {
+				vol := &svc.Volumes[i]
+				if vol.Type == types.VolumeTypeBind {
+					bind := types.ServiceVolumeBind{}
+					if vol.Bind != nil {
+						bind = *vol.Bind
+					}
+					bind.CreateHostPath = false
+					vol.Bind = &bind
+				}
+			}
+		}
 		t, err := translateService(proj, svc, containerName, labels, netNames, volNames, materializer)
 		if err != nil {
 			return "", false, false, false, err
