@@ -18,7 +18,7 @@ import (
 )
 
 func TestValidateBuildSupport_RejectsBuildOptions(t *testing.T) {
-	dc := &spec.DevContainer{Build: &spec.Build{Options: []string{"--add-host", "sample:127.0.0.1"}}}
+	dc := &spec.DevContainer{Build: &spec.Build{Options: []string{"--no-cache-filter", "sample"}}}
 	err := validateBuildSupport(dc)
 	if err == nil || !strings.Contains(err.Error(), "build.options is not supported") {
 		t.Fatalf("err = %v, want build.options rejection", err)

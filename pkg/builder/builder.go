@@ -471,6 +471,7 @@ func prepareBaseImage(dc *spec.DevContainer, opts Options) (string, *buildkit.Do
 	upstream := &buildkit.DockerfileBuild{
 		NetworkMode:         parsed.Network,
 		CgroupParent:        parsed.CgroupParent,
+		ExtraHosts:          parsed.ExtraHosts,
 		ShmSize:             parsed.ShmSize,
 		Ulimits:             parsed.Ulimits,
 		OmitSyntaxDirective: opts.OmitSyntaxDirective,

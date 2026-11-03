@@ -220,3 +220,11 @@ Build options accept `build.options --cgroup-parent` as a native string value.
 The last value wins; an explicit empty value restores the worker default.
 Both Dockerfile solve routes pass nonempty values to the native frontend.
 Cgroup availability and enforcement depend on the BuildKit worker.
+
+Build options accept repeated `build.options --add-host` with native buildx
+CSV slice syntax. Host mappings accept colon or equals separators, IPv4, IPv6,
+optional address brackets and quoted multiple IP addresses. Repeated mappings
+retain their order. `host-gateway` uses the selected Docker worker's advertised
+host gateway IP; missing or invalid worker labels return an error. Separate
+BuildKit endpoints follow the native remote driver's unsupported gateway
+behavior. Both Dockerfile solve routes receive the native frontend mappings.

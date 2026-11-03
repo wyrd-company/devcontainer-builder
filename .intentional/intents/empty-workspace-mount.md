@@ -105,3 +105,6 @@ precedence in both Dockerfile solve routes.
 
 Preserve native cgroup-parent build option strings, final value precedence and
 empty reset across standalone and nested Dockerfile solves.
+
+Preserve native extra host build options, CSV parsing, ordered IP mappings and
+Docker worker host gateway resolution on both Dockerfile solve routes.

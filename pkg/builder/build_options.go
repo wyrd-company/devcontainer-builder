@@ -16,6 +16,7 @@ import (
 )
 
 type dockerBuildOptions struct {
+	ExtraHosts   []string
 	CgroupParent string
 	NoCache      bool
 	NoCacheSet   bool
@@ -49,6 +50,7 @@ func parseBuildOptions(dc *spec.DevContainer) (dockerBuildOptions, error) {
 	}
 	flags := pflag.NewFlagSet("build.options", pflag.ContinueOnError)
 	flags.SetOutput(io.Discard)
+	flags.StringSliceVar(&parsed.ExtraHosts, "add-host", nil, "Additional host-to-IP mappings")
 	flags.StringVar(&parsed.CgroupParent, "cgroup-parent", "", "Parent cgroup for build RUN instructions")
 	flags.BoolVar(&parsed.NoCache, "no-cache", false, "Disable build cache")
 	flags.BoolVar(&parsed.Pull, "pull", false, "Always pull referenced images")

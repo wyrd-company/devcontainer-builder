@@ -33,7 +33,7 @@ func TestBuildOptionsNetwork(t *testing.T) {
 		{"missing", []string{"--network"}, "", true},
 		{"positional", []string{"sample"}, "", true},
 		{"terminated", []string{"--", "--network=host"}, "", true},
-		{"unmapped", []string{"--add-host", "sample:127.0.0.1"}, "", true},
+		{"unmapped", []string{"--no-cache-filter", "sample"}, "", true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

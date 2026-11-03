@@ -24,6 +24,8 @@ import (
 type DockerfileBuild struct {
 	// CgroupParent selects the parent cgroup for Dockerfile RUN instructions.
 	CgroupParent string
+	// ExtraHosts contains native buildx host-to-IP entries, resolved on the selected connection.
+	ExtraHosts []string
 	// NetworkMode is the Dockerfile RUN network: empty/sandbox, host, or none.
 	NetworkMode string
 	// ShmSize is the build container shared memory size in bytes; nonpositive uses the worker default.
@@ -73,7 +75,11 @@ func SolveDockerfile(ctx context.Context, b DockerfileBuild, opt SolveOptions) (
 	}
 	opt = dockerfileSolveOptions(&b, opt)
 	return runSolve(ctx, opt, len(opt.Platforms) > 1, localMounts, func(ctx context.Context, conn *Connection, so client.SolveOpt, ch chan *client.SolveStatus) (*client.SolveResponse, error) {
-		bs := buildSettings{resolveMode: resolveMode(opt, conn), noCache: opt.NoCache}
+		hosts, err := resolveExtraHosts(ctx, b.ExtraHosts, conn)
+		if err != nil {
+			return nil, err
+		}
+		bs := buildSettings{resolveMode: resolveMode(opt, conn), noCache: opt.NoCache, extraHosts: hosts}
 		attrs := dockerfileFrontendAttrs(&b, bs)
 		if len(opt.Platforms) > 0 {
 			attrs["platform"] = strings.Join(opt.Platforms, ",")
@@ -158,6 +164,9 @@ func dockerfileFrontendAttrs(b *DockerfileBuild, bs buildSettings) map[string]st
 		"filename":           filename,
 		"dockerfilekey":      dockerfileDockerfileLocal,
 		"image-resolve-mode": bs.resolveMode,
+	}
+	if bs.extraHosts != "" {
+		attrs["add-hosts"] = bs.extraHosts
 	}
 	if b.NetworkMode != "" {
 		attrs["force-network-mode"] = b.NetworkMode

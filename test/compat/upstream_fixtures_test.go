@@ -292,7 +292,7 @@ func TestCuratedCLIUnsupportedBuildOptionsError(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	dc.Build.Options = append(dc.Build.Options, "--add-host", "sample:127.0.0.1")
+	dc.Build.Options = append(dc.Build.Options, "--no-cache-filter", "sample")
 
 	_, err = builder.New().Build(context.Background(), builder.Options{
 		Spec:         dc,

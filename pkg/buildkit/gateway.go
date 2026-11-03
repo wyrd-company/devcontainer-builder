@@ -72,7 +72,15 @@ func SolveDevcontainer(ctx context.Context, spec BuildSpec, opt SolveOptions) (*
 
 	opt = dockerfileSolveOptions(spec.Upstream, opt)
 	return runSolve(ctx, opt, multi, localMounts, func(ctx context.Context, conn *Connection, so client.SolveOpt, ch chan *client.SolveStatus) (*client.SolveResponse, error) {
-		bs := buildSettings{resolveMode: resolveMode(opt, conn), noCache: opt.NoCache}
+		var entries []string
+		if spec.Upstream != nil {
+			entries = spec.Upstream.ExtraHosts
+		}
+		hosts, err := resolveExtraHosts(ctx, entries, conn)
+		if err != nil {
+			return nil, err
+		}
+		bs := buildSettings{resolveMode: resolveMode(opt, conn), noCache: opt.NoCache, extraHosts: hosts}
 		buildFunc := func(ctx context.Context, gc gateway.Client) (*gateway.Result, error) {
 			// Use native client-resolved local cache digests and session stores.
 			if raw := gc.BuildOpts().Opts["cache-imports"]; raw != "" {
@@ -90,6 +98,7 @@ func SolveDevcontainer(ctx context.Context, spec BuildSpec, opt SolveOptions) (*
 // the solve runs against.
 type buildSettings struct {
 	// resolveMode is a pb.AttrImageResolveMode* value.
+	extraHosts   string
 	resolveMode  string
 	noCache      bool
 	cacheImports []gateway.CacheOptionsEntry
