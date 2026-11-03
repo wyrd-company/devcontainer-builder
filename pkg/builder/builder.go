@@ -29,11 +29,19 @@ import (
 	"github.com/wyrd-company/devcontainer-builder/pkg/oci"
 	"github.com/wyrd-company/devcontainer-builder/pkg/platform"
 	"github.com/wyrd-company/devcontainer-builder/pkg/spec"
+	"github.com/wyrd-company/devcontainer-builder/pkg/substitute"
 	"github.com/wyrd-company/devcontainer-builder/pkg/vscode"
 )
 
 // Options drive a single Build invocation.
 type Options struct {
+	// LocalEnv selects the host environment for configuration substitution.
+	// Nil is an empty environment; the library never reads the process environment.
+	LocalEnv map[string]string
+	// Substitution supplies container workspace and identity context. Workspace
+	// and LocalEnv below own their corresponding context fields.
+	Substitution substitute.Context
+
 	// Spec supplies an already loaded configuration. When set, Build and Generate
 	// use this snapshot instead of reading SpecPath or discovering another file.
 	// The caller must keep it immutable for the duration of the call. Path retains

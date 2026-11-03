@@ -516,3 +516,9 @@ retain their order. `host-gateway` uses the selected Docker worker's advertised
 host gateway IP; missing or invalid worker labels return an error. Separate
 BuildKit endpoints follow the native remote driver's unsupported gateway
 behavior. Both Dockerfile solve routes receive the native frontend mappings.
+
+Build inputs resolve local environment and workspace variables before the build.
+This includes image names, Dockerfile and context paths, build arguments, target,
+cache sources, build options, and feature option values. Configuration keys stay
+literal. Explicit command-line or library build arguments apply last and stay
+literal. Runtime contributions keep their authored values for the host phase.

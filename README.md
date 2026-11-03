@@ -17,6 +17,9 @@ Dockerfile build network and extra host options map to native BuildKit controls.
 Documentation is at [wyrd.foo/docs/dcb](https://wyrd.foo/docs/dcb), published
 from [`docs/user/`](docs/user).
 
+Build inputs support local environment and workspace variable substitution.
+Library callers select the environment with `builder.Options.LocalEnv`.
+
 ## Install
 
 | Method | Command |

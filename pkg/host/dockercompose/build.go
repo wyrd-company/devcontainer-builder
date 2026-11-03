@@ -142,6 +142,7 @@ func BuildPrimaryImage(ctx context.Context, in BuildPrimaryInputs) (*BuildPrimar
 	opts := in.BuilderOptions
 	opts.Spec, opts.SpecPath = synthetic, in.Spec.Path
 	opts.Workspace = in.Workspace
+	opts.LocalEnv = in.LocalEnv
 	if in.Spec.Path != "" && opts.FeatureBaseDir == "" {
 		opts.FeatureBaseDir = filepath.Dir(in.Spec.Path)
 	}

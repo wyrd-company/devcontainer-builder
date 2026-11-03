@@ -477,3 +477,15 @@ options apply. Explicit false values can override those generated flags. Cache
 import generation still uses invocation no-cache; option-only cache bypass
 retains configured imports. These settings reach standalone and nested
 Dockerfile solves.
+
+Build and Generate use `builder.Options.LocalEnv` for configuration variables.
+Pass a selected map; nil supplies an empty environment. The library does not
+read the process environment. `Workspace` supplies the local workspace path.
+`Substitution` supplies the shared container workspace and identity context.
+The input configuration is retained unchanged. The CLI supplies its environment.
+
+Build inputs resolve local environment and workspace variables before the build.
+This includes image names, Dockerfile and context paths, build arguments, target,
+cache sources, build options, and feature option values. Configuration keys stay
+literal. Explicit command-line or library build arguments apply last and stay
+literal. Runtime contributions keep their authored values for the host phase.
