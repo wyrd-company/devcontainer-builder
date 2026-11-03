@@ -4,11 +4,14 @@
 package builder
 
 import (
+	"context"
 	"encoding/json"
 	"github.com/wyrd-company/devcontainer-builder/pkg/spec"
 	"github.com/wyrd-company/devcontainer-builder/pkg/substitute"
+	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -57,5 +60,31 @@ func TestBuildConfigurationWorkspacePath(t *testing.T) {
 	}
 	if got.Dockerfile != filepath.Join(dir, "Dockerfile") {
 		t.Fatal(got.Dockerfile)
+	}
+}
+
+func TestBuildRuntimeConfigurationSubstitution(t *testing.T) {
+	dc := &spec.DevContainer{Image: "alpine", ContainerEnv: map[string]any{"SAMPLE": "${localEnv:VALUE}", "LITERAL": "${localEnv:LITERAL}"}, ContainerUser: "${localEnv:BUILD_USER}", RemoteUser: "${localEnv:BUILD_USER}"}
+	opts := Options{Spec: dc, LocalEnv: map[string]string{"VALUE": "selected", "LITERAL": "${localEnv:VALUE}", "BUILD_USER": "sample"}, WorkDir: t.TempDir(), SkipImageMetaResolve: true}
+	view := buildRuntimeSpec(dc, opts)
+	if view.ContainerEnv["SAMPLE"] != "selected" || view.ContainerEnv["LITERAL"] != "${localEnv:VALUE}" || view.ContainerUser != "sample" || view.RemoteUser != "sample" {
+		t.Fatalf("view=%+v", view)
+	}
+	if dc.ContainerEnv["SAMPLE"] != "${localEnv:VALUE}" || dc.ContainerUser != "${localEnv:BUILD_USER}" || dc.RemoteUser != "${localEnv:BUILD_USER}" {
+		t.Fatal("authored contribution changed")
+	}
+	res, err := New().Generate(context.Background(), opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, err := os.ReadFile(res.FinalDockerfile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(body), `ENV SAMPLE=selected`) {
+		t.Fatalf("generated ENV=%s", body)
+	}
+	if !strings.Contains(string(body), `${localEnv:BUILD_USER}`) {
+		t.Fatalf("authored metadata was lost: %s", body)
 	}
 }

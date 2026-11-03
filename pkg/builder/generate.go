@@ -95,7 +95,8 @@ func (b *Builder) Generate(ctx context.Context, opts Options) (*Result, error) {
 		return nil, err
 	}
 	df, err := dockerfile.Generate(dockerfile.Inputs{
-		Spec:                    dc,
+		Spec:                    buildRuntimeSpec(dc, opts),
+		MetadataSpec:            dc,
 		BaseMetadata:            baseMetadata,
 		Metadata:                opts.Metadata,
 		OmitSyntaxDirective:     opts.OmitSyntaxDirective,
@@ -104,8 +105,8 @@ func (b *Builder) Generate(ctx context.Context, opts Options) (*Result, error) {
 		FeaturesContextDir:      "_features",
 		VSCodeServer:            sr,
 		VSCodeServerContextPath: serverCtx,
-		RemoteUser:              dc.RemoteUser,
-		ImageUser:               b.baseImageUser(ctx, dc, opts, logf),
+
+		ImageUser: b.baseImageUser(ctx, dc, opts, logf),
 	})
 	if err != nil {
 		return nil, err

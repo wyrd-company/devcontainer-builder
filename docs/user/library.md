@@ -486,6 +486,7 @@ The input configuration is retained unchanged. The CLI supplies its environment.
 
 Build inputs resolve local environment and workspace variables before the build.
 This includes image names, Dockerfile and context paths, build arguments, target,
-cache sources, build options, and feature option values. Configuration keys stay
+cache sources, build options, and feature option values. Build-time environment
+and feature users also resolve configuration variables. Configuration keys stay
 literal. Explicit command-line or library build arguments apply last and stay
 literal. Runtime contributions keep their authored values for the host phase.

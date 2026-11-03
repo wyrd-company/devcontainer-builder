@@ -302,7 +302,8 @@ func (b *Builder) prepareBuildContext(ctx context.Context, opts Options, logf fu
 		return
 	}
 	df, err = dockerfile.Generate(dockerfile.Inputs{
-		Spec:                    dc,
+		Spec:                    buildRuntimeSpec(dc, opts),
+		MetadataSpec:            dc,
 		BaseMetadata:            baseMetadata,
 		Metadata:                opts.Metadata,
 		OmitSyntaxDirective:     opts.OmitSyntaxDirective,
@@ -311,8 +312,8 @@ func (b *Builder) prepareBuildContext(ctx context.Context, opts Options, logf fu
 		FeaturesContextDir:      "_features",
 		VSCodeServer:            sr,
 		VSCodeServerContextPath: serverCtxPath,
-		RemoteUser:              dc.RemoteUser,
-		ImageUser:               b.baseImageUser(ctx, dc, opts, logf),
+
+		ImageUser: b.baseImageUser(ctx, dc, opts, logf),
 	})
 	if err != nil {
 		err = fmt.Errorf("dockerfile: %w", err)
@@ -354,7 +355,8 @@ func (b *Builder) runBuildKit(ctx context.Context, opts Options, ctxDir string,
 	}
 	bspec := buildkit.BuildSpec{
 		Graph: buildkit.GraphInputs{
-			Spec:                  dc,
+			Spec:                  buildRuntimeSpec(dc, opts),
+			MetadataSpec:          dc,
 			Metadata:              opts.Metadata,
 			BaseImage:             baseImage,
 			ImageUser:             imageUser,
@@ -362,8 +364,8 @@ func (b *Builder) runBuildKit(ctx context.Context, opts Options, ctxDir string,
 			VSCodeServer:          sr,
 			LocalContextName:      featuresLocalName,
 			FeaturesContextSubdir: "_features",
-			RemoteUser:            dc.RemoteUser,
-			ResolveImageConfig:    !opts.SkipImageMetaResolve,
+
+			ResolveImageConfig: !opts.SkipImageMetaResolve,
 		},
 		Upstream: upstream,
 		Labels:   labels,

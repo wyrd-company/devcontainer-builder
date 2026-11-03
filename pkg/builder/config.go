@@ -86,3 +86,24 @@ func substituteBuildValue(ctx substitute.Context, value any) any {
 		return value
 	}
 }
+
+// buildRuntimeSpec resolves fields shared by image creation and runtime.
+// The authored spec remains the metadata contribution so the host phase can
+// substitute it once, including values which themselves contain placeholders.
+func buildRuntimeSpec(dc *spec.DevContainer, opts Options) *spec.DevContainer {
+	ctx := opts.Substitution
+	ctx.LocalWorkspaceFolder, ctx.LocalEnv = opts.Workspace, opts.LocalEnv
+	out := *dc
+	out.ContainerUser = substitute.Substitute(ctx, dc.ContainerUser)
+	out.RemoteUser = substitute.Substitute(ctx, dc.RemoteUser)
+	if dc.ContainerEnv != nil {
+		out.ContainerEnv = make(map[string]any, len(dc.ContainerEnv))
+		for key, value := range dc.ContainerEnv {
+			if v, ok := value.(string); ok {
+				value = substitute.Substitute(ctx, v)
+			}
+			out.ContainerEnv[key] = value
+		}
+	}
+	return &out
+}

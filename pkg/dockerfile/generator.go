@@ -45,6 +45,9 @@ type Inputs struct {
 	OmitSyntaxDirective bool
 	// Spec is the loaded devcontainer.json.
 	Spec *spec.DevContainer
+	// MetadataSpec retains authored runtime contributions when Spec is a resolved
+	// build view. Nil uses Spec for metadata as well.
+	MetadataSpec *spec.DevContainer
 	// BaseImage is the FROM image. May be either the spec's `image`
 	// field, or a tag produced by a prior build of the
 	// spec's upstream Dockerfile.
@@ -119,7 +122,11 @@ func Generate(in Inputs) ([]byte, error) {
 	}
 	fmt.Fprintf(&b, "USER %s\n", imageUser)
 
-	label, err := metadata.DockerfileLabel(metadata.CollectWithOptions(in.BaseMetadata, in.Features, in.Spec, in.Metadata))
+	metadataSpec := in.MetadataSpec
+	if metadataSpec == nil {
+		metadataSpec = in.Spec
+	}
+	label, err := metadata.DockerfileLabel(metadata.CollectWithOptions(in.BaseMetadata, in.Features, metadataSpec, in.Metadata))
 	if err != nil {
 		return nil, fmt.Errorf("metadata label: %w", err)
 	}

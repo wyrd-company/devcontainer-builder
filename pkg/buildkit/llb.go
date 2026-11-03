@@ -32,8 +32,11 @@ import (
 // GraphInputs collects every piece of information the LLB authoring
 // routine needs.
 type GraphInputs struct {
-	Spec     *spec.DevContainer
-	Metadata metadata.CollectOptions
+	Spec *spec.DevContainer
+	// MetadataSpec retains authored runtime contributions when Spec is a resolved
+	// build view. Nil uses Spec for metadata as well.
+	MetadataSpec *spec.DevContainer
+	Metadata     metadata.CollectOptions
 	// BaseImage names the FROM image. Ignored when BaseState is set.
 	BaseImage string
 	// BaseState, when non-nil, is used as the starting llb.State instead
