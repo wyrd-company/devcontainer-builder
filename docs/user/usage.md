@@ -65,9 +65,12 @@ Bind sources must exist before creation. A missing source in a devcontainer
 bind or create its directory. Create-only also requires existing
 sources for Compose bind volumes, including short volume syntax. Ordinary
 Compose `up` retains its configured host-path creation behavior.
-Create-only rejects Compose bind mounts with SELinux `z` or `Z` relabel options:
+Create-only rejects Compose and Docker `runArgs` bind mounts with SELinux
+`z` or `Z` relabel options:
 the strict Engine mount API cannot preserve relabeling. The error names the
-service and mount. Ordinary `up` still supports these relabel options.
+service and mount for Compose, or the mount for Docker. It also rejects the
+explicit `bind-create-src` mount option. Ordinary `up` still supports these
+options.
 
 This mode extends the upstream CLI. Ordinary `up` behavior stays the same.
 

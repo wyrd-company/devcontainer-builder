@@ -38,7 +38,7 @@ func TestCreateOnlyCLI(t *testing.T) {
 				dc["build"] = map[string]any{"dockerfile": "Dockerfile"}
 				dc["overrideCommand"] = false
 				dc["workspaceMount"] = "type=bind,source=" + workspace + ",target=/workspace"
-				dc["runArgs"] = []string{"--name", "sample-create-" + filepath.Base(workspace), "--label", "sample.setting=retained", "--env", "SAMPLE_SETTING=retained"}
+				dc["runArgs"] = []string{"--name", "sample-create-" + filepath.Base(workspace), "--label", "sample.setting=retained", "--env", "SAMPLE_SETTING=retained", "--volume", workspace + ":/sample:ro,cached"}
 			} else {
 				dc["dockerComposeFile"] = "compose.yml"
 				dc["service"] = "primary"
@@ -144,6 +144,22 @@ func TestCreateOnlyLibrary(t *testing.T) {
 				if up.ContainerID != first.ContainerID || !up.StartedThisCall || up.CreatedThisCall || len(up.PhasesRun) == 0 {
 					t.Fatalf("up=%+v", up)
 				}
+				for _, flag := range []string{"-v", "--volume"} {
+					local := t.TempDir()
+					missing := filepath.Join(local, "missing")
+					copy := *dc
+					copy.RunArgs = []string{flag, missing + ":/sample:ro"}
+					req := hostdocker.UpRequest{Spec: &copy, LocalWorkspace: local, Image: dc.Image, NoStart: true}
+					defer host.Remove(ctx, local)
+					_, err := host.Up(ctx, req)
+					if err == nil || !strings.Contains(err.Error(), "bind source path does not exist") {
+						t.Fatalf("library %s error=%v", flag, err)
+					}
+					if _, err := os.Stat(missing); !os.IsNotExist(err) {
+						t.Fatalf("library %s source created: %v", flag, err)
+					}
+				}
+
 			} else {
 				host := dockercompose.New(cli, dockercompose.Options{})
 				defer host.Remove(ctx, workspace)
@@ -207,6 +223,40 @@ func TestCreateOnlyMissingBindCLI(t *testing.T) {
 			}
 			if _, err := os.Stat(missing); !os.IsNotExist(err) {
 				t.Fatalf("missing bind was created: %v", err)
+			}
+			if mode == "image" {
+				for _, flag := range []string{"-v", "--volume"} {
+					delete(dc, "mounts")
+					dc["runArgs"] = []string{flag, missing + ":/sample:ro"}
+					data, _ := json.Marshal(dc)
+					writeCreateFile(t, config, string(data))
+					err := hostRunCommandAllowError(bin, "up", "--no-start", "--workspace-folder", workspace, "--config", config, "--mount-workspace-git-root=false")
+					if err == nil || !strings.Contains(err.Error(), "bind source path does not exist") {
+						t.Fatalf("runArgs %s missing bind error=%v", flag, err)
+					}
+					if _, err := os.Stat(missing); !os.IsNotExist(err) {
+						t.Fatalf("runArgs %s source created: %v", flag, err)
+					}
+				}
+				for _, option := range []string{"z", "Z"} {
+					dc["runArgs"] = []string{"--volume", missing + ":/sample:" + option}
+					data, _ := json.Marshal(dc)
+					writeCreateFile(t, config, string(data))
+					err := hostRunCommandAllowError(bin, "up", "--no-start", "--workspace-folder", workspace, "--config", config, "--mount-workspace-git-root=false")
+					if err == nil || !strings.Contains(err.Error(), missing+":/sample:"+option) || !strings.Contains(err.Error(), "ordinary up still supports it") {
+						t.Fatalf("runArgs relabel error=%v", err)
+					}
+					if _, err := os.Stat(missing); !os.IsNotExist(err) {
+						t.Fatalf("runArgs relabel source created: %v", err)
+					}
+				}
+				dc["runArgs"] = []string{"--mount", "type=bind,src=" + missing + ",dst=/sample,bind-create-src"}
+				data, _ := json.Marshal(dc)
+				writeCreateFile(t, config, string(data))
+				err := hostRunCommandAllowError(bin, "up", "--no-start", "--workspace-folder", workspace, "--config", config, "--mount-workspace-git-root=false")
+				if err == nil || !strings.Contains(err.Error(), "bind-create-src") || !strings.Contains(err.Error(), "ordinary up still supports it") {
+					t.Fatalf("source creation option error=%v", err)
+				}
 			}
 			if mode == "compose" {
 				for _, option := range []string{"z", "Z"} {

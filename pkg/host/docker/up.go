@@ -380,6 +380,11 @@ func (h *Host) create(
 		return "", errorf("build container config: %w", err)
 	}
 	applyRequestIdentity(cfg, host, dc, req)
+	if req.NoStart {
+		if err := strictCreateMounts(host); err != nil {
+			return "", err
+		}
+	}
 	if err := h.applyGPUAvailability(ctx, dc, req.GPUAvailability, host); err != nil {
 		return "", err
 	}
