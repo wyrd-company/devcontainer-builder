@@ -41,6 +41,10 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
           submodules: true
+      # Namespace tests mount /proc in an isolated user namespace. Ubuntu's
+      # AppArmor restriction returns EACCES before their assertions can run.
+      - name: Permit isolated namespace mounts on this disposable runner
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version-file: go.mod
@@ -72,6 +76,10 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
           submodules: true
+      # Namespace tests mount /proc in an isolated user namespace. Ubuntu's
+      # AppArmor restriction returns EACCES before their assertions can run.
+      - name: Permit isolated namespace mounts on this disposable runner
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version-file: go.mod

@@ -12,6 +12,9 @@ commit title and explain the resulting behavior and validation.
 Use the repository devcontainer for Go, Docker, Task, Intentional, Actionlint,
 and Lefthook. Run `task check` before review. Docker integration checks require
 a working Docker daemon; Kubernetes validation uses kubeconform without a cluster.
+Hosted test and Docker runners permit unprivileged user namespace mounts so
+that workspace tests can hide `/proc` in their own namespaces. The CI setting
+applies only to disposable runners.
 Optional upstream fixture tests run when the reference submodules are initialized.
 The Git account-lookup test builds a C fixture and runs when a C compiler is installed.
 `task test` also runs the workspace tests with the `gitthreadcwd` tag, which
