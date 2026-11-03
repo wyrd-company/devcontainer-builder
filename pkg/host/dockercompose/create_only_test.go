@@ -14,7 +14,8 @@ func TestCreateOnlySELinuxBinds(t *testing.T) {
 	for _, option := range []string{"z", "Z"} {
 		t.Run(option, func(t *testing.T) {
 			vol := types.ServiceVolumeConfig{Type: types.VolumeTypeBind, Source: "/sample/source", Target: "/sample/target", Bind: &types.ServiceVolumeBind{CreateHostPath: true, SELinux: option}}
-			svc := types.ServiceConfig{Name: "sample", Volumes: []types.ServiceVolumeConfig{vol}}
+			svc := types.ServiceConfig{Name: "sample"}
+			svc.Volumes = []types.ServiceVolumeConfig{vol}
 			hash := serviceConfigHash(svc)
 			proj := &types.Project{Services: types.Services{"sample": svc}}
 			err := validateCreateOnlyBinds(proj, nil)
