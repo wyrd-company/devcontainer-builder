@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.2
+
+### Fixes
+
+- Give Go library documentation its own Developers navigation section.
+
 ## 0.1.1
 
 ### Fixes
