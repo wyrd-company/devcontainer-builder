@@ -37,10 +37,9 @@ value uses the default network. These options control Dockerfile `RUN`
 instructions. Host mode requests BuildKit's `network.host` entitlement; the
 daemon must allow it. Custom container network names are not BuildKit build
 networks. Image labels, build arguments, target selection, cache settings,
-secrets, SSH sources, shared memory size and resource limits
-are supported,
-as described below. Remaining build flags return an explicit unsupported-option
-error.
+secrets, SSH sources, shared memory size, resource limits, cgroup parents and
+extra hosts are supported, as described below. Build flags not documented as
+supported return an explicit unsupported-option error.
 
 Build options also accept repeated `--label KEY=VALUE` or `--label=KEY=VALUE`.
 The last value for a key wins. Bare keys have empty values and do not inherit

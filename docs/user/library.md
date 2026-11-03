@@ -375,8 +375,8 @@ OCI client and does not build or install Features.
 
 Dockerfile builds accept `build.options --network` with default, none or host.
 The builder maps these to `DockerfileBuild.NetworkMode`; standalone and nested
-Dockerfile solves request the host entitlement only for host mode. Remaining build
-flags other than image labels, build arguments and target selection remain unsupported.
+Dockerfile solves request the host entitlement only for host mode. Build flags not documented as supported in
+[Configuration](configuration.md) return an explicit unsupported-option error.
 
 `build.options --label` supplies final image labels with native buildx array
 parsing and last-key precedence. Bare keys use empty values. Explicit
