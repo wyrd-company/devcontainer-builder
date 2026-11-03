@@ -539,3 +539,5 @@ Use `dcb up --no-start` to create before binding external resources. It returns
 start the same container. `initializeCommand` runs on the host on each invocation.
 Bind sources must exist for devcontainer mounts; do not replace them with `-v`.
 Compose creates selected services and defers dependency readiness until normal up.
+Create-only rejects Compose SELinux z/Z bind relabel options with an explicit
+service/mount error. Ordinary up supports these options unchanged.

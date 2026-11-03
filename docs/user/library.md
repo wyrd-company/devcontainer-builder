@@ -501,4 +501,4 @@ Call `Up` again with `NoStart: false` to start the same container and run setup
 and lifecycle commands. Host initialization remains an explicit call to
 `pkg/host/local.Initialize` for each invocation. See
 [Create before first start](usage.md#create-before-first-start) for Compose,
-bind-source, and repeat behavior.
+bind-source, SELinux relabel limits, and repeat behavior.

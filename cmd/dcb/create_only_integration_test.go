@@ -208,6 +208,24 @@ func TestCreateOnlyMissingBindCLI(t *testing.T) {
 			if _, err := os.Stat(missing); !os.IsNotExist(err) {
 				t.Fatalf("missing bind was created: %v", err)
 			}
+			if mode == "compose" {
+				for _, option := range []string{"z", "Z"} {
+					delete(dc, "mounts")
+					writeCreateFile(t, filepath.Join(workspace, "compose.yml"), "services:\n  primary:\n    image: alpine:3.20\n    command: [sleep, infinity]\n    volumes:\n      - ./missing:/sample:"+option+"\n")
+					data, _ := json.Marshal(dc)
+					writeCreateFile(t, config, string(data))
+					err := hostRunCommandAllowError(bin, "up", "--no-start", "--workspace-folder", workspace, "--config", config, "--mount-workspace-git-root=false")
+					for _, part := range []string{"primary", missing, "/sample", "ordinary up still supports it"} {
+						if err == nil || !strings.Contains(err.Error(), part) {
+							t.Fatalf("missing %q in %v", part, err)
+						}
+					}
+					if _, err := os.Stat(missing); !os.IsNotExist(err) {
+						t.Fatalf("SELinux bind source created: %v", err)
+					}
+				}
+			}
+
 		})
 	}
 }

@@ -587,4 +587,5 @@ keys retain JavaScript's sorted-key comparison and output insertion order.
 `up --no-start` is a dcb extension with library request fields in both Docker
 hosts. It uses ordinary creation and discovery, defers all container execution,
 and retains ordinary up behavior when absent. Compose dependency readiness is
-deferred until startup. See [usage](../user/usage.md#create-before-first-start).
+deferred until startup. Create-only rejects Compose SELinux z/Z bind relabeling
+with a service/mount error; ordinary up retains those options. See [usage](../user/usage.md#create-before-first-start).

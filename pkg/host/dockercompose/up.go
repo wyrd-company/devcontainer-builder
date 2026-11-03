@@ -260,6 +260,12 @@ func (h *Host) Up(ctx context.Context, req UpRequest) (*UpResult, error) {
 		}
 	}
 
+	if req.NoStart {
+		if err := validateCreateOnlyBinds(proj, req.Spec.RunServices); err != nil {
+			return nil, err
+		}
+	}
+
 	materializer := newObjectMaterializer(func() (string, error) { return h.allocateObjects(ctx, proj.Name, req.LocalWorkspace) }, req.LocalEnv)
 
 	// Build any non-primary services that declare a compose-side
@@ -606,4 +612,21 @@ func (h *Host) runLifecycle(
 		res.PhasesRun = append(res.PhasesRun, p.Hook)
 	}
 	return nil
+}
+
+// validateCreateOnlyBinds rejects relabeling which the strict Engine Mount API
+// cannot express. Validate before allocating runtime resources or creating peers.
+func validateCreateOnlyBinds(proj *types.Project, runServices []string) error {
+	names, err := selectServices(proj, runServices)
+	if err != nil {
+		return err
+	}
+	return proj.ForEachService(names, func(name string, svc *types.ServiceConfig) error {
+		for _, vol := range svc.Volumes {
+			if vol.Type == types.VolumeTypeBind && vol.Bind != nil && vol.Bind.SELinux != "" {
+				return fmt.Errorf("service %q mount %q -> %q: create-only does not support SELinux relabel option %q; ordinary up still supports it", name, vol.Source, vol.Target, vol.Bind.SELinux)
+			}
+		}
+		return nil
+	})
 }
