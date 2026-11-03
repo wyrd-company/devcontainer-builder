@@ -77,6 +77,7 @@ func SolveDockerfile(ctx context.Context, b DockerfileBuild, opt SolveOptions) (
 	return runSolve(ctx, opt, len(opt.Platforms) > 1, localMounts, func(ctx context.Context, conn *Connection, so client.SolveOpt, ch chan *client.SolveStatus) (*client.SolveResponse, error) {
 		hosts, err := resolveExtraHosts(ctx, b.ExtraHosts, conn)
 		if err != nil {
+			close(ch)
 			return nil, err
 		}
 		bs := buildSettings{resolveMode: resolveMode(opt, conn), noCache: opt.NoCache, extraHosts: hosts}

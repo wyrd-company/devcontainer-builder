@@ -7,8 +7,14 @@ import (
 	"context"
 	"errors"
 	"github.com/moby/buildkit/client"
+	"github.com/wyrd-company/devcontainer-builder/pkg/spec"
+	"io"
 	"net"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 )
 
 func TestBuildExtraHostsFormat(t *testing.T) {
@@ -87,6 +93,48 @@ func TestWorkerHostGateway(t *testing.T) {
 			ip, err := workerHostGateway(workers)
 			if (err != nil) != tc.invalid || (!tc.invalid && ip.String() != tc.want) {
 				t.Fatalf("ip=%v err=%v", ip, err)
+			}
+		})
+	}
+}
+
+// Exercise the public routes with a live caller context. Cancellation is only
+// test teardown on failure; it must not be needed to return validation errors.
+func TestExtraHostsFailureReturns(t *testing.T) {
+	t.Setenv("BUILDKIT_HOST", "")
+	for _, nested := range []bool{false, true} {
+		name := "standalone"
+		if nested {
+			name = "nested"
+		}
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+			if err := os.WriteFile(filepath.Join(dir, "Dockerfile"), []byte("FROM scratch\n"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			b := DockerfileBuild{ContextDir: dir, ExtraHosts: []string{"sample:bad"}}
+			opt := SolveOptions{Docker: unusedNetworkEngine(t), Output: "type=cacheonly", Stderr: io.Discard, Progress: "plain"}
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			done := make(chan error, 1)
+			go func() {
+				var err error
+				if nested {
+					_, err = SolveDevcontainer(ctx, BuildSpec{Upstream: &b, Graph: GraphInputs{Spec: &spec.DevContainer{}}}, opt)
+				} else {
+					_, err = SolveDockerfile(ctx, b, opt)
+				}
+				done <- err
+			}()
+			select {
+			case err := <-done:
+				if err == nil || !strings.Contains(err.Error(), "invalid host sample:bad") {
+					t.Fatalf("error=%v", err)
+				}
+			case <-time.After(2 * time.Second):
+				cancel()
+				<-done
+				t.Fatal("host validation error did not return with a live caller context")
 			}
 		})
 	}

@@ -78,6 +78,7 @@ func SolveDevcontainer(ctx context.Context, spec BuildSpec, opt SolveOptions) (*
 		}
 		hosts, err := resolveExtraHosts(ctx, entries, conn)
 		if err != nil {
+			close(ch)
 			return nil, err
 		}
 		bs := buildSettings{resolveMode: resolveMode(opt, conn), noCache: opt.NoCache, extraHosts: hosts}
