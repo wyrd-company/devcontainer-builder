@@ -102,3 +102,6 @@ BuildKit Dockerfile frontend settings with Docker parsing and precedence.
 
 Preserve native no-cache and pull build option booleans and generated flag
 precedence in both Dockerfile solve routes.
+
+Preserve native cgroup-parent build option strings, final value precedence and
+empty reset across standalone and nested Dockerfile solves.

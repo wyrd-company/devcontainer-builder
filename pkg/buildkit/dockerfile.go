@@ -22,6 +22,8 @@ import (
 // as the rest of the LLB graph so no docker round-trip is required, or
 // a standalone image (SolveDockerfile).
 type DockerfileBuild struct {
+	// CgroupParent selects the parent cgroup for Dockerfile RUN instructions.
+	CgroupParent string
 	// NetworkMode is the Dockerfile RUN network: empty/sandbox, host, or none.
 	NetworkMode string
 	// ShmSize is the build container shared memory size in bytes; nonpositive uses the worker default.
@@ -159,6 +161,9 @@ func dockerfileFrontendAttrs(b *DockerfileBuild, bs buildSettings) map[string]st
 	}
 	if b.NetworkMode != "" {
 		attrs["force-network-mode"] = b.NetworkMode
+	}
+	if b.CgroupParent != "" {
+		attrs["cgroup-parent"] = b.CgroupParent
 	}
 	if b.ShmSize > 0 {
 		attrs["shm-size"] = strconv.FormatInt(b.ShmSize, 10)

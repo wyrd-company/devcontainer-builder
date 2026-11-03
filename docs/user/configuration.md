@@ -504,3 +504,8 @@ options apply. Explicit false values can override those generated flags. Cache
 import generation still uses invocation no-cache; option-only cache bypass
 retains configured imports. These settings reach standalone and nested
 Dockerfile solves.
+
+Build options accept `build.options --cgroup-parent` as a native string value.
+The last value wins; an explicit empty value restores the worker default.
+Both Dockerfile solve routes pass nonempty values to the native frontend.
+Cgroup availability and enforcement depend on the BuildKit worker.
