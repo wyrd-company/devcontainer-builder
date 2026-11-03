@@ -45,7 +45,8 @@ func TestBuildAndGenerateUseConfigurationSnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if dc != snapshot || base != "alpine:3.20" {
+	// Substitution uses a copy; retain the snapshot provenance and content checks.
+	if dc.Path != snapshot.Path || string(dc.Raw) != string(snapshot.Raw) || dc.Image != snapshot.Image || snapshot.Image != "alpine:3.20" || base != "alpine:3.20" {
 		t.Fatalf("Build independently read changed config: dc=%+v base=%q", dc, base)
 	}
 }
