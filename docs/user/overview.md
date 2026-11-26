@@ -17,7 +17,8 @@ OCI features, and runs the same lifecycle commands.
   platforms.
 - **Run.** `dcb up` builds the image when needed, then creates and starts the
   container and runs the lifecycle commands. `dcb exec` runs a command in it,
-  and `dcb down` removes it.
+  and `dcb down` removes it. See the
+  [build and startup timeline](devcontainer-timeline.md).
 - **Read.** Commands other than `outdated` write one JSON result line to stdout,
   except help,
   a valid `exec` invocation, and archive exports to stdout. Logs go to stderr.

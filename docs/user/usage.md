@@ -311,6 +311,9 @@ so this check is a heuristic.
 
 ## Lifecycle commands
 
+See the [build and startup timeline](devcontainer-timeline.md) for how these
+commands fit with image builds, Feature installation, mounts and users.
+
 `dcb up` runs `onCreateCommand`, `updateContentCommand`,
 `postCreateCommand`, `postStartCommand`, and `postAttachCommand`, including
 the ones that features contribute. Marker files in the container record the
