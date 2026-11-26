@@ -1,7 +1,7 @@
 # ---
 # relationships:
 #   publishes-to: wyrd-foo
-#   references: [ README, install, overview, usage, configuration, library ]
+#   references: [ README, install, overview, usage, configuration, library, devcontainer-timeline ]
 # ---
 schemaVersion: 1
 assets:
@@ -58,6 +58,8 @@ products:
         groups:
           - group: Guide
             pages: [overview, install, usage, configuration]
+          - group: Explanation
+            pages: [devcontainer-timeline]
       - section: Developers
         groups:
           - group: Go libraries
