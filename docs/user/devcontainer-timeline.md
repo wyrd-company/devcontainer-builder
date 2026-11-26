@@ -16,7 +16,7 @@ the image, and the workspace mount is available when the container starts.
 | 2. Prepare the image | Image builder | Use the specified image or build a Dockerfile or Compose service image. Install Features on top. |
 | 3. Create the container | Docker Engine | Apply the merged runtime settings, including mounts, environment variables and the startup user. |
 | 4. Start the container | Container | Mounts become available. The startup process runs Feature entrypoints and any preserved image or service command. |
-| 5. Run lifecycle commands | Container workspace | Run the creation, start and attach hooks as `remoteUser`. |
+| 5. Set up the workspace | Container workspace | In single-container mode, match UID/GID if enabled. Then run the creation, start and attach hooks as `remoteUser`. |
 
 ## Initialize on the host
 
@@ -113,10 +113,10 @@ After Docker starts the container, `dcb` runs the configured hooks in
 | Order | Hook | When it runs |
 | --- | --- | --- |
 | 1 | `onCreateCommand` | On the first setup of a new container. |
-| 2 | `updateContentCommand` | After `onCreateCommand`. `dcb up --prebuild` can rerun this hook to refresh workspace setup. |
+| 2 | `updateContentCommand` | After `onCreateCommand`. `dcb up --prebuild` reruns this hook on reuse and stops here. |
 | 3 | `postCreateCommand` | After content setup, once per container in ordinary use. |
 | 4 | `postStartCommand` | After each start, including the first. |
-| 5 | `postAttachCommand` | On attach in editor integrations. `dcb up` runs it by default, even without an editor. |
+| 5 | `postAttachCommand` | On tool attach, after the start hook. |
 
 If configured, `dcb` installs dotfiles after `postCreateCommand` and before
 `postStartCommand`.
@@ -129,9 +129,12 @@ Plain `dcb up` waits for the full sequence. With
 (`updateContentCommand` by default).
 
 On reuse, lifecycle markers skip creation hooks and any start hook already
-recorded for that start. A restart runs the start hook again. Replacing the
-container gives it a fresh lifecycle. `dcb up --no-start` ends after
-container creation, before startup and the in-container hooks. A later
+recorded for that start. A restart runs the start hook again. Plain `dcb up`
+runs `postAttachCommand` even when the container was already running. Use
+`--skip-post-attach` to omit that hook.
+
+Replacing the container gives it a fresh lifecycle. `dcb up --no-start` ends
+after container creation, before startup and the in-container hooks. A later
 `dcb up` can start and set up the same container.
 
 [Lifecycle controls](usage.md#lifecycle-controls)
